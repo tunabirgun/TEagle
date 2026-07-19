@@ -65,6 +65,19 @@ window with no embedded browser and no local web server on the core path.
   through the new in-process adapter (copia→LTR/Copia, gypsy→LTR/Gypsy, L1→LINE, Tc1→DNA/Tc1,
   Ac→DNA/hAT), and explicit broken-WSL / no-WSL / stack-missing degradation trials.
 
+### Branding & typography (2026-07-20)
+- **Cascadia Mono across the whole app.** The UI, tables, data fields, and figure labels
+  (gel ladder, genome ruler) now render in Cascadia Mono. The fonts are **bundled in the
+  app** (`app/native/assets/fonts`, SIL OFL 1.1) and loaded at startup, so the interface
+  looks identical without them installed. The frozen self-test fails if any bundled font
+  is missing from the build.
+- **Clean Cascadia Code wordmark.** The header/README wordmark is Cascadia Code Bold rendered
+  from the static face — the earlier square notches (an artifact of synthetic-bolding the
+  variable font) are gone. TE is white, AGLE takes the eagle mark's teal. The wordmark sits
+  a step smaller than the eagle mark.
+- **Eagle logo in the installer wizard.** The Inno Setup wizard now shows the eagle mark as
+  its top-right and Welcome/Finish images (DPI ladder of BMPs).
+
 ## [1.0.0] — 2026-07-18
 
 First public release. A self-contained Windows desktop application for

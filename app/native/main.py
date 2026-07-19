@@ -17,6 +17,7 @@ sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "backend"))
 
 from engine_worker import Engine
+import fonts
 import figures
 from figures import svg_genome
 import widgets
@@ -27,7 +28,7 @@ from teagle_core import appdirs
 
 APP_VERSION = "2.0.0"
 MARK_H = 36                                               # header brand-mark height (px)
-WORD_H = 24                                               # header wordmark height (px)
+WORD_H = 24                                               # header wordmark height (px); a touch smaller than the eagle mark
 ICON_TEAL = "#12B39A"                                     # mid-teal for OS chrome (reads on light + dark taskbars)
 
 def _load_asset(name: str) -> str:
@@ -50,7 +51,7 @@ def _mark_pixmap(color: str, height: int, dpr: float = 1.0) -> QPixmap:
         _MARK_SVG = _load_asset("teagle-mark.svg")
     return _svg_pixmap(_MARK_SVG.replace("currentColor", color), height, dpr)
 
-# wordmark: notched Cascadia 'TEAGLE' frozen to static paths, TE/AGLE recolored per theme
+# wordmark: clean Cascadia Code Bold 'TEAGLE' frozen to static paths, TE/AGLE recolored per theme
 _WORD_SVG = None
 def _word_pixmap(te: str, agle: str, height: int, dpr: float = 1.0) -> QPixmap:
     global _WORD_SVG
@@ -217,7 +218,7 @@ class MainWindow(QMainWindow):
         self.mark.setObjectName("mark")
         self.mark.setToolTip("TEagle")
         h.addWidget(self.mark)
-        self.word = QLabel()                                  # notched TEAGLE wordmark; pixmap set per-theme in _apply_theme
+        self.word = QLabel()                                  # Cascadia Code wordmark; pixmap set per-theme in _apply_theme
         self.word.setObjectName("word")
         h.addWidget(self.word)
         self.ver = QLabel("v" + APP_VERSION); self.ver.setObjectName("ver")
@@ -487,7 +488,8 @@ class MainWindow(QMainWindow):
         accent = theme_mod.ACCENT[self.theme]
         dpr = self.devicePixelRatioF(); z = theme_mod.UI_SCALE
         self.mark.setPixmap(_mark_pixmap(accent, round(MARK_H * z), dpr))
-        self.word.setPixmap(_word_pixmap(theme_mod.TEXT[self.theme], accent, round(WORD_H * z), dpr))
+        word_te = "#FFFFFF" if self.theme == "dark" else theme_mod.TEXT[self.theme]  # TE white on dark, dark ink on light
+        self.word.setPixmap(_word_pixmap(word_te, accent, round(WORD_H * z), dpr))   # AGLE = accent = eagle-mark colour
         self.headrule.setStyleSheet(f"QFrame#headrule {{ background: {theme_mod.HEADRULE[self.theme]}; }}")
         self._uppercase_buttons()
 
@@ -1259,6 +1261,9 @@ def selftest():
     from PySide6.QtGui import QImage, QPainter
     from PySide6.QtCore import QByteArray, Qt
     problems = []
+    missing_fonts = fonts.load_fonts()                    # proves the bundled TTFs actually shipped (offscreen still loads explicit fonts)
+    if missing_fonts:
+        problems.append("bundled fonts missing from build: " + ", ".join(missing_fonts))
     if primers.PRIMER3_VERSION == "unavailable":
         problems.append(f"primer3 failed to load ({primers.PRIMER3_ERROR})")
     if domains.PYHMMER_VERSION == "unavailable":
@@ -1309,6 +1314,7 @@ def main():
             pass
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName("TEagle")                      # title stays exactly "TEagle" (no auto-appended display name)
+    fonts.load_fonts()                                    # bundled Cascadia Mono (UI) — no dependence on installed fonts
     app.setWindowIcon(_app_icon())
     w = MainWindow()
     w.show()

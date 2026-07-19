@@ -37,12 +37,31 @@ def _square(color, n, ss=4):                             # mark on an n x n tran
     canvas.alpha_composite(big, ((n * ss - big.width) // 2, (n * ss - big.height) // 2))
     return canvas.resize((n, n), Image.LANCZOS)          # downscale = clean anti-aliasing at small sizes
 
+def _bmp(color, w, h, fill, ss=4):                       # eagle centered on an opaque white canvas (Inno wizard image, no alpha)
+    r = _renderer(color); s = r.defaultSize()
+    scale = min(w * fill / s.width(), h * fill / s.height())
+    eag = Image.open(io.BytesIO(_png(color, max(1, round(s.height() * scale * ss))))).convert("RGBA")
+    canvas = Image.new("RGBA", (w * ss, h * ss), (255, 255, 255, 255))
+    canvas.alpha_composite(eag, ((w * ss - eag.width) // 2, (h * ss - eag.height) // 2))
+    return canvas.resize((w, h), Image.LANCZOS).convert("RGB")   # 24-bit BMP, supersampled for clean edges
+
+def wizard_images():                                     # Inno Setup wizard eagle logo: top-right small + Welcome/Finish large
+    instdir = os.path.join(ROOT, "installer")
+    for n in (55, 83, 110, 138):                         # DPI ladder; Inno picks the closest to the current scaling
+        p = os.path.join(instdir, "wizard-small" + ("" if n == 55 else f"-{n}") + ".bmp")
+        _bmp(ICON_TEAL, n, n, fill=0.92).save(p, "BMP"); print("wrote", p)
+    for w, hh in ((164, 314), (246, 459), (328, 604), (410, 797)):
+        p = os.path.join(instdir, "wizard-large" + ("" if w == 164 else f"-{w}") + ".bmp")
+        _bmp(ICON_TEAL, w, hh, fill=0.66).save(p, "BMP"); print("wrote", p)
+
 def main():
     sizes = [16, 20, 24, 32, 40, 48, 64, 128, 256]      # standard Windows icon sizes; exact frame per DPI
     frames = [_square(ICON_TEAL, s) for s in sizes]
     ico = os.path.join(ROOT, "installer", "teagle.ico")
     frames[0].save(ico, format="ICO", sizes=[(s, s) for s in sizes])
     print("wrote", ico)
+
+    wizard_images()                                      # Inno Setup wizard eagle logos (BMP)
 
     figdir = os.path.join(ROOT, "report", "figures"); os.makedirs(figdir, exist_ok=True)
     Image.open(io.BytesIO(_png(DARK_INK, 900))).save(os.path.join(figdir, "teagle-mark-dark.png"))

@@ -6,11 +6,13 @@ so the wordmark spacing and uppercased labels are applied in code (main.py)."""
 
 import os, re
 
-MONO = '"Cascadia Code", "JetBrains Mono", "Consolas", "Courier New", monospace'
-SANS = '"Segoe UI", "Segoe UI Variable Text", system-ui, sans-serif'
+# Whole UI is Cascadia Mono (bundled with the app; see native/fonts.py). SANS is kept as a
+# separate name for the few prose labels, but points at the same mono family per the design brief.
+MONO = '"Cascadia Mono", "Cascadia Code", "Consolas", "Courier New", monospace'
+SANS = MONO
 
 # global UI zoom: scale fonts + padding uniformly (1px/2px borders & radii left untouched).
-UI_SCALE = float(os.environ.get("TEAGLE_UI_SCALE", "1.15"))
+UI_SCALE = float(os.environ.get("TEAGLE_UI_SCALE", "1.0"))
 
 _COMMON = """
 * {{ font-family: {sans}; font-size: 13px; color: {text}; }}

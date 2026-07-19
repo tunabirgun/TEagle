@@ -41,6 +41,12 @@ LicenseFile=..\LICENSE
 UninstallDisplayName={#MyAppName} {#MyAppVersion}
 UninstallDisplayIcon={app}\{#MyAppExeName}
 SetupIconFile=teagle.ico
+; eagle brand logo in the wizard: top-right small image (interior pages) + left image (Welcome/Finish),
+; each a DPI ladder so Inno picks the crisp size for the current scaling.
+WizardSmallImageFile=wizard-small.bmp,wizard-small-83.bmp,wizard-small-110.bmp,wizard-small-138.bmp
+WizardImageFile=wizard-large.bmp,wizard-large-246.bmp,wizard-large-328.bmp,wizard-large-410.bmp
+WizardImageStretch=no
+WizardImageBackColor=$FFFFFF
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

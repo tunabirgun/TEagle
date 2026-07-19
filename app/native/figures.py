@@ -7,7 +7,7 @@ multi-lane agarose gel (log MW axis, 5 palettes). Geometry mirrors svgGenome / s
 from __future__ import annotations
 import math
 
-FIGFONT = "Arial, Helvetica, sans-serif"
+FIGFONT = "Cascadia Mono, Consolas, monospace"   # bundled UI font; mono digits align on the gel ladder / ruler
 
 # Okabe-Ito data palette (domain / feature hues) — must match the web figure bands
 OK = {"RT": "#0072B2", "INT": "#E69F00", "RNaseH": "#009E73", "PR": "#CC79A7", "GAG": "#7A7A7A",

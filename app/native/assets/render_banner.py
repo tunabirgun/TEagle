@@ -17,7 +17,8 @@ OUT = os.path.join(ROOT, "docs", "img")
 MARK = open(os.path.join(HERE, "teagle-mark.svg"), encoding="utf-8").read()
 
 VARIANTS = {
-    "dark":  dict(mark="#33D6B8", te="#E6EDF1", agle="#33D6B8"),   # on dark backgrounds
+    # TE = white, AGLE = the eagle-mark colour. On light backgrounds TE goes dark so it stays legible.
+    "dark":  dict(mark="#33D6B8", te="#FFFFFF", agle="#33D6B8"),   # on dark backgrounds
     "light": dict(mark="#0E9E86", te="#141B21", agle="#0E9E86"),   # on white backgrounds
 }
 H = 260.0                                                # mark height (layout units)
@@ -26,16 +27,13 @@ PAD = 24.0                                               # transparent margin ar
 _FAMILY = None
 def _font():
     global _FAMILY
-    if _FAMILY is None:                                  # headless offscreen ships no fonts; load a real TTF
-        winf = os.path.join(os.environ.get("WINDIR", "C:/Windows"), "Fonts")
-        for fn in ("CascadiaCode.ttf", "CascadiaCodeNF.ttf", "consolab.ttf", "arialbd.ttf"):
-            fid = QFontDatabase.addApplicationFont(os.path.join(winf, fn))
-            if fid != -1:
-                _FAMILY = QFontDatabase.applicationFontFamilies(fid)[0]; break
-        else:
-            _FAMILY = QFont().defaultFamily()
+    if _FAMILY is None:
+        # the bundled STATIC Cascadia Code Bold — a real bold face, so glyphs are clean (the old
+        # notches came from synthetic-bolding the *variable* CascadiaCode.ttf). Same file that ships.
+        fid = QFontDatabase.addApplicationFont(os.path.join(HERE, "fonts", "CascadiaCode-Bold.ttf"))
+        _FAMILY = QFontDatabase.applicationFontFamilies(fid)[0] if fid != -1 else QFont().defaultFamily()
     f = QFont(_FAMILY); f.setStyleHint(QFont.Monospace)
-    f.setBold(True); f.setWeight(QFont.Bold); f.setPixelSize(int(H * 0.52))
+    f.setWeight(QFont.Bold); f.setPixelSize(int(H * 0.52))  # matches the only loaded face -> no synthesis
     return f
 
 def _path_to_d(path, dx=0.0, dy=0.0):                    # QPainterPath -> SVG path data (freezes the exact glyphs)
@@ -107,7 +105,7 @@ def render(variant, scale=4):
     print("wrote", png, "and", svg, f"({int(W)}x{int(Hh)})")
 
 def write_wordmark_asset():
-    """Freeze the notched Cascadia 'TEAGLE' into a static two-tone SVG (tokens {TE}/{AGLE})
+    """Freeze the clean Cascadia Code Bold 'TEAGLE' into a static two-tone SVG (tokens {TE}/{AGLE})
     for the in-app header — no font dependency, identical to the banner wordmark."""
     r, mw, font, te, agle, text_w, gap, total_w, fm = _layout()
     both = QPainterPath(); both.addPath(te); both.addPath(agle)

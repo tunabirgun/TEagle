@@ -33,8 +33,11 @@ datas = [
     (os.path.join(ROOT, "app", "backend", "data", "te_domains.hmm"), "data"),   # CC0 Pfam TE-domain profiles
     (os.path.join(ROOT, "app", "backend", "requirements.txt"), "."),            # for the in-app environment panel
     (os.path.join(ROOT, "app", "native", "assets", "teagle-mark.svg"), "native/assets"),      # header brand mark
-    (os.path.join(ROOT, "app", "native", "assets", "teagle-wordmark.svg"), "native/assets"),  # header wordmark (notched TEAGLE)
+    (os.path.join(ROOT, "app", "native", "assets", "teagle-wordmark.svg"), "native/assets"),  # header wordmark (Cascadia Code)
 ]
+# bundle the Cascadia fonts (SIL OFL) so the UI renders identically without them installed -> native/assets/fonts
+_fontdir = os.path.join(ROOT, "app", "native", "assets", "fonts")
+datas += [(os.path.join(_fontdir, fn), "native/assets/fonts") for fn in os.listdir(_fontdir)]
 # metadata so envcheck's importlib.metadata.version(...) resolves for the bundled deps (env panel stays green)
 for dist in ("PySide6", "shiboken6", "primer3-py", "pyhmmer"):
     try:
@@ -45,7 +48,7 @@ for dist in ("PySide6", "shiboken6", "primer3-py", "pyhmmer"):
 binaries = []
 hiddenimports = [
     # native UI package (app/native) + engine adapter (app/backend)
-    "main", "engine", "engine_worker", "figures", "widgets", "sample", "theme", "install_dialog",
+    "main", "engine", "engine_worker", "figures", "widgets", "sample", "theme", "fonts", "install_dialog",
     "envcheck", "server",
     "teagle_core", "teagle_core.appdirs", "teagle_core.sequtil", "teagle_core.structural",
     "teagle_core.classify", "teagle_core.domains", "teagle_core.primers", "teagle_core.fetch",
