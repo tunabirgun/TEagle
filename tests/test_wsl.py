@@ -43,8 +43,12 @@ def test_start_install_executes_script_not_reaped_nohup(monkeypatch):
     calls = []
     def fake_wsl(script, stdin=None, timeout=600):
         calls.append(script)
-        return 0, "FREE", ""                       # lock check -> FREE
+        return 0, "FREE", ""
+    def fake_wsl_script(script, timeout=90):        # lock-liveness pre-check goes through _wsl_script
+        calls.append(script)
+        return 0, "FREE", ""                        # no live install -> FREE, so start proceeds
     monkeypatch.setattr(wsl, "_wsl", fake_wsl)
+    monkeypatch.setattr(wsl, "_wsl_script", fake_wsl_script)
     monkeypatch.setattr(wsl, "available", lambda: {"wsl2": True})
     wsl._install_thread = None
     r = wsl.start_install()
