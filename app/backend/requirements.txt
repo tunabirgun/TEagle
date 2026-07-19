@@ -1,0 +1,4 @@
+# TEagle native app — pinned dependencies (reproducibility)
+primer3-py==2.3.0
+pyhmmer==0.12.1
+PySide6==6.11.1

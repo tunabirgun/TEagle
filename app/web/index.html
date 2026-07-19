@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TEagle — assay terminal</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="word">TE<b>AGLE</b><span class="ver" id="ver" title="TEagle version">v1.0.0</span></div>
+    <div class="tagline">Transposable&nbsp;Elements Assay&nbsp;Terminal</div>
+    <div class="spacer"></div>
+    <div class="statuschip" id="status"><span class="led"></span><span id="statusTxt">connecting…</span></div>
+    <button class="tbtn" id="theme" title="Toggle theme" aria-label="Toggle theme">
+      <svg viewBox="0 0 24 24"><path d="M21 12.8A8 8 0 1 1 11.2 3 6.3 6.3 0 0 0 21 12.8z"/></svg></button>
+  </header>
+
+  <div class="grid">
+    <!-- SPECIMEN RAIL -->
+    <aside class="rail">
+      <div class="sec-h"><span class="n">01</span><h2>Specimen</h2></div>
+      <div class="accrow">
+        <input id="acc" placeholder="accession — e.g. M11240, NC_003075.7" spellcheck="false">
+        <button class="btn sm" id="fetch">↓ Fetch</button>
+      </div>
+      <div id="accMeta" class="accmeta"></div>
+      <div class="accrow" style="margin-bottom:9px">
+        <button class="btn sm" id="uploadBtn" style="flex:1" aria-label="Upload a FASTA file">⭱ Upload FASTA (.fa / .fasta / .gz)</button>
+        <input type="file" id="fileInput" accept=".fa,.fasta,.fna,.txt,.gz" hidden aria-hidden="true">
+      </div>
+      <textarea id="seq" spellcheck="false" placeholder="…or paste DNA (FASTA or raw). Real IUPAC validation runs on analyze."></textarea>
+      <div class="rowsplit">
+        <button class="link" id="loadSample">↳ load sample element</button>
+        <span class="lbl" id="charCount">0 nt</span>
+      </div>
+      <button class="btn primary full" id="run">▶ Run analysis</button>
+
+      <div class="readout" id="readout">
+        <div class="cell"><div class="k">Length</div><div class="v" id="mLen">—</div></div>
+        <div class="cell"><div class="k">GC</div><div class="v" id="mGC">—</div></div>
+        <div class="cell"><div class="k">N content</div><div class="v" id="mN">—</div></div>
+        <div class="cell" id="mValidCell"><div class="k">IUPAC</div><div class="v" id="mValid">—</div></div>
+      </div>
+      <dl class="kv">
+        <dt>Records</dt><dd id="rRecords">—</dd>
+        <dt>Structural evidence</dt><dd id="rStruct">—</dd>
+        <dt>ORFs (≥40 aa)</dt><dd id="rOrf">—</dd>
+      </dl>
+      <div class="sec-h" style="margin-top:20px"><span class="n">◆</span><h2>Environment</h2></div>
+      <dl class="kv" id="envkv"><dt>status</dt><dd>checking…</dd></dl>
+
+      <div class="railnote">
+        Superfamily (Copia / Gypsy / LINE / DNA) is called from <b>protein-domain architecture</b>
+        (HMMER + CC0 Pfam profiles). <b>Dfam / RepeatMasker family-level naming</b> runs in the managed WSL backend (panel 03).
+      </div>
+    </aside>
+
+    <!-- RESULTS -->
+    <main class="main">
+      <div id="errbox"></div>
+
+      <!-- STRUCTURE -->
+      <div class="card">
+        <div class="ch"><span class="n">02</span><h3>Classification &amp; structure</h3><span class="meta" id="structMeta">finds LTR/TIR repeats, ORFs, and protein domains</span></div>
+        <div class="cb" id="structBody"><div class="empty">Run analysis to detect terminal repeats, ORFs and tails.</div></div>
+      </div>
+
+      <!-- DFAM / REPEATMASKER FAMILY (WSL) -->
+      <div class="card">
+        <div class="ch"><span class="n">03</span><h3>Dfam / RepeatMasker family</h3><span class="meta" id="wslMeta">names the TE family (Dfam / RepeatMasker)</span></div>
+        <div class="cb">
+          <div id="wslStatus" class="mini">checking WSL backend…</div>
+          <div class="wslsrc" style="margin-top:10px">
+            <div class="pf" style="max-width:280px"><label title="Which sequence to annotate against Dfam — the loaded specimen, a file you upload here, or one you paste">Sequence source</label><select id="wslSource">
+              <option value="specimen">Loaded specimen (panel 01)</option>
+              <option value="upload">Upload FASTA file…</option>
+              <option value="paste">Paste sequence…</option>
+            </select></div>
+            <input type="file" id="wslFile" accept=".fa,.fasta,.fna,.txt,.gz" hidden aria-hidden="true">
+            <textarea id="wslPaste" spellcheck="false" hidden style="min-height:60px;margin-top:8px" placeholder="Paste a FASTA or raw DNA sequence to annotate against Dfam"></textarea>
+            <div id="wslSrcMeta" class="mini" style="margin-top:6px;color:var(--faint)"></div>
+          </div>
+          <div class="accrow" style="margin-top:10px">
+            <input id="wslSpecies" placeholder="species (e.g. drosophila melanogaster) — from accession if fetched" spellcheck="false">
+            <button class="btn sm" id="annotate" disabled>▶ Run family annotation</button>
+          </div>
+          <div id="wslBody" style="margin-top:12px"><div class="empty">Run RepeatMasker against Dfam to name the TE family. Family-level naming is the Linux (WSL) backend.</div></div>
+        </div>
+      </div>
+
+      <!-- SPLICE DETECTION (de novo, WSL) -->
+      <div class="card">
+        <div class="ch"><span class="n">◧</span><h3>Splice detection (de&nbsp;novo)</h3><span class="meta" id="spliceMeta">finds exons &amp; introns from a transcript</span></div>
+        <div class="cb">
+          <div id="spliceStatus" class="mini">checking splice-alignment backend…</div>
+          <div class="rowsplit" style="margin-top:9px"><span class="lbl">Transcript / cDNA / mRNA (FASTA) to align against the loaded genomic sequence</span></div>
+          <textarea id="spliceTx" spellcheck="false" style="min-height:70px" placeholder="Paste a transcript / cDNA / mRNA. minimap2 -x splice maps it to the loaded sequence; introns are the alignment gaps, checked against canonical GT–AG splice sites."></textarea>
+          <div class="flexbtns" style="margin-top:9px"><button class="btn sm" id="runSplice" disabled>▶ Detect exons / introns</button>
+            <span class="lbl" id="spliceHint">load a genomic sequence, then paste its transcript</span></div>
+          <div class="orient">Find which parts of a gene are kept (<b>exons</b>) versus spliced out (<b>introns</b>) by aligning its DNA to an RNA transcript. Introns are the alignment gaps; each boundary is checked against the canonical GT–AG splice-site rule.</div>
+          <div id="spliceBody" style="margin-top:12px"><div class="empty">Align a transcript to the loaded sequence to resolve exon–intron structure de novo (evidence-based).</div></div>
+        </div>
+      </div>
+
+      <!-- PRIMERS -->
+      <div class="card">
+        <div class="ch"><span class="n">04</span><h3>Primer design</h3><span class="meta" id="primMeta">designs PCR primers (Primer3)</span></div>
+        <div class="cb">
+          <div class="params">
+            <div class="pf"><label title="Parameter preset — sets sensible bundles you can then tweak">Preset</label><select id="pPreset">
+              <option value="standard">Standard PCR</option>
+              <option value="qpcr">qPCR (short amplicon)</option>
+              <option value="highspec">High-specificity</option>
+              <option value="permissive">Permissive (hard targets)</option>
+            </select></div>
+            <div class="pf"><label title="Minimum PCR product (amplicon) length in base pairs">Prod min (bp)</label><input id="pMin" value="150"></div>
+            <div class="pf"><label title="Maximum PCR product (amplicon) length in base pairs">Prod max (bp)</label><input id="pMax" value="500"></div>
+            <div class="pf"><label title="Target melting temperature for each primer (Primer3 optimizes toward this)">Opt Tm (°C)</label><input id="pTm" value="60"></div>
+            <div class="pf"><label title="Minimum primer length in nucleotides">Min size</label><input id="pMinS" value="18"></div>
+            <div class="pf"><label title="Maximum primer length in nucleotides">Max size</label><input id="pMaxS" value="27"></div>
+            <div class="pf"><label title="How many candidate primer pairs to return, best-penalty first">Return</label><input id="pNum" value="5"></div>
+          </div>
+          <details class="advparams"><summary>Advanced parameters</summary>
+            <div class="params">
+              <div class="pf"><label title="Preferred primer length; Primer3 optimizes toward it">Opt size</label><input id="pOptS" value="20"></div>
+              <div class="pf"><label title="Lowest acceptable primer melting temperature (°C)">Tm min (°C)</label><input id="pTmMin" value="57"></div>
+              <div class="pf"><label title="Highest acceptable primer melting temperature (°C)">Tm max (°C)</label><input id="pTmMax" value="63"></div>
+              <div class="pf"><label title="Lowest acceptable primer GC content (%)">GC min (%)</label><input id="pGcMin" value="40"></div>
+              <div class="pf"><label title="Highest acceptable primer GC content (%)">GC max (%)</label><input id="pGcMax" value="60"></div>
+              <div class="pf"><label title="Longest allowed single-base run (e.g. AAAA); lower avoids mispriming">Max poly-X</label><input id="pPolyX" value="4"></div>
+              <div class="pf"><label title="Number of G/C bases required at the 3′ end to anchor the primer (0 = off)">GC clamp</label><input id="pGcClamp" value="0"></div>
+            </div>
+            <span class="lbl">Tm/GC windows, primer length optimum, homopolymer-run limit and 3′ GC-clamp — passed straight to Primer3.</span>
+          </details>
+          <div class="flexbtns"><button class="btn primary sm" id="design" disabled>⋯ Design primers</button>
+            <button class="btn sm" id="pReset" type="button" title="Reset all parameters to the Standard preset">↺ reset</button>
+            <span class="lbl" id="designHint">run analysis first</span></div>
+          <div id="primBody" style="margin-top:14px"></div>
+        </div>
+      </div>
+
+      <!-- IN SILICO PCR -->
+      <div class="card">
+        <div class="ch"><span class="n">05</span><h3>In-silico PCR</h3><span class="meta">predicts which fragments amplify</span></div>
+        <div class="cb">
+          <div class="rowsplit"><span class="lbl">Loaded primer pairs — one gel lane each · drag rows or use ↑ ↓ to set lane order</span>
+            <span class="lbl" id="pcrCount">0 loaded</span></div>
+          <div id="pcrQueue" class="pcrqueue"><div class="empty sm">No pairs loaded. Design primers (panel 04), then “→ send to in-silico PCR”, or stage all below.</div></div>
+          <div class="flexbtns" style="margin-top:8px">
+            <button class="btn sm" id="pcrStageAll" disabled title="Load every designed candidate pair into the engine">＋ stage all designed</button>
+            <button class="btn sm" id="pcrClear" disabled title="Remove all loaded pairs">✕ clear</button></div>
+          <div class="params" style="margin-top:12px">
+            <div class="pf"><label title="Mismatches allowed per primer — raise this to let near-identical relatives prime and reveal non-specific (off-target) products">Max mismatches</label><input id="pcrMM" value="2"></div>
+            <div class="pf"><label title="Number of 3′ terminal bases that must match exactly; the 3′ end drives specificity">3′ exact bases</label><input id="pcrTP" value="5"></div>
+            <div class="pf"><label title="Minimum amplicon (product) size in bp">Prod min (bp)</label><input id="pcrPmin" value="70"></div>
+            <div class="pf"><label title="Maximum amplicon (product) size in bp">Prod max (bp)</label><input id="pcrPmax" value="1000"></div>
+          </div>
+          <div class="rowsplit" style="margin-top:10px"><span class="lbl">Optional custom background (FASTA) — paste extra copies to search for off-target amplicons</span></div>
+          <textarea id="bg" spellcheck="false" style="min-height:64px" placeholder="Optional: paste extra background sequence(s) — e.g. another copy of the element — to reveal off-target amplicons."></textarea>
+          <div class="flexbtns" style="margin-top:10px"><button class="btn primary sm" id="runpcr" disabled>▶ Run loaded pairs</button>
+            <span class="lbl" id="pcrHint">load one or more pairs, then run — each becomes a gel lane</span></div>
+          <div id="pcrBody" style="margin-top:14px"><div class="empty">Load a pair, then run pair-aware amplicon search.</div></div>
+        </div>
+      </div>
+
+      <!-- PROVENANCE -->
+      <div class="card">
+        <div class="ch"><span class="n">06</span><h3>Run provenance</h3><span class="meta">versions + checksums for reproducibility</span></div>
+        <div class="cb" id="provBody"><div class="empty">Populated from the last computation — travels with every result.</div></div>
+      </div>
+    </main>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

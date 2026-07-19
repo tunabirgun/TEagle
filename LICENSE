@@ -1,0 +1,54 @@
+TEagle — Proprietary Software License
+Copyright (c) 2026 Tuna Birgün. All rights reserved.
+
+This software, including its source code, compiled binaries, assets, and
+accompanying documentation (collectively, the "Software"), is proprietary and
+confidential. It is made available for viewing and evaluation only. No license
+or right is granted except as expressly stated below.
+
+1. Ownership. The Software is owned by Tuna Birgün and is protected by copyright
+   and other intellectual-property laws. All rights not expressly granted here
+   are reserved.
+
+2. Permitted use. Subject to this License, you may download and run the official
+   pre-built release of the Software (the installer published by the author) for
+   your own personal, internal, academic, or research use.
+
+3. Restrictions. You may NOT, in whole or in part:
+   (a) redistribute, publish, sublicense, sell, rent, lease, or otherwise make
+       the Software available to any third party;
+   (b) copy the Software except as strictly necessary to run the official
+       release you obtained;
+   (c) modify, adapt, translate, or create derivative works of the Software;
+   (d) reverse engineer, decompile, or disassemble the Software, or attempt to
+       derive its source code, except to the extent this restriction is
+       prohibited by applicable law;
+   (e) remove or alter any copyright, trademark, or other proprietary notice.
+
+4. Source availability. Where the source code is made visible (for example, in a
+   source repository), it is provided for reference and transparency only. Its
+   visibility does not grant any license to use, copy, modify, or distribute it,
+   and it is NOT open-source software.
+
+5. Third-party components. The Software incorporates third-party components that
+   remain governed by their own licenses (including, without limitation, PySide6/
+   Qt, primer3 / primer3-py, HMMER / pyhmmer, minimap2, RepeatMasker, and Pfam /
+   Dfam data). Nothing in this License limits your rights or obligations under
+   those licenses with respect to those components. The Dfam and RepeatMasker
+   stacks are downloaded from their official sources at install time and are not
+   redistributed by the author.
+
+6. No warranty. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+7. Limitation of liability. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM,
+   DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR
+   OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+   OR OTHER DEALINGS IN THE SOFTWARE.
+
+8. Scientific disclaimer. The Software produces in-silico predictions. It does
+   not assert experimental or clinical validation. Results must be independently
+   verified before any laboratory, diagnostic, or clinical use.
+
+For permissions beyond the scope of this License, contact the author.
