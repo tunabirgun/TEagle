@@ -5,8 +5,9 @@ annotation, splice detection, provenance and exports."""
 from __future__ import annotations
 import gzip, os, sys
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QGuiApplication, QFont
+from PySide6.QtCore import Qt, QTimer, QByteArray
+from PySide6.QtGui import QGuiApplication, QFont, QPixmap, QPainter, QIcon
+from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QFrame, QVBoxLayout, QHBoxLayout,
                                QGridLayout, QLabel, QLineEdit, QTextEdit, QPushButton, QComboBox,
                                QScrollArea, QSplitter, QFileDialog, QSizePolicy)
@@ -22,8 +23,47 @@ import widgets
 from widgets import FigurePanel, GenomePanel, DataTable
 from sample import make_sample
 import theme as theme_mod
+from teagle_core import appdirs
 
 APP_VERSION = "2.0.0"
+MARK_H = 36                                               # header brand-mark height (px)
+WORD_H = 24                                               # header wordmark height (px)
+ICON_TEAL = "#12B39A"                                     # mid-teal for OS chrome (reads on light + dark taskbars)
+
+def _load_asset(name: str) -> str:
+    path = appdirs.resource("native", "assets", name) or os.path.join(_HERE, "assets", name)
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+def _svg_pixmap(svg: str, height: int, dpr: float = 1.0) -> QPixmap:
+    r = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+    s = r.defaultSize(); w = max(1, round(height * s.width() / s.height()))
+    pm = QPixmap(round(w * dpr), round(height * dpr)); pm.fill(Qt.transparent)
+    p = QPainter(pm); r.render(p); p.end(); pm.setDevicePixelRatio(dpr)
+    return pm
+
+# brand mark: single-color eagle logo (fill=currentColor), recolored per theme
+_MARK_SVG = None
+def _mark_pixmap(color: str, height: int, dpr: float = 1.0) -> QPixmap:
+    global _MARK_SVG
+    if _MARK_SVG is None:
+        _MARK_SVG = _load_asset("teagle-mark.svg")
+    return _svg_pixmap(_MARK_SVG.replace("currentColor", color), height, dpr)
+
+# wordmark: notched Cascadia 'TEAGLE' frozen to static paths, TE/AGLE recolored per theme
+_WORD_SVG = None
+def _word_pixmap(te: str, agle: str, height: int, dpr: float = 1.0) -> QPixmap:
+    global _WORD_SVG
+    if _WORD_SVG is None:
+        _WORD_SVG = _load_asset("teagle-wordmark.svg")
+    return _svg_pixmap(_WORD_SVG.replace("{TE}", te).replace("{AGLE}", agle), height, dpr)
+
+def _app_icon() -> QIcon:                                 # window/taskbar icon from the mark, mid-teal on transparent
+    icon = QIcon()
+    for s in (16, 20, 24, 32, 40, 48, 64, 128, 256):
+        big = _mark_pixmap(ICON_TEAL, s * 4)              # supersample x4 then smooth-scale -> clean small frames
+        icon.addPixmap(big.scaled(s, s, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+    return icon
 
 STRUCT_COLS = ["Feature", "Coords (0-based)", "Len", "Metric", "Method"]
 ORF_COLS = ["Strand", "Frame", "Start", "End", "aa"]
@@ -140,8 +180,8 @@ def _sl(text):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("TEagle — assay terminal")
-        self.resize(1240, 860)
+        self.setWindowTitle("TEagle")
+        self.resize(round(1240 * theme_mod.UI_SCALE), round(860 * theme_mod.UI_SCALE))
         self.theme = "dark"
         self.state = {"seq": "", "source": None, "last_rec": None}
 
@@ -172,16 +212,17 @@ class MainWindow(QMainWindow):
     def _build_header(self):
         wrap = QWidget()
         col = QVBoxLayout(wrap); col.setContentsMargins(6, 0, 2, 0); col.setSpacing(0)
-        h = QHBoxLayout(); h.setContentsMargins(0, 2, 0, 8); h.setSpacing(12)
-        self.word = QLabel()                                  # TE + accent AGLE; text set per-theme in _apply_theme
-        self.word.setObjectName("word"); self.word.setTextFormat(Qt.RichText)
-        wf = QFont("Cascadia Code"); wf.setStyleHint(QFont.Monospace); wf.setBold(True); wf.setPointSize(13)
-        wf.setLetterSpacing(QFont.AbsoluteSpacing, 6)         # the .42em tracking of the web wordmark
-        self.word.setFont(wf)
+        h = QHBoxLayout(); h.setContentsMargins(0, 2, 0, 8); h.setSpacing(10)
+        self.mark = QLabel()                                  # eagle brand mark; pixmap set per-theme in _apply_theme
+        self.mark.setObjectName("mark")
+        self.mark.setToolTip("TEagle")
+        h.addWidget(self.mark)
+        self.word = QLabel()                                  # notched TEAGLE wordmark; pixmap set per-theme in _apply_theme
+        self.word.setObjectName("word")
         h.addWidget(self.word)
         self.ver = QLabel("v" + APP_VERSION); self.ver.setObjectName("ver")
         h.addWidget(self.ver)
-        tag = QLabel("TRANSPOSABLE ELEMENTS · ASSAY TERMINAL"); tag.setObjectName("tagline")
+        tag = QLabel("TRANSPOSABLE ELEMENTS"); tag.setObjectName("tagline")
         tf = tag.font(); tf.setLetterSpacing(QFont.AbsoluteSpacing, 1.5); tag.setFont(tf)
         h.addWidget(tag)
         h.addStretch(1)
@@ -444,7 +485,9 @@ class MainWindow(QMainWindow):
     def _apply_theme(self):
         QApplication.instance().setStyleSheet(theme_mod.qss(self.theme))
         accent = theme_mod.ACCENT[self.theme]
-        self.word.setText(f"TE<span style='color:{accent}'>AGLE</span>")
+        dpr = self.devicePixelRatioF(); z = theme_mod.UI_SCALE
+        self.mark.setPixmap(_mark_pixmap(accent, round(MARK_H * z), dpr))
+        self.word.setPixmap(_word_pixmap(theme_mod.TEXT[self.theme], accent, round(WORD_H * z), dpr))
         self.headrule.setStyleSheet(f"QFrame#headrule {{ background: {theme_mod.HEADRULE[self.theme]}; }}")
         self._uppercase_buttons()
 
@@ -1258,8 +1301,15 @@ def selftest():
 def main():
     if os.environ.get("TEAGLE_SELFTEST"):
         return selftest()
+    if sys.platform == "win32":                           # taskbar groups under our icon, not pythonw's, in dev runs
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("TEagle.desktop.2")
+        except Exception:
+            pass
     app = QApplication.instance() or QApplication(sys.argv)
-    QGuiApplication.setApplicationDisplayName("TEagle")
+    app.setApplicationName("TEagle")                      # title stays exactly "TEagle" (no auto-appended display name)
+    app.setWindowIcon(_app_icon())
     w = MainWindow()
     w.show()
     return app.exec()

@@ -40,6 +40,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 LicenseFile=..\LICENSE
 UninstallDisplayName={#MyAppName} {#MyAppVersion}
 UninstallDisplayIcon={app}\{#MyAppExeName}
+SetupIconFile=teagle.ico
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

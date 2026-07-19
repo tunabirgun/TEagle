@@ -32,6 +32,8 @@ open(_verinfo, "w", encoding="utf-8").write(f"""VSVersionInfo(
 datas = [
     (os.path.join(ROOT, "app", "backend", "data", "te_domains.hmm"), "data"),   # CC0 Pfam TE-domain profiles
     (os.path.join(ROOT, "app", "backend", "requirements.txt"), "."),            # for the in-app environment panel
+    (os.path.join(ROOT, "app", "native", "assets", "teagle-mark.svg"), "native/assets"),      # header brand mark
+    (os.path.join(ROOT, "app", "native", "assets", "teagle-wordmark.svg"), "native/assets"),  # header wordmark (notched TEAGLE)
 ]
 # metadata so envcheck's importlib.metadata.version(...) resolves for the bundled deps (env panel stays green)
 for dist in ("PySide6", "shiboken6", "primer3-py", "pyhmmer"):

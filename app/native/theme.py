@@ -4,8 +4,13 @@ tabular-mono data, uppercase tracked micro-labels, and a teal accent reserved fo
 affordances. Okabe-Ito data hues live in the figures. Qt QSS has no letter-spacing / text-transform,
 so the wordmark spacing and uppercased labels are applied in code (main.py)."""
 
+import os, re
+
 MONO = '"Cascadia Code", "JetBrains Mono", "Consolas", "Courier New", monospace'
 SANS = '"Segoe UI", "Segoe UI Variable Text", system-ui, sans-serif'
+
+# global UI zoom: scale fonts + padding uniformly (1px/2px borders & radii left untouched).
+UI_SCALE = float(os.environ.get("TEAGLE_UI_SCALE", "1.15"))
 
 _COMMON = """
 * {{ font-family: {sans}; font-size: 13px; color: {text}; }}
@@ -131,7 +136,16 @@ _LIGHT = dict(bg="#EDF1F3", panel="#FFFFFF", panel2="#F2F5F7", panel3="#E7ECEF",
 HEADRULE = {"dark": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #33D6B8, stop:0.42 transparent)",
             "light": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0E9E86, stop:0.42 transparent)"}
 ACCENT = {"dark": "#33D6B8", "light": "#0E9E86"}
+TEXT = {"dark": "#E6EDF1", "light": "#141B21"}         # wordmark "TE" ink, per theme
 
+
+def _scale_px(css: str, f: float) -> str:
+    if abs(f - 1.0) < 1e-3:
+        return css
+    # scale font/padding px (>=6px) only; keep 1-2px borders and 2px radii crisp
+    return re.sub(r"(\d+(?:\.\d+)?)px",
+                  lambda m: (f"{float(m.group(1)) * f:.1f}px" if float(m.group(1)) >= 6 else m.group(0)),
+                  css)
 
 def qss(theme: str = "dark") -> str:
-    return _COMMON.format(**(_LIGHT if theme == "light" else _DARK))
+    return _scale_px(_COMMON.format(**(_LIGHT if theme == "light" else _DARK)), UI_SCALE)
