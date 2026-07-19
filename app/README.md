@@ -13,11 +13,17 @@ This is the **working** TEagle application — a **native Windows desktop app** 
 
 > Everything is real and computed; nothing is guessed or faked. The one part that needs Linux — RepeatMasker/Dfam — runs in **WSL2**, which TEagle detects, installs (checksum-verified), and reports on inside the app (panel 03). Superfamily (Copia/Gypsy/LINE/DNA) also works natively from domains, so you get a result even before the WSL backend is set up.
 
+![TEagle analysing a copia element](../docs/img/overview.png)
+
+Right-click any structural, ORF, domain, family, or amplicon row — or any feature in the genome viewer or gel — to copy its FASTA/DNA/coordinates/protein or design a primer there; hover a table header for a plain-language definition, or a figure feature for its size and type. Every table exports to CSV/TSV and every figure to SVG/PNG.
+
 ## The WSL backend (Dfam / RepeatMasker family naming)
 
 Family-level naming (e.g. `Copia_I`, `Gypsy-2_DM`) uses tools that only run on Linux, so TEagle manages a **WSL2** environment for them — you never touch a Linux shell.
 
 - **Panel 03 “Dfam / RepeatMasker family”** shows the backend status. Click **Backend installer** to open a window that lists every component (WSL2, micromamba, **RepeatMasker 4.2.4**, minimap2, the **Dfam 4.0** libraries, FamDB config) with a live status tick. Install them all with one click, **repair any single component**, or run a **check-integrity** pass; the Dfam libraries are downloaded from a pinned, md5-verified source into WSL. One time, ~a few minutes.
+
+![The backend installer, component by component](../docs/img/installer.png)
 - Once ready, set the **species** (auto-filled from a fetched accession's organism) and click **Run family annotation**. TEagle runs RepeatMasker (RMBLAST) against Dfam in WSL and lists the family hits with coordinates, divergence and score — Layer-A homology evidence that complements the domain-based superfamily.
 - Coverage depends on the installed Dfam partitions; the curated set names families for well-studied organisms. Security: your sequence is piped to WSL as data, never built into a shell command.
 

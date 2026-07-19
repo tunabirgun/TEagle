@@ -6,6 +6,8 @@ Paste a sequence, open a FASTA file, or fetch an NCBI accession; detect and clas
 
 TEagle is a **native PySide6/Qt application**. The scientific core (sequence parsing, structural detection, HMMER protein-domain scanning, superfamily classification, Primer3 design, in-silico PCR, provenance) runs in-process — no browser, no local web server, no internet needed for the core workflow.
 
+![TEagle analysis view — classification, interactive genome viewer, and structural evidence for a Drosophila copia element](docs/img/overview.png)
+
 > **License:** TEagle is proprietary software. The source here is provided for reference and transparency; it is **not** open-source. You may download and run the official release for personal, academic, or research use, but redistribution, modification, and reverse-engineering are not permitted. See [LICENSE](LICENSE).
 
 ---
@@ -57,6 +59,20 @@ This freezes the app with PyInstaller (`installer/teagle_native.spec`), runs the
 - **Provenance + export** — every result carries a run manifest (database + tool versions, checksums, parameters, environment) and source-verified citations.
 
 Every value on screen is computed live. There is no mock data.
+
+## In the app
+
+**Primer design** — Primer3 with presets and full advanced parameters; each pair links to its source citation, and a right-click sends it straight to in-silico PCR.
+
+![Primer design panel with the designed-pair table](docs/img/primers.png)
+
+**In-silico PCR** — stage one or more pairs (one lane each) and run a pair-aware amplicon search rendered as a to-scale multi-lane gel with a MW ladder and on/off-target calls; hover a band for its size and call, right-click to copy the amplicon.
+
+![In-silico PCR rendered as a to-scale multi-lane agarose gel](docs/img/pcr_gel.png)
+
+**Backend installer** (optional) — a dedicated window installs the Linux (WSL) annotation stack component by component, each with a live status tick, a per-component **Repair** button, and a **check-integrity** pass. A failure in one component never blocks the others.
+
+![Backend installer showing each component with a status tick, repair buttons, and a live log](docs/img/installer.png)
 
 ## Reproducibility (top-priority constraint)
 
