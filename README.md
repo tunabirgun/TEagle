@@ -4,7 +4,7 @@
   <img alt="TEagle" src="docs/img/teagle-banner-light.png" width="460">
 </picture>
 
-![Version](https://img.shields.io/badge/version-2.0.0-0E9E86) ![Platform](https://img.shields.io/badge/platform-Windows%20x64-1FB89C) ![License](https://img.shields.io/badge/license-Proprietary-C6432E) ![Built with](https://img.shields.io/badge/built%20with-PySide6%20%C2%B7%20Primer3%20%C2%B7%20HMMER-2B3740)
+![Version](https://img.shields.io/badge/version-2.1.0-0E9E86) ![Platform](https://img.shields.io/badge/platform-Windows%20x64-1FB89C) ![License](https://img.shields.io/badge/license-Proprietary-C6432E) ![Built with](https://img.shields.io/badge/built%20with-PySide6%20%C2%B7%20Primer3%20%C2%B7%20HMMER-2B3740)
 </div>
 
 Paste a sequence, open a FASTA file, or fetch an NCBI accession; detect and classify transposable elements with full evidence provenance; explore the results in an interactive genome viewer; and design purpose-specific PCR primers checked by pair-aware in-silico PCR with a to-scale gel — all in a native window, without a command line, and with every result reproducible from the exact database and software versions that produced it.
@@ -58,9 +58,10 @@ This freezes the app with PyInstaller (`installer/teagle_native.spec`), runs the
 - **Interactive genome viewer** — ruler, terminal-repeat / domain / ORF tracks, semantic zoom, pan, WYSIWYG SVG/PNG export, **hover a feature for its size and type**, and **right-click any feature** to copy its FASTA/DNA/coordinates or design a primer there.
 - **Primer design** — Primer3 with presets (standard / qPCR / high-specificity / permissive) and full advanced parameters, including domain-confined design.
 - **In-silico PCR** — stage one or more primer pairs (one gel lane each), pair-aware amplicon search with a strict 3′ rule and mismatch control, rendered as a to-scale multi-lane agarose gel (dark / light / UV / mono themes) with on/off-target calls; **hover a band** for its size and call, **right-click** to copy the amplicon.
-- **Copy / export everywhere** — right-click any structural, ORF, domain, family, or amplicon row to copy FASTA/DNA/coordinates/protein or design a primer; every table exports to CSV/TSV, every figure to SVG/PNG. Table headers carry plain-language tooltips, and each result panel links to its **source citation** (Wicker 2007, Pfam, Dfam, RepeatMasker, Primer3, minimap2, NCBI).
-- **Dfam / RepeatMasker family naming** (optional, WSL) — RepeatMasker 4.2.4 against the Dfam 4.0 curated library, one-click managed install.
-- **De-novo splice detection** (optional, WSL) — minimap2 spliced alignment of a transcript, with canonical GT–AG splice-site checking.
+- **Sortable, centered result tables** — click any header to sort (numeric-aware for score, E-value, aa, divergence, coordinates); the default keeps the engine's order. Every table exports to CSV/TSV.
+- **Copy / export everywhere** — right-click any structural, ORF, domain, family, or amplicon row to copy FASTA/DNA/coordinates/protein, design a primer, or **send the sequence to splice detection**; export amplicons to FASTA; every figure exports to SVG/PNG **in the background mode you have selected** (dark / light / UV / mono). Table headers carry plain-language tooltips, and each result panel links to its **source citation** (Wicker 2007, Pfam, Dfam, RepeatMasker, Primer3, minimap2, NCBI).
+- **Dfam / RepeatMasker family naming** (optional, WSL) — RepeatMasker 4.2.4 against the Dfam 4.0 curated library, one-click managed install; pick the organism from a dropdown of common model species (or type any lineage under "Other").
+- **De-novo splice detection** (optional, WSL) — minimap2 spliced alignment of a transcript against the loaded genomic reference (shown in the panel), with canonical GT–AG splice-site checking. Right-click any feature to send its sequence straight to the splice tool.
 - **Provenance + export** — every result carries a run manifest (database + tool versions, checksums, parameters, environment) and source-verified citations.
 
 Every value on screen is computed live. There is no mock data.

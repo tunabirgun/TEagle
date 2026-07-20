@@ -31,7 +31,7 @@ def _png(color, h):                                      # aspect-preserved PNG 
     img.save(b, "PNG"); b.close()
     return bytes(buf)
 
-def _square(color, n, ss=4):                             # mark on an n x n transparent canvas, supersampled ss x
+def _square(color, n, ss=8):                             # mark on an n x n transparent canvas, supersampled ss x
     big = Image.open(io.BytesIO(_png(color, round(n * ss * 0.94)))).convert("RGBA")
     canvas = Image.new("RGBA", (n * ss, n * ss), (0, 0, 0, 0))
     canvas.alpha_composite(big, ((n * ss - big.width) // 2, (n * ss - big.height) // 2))
@@ -55,10 +55,12 @@ def wizard_images():                                     # Inno Setup wizard eag
         _bmp(ICON_TEAL, w, hh, fill=0.66).save(p, "BMP"); print("wrote", p)
 
 def main():
-    sizes = [16, 20, 24, 32, 40, 48, 64, 128, 256]      # standard Windows icon sizes; exact frame per DPI
+    sizes = [16, 20, 24, 32, 40, 48, 64, 96, 128, 256]  # standard Windows icon sizes; exact frame per DPI
     frames = [_square(ICON_TEAL, s) for s in sizes]
     ico = os.path.join(ROOT, "installer", "teagle.ico")
-    frames[0].save(ico, format="ICO", sizes=[(s, s) for s in sizes])
+    # save from the LARGEST frame as base + append the rest, so every size embeds its own high-res
+    # render. (Saving from the 16px frame made Pillow drop all larger sizes → a blurry upscaled icon.)
+    frames[-1].save(ico, format="ICO", sizes=[(s, s) for s in sizes], append_images=frames[:-1])
     print("wrote", ico)
 
     wizard_images()                                      # Inno Setup wizard eagle logos (BMP)

@@ -9,6 +9,37 @@ and propagates to the backend health endpoint, the UI header badge, every run
 provenance manifest, the packaged executable's Windows file-version metadata, and
 the LaTeX report title page.
 
+## [2.1.0] — 2026-07-20
+
+UI and workflow refinements for wet-lab use, plus fixes found by a two-round debugging swarm.
+
+### Added
+- **Sortable, centered result tables.** Click any header to sort; sorting is numeric-aware for
+  score, E-value, aa, divergence, and coordinates (composite `F/R` cells sort by the combined
+  value), and the default view keeps the engine's order. All cells and headers are centered.
+- **Organism dropdown for family annotation.** RepeatMasker's `-species` is now chosen from a list
+  of common model organisms, with an **Other…** free-text field for any lineage; it auto-selects
+  from a fetched accession's organism.
+- **Send to splice detection.** Right-click any feature (structural, ORF, domain, family, genome
+  viewer, amplicon) to send its sequence to the splice tool as the transcript. The splice card now
+  states the **genomic reference** it aligns against (the loaded specimen).
+- **Amplicon FASTA export** writes a file; figure export (gel / genome) now writes the **currently
+  selected background mode** (dark / light / UV / mono) instead of always transparent.
+
+### Fixed
+- **Right-click actions used the wrong sequence.** Family-annotation hits (when run on a pasted
+  sequence) and custom-background PCR amplicons copied/derived DNA by re-slicing the panel-01
+  specimen at coordinates that indexed a *different* sequence. Copies, coordinates, primer design,
+  and send-to-splice now use each row's actual source sequence.
+- Result-card headers kept their ALL-CAPS style when expanded, and now show their one-line
+  description (previously dropped).
+- The in-silico-PCR amplicon table no longer lets a long *Source* value push the on/off-target
+  *Call* column off-screen (the source elides, full value on hover).
+- The header tagline reads **TRANSPOSABLE ELEMENTS ASSAY TERMINAL**; the "copied to clipboard"
+  message no longer sticks in the status area (brief cursor tooltip instead).
+- **App icon quality.** The `.ico` embedded only a 16 px frame (Windows upscaled it); it now
+  carries every size up to 256 px, rendered cleanly.
+
 ## [2.0.0] — 2026-07-18
 
 Native desktop rewrite. The user interface is now a **native PySide6/Qt application**;
@@ -117,5 +148,6 @@ primer design, usable without a command line.
   the WebView2 runtime is absent. A kill-on-close Job Object ties the whole process tree to the
   launcher, so an in-place upgrade never orphans a window.
 
+[2.1.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.1.0
 [2.0.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.0.0
 [1.0.0]: https://github.com/tunabirgun/TEagle/releases/tag/v1.0.0

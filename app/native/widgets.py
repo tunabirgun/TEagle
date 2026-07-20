@@ -3,7 +3,7 @@ an interactive genome viewer (windowed semantic zoom), and a data table with CSV
 and a copy context menu. All figure rendering goes through QSvgRenderer so on-screen output
 matches the exported SVG/PNG (the gel's Gaussian-blur glow is the one SVG-Tiny casualty on screen)."""
 from __future__ import annotations
-import math
+import math, re
 
 from PySide6.QtCore import Qt, QByteArray, QPointF, QRectF, Signal
 from PySide6.QtGui import QImage, QPainter, QColor
@@ -148,7 +148,7 @@ class SvgCanvas(QWidget):
 
 class FigurePanel(QWidget):
     """Toolbar (bg modes + zoom + fit + export) over an SvgCanvas. `build_fn(bg)->svg` supplies
-    the figure; export always writes the transparent variant (publication-ready), mirroring the web UI."""
+    the figure; export is WYSIWYG — it writes the currently selected background mode."""
     def __init__(self, build_fn, base_name: str, modes=("dark", "white"), parent=None,
                  hit_regions=None, on_menu=None):
         super().__init__(parent)
@@ -206,12 +206,12 @@ class FigurePanel(QWidget):
     def _export_svg(self):
         path, _ = QFileDialog.getSaveFileName(self, "Export SVG", self.base_name + ".svg", "SVG (*.svg)")
         if path:
-            save_svg(self.build_fn("transparent"), path)
+            save_svg(self.build_fn(self.bg), path)                 # export what you see (selected bg mode)
 
     def _export_png(self):
         path, _ = QFileDialog.getSaveFileName(self, "Export PNG", self.base_name + ".png", "PNG (*.png)")
         if path:
-            render_png(self.build_fn("transparent"), path)
+            render_png(self.build_fn(self.bg), path)               # export what you see (selected bg mode)
 
 
 class GenomePanel(QWidget):
@@ -307,12 +307,12 @@ class GenomePanel(QWidget):
     def _export_svg(self):
         path, _ = QFileDialog.getSaveFileName(self, "Export SVG", self.base_name + ".svg", "SVG (*.svg)")
         if path:
-            save_svg(self._cur_svg(920, for_export=True, theme="transparent"), path)
+            save_svg(self._cur_svg(920, for_export=False, theme=self.theme), path)   # honor the selected bg
 
     def _export_png(self):
         path, _ = QFileDialog.getSaveFileName(self, "Export PNG", self.base_name + ".png", "PNG (*.png)")
         if path:
-            render_png(self._cur_svg(920, for_export=True, theme="transparent"), path)
+            render_png(self._cur_svg(920, for_export=False, theme=self.theme), path)  # honor the selected bg
 
 
 class _GenomeCanvas(QWidget):
@@ -453,6 +453,47 @@ def export_table(headers, rows, base, parent=None):
         f.write("\r\n".join(lines))
 
 
+def save_fasta(fasta: str, base: str, parent=None):
+    """Write a ready-made FASTA string to a user-chosen .fasta file."""
+    path, _ = QFileDialog.getSaveFileName(parent, "Export FASTA", base + ".fasta",
+                                          "FASTA (*.fasta *.fa *.txt)")
+    if not path:
+        return
+    if not fasta.endswith("\n"):
+        fasta += "\n"
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(fasta)
+
+
+_NUM_RE = re.compile(r'-?\d+\.?\d*(?:[eE][-+]?\d+)?')
+
+def _sortkey(text: str):
+    """Numeric key for a cell: a slash-composite like '2/1' or '60.1/58.3' (Mism/Tm/GC F/R) sorts by
+    the sum of both values; otherwise the leading number (handles 1.2e-30, 45%, '0–5146' → 0). None
+    when the cell has no number, so those columns fall back to case-insensitive string order."""
+    if not text:
+        return None
+    nums = _NUM_RE.findall(text)
+    if not nums:
+        return None
+    try:
+        if "/" in text and len(nums) >= 2:               # F/R composite → combine both, not just forward
+            return float(nums[0]) + float(nums[1])
+        return float(nums[0])
+    except ValueError:
+        return None
+
+
+class _Cell(QTableWidgetItem):
+    """Table cell that sorts numerically when both cells parse as numbers, else alphabetically —
+    so Score / E-value / aa / divergence / coords sort by value, not by string."""
+    def __lt__(self, other):
+        a, b = _sortkey(self.text()), _sortkey(other.text())
+        if a is not None and b is not None:
+            return a < b
+        return self.text().casefold() < other.text().casefold()
+
+
 class DataTable(QTableWidget):
     """A read-only table with CSV/TSV export and a copy-cell/row context menu. Optional per-row
     activation callback (double-click / Enter) and a right-click menu builder for FASTA-style actions."""
@@ -474,16 +515,37 @@ class DataTable(QTableWidget):
         self.customContextMenuRequested.connect(self._menu)
         self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.horizontalHeader().setStretchLastSection(True)
-        self.doubleClicked.connect(lambda idx: self.row_activated.emit(idx.row()))
-        self._row_menu = None            # callable(row)->list[(label, fn)]
+        self.horizontalHeader().setMaximumSectionSize(360)            # cap wide free-text cols so the last column stays visible
+        self.setTextElideMode(Qt.ElideRight)                          # elide overflow; full text is in the cell tooltip
+        self.horizontalHeader().setDefaultAlignment(Qt.AlignCenter)   # centered headers
+        self.setSortingEnabled(True)                                  # click a header to sort (numeric-aware via _Cell)
+        self.doubleClicked.connect(lambda idx: self.row_activated.emit(self._orig(idx.row())))
+        self._row_menu = None            # callable(orig_row_index)->list[(label, fn)]
+
+    def _orig(self, visual_row):
+        """Map a visual row (post-sort) back to the index it had in set_rows, so row menus /
+        activation address the right data record no matter how the user sorted."""
+        if visual_row < 0:
+            return -1
+        it = self.item(visual_row, 0)
+        d = it.data(Qt.UserRole) if it else None
+        return d if d is not None else visual_row
 
     def set_rows(self, rows):
+        self.setSortingEnabled(False)                # never sort mid-insert (it scrambles rows)
         self.setRowCount(0)
-        for r in rows:
-            i = self.rowCount()
+        for i, r in enumerate(rows):
             self.insertRow(i)
             for j, c in enumerate(r):
-                self.setItem(i, j, QTableWidgetItem("" if c is None else str(c)))
+                text = "" if c is None else str(c)
+                item = _Cell(text)
+                item.setTextAlignment(Qt.AlignCenter)    # centered cells, matching the headers
+                item.setToolTip(text)                    # full value on hover, in case the cell elides
+                if j == 0:
+                    item.setData(Qt.UserRole, i)         # remember the original row index for menus
+                self.setItem(i, j, item)
+        self.horizontalHeader().setSortIndicator(-1, Qt.AscendingOrder)  # keep engine order until a header is clicked
+        self.setSortingEnabled(True)
         self.resizeColumnsToContents()
 
     def set_row_menu(self, builder):
@@ -493,7 +555,7 @@ class DataTable(QTableWidget):
         row = self.rowAt(pos.y())
         m = QMenu(self)
         if row >= 0 and self._row_menu:
-            for label, fn in self._row_menu(row):
+            for label, fn in self._row_menu(self._orig(row)):        # pass the original data index, not the sorted row
                 m.addAction(label, fn)
             m.addSeparator()
         m.addAction("Copy row", lambda: self._copy_row(row))

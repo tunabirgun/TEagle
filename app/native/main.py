@@ -6,11 +6,11 @@ from __future__ import annotations
 import gzip, os, sys
 
 from PySide6.QtCore import Qt, QTimer, QByteArray
-from PySide6.QtGui import QGuiApplication, QFont, QPixmap, QPainter, QIcon
+from PySide6.QtGui import QGuiApplication, QFont, QPixmap, QPainter, QIcon, QCursor
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QFrame, QVBoxLayout, QHBoxLayout,
                                QGridLayout, QLabel, QLineEdit, QTextEdit, QPushButton, QComboBox,
-                               QScrollArea, QSplitter, QFileDialog, QSizePolicy)
+                               QScrollArea, QSplitter, QFileDialog, QSizePolicy, QToolTip)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
@@ -26,7 +26,18 @@ from sample import make_sample
 import theme as theme_mod
 from teagle_core import appdirs
 
-APP_VERSION = "2.0.0"
+APP_VERSION = "2.1.0"
+# common model organisms for RepeatMasker/Dfam lineage (display, value passed to -species).
+# 'Other…' at the end reveals a free-text field for anything not listed.
+WSL_ORGANISMS = [
+    ("Human", "Homo sapiens"), ("Mouse", "Mus musculus"), ("Rat", "Rattus norvegicus"),
+    ("Zebrafish", "Danio rerio"), ("Chicken", "Gallus gallus"), ("Frog", "Xenopus tropicalis"),
+    ("Fruit fly", "Drosophila melanogaster"), ("Mosquito", "Anopheles gambiae"),
+    ("Nematode", "Caenorhabditis elegans"), ("Honey bee", "Apis mellifera"),
+    ("Thale cress", "Arabidopsis thaliana"), ("Rice", "Oryza sativa"), ("Maize", "Zea mays"),
+    ("Wheat", "Triticum aestivum"), ("Cow", "Bos taurus"), ("Dog", "Canis lupus familiaris"),
+    ("Budding yeast", "Saccharomyces cerevisiae"),
+]
 MARK_H = 36                                               # header brand-mark height (px)
 WORD_H = 24                                               # header wordmark height (px); a touch smaller than the eagle mark
 ICON_TEAL = "#12B39A"                                     # mid-teal for OS chrome (reads on light + dark taskbars)
@@ -61,8 +72,8 @@ def _word_pixmap(te: str, agle: str, height: int, dpr: float = 1.0) -> QPixmap:
 
 def _app_icon() -> QIcon:                                 # window/taskbar icon from the mark, mid-teal on transparent
     icon = QIcon()
-    for s in (16, 20, 24, 32, 40, 48, 64, 128, 256):
-        big = _mark_pixmap(ICON_TEAL, s * 4)              # supersample x4 then smooth-scale -> clean small frames
+    for s in (16, 20, 24, 32, 40, 48, 64, 96, 128, 256):
+        big = _mark_pixmap(ICON_TEAL, s * 8)              # supersample x8 then smooth-scale -> clean small frames
         icon.addPixmap(big.scaled(s, s, Qt.KeepAspectRatio, Qt.SmoothTransformation))
     return icon
 
@@ -73,7 +84,7 @@ DOMAIN_COLS = ["Domain", "Label", "Pfam", "aa", "nt", "Score", "E-value"]
 GLOSS = {
     "Feature": "Structural hallmark found in the sequence — e.g. LTR, TIR, target-site duplication, poly-A tail.",
     "Coords (0-based)": "Location in the sequence, 0-based half-open [start, end).",
-    "Coords": "Location of this amplicon in the searched sequence.",
+    "Coords": "Location of this amplicon in the searched sequence, 0-based half-open [start, end).",
     "Len": "Length in base pairs.",
     "Metric": "Feature-specific measure — terminal-repeat identity %, a motif, or a length.",
     "Method": "How TEagle detected this feature (the algorithm/heuristic used).",
@@ -142,7 +153,7 @@ class CollapsibleCard(QFrame):
         self.bodylay.setContentsMargins(11, 4, 11, 12)
         self.bodylay.setSpacing(9)
         self._lay.addWidget(self.body)
-        self._number, self._title = number, title
+        self._number, self._title, self._meta = number, title, meta
         self.set_collapsed(collapsed)
 
     def _toggle(self):
@@ -152,7 +163,9 @@ class CollapsibleCard(QFrame):
         self.body.setVisible(not collapsed)
         arrow = "▸" if collapsed else "▾"
         title = self._title.replace("&", "&&")           # QPushButton eats a lone '&' as a mnemonic
-        self.hdr.setText(f"{arrow} {self._number}  {title}")
+        meta = self._meta.replace("&", "&&") if self._meta else ""
+        txt = f"{arrow} {self._number}  {title}" + (f"    ·  {meta}" if meta else "")
+        self.hdr.setText(txt.upper())                     # stay ALL CAPS whether collapsed or expanded; keep the meta gloss
 
     def expand(self):
         self.set_collapsed(False)
@@ -223,7 +236,7 @@ class MainWindow(QMainWindow):
         h.addWidget(self.word)
         self.ver = QLabel("v" + APP_VERSION); self.ver.setObjectName("ver")
         h.addWidget(self.ver)
-        tag = QLabel("TRANSPOSABLE ELEMENTS"); tag.setObjectName("tagline")
+        tag = QLabel("TRANSPOSABLE ELEMENTS ASSAY TERMINAL"); tag.setObjectName("tagline")
         tf = tag.font(); tf.setLetterSpacing(QFont.AbsoluteSpacing, 1.5); tag.setFont(tf)
         h.addWidget(tag)
         h.addStretch(1)
@@ -318,6 +331,7 @@ class MainWindow(QMainWindow):
     # ---------- results column ----------
     def _build_results(self):
         wrap = QScrollArea(); wrap.setWidgetResizable(True)
+        self.resultsScroll = wrap                          # so send-to-splice etc. can scroll a card into view
         inner = QWidget(); inner.setObjectName("central")
         self.results = QVBoxLayout(inner); self.results.setContentsMargins(4, 0, 8, 0); self.results.setSpacing(9)
         self.errbanner = QLabel(""); self.errbanner.setObjectName("errbanner"); self.errbanner.setWordWrap(True)
@@ -358,8 +372,17 @@ class MainWindow(QMainWindow):
         self.wslSource.currentIndexChanged.connect(lambda i: self.wslPaste.setVisible(i == 1))
         card.bodylay.addWidget(self.wslPaste)
         row = QHBoxLayout()
-        self.wslSpecies = QLineEdit(); self.wslSpecies.setPlaceholderText("species (e.g. drosophila melanogaster) — from accession if fetched")
-        row.addWidget(self.wslSpecies)
+        row.addWidget(QLabel("Organism"))
+        self.wslSpecies = QComboBox()                     # dropdown of common organisms + 'Other…'
+        self.wslSpecies.addItem("— select organism —", None)
+        for common, sci in WSL_ORGANISMS:
+            self.wslSpecies.addItem(f"{common} · {sci}", sci)
+        self.wslSpecies.addItem("Other…", "__other__")
+        self.wslSpecies.currentIndexChanged.connect(lambda _i: self._on_species_changed())
+        row.addWidget(self.wslSpecies, 1)
+        self.wslSpeciesOther = QLineEdit(); self.wslSpeciesOther.setPlaceholderText("type organism / species")
+        self.wslSpeciesOther.setVisible(False)
+        row.addWidget(self.wslSpeciesOther, 1)
         self.annotateBtn = QPushButton("▶ Run family annotation"); self.annotateBtn.setProperty("sm", True)
         self.annotateBtn.setEnabled(False); self.annotateBtn.clicked.connect(self._annotate)
         row.addWidget(self.annotateBtn)
@@ -380,6 +403,14 @@ class MainWindow(QMainWindow):
         self.spliceStatus = QLabel("checking splice-alignment backend…"); self.spliceStatus.setObjectName("cardmeta")
         self.spliceStatus.setWordWrap(True); self.spliceStatus.setTextFormat(Qt.RichText)
         card.bodylay.addWidget(self.spliceStatus)
+        # the genomic reference is always the specimen loaded in panel 01 (fetched/uploaded/pasted)
+        self.spliceRef = QLabel("Genomic reference: none loaded yet — load a specimen in panel 01.")
+        self.spliceRef.setObjectName("cardmeta"); self.spliceRef.setWordWrap(True); self.spliceRef.setTextFormat(Qt.RichText)
+        card.bodylay.addWidget(self.spliceRef)
+        tip = QLabel("Aligns a transcript / cDNA / mRNA to that reference; introns are the alignment gaps. "
+                     "Tip: right-click any feature → “Send to splice detection” to use it as the transcript.")
+        tip.setObjectName("cardmeta"); tip.setWordWrap(True)
+        card.bodylay.addWidget(tip)
         self.spliceTx = QTextEdit()
         self.spliceTx.setPlaceholderText("Paste a transcript / cDNA / mRNA. minimap2 -x splice maps it to the loaded sequence; "
                                          "introns are the alignment gaps, checked against canonical GT–AG splice sites.")
@@ -654,7 +685,8 @@ class MainWindow(QMainWindow):
         self.state["features"] = res.get("features")
         # auto-fill species for WSL family annotation if present
         if hasattr(self, "wslSpecies") and org:
-            self.wslSpecies.setText(org.lower())
+            self._set_species(org)
+        self._update_splice_ref()
 
     def _on_analyze(self, res):
         self.runBtn.setEnabled(True); self.runBtn.setText("▶ Run analysis")
@@ -667,6 +699,7 @@ class MainWindow(QMainWindow):
         rec = recs[0]
         self.state["last_rec"] = rec
         self.state["analyzed_clean"] = self._clean_seq(self.state.get("seq", ""))
+        self._update_splice_ref()
         self.designBtn.setEnabled(True); self.designHint.setText("")
         comp = rec.get("composition", {})
         self.mLen.setText(f"{comp.get('length', 0):,}")
@@ -786,8 +819,9 @@ class MainWindow(QMainWindow):
         body = "".join(l for l in t.splitlines() if not l.startswith(">"))
         return "".join(c for c in body if c.isalpha()).upper()
 
-    def _slice(self, s, e):
-        return self._clean_seq(self.state.get("seq", ""))[s:e]
+    def _slice(self, s, e, seq=None):
+        base = self._clean_seq(seq) if seq is not None else self._clean_seq(self.state.get("seq", ""))
+        return base[s:e]
 
     def _stale_block(self):
         """Block primer / PCR when the sequence in the box differs from the analysed one."""
@@ -801,18 +835,58 @@ class MainWindow(QMainWindow):
 
     def _copy(self, text):
         QApplication.clipboard().setText(text)
-        self.statusTxt.setText("copied to clipboard")
-        QTimer.singleShot(1500, lambda: self.statusTxt.setText(self.statusTxt.text()))
+        QToolTip.showText(QCursor.pos(), "copied", self)     # brief feedback at the cursor, not the status chip
 
-    def _feat_menu(self, start, end, strand, label, protein=None):
-        dna = self._revcomp(self._slice(start, end)) if strand == "-" else self._slice(start, end)
-        items = [(f"⧉ Copy FASTA", lambda: self._copy(f">{label}_{start}-{end}{'_rev' if strand=='-' else ''}\n{dna}")),
+    def _feat_menu(self, start, end, strand, label, protein=None, dna=None, src_seq=None):
+        """Right-click menu for a feature. Coordinates address `src_seq` (default: the panel-01
+        specimen); pass `dna` when the exact sequence is already known (an amplicon carries its own
+        seq relative to its own background), so copies never re-slice the wrong template."""
+        explicit = dna is not None
+        if not explicit:
+            raw = self._slice(start, end, src_seq)
+            dna = self._revcomp(raw) if strand == "-" else raw
+        rev = "_rev" if strand == "-" else ""
+        def _design():
+            if explicit:                                  # amplicon: design within its own sequence
+                self._design_for_domain(0, len(dna), label, seq=dna)
+            elif src_seq is not None:                     # feature on a non-panel-01 sequence
+                self._design_for_domain(start, end, label, seq=src_seq)
+            else:
+                self._design_for_domain(start, end, label)
+        items = [(f"⧉ Copy FASTA", lambda: self._copy(f">{label}_{start}-{end}{rev}\n{dna}")),
                  (f"⧉ Copy DNA", lambda: self._copy(dna)),
                  (f"⧉ Copy coords ({start}–{end} {strand})", lambda: self._copy(f"{start}-{end} {strand}"))]
         if protein:
             items.append(("⧉ Copy protein", lambda: self._copy(protein)))
-        items.append(("⌖ Design primer here", lambda: self._design_for_domain(start, end, label)))
+        items.append(("⌖ Design primer here", _design))
+        items.append(("◧ Send to splice detection",
+                      lambda: self._send_to_splice(f">{label}_{start}-{end}{rev}\n{dna}")))
         return items
+
+    def _send_to_splice(self, fasta):
+        """Load a right-clicked subsequence as the transcript in the splice card and reveal it —
+        mirrors 'send to in-silico PCR'. It is aligned to the loaded genomic reference."""
+        self.spliceTx.setPlainText(fasta)
+        self.card_splice.expand()
+        try:
+            self.resultsScroll.ensureWidgetVisible(self.card_splice)
+        except Exception:
+            pass
+        self.spliceTx.setFocus()
+
+    def _update_splice_ref(self):
+        """Show which specimen splice will align a transcript against (the genomic reference)."""
+        if not hasattr(self, "spliceRef"):
+            return
+        seq = self.state.get("seq") or ""
+        if not seq:
+            self.spliceRef.setText("Genomic reference: none loaded yet — load a specimen in panel 01.")
+            return
+        src = self.state.get("source") or {}
+        n = len(self._clean_seq(seq))
+        who = src.get("accession") or "pasted / uploaded specimen"
+        org = f" · {src.get('organism')}" if src.get("organism") else ""
+        self.spliceRef.setText(f"Genomic reference: <b>{who}</b>{org} · {n:,} bp (from panel 01)")
 
     def _struct_menu(self, e):
         sp = e.get("element_span") or e.get("five_prime") or e.get("pos") or e.get("upstream") or [None, None]
@@ -906,14 +980,17 @@ class MainWindow(QMainWindow):
         self.designBtn.setEnabled(False); self.designBtn.setText("◴ designing…")
         self.engine.submit("primers", {"sequence": self.state["seq"], "params": self._read_primer_params()}, key="primers")
 
-    def _design_for_domain(self, start, end, label):
+    def _design_for_domain(self, start, end, label, seq=None):
         self._clear_banner()
-        if self._stale_block():
+        if seq is None and self._stale_block():           # stale guard only applies to the panel-01 specimen
             return
+        tmpl = seq if seq is not None else self.state.get("seq", "")
+        if not self._clean_seq(tmpl):
+            return self._banner("No sequence to design a primer on.")
         inc = [start, max(60, end - start)]
         self.card_primer.expand()
         self._pending_domain = label
-        self.engine.submit("primers", {"sequence": self.state["seq"], "params": self._read_primer_params(),
+        self.engine.submit("primers", {"sequence": tmpl, "params": self._read_primer_params(),
                                         "included": inc}, key="primers")
 
     def _on_primers(self, d):
@@ -1063,12 +1140,19 @@ class MainWindow(QMainWindow):
             t = DataTable(headers, GLOSS)
             t.set_rows([[a["pair"], a["source"], f"{a['start']}–{a['end']}", a["length"],
                          f"{a['fwd_mm']}/{a['rev_mm']}", "on-target" if a.get("on_target") else "off-target"] for a in amps])
-            t.set_row_menu(lambda r: self._feat_menu(amps[r]["start"], amps[r]["end"], "+", f"amplicon_{amps[r]['pair']}"))
+            t.set_row_menu(lambda r: self._feat_menu(amps[r]["start"], amps[r]["end"], "+",
+                                                     f"amplicon_{amps[r]['pair']}", dna=amps[r].get("seq", "")))
             t.setMaximumHeight(200)
             self.pcrBody.addWidget(t)
-            cp = QPushButton("⧉ amplicons → FASTA"); cp.setProperty("sm", True)
-            cp.clicked.connect(lambda: self._copy("\n".join(
-                f">amplicon_{a['pair']}_{a['start']}-{a['end']}_{a['length']}bp_{'on' if a.get('on_target') else 'off'}target\n{a.get('seq','')}" for a in amps)))
+            def _amps_fasta(_=False, aa=amps, tbl=t):
+                order = [tbl._orig(r) for r in range(tbl.rowCount())]      # follow the table's current (sorted) order
+                seq_amps = [aa[i] for i in order if 0 <= i < len(aa)] or aa
+                fasta = "\n".join(
+                    f">amplicon_{a['pair']}_{a['start']}-{a['end']}_{a['length']}bp_"
+                    f"{'on' if a.get('on_target') else 'off'}target\n{a.get('seq','')}" for a in seq_amps)
+                widgets.save_fasta(fasta, "TEagle_amplicons", self)
+            cp = QPushButton("⭳ Export amplicons → FASTA"); cp.setProperty("sm", True)
+            cp.clicked.connect(_amps_fasta)
             self.pcrBody.addWidget(cp)
         else:
             self.pcrBody.addWidget(_empty("No amplicon predicted for any pair under the criteria."))
@@ -1104,6 +1188,34 @@ class MainWindow(QMainWindow):
         elif w.get("wsl2"):
             self.spliceStatus.setText("minimap2 not installed in the WSL backend — it ships with the managed install (panel 03).")
 
+    def _on_species_changed(self):
+        """Show the free-text field only for 'Other…'; clear it when switching to a listed organism
+        so a stale lineage can't silently drive the next annotation."""
+        other = self.wslSpecies.currentData() == "__other__"
+        self.wslSpeciesOther.setVisible(other)
+        if not other:
+            self.wslSpeciesOther.clear()
+
+    def _species(self):
+        """Selected organism for RepeatMasker (-species), or None. 'Other…' uses the free-text field."""
+        if self.wslSpecies.currentData() == "__other__":
+            return self.wslSpeciesOther.text().strip() or None
+        return self.wslSpecies.currentData() or None
+
+    def _set_species(self, name):
+        """Auto-select the dropdown entry matching a fetched organism; fall back to 'Other…' free-text."""
+        name = (name or "").strip()
+        if not name:
+            return
+        for i in range(self.wslSpecies.count()):
+            d = self.wslSpecies.itemData(i)
+            if isinstance(d, str) and d != "__other__" and d.lower() == name.lower():
+                self.wslSpecies.setCurrentIndex(i); return
+        oi = self.wslSpecies.findData("__other__")        # not a listed organism -> Other + free text
+        if oi >= 0:
+            self.wslSpecies.setCurrentIndex(oi)
+            self.wslSpeciesOther.setText(name)
+
     def _annotate(self):
         if self.wslSource.currentIndex() == 1:
             seq = self.wslPaste.toPlainText().strip()
@@ -1113,8 +1225,9 @@ class MainWindow(QMainWindow):
             src = self.state.get("source")
         if not seq:
             return self._banner("no sequence to annotate — load a specimen or paste one")
+        self.state["family_seq"] = self._clean_seq(seq)   # hit coords index THIS sequence, not always panel-01
         self.annotateBtn.setEnabled(False); self.annotateBtn.setText("◴ annotating…")
-        self.engine.submit("annotate", {"sequence": seq, "species": self.wslSpecies.text().strip() or None,
+        self.engine.submit("annotate", {"sequence": seq, "species": self._species(),
                                         "source": src}, key="annotate")
 
     def _on_annotate(self, d):
@@ -1148,7 +1261,8 @@ class MainWindow(QMainWindow):
         t = DataTable(headers, GLOSS)
         t.set_rows([[i + 1, h["class_family"], h["family"], f"{h['q_start']}–{h['q_end']}",
                      h["strand"], f"{h['divergence']}%", h["score"]] for i, h in enumerate(te)])
-        t.set_row_menu(lambda r: self._feat_menu(te[r]["q_start"], te[r]["q_end"], te[r]["strand"], te[r]["family"]))
+        t.set_row_menu(lambda r: self._feat_menu(te[r]["q_start"], te[r]["q_end"], te[r]["strand"],
+                                                 te[r]["family"], src_seq=self.state.get("family_seq")))
         cont = QWidget(); cl = QVBoxLayout(cont); cl.setContentsMargins(0, 0, 0, 0); cl.setSpacing(6)
         cl.addWidget(head); cl.addWidget(t)
         self._set_body(self.wslBody, cont)
