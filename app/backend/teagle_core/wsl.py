@@ -206,12 +206,47 @@ echo "[teagle] STEP {key} OK"
 
 # key -> idempotent bash body (prelude sets MM/ENV/FAMDIR/fail; every step is safe to re-run)
 _STEP = {
+    # A fresh minimal Ubuntu WSL ships neither curl nor bzip2, so the old single `curl | tar -xj`
+    # failed on other users' PCs (every downstream step then died "micromamba required first").
+    # Robust order: (1) reuse a micromamba already on the box — another app (e.g. BulkSeq Studio)
+    # may have installed one at ~/.local/bin; (2) python3 stdlib download (ships on default Ubuntu,
+    # bz2 is built into CPython — no curl/bzip2/apt/sudo); (3) curl/wget+bzip2; (4) passwordless apt.
+    # The reused/installed binary is copied to $MM ($HOME/bin/micromamba) so every hardcoded ref works.
     "micromamba": r'''
 echo "[teagle] STEP micromamba START"
+mkdir -p "$HOME/bin" || fail "cannot create $HOME/bin"
+MM_URL="https://micro.mamba.pm/api/micromamba/linux-64/latest"
+mm_py3(){ python3 - "$MM" "$MM_URL" <<'PY'
+import io, os, stat, sys, tarfile, urllib.request
+dest, url = sys.argv[1], sys.argv[2]
+data = urllib.request.urlopen(url, timeout=180).read()
+with tarfile.open(fileobj=io.BytesIO(data), mode="r:bz2") as tf:
+    m = tf.extractfile(tf.getmember("bin/micromamba"))
+    if m is None: raise SystemExit("bin/micromamba not in archive")
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    open(dest, "wb").write(m.read())
+os.chmod(dest, os.stat(dest).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+PY
+}
 if [ -x "$MM" ]; then echo "[teagle] micromamba already present"; else
-  mkdir -p "$HOME/bin" || fail "cannot create $HOME/bin"
-  curl -Ls "https://micro.mamba.pm/api/micromamba/linux-64/latest" | tar -xj -C "$HOME" bin/micromamba || fail "micromamba download/extract"
-  [ -x "$MM" ] || fail "micromamba missing after extract"
+  FOUND=""
+  for c in "$HOME/.local/bin/micromamba" "$HOME/micromamba/bin/micromamba" "$(command -v micromamba 2>/dev/null)"; do
+    if [ -n "$c" ] && [ "$c" != "$MM" ] && [ -x "$c" ] && "$c" --version >/dev/null 2>&1; then FOUND="$c"; break; fi
+  done
+  if [ -n "$FOUND" ] && cp -f "$FOUND" "$MM" && chmod +x "$MM"; then
+    echo "[teagle] reused existing micromamba from $FOUND"
+  elif command -v python3 >/dev/null 2>&1 && mm_py3; then
+    echo "[teagle] micromamba installed via python3"
+  elif command -v bzip2 >/dev/null 2>&1 && command -v curl >/dev/null 2>&1 && curl -fL "$MM_URL" | tar -xj -C "$HOME" bin/micromamba; then
+    echo "[teagle] micromamba installed via curl"
+  elif command -v bzip2 >/dev/null 2>&1 && command -v wget >/dev/null 2>&1 && wget -qO- "$MM_URL" | tar -xj -C "$HOME" bin/micromamba; then
+    echo "[teagle] micromamba installed via wget"
+  elif sudo -n true 2>/dev/null && sudo apt-get update && sudo apt-get install -y python3 ca-certificates && mm_py3; then
+    echo "[teagle] micromamba installed via apt+python3"
+  else
+    fail "micromamba: no python3, no curl/wget+bzip2, and sudo needs a password. Open a WSL terminal, run:  sudo apt-get update && sudo apt-get install -y python3 ca-certificates  then click Repair again"
+  fi
+  [ -x "$MM" ] || fail "micromamba missing after install"
 fi
 echo "[teagle] STEP micromamba OK"
 ''',
@@ -273,7 +308,10 @@ _COMP_META = [
 
 
 def _build_script(keys) -> str:
-    return _PRELUDE + "".join(_STEP[k] for k in keys) + '\necho "[teagle] DONE $(date -u +%FT%TZ)"\n'
+    script = _PRELUDE + "".join(_STEP[k] for k in keys) + '\necho "[teagle] DONE $(date -u +%FT%TZ)"\n'
+    # force LF: bash chokes on CRLF (a heredoc terminator "PY\r" never matches "PY"), and a
+    # Windows checkout with core.autocrlf=true could otherwise deliver a \r-poisoned script.
+    return script.replace("\r\n", "\n").replace("\r", "\n")
 
 
 # LIVE = a lock held by a still-running install; a lock whose recorded PID is dead reads FREE (reaped on next run)

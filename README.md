@@ -4,7 +4,7 @@
   <img alt="TEagle" src="docs/img/teagle-banner-light.png" width="460">
 </picture>
 
-![Version](https://img.shields.io/badge/version-2.1.0-0E9E86) ![Platform](https://img.shields.io/badge/platform-Windows%20x64-1FB89C) ![License](https://img.shields.io/badge/license-Proprietary-C6432E) ![Built with](https://img.shields.io/badge/built%20with-PySide6%20%C2%B7%20Primer3%20%C2%B7%20HMMER-2B3740)
+![Version](https://img.shields.io/badge/version-2.1.1-0E9E86) ![Platform](https://img.shields.io/badge/platform-Windows%20x64-1FB89C) ![License](https://img.shields.io/badge/license-Proprietary-C6432E) ![Built with](https://img.shields.io/badge/built%20with-PySide6%20%C2%B7%20Primer3%20%C2%B7%20HMMER-2B3740)
 </div>
 
 Paste a sequence, open a FASTA file, or fetch an NCBI accession; detect and classify transposable elements with full evidence provenance; explore the results in an interactive genome viewer; and design purpose-specific PCR primers checked by pair-aware in-silico PCR with a to-scale gel — all in a native window, without a command line, and with every result reproducible from the exact database and software versions that produced it.

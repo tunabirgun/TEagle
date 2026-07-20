@@ -26,7 +26,7 @@ from sample import make_sample
 import theme as theme_mod
 from teagle_core import appdirs
 
-APP_VERSION = "2.1.0"
+APP_VERSION = "2.1.1"
 # common model organisms for RepeatMasker/Dfam lineage (display, value passed to -species).
 # 'Other…' at the end reveals a free-text field for anything not listed.
 WSL_ORGANISMS = [

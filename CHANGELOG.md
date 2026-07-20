@@ -9,6 +9,20 @@ and propagates to the backend health endpoint, the UI header badge, every run
 provenance manifest, the packaged executable's Windows file-version metadata, and
 the LaTeX report title page.
 
+## [2.1.1] — 2026-07-20
+
+Bugfix release: the optional WSL annotation backend failed to install on some users' machines.
+
+### Fixed
+- **WSL backend install failed on a freshly installed Linux distribution.** The micromamba
+  bootstrap assumed `curl` and `bzip2` were present, but a fresh Ubuntu WSL ships neither, so the
+  download silently failed and every dependent step (RepeatMasker, minimap2, Dfam) then reported
+  *"micromamba required first."* Installation now tries, in order: a micromamba already present on
+  the machine (reused if another tool installed one), a download using only the Python 3 standard
+  library (no `curl`/`bzip2`/`apt`/`sudo` needed), then `curl`/`wget`, then a passwordless `apt`,
+  and finally a clear message naming the one command to run. The generated install script is forced
+  to Unix line endings so it cannot break on a Windows checkout.
+
 ## [2.1.0] — 2026-07-20
 
 UI and workflow refinements for wet-lab use, plus fixes found by a two-round debugging swarm.
@@ -148,6 +162,7 @@ primer design, usable without a command line.
   the WebView2 runtime is absent. A kill-on-close Job Object ties the whole process tree to the
   launcher, so an in-place upgrade never orphans a window.
 
+[2.1.1]: https://github.com/tunabirgun/TEagle/releases/tag/v2.1.1
 [2.1.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.1.0
 [2.0.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.0.0
 [1.0.0]: https://github.com/tunabirgun/TEagle/releases/tag/v1.0.0
