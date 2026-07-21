@@ -18,6 +18,38 @@ def test_copia_when_integrase_upstream_plus_strand():
     assert cl["confidence"] == "High"
 
 
+def test_protease_evidence_recorded_from_pr_code():
+    # domains.py emits code "PR" for the aspartic protease (RVP profile); the evidence line must fire on "PR"
+    cl = classify.classify(LTR, [_dom("INT", (100, 300), "+", 40), _dom("RT", (500, 1400), "+", 90),
+                                 _dom("PR", (350, 480), "+", 30)])
+    assert any("aspartic-protease" in e for e in cl["evidence"]), cl["evidence"]
+
+
+def test_line_polyt_not_mislabeled_as_polya():
+    # a LINE with only a 5' poly-T tract must not be reported as a "3' poly-A tail"
+    struct = [{"type": "poly-T (5')", "length": 20, "pos": [0, 20]}]
+    cl = classify.classify(struct, [_dom("RT", (100, 1000), "+", 90)])
+    ev = " ".join(cl["evidence"])
+    assert "poly-T" in ev and "poly-A tail consistent" not in ev
+
+
+def test_domain_dedup_keeps_opposite_strand():
+    from teagle_core import domains
+    # same code + same nt region but OPPOSITE strands -> both kept (different features)
+    hits = [{"domain": "INT", "nt": [100, 300], "strand": "+", "score": 90},
+            {"domain": "INT", "nt": [100, 300], "strand": "-", "score": 40}]
+    kept = domains._dedup_domains(hits)
+    assert len(kept) == 2 and {h["strand"] for h in kept} == {"+", "-"}
+
+
+def test_domain_dedup_drops_same_strand_lower_score():
+    from teagle_core import domains
+    hits = [{"domain": "RT", "nt": [100, 300], "strand": "+", "score": 90},
+            {"domain": "RT", "nt": [150, 350], "strand": "+", "score": 40}]   # same code+strand, overlap
+    kept = domains._dedup_domains(hits)
+    assert len(kept) == 1 and kept[0]["score"] == 90
+
+
 def test_gypsy_when_integrase_downstream_plus_strand():
     cl = classify.classify(LTR, [_dom("RT", (100, 1000), "+", 90), _dom("INT", (1200, 1400), "+", 40)])
     assert cl["superfamily"].startswith("Gypsy"), cl["superfamily"]

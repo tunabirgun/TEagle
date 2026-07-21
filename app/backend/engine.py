@@ -138,7 +138,9 @@ def run_analyze(body):
 
 def analyze(seq_text: str, source: dict | None = None):
     recs = sequtil.parse_fasta(seq_text)
-    rna = isinstance(seq_text, str) and "U" in seq_text.upper()      # RNA input was normalized U->T by parse_fasta
+    # RNA input (normalized U->T by parse_fasta): detect U in the SEQUENCE body only, never in a header line
+    _body = "".join(l for l in seq_text.splitlines() if not l.startswith(">")) if isinstance(seq_text, str) else ""
+    rna = "U" in _body.upper()
     out = []
     for rid, seq in recs:
         ok, bad = sequtil.validate_iupac(seq)
@@ -277,7 +279,8 @@ def run_splice(body):
         r["references"] = references
         r["provenance"] = provenance.build_manifest(
             "splice", grecs[0][1], grecs[0][0],
-            {"tool": "minimap2", "preset": "splice", "minimap2": r.get("minimap2_version")},
+            {"tool": "minimap2", "preset": "splice", "minimap2": r.get("minimap2_version"),
+             "transcript_sha256": hashlib.sha256(trecs[0][1].encode()).hexdigest()},   # seal the transcript too
             source=body.get("source"), references=references)
     return r
 
@@ -336,6 +339,8 @@ def run_primers(body):
         inc = [s0, max(1, min(int(_num(inc[1], 1)), len(seq) - s0))]
     try:
         res = primers.design_primers(seq, params, body.get("target"), inc)
+    except (ImportError, RuntimeError):                # environment fault (Primer3 unavailable) -> 500, not a user 400
+        raise
     except Exception as e:
         msg = str(e)
         if "PRIMER_PRODUCT_SIZE_RANGE" in msg or "SEQUENCE_INCLUDED_REGION" in msg:
@@ -378,8 +383,9 @@ def run_pcr(body):
             backgrounds.append({"id": bid + " (custom background)", "seq": bseq})
     ts = body.get("target_span")
     if ts is not None and not (isinstance(ts, (list, tuple)) and len(ts) == 2
-            and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in ts)):
-        raise BadRequest("target_span must be a [start, end] pair of numbers")
+            and all(isinstance(x, (int, float)) and not isinstance(x, bool)
+                    and x == x and abs(x) != float("inf") for x in ts)):    # reject NaN/Inf (would seal into the manifest)
+        raise BadRequest("target_span must be a [start, end] pair of finite numbers")
     tp = max(0, int(_num(p.get("tp", 5), 5)))            # non-negative int; float/NaN already rejected by _clean_params
     mm = max(0, int(_num(p.get("max_mm", 2), 2)))
     try:

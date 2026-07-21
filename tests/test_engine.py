@@ -60,6 +60,13 @@ def test_run_pcr_nonstring_background_is_badrequest():
         engine.run_pcr(body)
 
 
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_run_pcr_nonfinite_target_span_is_badrequest(bad):
+    # a NaN/Inf target_span would otherwise seal into the reproducibility manifest
+    with pytest.raises(BadRequest):
+        engine.run_pcr({"sequence": "ACGT" * 60, "fwd": "ACGT", "rev": "ACGT", "target_span": [bad, 100]})
+
+
 def test_run_pcr_malformed_target_span_is_badrequest():
     body = {"sequence": "ACGT" * 40, "fwd": "ACGTACGTACGTACGTAC", "rev": "TTGGTTGGTTGGTTGGTT",
             "target_span": "whoops"}
@@ -148,6 +155,26 @@ def test_run_fetch_coords_custom_routes_through_resolve(monkeypatch):
                         (seen.update(accession=acc, taxid=taxid), {"runType": "coordinate", "source": {}})[1])
     r = engine.run_fetch_coords({"regions": "chr1:1-10", "organism": "", "customQuery": "GCF_999.1"})
     assert r["ok"] is True and seen["accession"] == "GCF_999.1" and seen["taxid"] == "9"
+
+
+# --- RNA detection must read the sequence body, not a header that merely contains 'U' ---
+def test_analyze_rna_flag_ignores_header_u():
+    r = engine.run_analyze({"sequence": ">Human U2 snRNA gene\nACGTACGTACGTACGTACGT"})
+    assert not any("RNA" in n for n in r["records"][0].get("notes", []))
+
+
+def test_analyze_rna_flag_detects_body_u():
+    r = engine.run_analyze({"sequence": ">x\nACGUACGUACGUACGU"})
+    assert any("RNA" in n for n in r["records"][0].get("notes", []))
+
+
+# --- a Primer3 environment fault must surface as a 500 (re-raised), not a user BadRequest ---
+def test_run_primers_env_fault_is_not_badrequest(monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("primer3 shared library unavailable")
+    monkeypatch.setattr(engine.primers, "design_primers", boom)
+    with pytest.raises(RuntimeError):
+        engine.run_primers({"sequence": "ACGT" * 60})
 
 
 # --- run_analyze end to end on a trivial sequence returns the expected shape ---

@@ -69,7 +69,10 @@ def resolve(acc: str) -> dict:
     """Verify the accession and return metadata BEFORE downloading the sequence."""
     acc = validate_accession(acc)
     q = urllib.parse.urlencode({"db": "nuccore", "id": acc, "retmode": "json", "tool": TOOL})
-    data = json.loads(_get(EUTILS + "esummary.fcgi?" + q))
+    try:                                                       # a 200 with a non-JSON/empty body (maintenance/rate-limit)
+        data = json.loads(_get(EUTILS + "esummary.fcgi?" + q))
+    except (json.JSONDecodeError, ValueError):
+        raise FetchError("NCBI returned an unexpected (non-JSON) response — try again shortly")
     res = data.get("result", {})
     uids = res.get("uids", [])
     if not uids:
@@ -88,19 +91,29 @@ def resolve(acc: str) -> dict:
     }
 
 
-def fetch_fasta(acc: str) -> str:
+def fetch_fasta(acc: str, served: list | None = None) -> str:
+    """Fetch the FASTA for an accession. If `served` is given, the (source-label, endpoint) that
+    actually served the bytes is appended to it, so the caller records the real serving database
+    (NCBI or the ENA fallback) rather than always claiming NCBI."""
     acc = validate_accession(acc)
     q = urllib.parse.urlencode({"db": "nuccore", "id": acc, "rettype": "fasta",
                                 "retmode": "text", "tool": TOOL})
-    txt = _get(EUTILS + "efetch.fcgi?" + q)
+    src = ("NCBI nuccore", EUTILS + "efetch.fcgi")
+    try:
+        txt = _get(EUTILS + "efetch.fcgi?" + q)
+    except FetchError:
+        txt = ""                                              # NCBI HTTP/URL error -> still try the ENA fallback below
     if not txt.lstrip().startswith(">"):
-        # fall back to ENA once before giving up
+        # fall back to ENA once before giving up (covers both a non-FASTA 200 body and an NCBI request error)
         try:
             txt = _get(ENA + urllib.parse.quote(acc))
+            src = ("ENA (EMBL-EBI)", ENA + acc)
         except FetchError:
             pass
     if not txt.lstrip().startswith(">"):
         raise FetchError("no FASTA returned (check the accession)")
+    if served is not None:
+        served.append(src)
     return txt
 
 
@@ -197,12 +210,18 @@ def retrieve(acc: str, refresh: bool = False) -> dict:
             cached["servedUtc"] = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
             return cached
     meta = resolve(acc)
-    fasta = fetch_fasta(acc)
+    served = []
+    fasta = fetch_fasta(acc, served)
     seq = "".join(l for l in fasta.splitlines() if not l.startswith(">"))
     meta["fasta"] = fasta
     meta["seq_length"] = len(seq)
     meta["retrievedUtc"] = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
-    meta["endpoint"] = EUTILS + "efetch.fcgi"
+    if served:                                                 # record the DB that actually served the sequence
+        meta["source"], meta["endpoint"] = served[0]
+    else:
+        meta["endpoint"] = EUTILS + "efetch.fcgi"
+    meta["sourceUrl"] = ("https://www.ebi.ac.uk/ena/browser/view/" + acc if meta.get("source", "").startswith("ENA")
+                         else "https://www.ncbi.nlm.nih.gov/nuccore/" + acc)
     meta["fromCache"] = False
     try:                                                       # best-effort gene annotation (exon/intron/CDS); never blocks the fetch
         gm = fetch_features(acc)
@@ -315,8 +334,11 @@ def _load_assembly_map(assembly_accession: str, refresh: bool = False) -> dict:
     (so a custom assembly stays reproducible after first resolve)."""
     p = os.path.join(_assembly_map_dir(), assembly_accession + ".json")
     if not refresh and os.path.isfile(p):
-        with open(p, encoding="utf-8") as f:
-            return json.load(f)
+        try:                                                  # a truncated/corrupt shipped map falls through to the live fetch
+            with open(p, encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, ValueError, OSError):
+            pass
     cached = _read_cache("asm_" + assembly_accession)
     if cached and not refresh:
         return cached

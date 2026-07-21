@@ -90,6 +90,29 @@ def test_coord_seal_changes_with_identity():
     assert base != _seal(_coord_src(regions=minus))
 
 
+def test_seal_invariant_to_serving_database():
+    # the DB that served the FASTA (NCBI vs the ENA fallback) is recorded but must NOT change the seal
+    a = {"accession": "M11240.1", "organism": "Drosophila", "taxid": "7227", "source": "NCBI nuccore",
+         "endpoint": "https://eutils.ncbi.nlm.nih.gov/.../efetch.fcgi", "sourceUrl": "https://www.ncbi.nlm.nih.gov/nuccore/M11240.1",
+         "retrievedUtc": "2026-07-21T10:00:00+00:00"}
+    b = dict(a, source="ENA (EMBL-EBI)", endpoint="https://www.ebi.ac.uk/ena/browser/api/fasta/M11240.1",
+             sourceUrl="https://www.ebi.ac.uk/ena/browser/view/M11240.1")
+    ma = provenance.build_manifest("analysis", "ACGTACGT", "M11240.1", {}, source=a)
+    mb = provenance.build_manifest("analysis", "ACGTACGT", "M11240.1", {}, source=b)
+    assert ma["input"]["source"] != mb["input"]["source"]              # recorded verbatim...
+    assert ma["manifestSha256"] == mb["manifestSha256"]                # ...never sealed (refetch-invariant)
+
+
+def test_splice_seal_includes_transcript():
+    import hashlib
+    g = "ACGTACGTACGTACGT"
+    m1 = provenance.build_manifest("splice", g, "gid", {"tool": "minimap2",
+         "transcript_sha256": hashlib.sha256(b"transcript-one").hexdigest()})
+    m2 = provenance.build_manifest("splice", g, "gid", {"tool": "minimap2",
+         "transcript_sha256": hashlib.sha256(b"transcript-two").hexdigest()})
+    assert m1["manifestSha256"] != m2["manifestSha256"]                # same genomic, different transcript -> different seal
+
+
 def test_coord_and_accession_seals_are_distinct():
     # a coordinate run and a bare-accession run of the same bytes must not collide
     acc_src = {"accession": "NC_000013.11", "organism": "Homo sapiens", "taxid": "9606",

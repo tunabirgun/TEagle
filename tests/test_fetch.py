@@ -22,7 +22,7 @@ def test_retrieve_caches_and_reuses(tmp_path, monkeypatch):
         return {"accession": "M11240.1", "organism": "Drosophila melanogaster", "taxid": 7227,
                 "title": "copia", "length": 5146, "moltype": "DNA", "source": "NCBI nuccore"}
     monkeypatch.setattr(fetch, "resolve", fake_resolve)
-    monkeypatch.setattr(fetch, "fetch_fasta", lambda acc: ">M11240.1\n" + "ACGT" * 20)
+    monkeypatch.setattr(fetch, "fetch_fasta", lambda acc, served=None: ">M11240.1\n" + "ACGT" * 20)
     first = fetch.retrieve("M11240")
     assert first["fromCache"] is False and calls["n"] == 1
     second = fetch.retrieve("M11240")
@@ -99,6 +99,44 @@ def test_parse_regions_rejects_malformed(bad):
     # a comma/space-only coordinate group must raise CoordError, never a bare int('') ValueError
     with pytest.raises(fetch.CoordError):
         fetch.parse_regions(bad)
+
+
+def test_fetch_fasta_records_ena_fallback_source(monkeypatch):
+    # efetch returns a non-FASTA body, ENA has the sequence: the served-by must be reported as ENA, not NCBI
+    def fake_get(url, *a, **k):
+        if "efetch" in url:
+            return "<html>error</html>"                       # NCBI can't serve it as FASTA
+        return ">X\n" + "ACGT" * 10                           # ENA fallback serves it
+    monkeypatch.setattr(fetch, "_get", fake_get)
+    served = []
+    fetch.fetch_fasta("M11240", served)
+    assert served and served[0][0].startswith("ENA")
+
+
+def test_fetch_fasta_ena_fallback_on_ncbi_request_error(monkeypatch):
+    # an NCBI HTTP/URL error (not just a non-FASTA 200) must still fall through to ENA
+    def fake_get(url, *a, **k):
+        if "efetch" in url:
+            raise fetch.FetchError("HTTP 503 from source")
+        return ">X\n" + "ACGT" * 10
+    monkeypatch.setattr(fetch, "_get", fake_get)
+    served = []
+    fetch.fetch_fasta("M11240", served)
+    assert served and served[0][0].startswith("ENA")
+
+
+def test_fetch_fasta_records_ncbi_when_efetch_serves(monkeypatch):
+    monkeypatch.setattr(fetch, "_get", lambda url, *a, **k: ">X\n" + "ACGT" * 10)
+    served = []
+    fetch.fetch_fasta("M11240", served)
+    assert served and served[0][0] == "NCBI nuccore"
+
+
+def test_resolve_non_json_body_is_fetcherror(monkeypatch):
+    # accession metadata path: a 200 with a non-JSON body must be a clean FetchError, not JSONDecodeError/500
+    monkeypatch.setattr(fetch, "_get", lambda *a, **k: "<html>maintenance</html>")
+    with pytest.raises(fetch.FetchError):
+        fetch.resolve("M11240")
 
 
 def test_datasets_json_non_json_body_is_coorderror(monkeypatch):

@@ -11,7 +11,9 @@ _SEAL_EXCLUDE_TOP = ("createdUtc", "environment")
 # volatile / label-only input fields: retrieval time, and the raw FASTA-header id (differs between the
 # NCBI and ENA-fallback fetch paths for the SAME accession+sequence). The sequence sha256 + the resolved
 # accession/organism/taxid still seal the scientific identity.
-_SEAL_EXCLUDE_INPUT = ("retrievedUtc", "id", "assemblyName", "displayLocus", "chromName")
+_SEAL_EXCLUDE_INPUT = ("retrievedUtc", "id", "assemblyName", "displayLocus", "chromName",
+                       "source", "endpoint", "sourceUrl")   # serving-DB labels: recorded, never sealed (NCBI vs ENA fallback
+                                                            # must not change the content-addressed seal for identical bytes)
 
 
 def _software(run_type: str) -> list:

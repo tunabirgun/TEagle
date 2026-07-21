@@ -9,6 +9,22 @@ and propagates to the backend health endpoint, the UI header badge, every run
 provenance manifest, the packaged executable's Windows file-version metadata, and
 the LaTeX report title page.
 
+## [2.4.1] — 2026-07-21
+
+Correctness and robustness release from a comprehensive multi-agent debug pass (three adversarial review loops with independent verification and advisor review). No feature changes.
+
+### Fixed
+- **Reproducibility seal.** The manifest hash is now invariant to which database served a fetched sequence (NCBI vs the ENA fallback) — two byte-identical runs of the same accession seal identically again. The in-silico splice manifest now seals the transcript as well as the genomic sequence, so two splice runs on the same locus with different transcripts no longer collide. In-silico PCR rejects a non-finite (NaN/Inf) target span instead of sealing it.
+- **Specimen identity and stale state.** Editing a fetched sequence now clears the accession identity so a pasted edit is never sealed under the previous record; loading a new specimen clears the previous accession's gene model; and feature copy/design/send-to-splice now slice the *analysed* sequence rather than a later unanalysed edit, so copied bases always match the displayed coordinates. The splice "genomic reference" label refreshes when the specimen changes.
+- **Classification and domains.** The aspartic-protease evidence line is now recorded; a 5′ poly-T tract is no longer mislabelled as a 3′ poly-A tail; and overlapping same-domain hits on opposite strands are no longer discarded (strand-aware de-duplication).
+- **In-silico PCR.** A primer pair is only called on-target against the template it was actually designed on (never a false on-target from a pair designed on a different sequence); a multi-pair run still renders the gel for the successful lanes if one pair fails; and concurrent primer-design or fetch requests can no longer race.
+- **Fetch robustness.** A transient NCBI response that is not valid JSON now surfaces as a clean, retry-suggesting message instead of an internal error; the ENA fallback also fires when NCBI raises a request error (not only on a non-FASTA body); a corrupt bundled assembly map falls through to a live resolve; and the served-database label links correctly for ENA-served records.
+- **Miscellaneous.** RNA detection reads the sequence body only (a header containing the letter "U" no longer stamps a false RNA note); the genome viewer's coordinate mapping is correct at any panel width; a Primer3 environment fault is reported as an internal fault rather than a bad-input error; the local web server returns 400 (not 500) for a malformed Content-Length and tightens its static-file path guard; and the app version shown in the UI is taken from the single source of truth.
+
+### Known limitations
+- **WSL2-install-from-app path (unverified).** Three robustness issues on the elevated WSL2 installer — the completion marker can report a `wsl --install` failure as success, a non-ASCII Windows user path can be dropped from the install-log path, and a corrupted conda index shard is not auto-repaired on a Repair re-run — are identified but **not fixed in this release**, because this path cannot be verified without a WSL-less test machine (as noted for 2.4.0). The core app (classification, domains, primer design, in-silico PCR, coordinate/accession fetch) is unaffected and works fully offline.
+- **Long LTRs (> ~1800 bp).** The terminal-repeat search window is capped at ~1800 bp, so an element with LTRs longer than that is reported with a truncated LTR length and an inward-shifted element span. This is a pre-existing limitation; a correct fix requires validation against long-LTR reference elements and is deferred.
+
 ## [2.4.0] — 2026-07-21
 
 Fetch by genomic coordinate, an explicit table-export format menu, and a fixed Windows taskbar icon.
@@ -194,6 +210,7 @@ primer design, usable without a command line.
   the WebView2 runtime is absent. A kill-on-close Job Object ties the whole process tree to the
   launcher, so an in-place upgrade never orphans a window.
 
+[2.4.1]: https://github.com/tunabirgun/TEagle/releases/tag/v2.4.1
 [2.4.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.4.0
 [2.3.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.3.0
 [2.2.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.2.0

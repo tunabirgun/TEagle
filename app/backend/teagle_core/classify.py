@@ -51,15 +51,16 @@ def classify(structural, domains):
             if not order_resolvable:
                 ev.append("integrase/RT order not cleanly resolvable (different strands or overlapping spans) — superfamily call is tentative")
             te_class = "LTR/" + superfamily.split(" ")[0]
-            if "RVP" in cset:
+            if "PR" in cset:                                  # cset holds emitted domain codes; domains.py maps RVP -> code "PR"
                 ev.append("aspartic-protease domain present")
             if "RNaseH" in cset:
                 ev.append("RNase H domain present")
         elif not has_ltr and not intg:
             superfamily, te_class = "LINE (non-LTR)", "LINE"
             ev.append("RT without integrase and without LTRs → non-LTR retrotransposon (LINE)")
-            if has_polya:
-                ev.append("3′ poly-A tail consistent with LINE")
+            if has_polya:                                     # name the tail that was actually detected, not always poly-A
+                _pa = any(e["type"].startswith("poly-A") for e in structural)
+                ev.append(("3′ poly-A tail" if _pa else "5′ poly-T tract") + " consistent with LINE")
         elif has_ltr:
             superfamily, te_class = "LTR retrotransposon (superfamily undetermined)", "LTR/unclassified"
             ev.append("LTRs + RT present but integrase/order not resolved")

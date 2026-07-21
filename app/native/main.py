@@ -26,8 +26,7 @@ from sample import make_sample
 import theme as theme_mod
 from teagle_core import appdirs
 from teagle_core.fetch import COORD_ASSEMBLIES        # organism -> pinned assembly, for the coordinate-fetch dropdown
-
-APP_VERSION = "2.1.1"
+from teagle_core import __version__ as APP_VERSION    # single source of truth (never hardcode a duplicate version)
 # common model organisms for RepeatMasker/Dfam lineage (display, value passed to -species).
 # 'Other…' at the end reveals a free-text field for anything not listed.
 WSL_ORGANISMS = [
@@ -128,6 +127,7 @@ REFLINKS = {
     "Dfam":         {"url": "https://doi.org/10.1186/s13100-020-00230-y", "cite": "Storer J, et al. (2021) The Dfam community resource of transposable element families. Mob DNA 12:2."},
     "RepeatMasker": {"url": "https://www.repeatmasker.org/", "cite": "Smit AFA, Hubley R, Green P. RepeatMasker Open-4.0."},
     "NCBI":         {"url": "https://www.ncbi.nlm.nih.gov/nuccore/", "cite": "NCBI Entrez / E-utilities (Sayers E, NCBI)."},
+    "ENA":          {"url": "https://www.ebi.ac.uk/ena/browser/view/", "cite": "European Nucleotide Archive (EMBL-EBI) — sequence fallback source."},
     "Primer3":      {"url": "https://doi.org/10.1093/nar/gks596", "cite": "Untergasser A, et al. (2012) Primer3 — new capabilities and interfaces. Nucleic Acids Res 40:e115."},
     "minimap2":     {"url": "https://doi.org/10.1093/bioinformatics/bty191", "cite": "Li H (2018) Minimap2: pairwise alignment for nucleotide sequences. Bioinformatics 34:3094-3100."},
 }
@@ -211,6 +211,9 @@ class MainWindow(QMainWindow):
         self.resize(round(1240 * theme_mod.UI_SCALE), round(860 * theme_mod.UI_SCALE))
         self.theme = "dark"
         self.state = {"seq": "", "source": None, "last_rec": None}
+        self._loading = False                                 # True while a programmatic load writes the specimen box
+        self._pcr_gen = 0                                     # monotonic in-silico-PCR batch id (drops stale sibling results)
+        self._design_inflight = False                         # one primer design at a time (self._design_tmpl is shared state)
 
         self.engine = Engine(self)
         self.engine.done.connect(self._on_done)
@@ -275,8 +278,8 @@ class MainWindow(QMainWindow):
         accrow = QHBoxLayout()
         self.acc = QLineEdit(); self.acc.setPlaceholderText("accession — e.g. M11240, NC_003075.7")
         accrow.addWidget(self.acc)
-        fb = QPushButton("↓ Fetch"); fb.setProperty("sm", True); fb.clicked.connect(self._fetch)
-        accrow.addWidget(fb)
+        self.fetchBtn = QPushButton("↓ Fetch"); self.fetchBtn.setProperty("sm", True); self.fetchBtn.clicked.connect(self._fetch)
+        accrow.addWidget(self.fetchBtn)
         lay.addLayout(accrow)
         self.accMeta = QLabel(""); self.accMeta.setObjectName("cardmeta"); self.accMeta.setWordWrap(True)
         self.accMeta.setTextFormat(Qt.RichText); self.accMeta.setOpenExternalLinks(True)
@@ -302,8 +305,9 @@ class MainWindow(QMainWindow):
         self.coord.setPlaceholderText("chr13:33,016,423-33,066,143   (one region per line for multi-region)")
         cb.addWidget(self.coord)
         crow = QHBoxLayout()
-        cfb = QPushButton("↓ Fetch region(s)"); cfb.setProperty("sm", True); cfb.clicked.connect(self._fetch_coord)
-        crow.addWidget(cfb); crow.addStretch(1); cb.addLayout(crow)
+        self.coordFetchBtn = QPushButton("↓ Fetch region(s)"); self.coordFetchBtn.setProperty("sm", True)
+        self.coordFetchBtn.clicked.connect(self._fetch_coord)
+        crow.addWidget(self.coordFetchBtn); crow.addStretch(1); cb.addLayout(crow)
         self.coordMeta = QLabel(""); self.coordMeta.setObjectName("cardmeta"); self.coordMeta.setWordWrap(True)
         self.coordMeta.setTextFormat(Qt.RichText); self.coordMeta.setOpenExternalLinks(True); cb.addWidget(self.coordMeta)
         cnote = QLabel("UCSC-style, 1-based (same numbers as the browser). Multi-region: all fetched + recorded; "
@@ -597,17 +601,33 @@ class MainWindow(QMainWindow):
         self._render_pcr_queue()
 
     # ---------- input handling ----------
+    def _set_seq(self, text):
+        """Programmatic specimen load (fetch / upload / sample). Wrapped in the _loading guard so the
+        textChanged handler keeps state['seq'] in sync but does NOT treat the load as a user edit that
+        would wipe the source the loader is about to set."""
+        self.state["features"] = None                         # drop a prior accession's gene model (fetch re-sets it after)
+        self._loading = True
+        try:
+            self.seq.setPlainText(text)
+        finally:
+            self._loading = False
+
     def _seq_changed(self):
         txt = self.seq.toPlainText()
-        n = len(txt.replace("\n", "").replace("\r", ""))
-        # rough nt count excluding header lines
         body = "".join(l for l in txt.splitlines() if not l.startswith(">"))
         self.charCount.setText(f"{len(body)} nt")
+        self.state["seq"] = txt.strip()                       # specimen tracks the box: splice/annotate read this
+        if not self._loading:
+            if self.state.get("source") is not None:
+                self.state["source"] = None                   # a genuine edit no longer matches the fetched identity
+                self.accMeta.setText(""); self.coordMeta.setText("")
+                self.state["features"] = None
+            self._update_splice_ref()                         # refresh the 'Genomic reference' label to the edited specimen
 
     def _load_sample(self):
-        self.seq.setPlainText(make_sample())
+        self._set_seq(make_sample())
         self.state["source"] = None
-        self.accMeta.setText("")
+        self.accMeta.setText(""); self.coordMeta.setText("")
 
     def _upload(self):
         path, _ = QFileDialog.getOpenFileName(self, "Open FASTA", "",
@@ -623,15 +643,19 @@ class MainWindow(QMainWindow):
                     data = f.read()
         except OSError as e:
             return self._banner(f"could not read file: {e}")
-        self.seq.setPlainText(data)
+        self._set_seq(data)
         self.state["source"] = None
-        self.accMeta.setText(f"loaded {os.path.basename(path)}")
+        self.accMeta.setText(f"loaded {os.path.basename(path)}"); self.coordMeta.setText("")
+
+    def _set_fetch_enabled(self, on):
+        self.fetchBtn.setEnabled(on); self.coordFetchBtn.setEnabled(on)   # both disabled in-flight: no overlapping fetch race
 
     def _fetch(self):
         acc = self.acc.text().strip()
         if not acc:
             return self._banner("enter an accession first")
         self.accMeta.setText("fetching…")
+        self._set_fetch_enabled(False)
         self.engine.submit("fetch", {"accession": acc}, key="fetch")
 
     def _run_analysis(self):
@@ -639,6 +663,7 @@ class MainWindow(QMainWindow):
         if not seq:
             return self._banner("paste, upload, or fetch a sequence first")
         self.state["seq"] = seq
+        self.state["analyzed_seq"] = seq                  # snapshot the sequence the reported feature coords index
         self.runBtn.setEnabled(False); self.runBtn.setText("… analysing")
         self.engine.submit("analyze", {"sequence": seq, "source": self.state["source"]}, key="analyze")
 
@@ -664,30 +689,36 @@ class MainWindow(QMainWindow):
         elif key == "primers":
             self._on_primers(res)
         elif key.startswith("pcr#"):
-            self._on_pcr(key, res)
+            self._pcr_slot(key, res)
 
     def _reset_buttons(self, key):
         if key == "analyze":
             self.runBtn.setEnabled(True); self.runBtn.setText("▶ Run analysis")
         elif key == "primers":
+            self._design_inflight = False
             self.designBtn.setEnabled(True); self.designBtn.setText("⋯ Design primers")
-        elif key.startswith("pcr#"):
-            self.runPcrBtn.setEnabled(True); self.runPcrBtn.setText("▶ Run loaded pairs")
         elif key == "annotate":
             self.annotateBtn.setEnabled(True); self.annotateBtn.setText("▶ Run family annotation")
         elif key == "splice":
             self.spliceBtn.setEnabled(True); self.spliceBtn.setText("▶ Detect exons / introns")
         elif key == "fetch":
+            self._set_fetch_enabled(True)                     # fetch failed — re-enable so the user can retry
             for lbl in (self.accMeta, self.coordMeta):        # clear only the in-flight indicator, keep a prior result
                 if lbl.text() == "fetching…":
                     lbl.setText("")
 
     def _on_user_error(self, key, msg):
-        self._reset_buttons(key)
+        if key.startswith("pcr#"):                            # a failed pair fills its slot so the batch still renders
+            self._pcr_slot(key, {"error": msg, "amplicons": []})
+        else:
+            self._reset_buttons(key)
         self._banner(msg)
 
     def _on_failed(self, key, msg, trace):
-        self._reset_buttons(key)
+        if key.startswith("pcr#"):
+            self._pcr_slot(key, {"error": msg, "amplicons": []})
+        else:
+            self._reset_buttons(key)
         sys.stderr.write(trace + "\n")
         self._banner(f"unexpected error: {msg}")
 
@@ -728,6 +759,7 @@ class MainWindow(QMainWindow):
             return self._banner("enter at least one region, e.g. chr13:33,016,423-33,066,143")
         strand = "-" if self.coordStrand.currentIndex() == 1 else "+"
         self.coordMeta.setText("fetching…")
+        self._set_fetch_enabled(False)
         self.engine.submit("fetch_coords", {"regions": regions, "strand": strand,
                            "organism": "" if org == "__custom__" else org, "customQuery": custom}, key="fetch")
 
@@ -745,13 +777,14 @@ class MainWindow(QMainWindow):
         self.state["features"] = None
 
     def _on_fetch(self, res):
+        self._set_fetch_enabled(True)                         # fetch settled — allow the next one
         if not res.get("ok"):
             self.accMeta.setText(""); self.coordMeta.setText("")
             return self._banner(res.get("error", "fetch failed"))
         self._clear_banner()
         seqtext = res.get("fasta") or res.get("sequence") or ""
         if seqtext:
-            self.seq.setPlainText(seqtext)
+            self._set_seq(seqtext)
         org = res.get("organism", "")
         if res.get("runType") == "coordinate":
             self._render_coord_fetch(res)
@@ -759,8 +792,10 @@ class MainWindow(QMainWindow):
             length = res.get("length") or res.get("seq_length") or ""
             cached = " · cached (local)" if res.get("fromCache") else ""
             acc = res.get("accession", "")
-            ncbi = self._src_html("NCBI", "https://www.ncbi.nlm.nih.gov/nuccore/" + acc) if acc else ""
-            self.accMeta.setText(f"{acc} · {org} · {length} bp{cached}{ncbi}<br>{res.get('title','')}")
+            src_label = "ENA" if str(res.get("source", "")).startswith("ENA") else "NCBI"   # name the DB that served it
+            src_url = res.get("sourceUrl") or ("https://www.ncbi.nlm.nih.gov/nuccore/" + acc)
+            link = self._src_html(src_label, src_url) if acc else ""
+            self.accMeta.setText(f"{acc} · {org} · {length} bp{cached}{link}<br>{res.get('title','')}")
             self.coordMeta.setText("")                    # clear the other specimen identity
             self.state["source"] = {k: res.get(k) for k in ("accession", "organism", "title", "length", "moltype") if res.get(k) is not None}
             self.state["features"] = res.get("features")
@@ -902,8 +937,30 @@ class MainWindow(QMainWindow):
         body = "".join(l for l in t.splitlines() if not l.startswith(">"))
         return "".join(c for c in body if c.isalpha()).upper()
 
+    def _norm_seq(self, text=None):
+        """Normalize exactly as the backend (sequtil.parse_fasta record 0 + _norm) does, so a re-sliced
+        feature indexes the same positions the engine reported. With a '>' header present, take ONLY the
+        first record's sequence — drop any bases before the first header and any later records — then strip
+        all whitespace, uppercase, U->T (keep gaps/'*'/digits). Without a header, the whole text is the seq."""
+        t = self.seq.toPlainText() if text is None else text
+        if ">" in t:
+            body, started = [], False
+            for line in t.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+                if line.startswith(">"):
+                    if started:                               # a second header ends record 0
+                        break
+                    started = True
+                elif started:
+                    body.append(line)
+            body = "".join(body)
+        else:
+            body = t
+        return "".join(body.split()).upper().replace("U", "T")
+
     def _slice(self, s, e, seq=None):
-        base = self._clean_seq(seq) if seq is not None else self._clean_seq(self.state.get("seq", ""))
+        # panel-01 feature coords index the ANALYZED snapshot, not the live box (which splice/annotate submit);
+        # an explicit seq (family/splice/amplicon) is used verbatim.
+        base = self._norm_seq(seq) if seq is not None else self._norm_seq(self.state.get("analyzed_seq", ""))
         return base[s:e]
 
     def _stale_block(self):
@@ -1058,13 +1115,19 @@ class MainWindow(QMainWindow):
     # =================== primer design ===================
     def _design(self):
         self._clear_banner()
+        if self._design_inflight:
+            return self._banner("A primer design is already running — wait for it to finish.")
         if self._stale_block():
             return
+        self._design_inflight = True
         self.designBtn.setEnabled(False); self.designBtn.setText("◴ designing…")
+        self._design_tmpl = self.state["seq"]             # remember the template these candidates index (for PCR on-target)
         self.engine.submit("primers", {"sequence": self.state["seq"], "params": self._read_primer_params()}, key="primers")
 
     def _design_for_domain(self, start, end, label, seq=None):
         self._clear_banner()
+        if self._design_inflight:
+            return self._banner("A primer design is already running — wait for it to finish.")
         if seq is None and self._stale_block():           # stale guard only applies to the panel-01 specimen
             return
         tmpl = seq if seq is not None else self.state.get("seq", "")
@@ -1073,10 +1136,13 @@ class MainWindow(QMainWindow):
         inc = [start, max(60, end - start)]
         self.card_primer.expand()
         self._pending_domain = label
+        self._design_inflight = True
+        self._design_tmpl = tmpl                          # candidates' left/right_pos index THIS template, not always panel-01
         self.engine.submit("primers", {"sequence": tmpl, "params": self._read_primer_params(),
                                         "included": inc}, key="primers")
 
     def _on_primers(self, d):
+        self._design_inflight = False
         self.designBtn.setEnabled(True); self.designBtn.setText("⋯ Design primers")
         self.card_primer.expand()
         self._render_primers(d)
@@ -1090,6 +1156,9 @@ class MainWindow(QMainWindow):
             if w:
                 w.setParent(None)
         cands = d.get("candidates", [])
+        tmpl_sig = self._norm_seq(getattr(self, "_design_tmpl", self.state.get("seq", "")))
+        for c in cands:                                       # tag each pair with the template its coords index
+            c["_tmpl_sig"] = tmpl_sig
         self.state["candidates"] = cands
         self.pcrStageAll.setEnabled(bool(cands))
         if not cands:
@@ -1176,19 +1245,30 @@ class MainWindow(QMainWindow):
         p = {"max_mm": self._numfield("pcrMM", 2), "tp": self._numfield("pcrTP", 5),
              "prod_min": self._numfield("pcrPmin", 70), "prod_max": self._numfield("pcrPmax", 1000)}
         bg = self.pcrBg.toPlainText()
-        self._pcr_run = {"expected": len(pairs), "results": [None] * len(pairs), "single": len(pairs) == 1}
+        # _tmpl_sig uses _norm_seq while the stale-gate uses _clean_seq; a post-analysis edit adding a gap/digit
+        # could pass the gate yet flip this sig -> spurious OFF-target (fails safe, never a false on-target).
+        cur_sig = self._norm_seq(self.state["seq"])           # on-target only when the pair was designed on THIS template
+        self._pcr_gen += 1                                     # new batch id: results from a superseded batch are dropped
+        self._pcr_run = {"gen": self._pcr_gen, "results": [None] * len(pairs)}
         self.runPcrBtn.setEnabled(False); self.runPcrBtn.setText("◴ running…")
         for i, c in enumerate(pairs):
+            # a pair designed on a different template (family/splice/amplicon) has coords that do not index
+            # state["seq"]; passing its target_span here would fabricate a false on-target call -> omit it
+            ts = [c["left_pos"][0], c["right_pos"][1]] if c.get("_tmpl_sig") == cur_sig else None
             body = {"sequence": self.state["seq"], "background": bg, "fwd": c["left_seq"], "rev": c["right_seq"],
-                    "target_span": [c["left_pos"][0], c["right_pos"][1]], "params": p}
-            self.engine.submit("pcr", body, key=f"pcr#{i}")
+                    "target_span": ts, "params": p}
+            self.engine.submit("pcr", body, key=f"pcr#{self._pcr_gen}#{i}")
 
-    def _on_pcr(self, key, d):
-        i = int(key.split("#")[1])
+    def _pcr_slot(self, key, result):
+        """Fill one batch slot (a success dict OR an error placeholder) and render once the whole batch
+        is in. A late result from a superseded batch (different gen) is dropped, so the button re-enabling
+        after one lane can never let a stale sibling corrupt the next run."""
+        parts = key.split("#")                                # pcr#<gen>#<i>
+        gen, i = int(parts[1]), int(parts[2])
         run = getattr(self, "_pcr_run", None)
-        if not run or i >= len(run["results"]):
-            return
-        run["results"][i] = d
+        if not run or gen != run["gen"] or not (0 <= i < len(run["results"])):
+            return                                            # stale / superseded batch
+        run["results"][i] = result
         if any(r is None for r in run["results"]):
             return
         self.runPcrBtn.setEnabled(True); self.runPcrBtn.setText("▶ Run loaded pairs")
@@ -1315,7 +1395,7 @@ class MainWindow(QMainWindow):
             src = self.state.get("source")
         if not seq:
             return self._banner("no sequence to annotate — load a specimen or paste one")
-        self.state["family_seq"] = self._clean_seq(seq)   # hit coords index THIS sequence, not always panel-01
+        self.state["family_seq"] = self._norm_seq(seq)    # hit coords index THIS sequence (backend-normalized), not always panel-01
         self.annotateBtn.setEnabled(False); self.annotateBtn.setText("◴ annotating…")
         self.engine.submit("annotate", {"sequence": seq, "species": self._species(),
                                         "source": src}, key="annotate")
@@ -1375,6 +1455,7 @@ class MainWindow(QMainWindow):
             return self._banner("Load a genomic sequence first (fetch, upload, or paste, then Run analysis).")
         if not tx:
             return self._banner("Paste a transcript / cDNA / mRNA to align.")
+        self.state["splice_seq"] = self._norm_seq(genomic)    # intron menus slice THIS (backend-normalized) sequence, not a later box edit
         self.spliceBtn.setEnabled(False); self.spliceBtn.setText("◴ aligning…")
         self.engine.submit("splice", {"sequence": genomic, "transcript": tx, "source": self.state.get("source"),
                                       "timeout": 300}, key="splice")
@@ -1408,7 +1489,8 @@ class MainWindow(QMainWindow):
             t = DataTable(headers, GLOSS)
             t.set_rows([[k + 1, f"{i['start']}–{i['end']}", i["end"] - i["start"], f"{i['donor']}…{i['acceptor']}",
                          "canonical" if i.get("canonical") else "non-canonical"] for k, i in enumerate(introns)])
-            t.set_row_menu(lambda r: self._feat_menu(introns[r]["start"], introns[r]["end"], d.get("strand", "+"), f"intron_{r+1}"))
+            t.set_row_menu(lambda r: self._feat_menu(introns[r]["start"], introns[r]["end"], d.get("strand", "+"),
+                                                     f"intron_{r+1}", src_seq=self.state.get("splice_seq")))
             cl.addWidget(t)
         else:
             cl.addWidget(_empty("single exon — no introns detected"))

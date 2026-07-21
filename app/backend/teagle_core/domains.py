@@ -106,12 +106,17 @@ def scan_domains(seq: str, max_orfs: int = 12, evalue: float = 1e-3):
                     "orf": n, "strand": o["strand"], "aa": [d.env_from, d.env_to], "nt": nt,
                     "dna": coding, "protein": translate(coding).rstrip("*"),
                 })
-    # keep the best-scoring hit per (domain-code, overlapping nt region); order along element
-    hits.sort(key=lambda x: (-x["score"]))
+    return _dedup_domains(hits)
+
+
+def _dedup_domains(hits):
+    """Keep the best-scoring hit per (domain-code, STRAND, overlapping-nt-region), then order along the
+    element by genomic position. The strand check keeps a genuine minus-strand hit that merely overlaps a
+    higher-scoring plus-strand hit of the same code — they are different biological features."""
     kept = []
-    for hh in hits:
-        if any(o["domain"] == hh["domain"] and not (hh["nt"][1] <= o["nt"][0] or hh["nt"][0] >= o["nt"][1]) for o in kept):
-            continue                                          # overlapping same-domain, lower score -> drop
+    for hh in sorted(hits, key=lambda x: -x["score"]):
+        if any(o["domain"] == hh["domain"] and o["strand"] == hh["strand"]
+               and not (hh["nt"][1] <= o["nt"][0] or hh["nt"][0] >= o["nt"][1]) for o in kept):
+            continue                                          # overlapping same-domain same-strand, lower score -> drop
         kept.append(hh)
-    kept.sort(key=lambda x: x["nt"][0])            # order along the element by genomic position
-    return kept
+    return sorted(kept, key=lambda x: x["nt"][0])

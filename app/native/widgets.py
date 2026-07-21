@@ -243,7 +243,8 @@ class GenomePanel(QWidget):
             b = QPushButton(txt); b.setProperty("sm", True); b.clicked.connect(fn); bar.addWidget(b)
         lay.addLayout(bar)
         self.canvas = _GenomeCanvas(self)
-        lay.addWidget(self.canvas)
+        self.canvas.setMinimumWidth(320)                  # match the SVG authoring floor so it never CSS-stretches
+        lay.addWidget(self.canvas)                         # (below 320 the bp<->pixel map would drift; obs: genome hit-test)
 
     def set_model(self, model: dict):
         self.model = model

@@ -54,7 +54,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, engine.run_wsl_install_log())
         rel = "index.html" if path in ("/", "") else path.lstrip("/")
         fp = os.path.abspath(os.path.join(WEB, rel))
-        if not fp.startswith(WEB) or not os.path.isfile(fp):   # path-traversal guard
+        # require a real path-separator boundary so a sibling dir sharing the 'web' prefix (web_evil/) can't pass
+        if not (fp == WEB or fp.startswith(WEB + os.sep)) or not os.path.isfile(fp):
             return self._send(404, {"error": "not found"})
         ext = os.path.splitext(fp)[1]
         try:
@@ -80,7 +81,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
-            n = int(self.headers.get("Content-Length", 0) or 0)
+            try:
+                n = int(self.headers.get("Content-Length", 0) or 0)
+            except (TypeError, ValueError):                      # a non-numeric Content-Length is a client error, not a 500
+                return self._send(400, {"error": "invalid Content-Length"})
             if n < 0:                                            # a negative length must not bypass the cap
                 return self._send(400, {"error": "invalid Content-Length"})
             if n > 80_000_000:                                   # request-size cap

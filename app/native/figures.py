@@ -21,11 +21,15 @@ def esc(s) -> str:
 
 
 def _label_ink(hex_color: str) -> str:
-    """Pick black/white label by best WCAG contrast against a fill colour."""
+    """Pick black/white label by best WCAG contrast against a fill colour. Accepts 3- or 6-digit hex
+    (a bare '#888' fallback would otherwise raise ValueError and abort the whole figure render)."""
     def lin(v):
         v /= 255.0
         return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
-    r = int(hex_color[1:3], 16); g = int(hex_color[3:5], 16); b = int(hex_color[5:7], 16)
+    h = hex_color.lstrip("#")
+    if len(h) == 3:
+        h = "".join(c * 2 for c in h)                         # #888 -> #888888
+    r = int(h[0:2], 16); g = int(h[2:4], 16); b = int(h[4:6], 16)
     L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
     return "#fff" if (1.05 / (L + 0.05)) >= ((L + 0.05) / 0.05) else "#111"
 
