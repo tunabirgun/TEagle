@@ -9,6 +9,17 @@ and propagates to the backend health endpoint, the UI header badge, every run
 provenance manifest, the packaged executable's Windows file-version metadata, and
 the LaTeX report title page.
 
+## [2.2.0] — 2026-07-21
+
+In-silico PCR and gel-imaging upgrades for repeat-rich elements, plus spreadsheet-native table export.
+
+### Added
+- **Single-primer (self-priming) in-silico PCR products.** The amplicon search now also reports products a single primer makes by priming in both orientations across an inverted repeat (F+F / R+R) — common at TE terminal inverted repeats and LTRs. These are flagged distinctly, listed in the amplicon table, exported with a `singleprimer` tag, and drawn in their own gel colour.
+- **Excel (XLSX) table export with a visible button.** The protein-domain and Dfam / RepeatMasker family tables gain an **Export table** button; every table now exports to CSV, TSV, and native XLSX (numbers typed as numbers, header frozen and bold, spreadsheet-formula injection neutralised) in addition to the existing right-click export.
+
+### Changed
+- **Gel imaging.** Equal-size amplicons co-migrate into a single band (a gel cannot resolve them) and the on-target colour always wins, so an on-target band is never painted over by an off-target of the same size. Band intensity now tracks priming efficiency (fewer mismatches → brighter). A lane carrying bands but no intended product is labelled **no on-target**, and the legend gains a single-primer swatch when relevant.
+
 ## [2.1.1] — 2026-07-20
 
 Bugfix release: the optional WSL annotation backend failed to install on some users' machines.

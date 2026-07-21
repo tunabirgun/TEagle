@@ -6,10 +6,12 @@ IUPAC = set("ACGTURYSWKMBDHVN")
 _COMP = str.maketrans("ACGTURYSWKMBDHVNacgturyswkmbdhvn",
                       "TGCAAYRSWMKVHDBNtgcaayrswmkvhdbn")
 
-def parse_fasta(text):
+def parse_fasta(text, norm=None):
     """Return list of (header, sequence). Bare sequence (no '>') becomes one record.
     Tolerant of non-string input (None -> [], other types coerced) so a malformed
-    request never crashes the parser."""
+    request never crashes the parser. `norm` overrides the per-residue normalizer
+    (default DNA: U->T); pass `_norm_aa` for protein input so selenocysteine is kept."""
+    norm = norm or _norm
     if text is None:
         return []
     if not isinstance(text, str):
@@ -17,7 +19,7 @@ def parse_fasta(text):
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     recs = []
     if ">" not in text:
-        seq = _norm(text)
+        seq = norm(text)
         if seq:
             recs.append(("input_sequence", seq))
         return recs
@@ -25,12 +27,12 @@ def parse_fasta(text):
     for line in text.split("\n"):
         if line.startswith(">"):
             if header is not None:
-                recs.append((header, _norm("".join(buf))))
+                recs.append((header, norm("".join(buf))))
             header, buf = line[1:].strip() or "record", []
         elif header is not None:
             buf.append(re.sub(r"\s+", "", line))
     if header is not None:
-        recs.append((header, _norm("".join(buf))))
+        recs.append((header, norm("".join(buf))))
     return recs
 
 
@@ -38,6 +40,16 @@ def _norm(s: str) -> str:
     # strip whitespace, uppercase, and normalize RNA to its DNA equivalent (U -> T) so composition,
     # ORF finding, translation, and primer design all operate on DNA
     return re.sub(r"\s+", "", s).upper().replace("U", "T")
+
+
+def _norm_aa(s: str) -> str:
+    # protein: strip whitespace + uppercase only; keep U (selenocysteine) as itself, never U->T
+    return re.sub(r"\s+", "", s).upper()
+
+
+def parse_protein(text):
+    """FASTA parse for amino-acid input: same record splitting, no DNA U->T normalization."""
+    return parse_fasta(text, norm=_norm_aa)
 
 def validate_iupac(seq: str):
     """Return (ok, [(0-based position, char), ...]) for characters outside the IUPAC set."""

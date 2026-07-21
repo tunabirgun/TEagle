@@ -182,69 +182,129 @@ def svg_genome(model: dict, view: dict, W: float, theme: str, for_export: bool =
 # ================= agarose gel =================
 GELPAL = {
     "transparent": {"paper": "none", "gel": "#0f1316", "well": "#04060a", "stroke": "#2a3138", "ink": "#5a656f",
-                    "on": OK["on"], "off": OK["off"], "ladder": OK["ladder"], "glow": 1.4, "band": 2.6},
+                    "on": OK["on"], "off": OK["off"], "single": "#0072B2", "ladder": OK["ladder"], "glow": 1.4, "band": 2.6},
     "dark":        {"paper": "#0b0e11", "gel": "#0f1316", "well": "#04060a", "stroke": "#232a30", "ink": "#8792a0",
-                    "on": OK["on"], "off": OK["off"], "ladder": OK["ladder"], "glow": 1.4, "band": 2.6},
+                    "on": OK["on"], "off": OK["off"], "single": "#0072B2", "ladder": OK["ladder"], "glow": 1.4, "band": 2.6},
     "white":       {"paper": "#ffffff", "gel": "#ededed", "well": "#c4c4c4", "stroke": "#cccccc", "ink": "#555555",
-                    "on": "#151515", "off": "#992222", "ladder": "#9a9a9a", "glow": 0.3, "band": 2.6},
+                    "on": "#151515", "off": "#992222", "single": "#1f5fa8", "ladder": "#9a9a9a", "glow": 0.3, "band": 2.6},
     "uv":          {"paper": "#050310", "gel": "#0a0714", "well": "#000000", "stroke": "#1c1236", "ink": "#9fb4d8",
-                    "on": "#5bff6b", "off": "#ffcf47", "ladder": "#79d0ff", "glow": 3.2, "band": 3.1},
+                    "on": "#5bff6b", "off": "#ffcf47", "single": "#6fb2ff", "ladder": "#79d0ff", "glow": 3.2, "band": 3.1},
     "mono":        {"paper": "#0d0d0d", "gel": "#181818", "well": "#000000", "stroke": "#2b2b2b", "ink": "#b2b2b2",
-                    "on": "#f2f2f2", "off": "#9a9a9a", "ladder": "#cfcfcf", "glow": 2.0, "band": 2.9},
+                    "on": "#f2f2f2", "off": "#9a9a9a", "single": "#6f6f6f", "ladder": "#cfcfcf", "glow": 2.0, "band": 2.9},
 }
 
 
+def _band_opacity(total_mm: int) -> float:
+    """Priming-efficiency proxy: a perfect match reads bright; each mismatch dims the band.
+    All reported mismatches are 5'-proximal (the strict-3' rule forbids 3'-end mismatches)."""
+    return round(max(0.4, 1.0 - 0.22 * max(0, total_mm)), 3)
+
+
+def _lane_bands(amplicons, P):
+    """Collapse a lane's amplicons into one band per product size (a real gel cannot resolve equal
+    lengths). On-target colour wins so it is never painted over; else single-primer, else off-target.
+    Band intensity follows the strongest (fewest-mismatch) product at that size."""
+    groups = {}
+    for a in (amplicons or []):
+        groups.setdefault(a["length"], []).append(a)
+    bands = []
+    for size in sorted(groups):
+        g = groups[size]
+        # disjoint buckets so a product is counted once (priority on-target > single-primer > off-target pair)
+        n_on = sum(1 for a in g if a.get("on_target"))
+        n_single = sum(1 for a in g if a.get("single_primer") and not a.get("on_target"))
+        n_off = len(g) - n_on - n_single
+        if n_on:                                          # on-target colour always wins (never overpainted)
+            color = P["on"]
+        elif n_single and not n_off:                      # every non-on-target product at this size is single-primer
+            color = P["single"]
+        else:
+            color = P["off"]
+        min_mm = min((a.get("fwd_mm", 0) + a.get("rev_mm", 0)) for a in g)
+        parts = (([f"{n_on} on-target"] if n_on else []) + ([f"{n_off} off-target"] if n_off else [])
+                 + ([f"{n_single} single-primer"] if n_single else []))
+        src = esc(g[0].get("source", ""))
+        bands.append({"size": size, "color": color, "opacity": _band_opacity(min_mm),
+                      "on": bool(n_on), "single": bool(n_single), "count": len(g),   # dash iff a non-on single-primer product is present
+                      "t": ", ".join(parts) + (f" · {src}" if src else "")})
+    return bands
+
+
+LANES_PER_ROW = 10        # sample lanes per gel row; more than this wraps onto stacked rows
+
+
 def _gel_geometry(data: dict):
-    """Shared layout math for svg_gel and gel_regions (must stay identical so hit-boxes line up)."""
-    lanes = data.get("lanes") or [{"label": data.get("laneLabel", "PCR"), "amplicons": data.get("amplicons", [])}]
-    sizes = [a["length"] for l in lanes for a in (l.get("amplicons") or [])]
-    smallest = min(sizes) if sizes else 90
-    minbp = max(25, min(90, smallest - 10))
-    maxbp = max([1600] + sizes)
-    laneW, gap, x0, top, botPad, H = 40, 12, 62, 48, 46, 366
-    bot = H - botPad
-
-    def y(bp):
-        return top + (math.log(maxbp) - math.log(max(bp, minbp))) / (math.log(maxbp) - math.log(minbp)) * (bot - top)
-
-    def laneX(i):
-        return x0 + i * (laneW + gap)
-    return lanes, minbp, maxbp, laneW, x0, top, bot, H, y, laneX
-
-
-def gel_regions(data: dict):
-    """Per-band hit-boxes (SVG coords) + the amplicon each band represents, for hover/right-click
-    on the gel figure. Lane 0 is the ladder (skipped); sample lanes start at column 1."""
-    lanes, minbp, maxbp, laneW, x0, top, bot, H, y, laneX = _gel_geometry(data)
-    P = GELPAL["dark"]
-    regions = []
-    for i, l in enumerate(lanes):
-        lx = laneX(i + 1)
-        for a in (l.get("amplicons") or []):
-            yy = y(a["length"]); h = P["band"]
-            call = "on-target" if a.get("on_target") else "off-target"
-            tip = f'{a["length"]} bp · {call}' + (f' · {a.get("source","")}' if a.get("source") else "")
-            regions.append({"x0": lx + 3, "y0": yy - 4, "x1": lx + laneW - 3, "y1": yy + 4,
-                            "tip": tip, "amplicon": a, "pair": l.get("label", "")})
-    return regions
-
-
-def svg_gel(data: dict, bg: str) -> str:
-    """data: {lanes:[{label, amplicons:[{length,on_target,source}]}]} or legacy {amplicons}."""
+    """Shared layout math for svg_gel and gel_regions (must stay identical so hit-boxes line up).
+    Sample lanes wrap into stacked rows of <=LANES_PER_ROW; each row carries its own ladder + bp scale."""
     lanes = data.get("lanes") or [{"label": data.get("laneLabel", "PCR"), "amplicons": data.get("amplicons", [])}]
     sizes = [a["length"] for l in lanes for a in (l.get("amplicons") or [])]
     smallest = min(sizes) if sizes else 90
     minbp = max(25, min(90, smallest - 10))
     maxbp = max([1600] + sizes)
     LADDER = [m for m in (1500, 1000, 700, 500, 400, 300, 200, 100, 50) if minbp <= m <= maxbp]
-    laneW, gap, x0, top, botPad, H = 40, 12, 62, 48, 46, 366
-    bot = H - botPad
-    def y(bp):
-        return top + (math.log(maxbp) - math.log(max(bp, minbp))) / (math.log(maxbp) - math.log(minbp)) * (bot - top)
-    cols = 1 + len(lanes)
-    W = max(x0 + cols * (laneW + gap) + 12, 300)
+    laneW, gap, x0 = 40, 12, 62
+    TOP_MARGIN, ROW_TOP_PAD, BODY, ROW_BOT_PAD, ROW_GAP = 8, 30, 240, 20, 16
+    ROW_PITCH = ROW_TOP_PAD + BODY + ROW_BOT_PAD + ROW_GAP
+    rows = [list(range(i, min(i + LANES_PER_ROW, len(lanes)))) for i in range(0, len(lanes), LANES_PER_ROW)] or [[]]
+    widest = min(LANES_PER_ROW, max(1, len(lanes)))
+    any_single = any(a.get("single_primer") for l in lanes for a in (l.get("amplicons") or []))
+    legend_w = x0 + (214 if any_single else 132) + 100    # room for the on/off(/single-primer)/ladder legend row
+    W = max(x0 + (1 + widest) * (laneW + gap) + 12, legend_w, 300)
+    last_bot = TOP_MARGIN + (len(rows) - 1) * ROW_PITCH + ROW_TOP_PAD + BODY + ROW_BOT_PAD
+    H = last_bot + 22                                       # legend strip below the last row
+
+    def row_top(r):                                        # band-area top of row r
+        return TOP_MARGIN + r * ROW_PITCH + ROW_TOP_PAD
+
+    def y(bp, r):
+        t = row_top(r)
+        return t + (math.log(maxbp) - math.log(max(bp, minbp))) / (math.log(maxbp) - math.log(minbp)) * BODY
+
+    def laneX(col):
+        return x0 + col * (laneW + gap)
+
+    return {"lanes": lanes, "rows": rows, "minbp": minbp, "maxbp": maxbp, "LADDER": LADDER,
+            "laneW": laneW, "gap": gap, "x0": x0, "BODY": BODY, "W": W, "H": H,
+            "y": y, "laneX": laneX, "row_top": row_top}
+
+
+def gel_regions(data: dict):
+    """Per-band hit-boxes (SVG coords) + the amplicon each band represents, for hover/right-click.
+    Follows the wrapped multi-row layout; the ladder column (0) is skipped, sample lanes start at 1."""
+    G = _gel_geometry(data)
+    lanes, rows, laneW, y, laneX = G["lanes"], G["rows"], G["laneW"], G["y"], G["laneX"]
+    regions = []
+    for r, idxs in enumerate(rows):
+        for j, li in enumerate(idxs):
+            l = lanes[li]
+            lx = laneX(j + 1)
+            groups = {}
+            for a in (l.get("amplicons") or []):
+                groups.setdefault(a["length"], []).append(a)
+            for size in sorted(groups):
+                g = groups[size]
+                yy = y(size, r)
+                # representative for the right-click menu: the intended (on-target) product if any, else the strongest
+                rep = min(g, key=lambda a: (not a.get("on_target"), a.get("fwd_mm", 0) + a.get("rev_mm", 0)))
+                n_on = sum(1 for a in g if a.get("on_target"))
+                n_single = sum(1 for a in g if a.get("single_primer") and not a.get("on_target"))
+                n_off = len(g) - n_on - n_single
+                call = ", ".join(([f"{n_on} on-target"] if n_on else []) + ([f"{n_off} off-target"] if n_off else [])
+                                 + ([f"{n_single} single-primer"] if n_single else []))
+                tip = f'{size} bp · {call}' + (f' · {rep.get("source","")}' if rep.get("source") else "")
+                regions.append({"x0": lx + 3, "y0": yy - 4, "x1": lx + laneW - 3, "y1": yy + 4,
+                                "tip": tip, "amplicon": rep, "pair": l.get("label", "")})
+    return regions
+
+
+def svg_gel(data: dict, bg: str) -> str:
+    """data: {lanes:[{label, amplicons:[{length,on_target,source}]}]} or legacy {amplicons}.
+    Lanes beyond LANES_PER_ROW wrap onto stacked gel rows, each with its own ladder + bp scale."""
+    G = _gel_geometry(data)
+    lanes, rows, LADDER = G["lanes"], G["rows"], G["LADDER"]
+    laneW, gap, x0, BODY = G["laneW"], G["gap"], G["x0"], G["BODY"]
+    W, H, y, laneX, row_top = G["W"], G["H"], G["y"], G["laneX"], G["row_top"]
     P = GELPAL.get(bg, GELPAL["transparent"])
-    def laneX(i): return x0 + i * (laneW + gap)
     s = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" '
          f'font-family="{FIGFONT}">')
     s += (f'<defs><filter id="glow" x="-40%" y="-140%" width="180%" height="380%">'
@@ -252,37 +312,52 @@ def svg_gel(data: dict, bg: str) -> str:
           f'<feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>')
     if P["paper"] != "none":
         s += f'<rect width="{W}" height="{H}" fill="{P["paper"]}"/>'
-    s += (f'<rect x="{x0-7:.1f}" y="{top-16}" width="{cols*(laneW+gap)+2:.1f}" height="{bot-top+30:.1f}" '
-          f'rx="2" fill="{P["gel"]}" stroke="{P["stroke"]}"/>')
-    s += f'<text x="{x0-14}" y="{top-19}" fill="{P["ink"]}" font-size="8" text-anchor="end">bp</text>'
-    for m in LADDER:
-        yy = y(m)
-        s += f'<text x="{x0-14}" y="{yy+2.5:.1f}" fill="{P["ink"]}" font-size="8" text-anchor="end">{m}</text>'
 
-    def draw_lane(col, label, bands, is_ladder):
+    def draw_lane(col, r, label, bands, is_ladder):
         nonlocal s
         lx = laneX(col)
-        s += f'<rect x="{lx+4:.1f}" y="{top-13}" width="{laneW-8}" height="4" rx="1" fill="{P["well"]}"/>'
-        s += f'<text x="{lx+laneW/2:.1f}" y="{top-18}" fill="{P["ink"]}" font-size="8.5" text-anchor="middle">{esc(label)}</text>'
+        rtop = row_top(r); rbot = rtop + BODY
+        s += f'<rect x="{lx+4:.1f}" y="{rtop-13}" width="{laneW-8}" height="4" rx="1" fill="{P["well"]}"/>'
+        s += f'<text x="{lx+laneW/2:.1f}" y="{rtop-18}" fill="{P["ink"]}" font-size="8.5" text-anchor="middle">{esc(label)}</text>'
         for bd in (bands or []):
-            yy = y(bd["size"]); h = 1.6 if is_ladder else P["band"]
+            yy = y(bd["size"], r); h = 1.6 if is_ladder else P["band"]
             filt = "" if is_ladder else ' filter="url(#glow)"'
-            title = f'{bd["size"]} bp' + (f' · {bd["t"]}' if bd.get("t") else "")
+            op = "" if is_ladder else f' fill-opacity="{bd.get("opacity", 1.0)}"'
+            dash = ' stroke="#ffffff" stroke-width="0.5" stroke-dasharray="2 1.5"' if bd.get("single") else ""
+            n = bd.get("count", 1)
+            title = f'{bd["size"]} bp' + (f' · {bd["t"]}' if bd.get("t") else "") + (f' (×{n})' if n > 1 else "")
             s += (f'<rect x="{lx+3:.1f}" y="{yy-h/2:.1f}" width="{laneW-6}" height="{h}" rx="1" '
-                  f'fill="{bd["color"]}"{filt}><title>{title}</title></rect>')
-        if not is_ladder and not (bands or []):
-            s += f'<text x="{lx+laneW/2:.1f}" y="{bot+13}" fill="{P["ink"]}" font-size="7" text-anchor="middle">—</text>'
+                  f'fill="{bd["color"]}"{op}{dash}{filt}><title>{title}</title></rect>')
+        if not is_ladder:
+            if not (bands or []):
+                s += f'<text x="{lx+laneW/2:.1f}" y="{rbot+13}" fill="{P["ink"]}" font-size="7" text-anchor="middle">—</text>'
+            elif not any(b.get("on") for b in bands):        # bands present but none intended
+                s += (f'<text x="{lx+laneW/2:.1f}" y="{rbot+13}" fill="{P["off"]}" font-size="6.5" '
+                      f'text-anchor="middle">no on-target</text>')
 
-    draw_lane(0, "L", [{"size": m, "color": P["ladder"]} for m in LADDER], True)
-    for i, l in enumerate(lanes):
-        bands = [{"size": a["length"], "color": P["on"] if a.get("on_target") else P["off"],
-                  "t": ("on-target" if a.get("on_target") else "off-target") + " · " + esc(a.get("source", ""))}
-                 for a in (l.get("amplicons") or [])]
-        draw_lane(i + 1, l["label"], bands, False)
-    ly = H - 12
+    for r, idxs in enumerate(rows):
+        rtop = row_top(r)
+        ncols = 1 + len(idxs)
+        s += (f'<rect x="{x0-7:.1f}" y="{rtop-16}" width="{ncols*(laneW+gap)+2:.1f}" height="{BODY+30:.1f}" '
+              f'rx="2" fill="{P["gel"]}" stroke="{P["stroke"]}"/>')
+        s += f'<text x="{x0-14}" y="{rtop-19}" fill="{P["ink"]}" font-size="8" text-anchor="end">bp</text>'
+        for m in LADDER:
+            s += f'<text x="{x0-14}" y="{y(m, r)+2.5:.1f}" fill="{P["ink"]}" font-size="8" text-anchor="end">{m}</text>'
+        draw_lane(0, r, "L", [{"size": m, "color": P["ladder"]} for m in LADDER], True)
+        for j, li in enumerate(idxs):
+            l = lanes[li]
+            draw_lane(j + 1, r, l["label"], _lane_bands(l.get("amplicons") or [], P), False)
+
+    any_single = any(a.get("single_primer") for l in lanes for a in (l.get("amplicons") or []))
+    ly = H - 8
     s += (f'<circle cx="{x0}" cy="{ly}" r="3" fill="{P["on"]}"/>'
           f'<text x="{x0+7}" y="{ly+3}" fill="{P["ink"]}" font-size="8">on-target</text>'
           f'<circle cx="{x0+64}" cy="{ly}" r="3" fill="{P["off"]}"/>'
-          f'<text x="{x0+71}" y="{ly+3}" fill="{P["ink"]}" font-size="8">off-target</text>'
-          f'<text x="{x0+140}" y="{ly+3}" fill="{P["ink"]}" font-size="8">L = MW ladder (bp)</text>')
+          f'<text x="{x0+71}" y="{ly+3}" fill="{P["ink"]}" font-size="8">off-target</text>')
+    xnext = x0 + 132
+    if any_single:
+        s += (f'<circle cx="{xnext}" cy="{ly}" r="3" fill="{P["single"]}"/>'
+              f'<text x="{xnext+7}" y="{ly+3}" fill="{P["ink"]}" font-size="8">single-primer</text>')
+        xnext += 82
+    s += f'<text x="{xnext}" y="{ly+3}" fill="{P["ink"]}" font-size="8">L = MW ladder (bp)</text>'
     return s + "</svg>"

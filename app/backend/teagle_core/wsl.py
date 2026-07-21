@@ -275,6 +275,16 @@ if [ -x "$ENV/bin/minimap2" ]; then echo "[teagle] minimap2 already present"; el
 fi
 echo "[teagle] STEP minimap2 OK"
 ''',
+    "miniprot": r'''
+echo "[teagle] STEP miniprot START"
+[ -x "$MM" ] || fail "micromamba required first (repair micromamba)"
+if [ -x "$ENV/bin/miniprot" ]; then echo "[teagle] miniprot already present"; else
+  [ -d "$ENV/conda-meta" ] || "$MM" create -y -n te -c conda-forge -c bioconda || fail "create te env"
+  "$MM" install -y -n te -c conda-forge -c bioconda miniprot || fail "install miniprot"
+  [ -x "$ENV/bin/miniprot" ] || fail "miniprot missing after install"
+fi
+echo "[teagle] STEP miniprot OK"
+''',
     "dfam_root": _dfam_step("dfam_root"),
     "dfam_curated": _dfam_step("dfam_curated"),
     "famdb_conf": r'''
@@ -293,6 +303,8 @@ echo "[teagle] STEP famdb_conf OK"
 ''',
 }
 
+# miniprot (homology tier) is intentionally NOT in the default install list while that tier is on hold;
+# its step + parser stay in the code, dormant, ready to re-enable when the homology UI ships.
 _ALL_STEPS = ["micromamba", "repeatmasker", "minimap2", "dfam_root", "dfam_curated", "famdb_conf"]
 
 # component metadata surfaced to the install dialog (order = install order)
@@ -575,5 +587,145 @@ def splice_align(genomic_fasta: str, transcript_fasta: str, timeout: int = 180) 
         return res
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": f"minimap2 timed out after {timeout}s"}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+# ---------- homology-based coding/intron recovery (WSL / miniprot) ----------
+def _mp_attrs(field9: str) -> dict:
+    d = {}
+    for kv in field9.split(";"):
+        if "=" in kv:
+            k, v = kv.split("=", 1)
+            d[k] = v
+    return d
+
+
+def _parse_miniprot_gff(gff_text: str, genomic_seq: str, max_hits: int = 25):
+    """miniprot --gff -> ranked gene models. Pure function of the GFF3 text + genomic sequence.
+    Each mRNA is one hit; its CDS features are exons; introns are the gaps between genomically
+    adjacent CDS (miniprot keeps frameshifts in a single CDS, so a CDS break is a real intron).
+    Splice motifs are read strand-aware and flagged canonical, as in splice_align. Frameshift
+    and in-frame-stop counts come from the mRNA attributes / the preceding ##PAF tag line."""
+    g = (genomic_seq or "").upper()
+    hits, order, paf = {}, [], None
+    for line in gff_text.splitlines():
+        if line.startswith("##PAF"):
+            paf = line.split("\t")
+            continue
+        if not line.strip() or line.startswith("#"):
+            continue
+        f = line.split("\t")
+        if len(f) < 9:
+            continue
+        _seqid, _src, ftype, start, end, score, strand, phase, attrs = f[:9]
+        a = _mp_attrs(attrs)
+        if ftype == "mRNA":
+            hid = a.get("ID") or f"MP{len(order) + 1:06d}"
+            tgt = a.get("Target", "").split()
+            qlen = fs = st = None
+            if paf and len(paf) >= 3:
+                try:
+                    qlen = int(paf[2])                       # ##PAF col2 = query (protein) length
+                except ValueError:
+                    qlen = None
+                tags = "\t".join(paf)
+                mfs = re.search(r"fs:i:(\d+)", tags); fs = int(mfs.group(1)) if mfs else None
+                mst = re.search(r"st:i:(\d+)", tags); st = int(mst.group(1)) if mst else None
+            try:
+                sc = float(score)
+            except ValueError:
+                sc = None
+            hits[hid] = {
+                "protein": tgt[0] if tgt else a.get("Target", ""),
+                "protein_start": int(tgt[1]) if len(tgt) >= 3 and tgt[1].isdigit() else None,
+                "protein_end": int(tgt[2]) if len(tgt) >= 3 and tgt[2].isdigit() else None,
+                "protein_len": qlen,
+                "strand": strand, "score": sc,
+                "identity": float(a["Identity"]) if a.get("Identity") else None,
+                "positive": float(a["Positive"]) if a.get("Positive") else None,
+                "rank": int(a["Rank"]) if a.get("Rank", "").isdigit() else None,
+                "frameshifts": int(a["Frameshift"]) if a.get("Frameshift", "").isdigit() else (fs or 0),
+                "inframe_stops": int(a["StopCodon"]) if a.get("StopCodon", "").isdigit() else (st if st is not None else 0),
+                "ref_start": int(start) - 1, "ref_end": int(end),
+                "cds": [],
+            }
+            order.append(hid)
+            paf = None
+        elif ftype == "CDS":
+            hid = a.get("Parent")
+            if hid in hits:
+                hits[hid]["cds"].append({"start": int(start) - 1, "end": int(end)})
+    out = []
+    for hid in order:
+        h = hits[hid]
+        cds = sorted(h["cds"], key=lambda c: c["start"])
+        minus = h["strand"] == "-"
+        exons = [{"start": c["start"], "end": c["end"]} for c in cds]
+        introns = []
+        for prev, nxt in zip(cds, cds[1:]):
+            istart, iend = prev["end"], nxt["start"]         # 0-based half-open gap between exons
+            if iend <= istart:
+                continue
+            if minus:                                        # motif read on the transcribed (reverse) strand
+                donor, acceptor = _revcomp(g[iend - 2:iend]), _revcomp(g[istart:istart + 2])
+            else:
+                donor, acceptor = g[istart:istart + 2], g[iend - 2:iend]
+            introns.append({"start": istart, "end": iend, "length": iend - istart,
+                            "donor": donor, "acceptor": acceptor,
+                            "canonical": (donor, acceptor) in _SPLICE_CANON})
+        cov = None
+        if h["protein_len"] and h["protein_start"] is not None and h["protein_end"] is not None:
+            cov = round((h["protein_end"] - h["protein_start"] + 1) / h["protein_len"], 4)
+        out.append({
+            "protein": h["protein"], "strand": h["strand"], "score": h["score"],
+            "identity": h["identity"], "positive": h["positive"], "rank": h["rank"],
+            "frameshifts": h["frameshifts"], "inframe_stops": h["inframe_stops"],
+            "ref_start": h["ref_start"], "ref_end": h["ref_end"],
+            "protein_start": h["protein_start"], "protein_end": h["protein_end"],
+            "protein_len": h["protein_len"], "protein_coverage": cov,
+            "exons": list(reversed(exons)) if minus else exons,   # display in protein/transcription order
+            "introns": introns,
+            "counts": {"exons": len(exons), "introns": len(introns),
+                       "canonical_introns": sum(1 for i in introns if i["canonical"])},
+        })
+    out.sort(key=lambda x: (-(x["score"] or 0), -(x["identity"] or 0)))
+    return out[:max_hits]
+
+
+def protein_align(genomic_fasta: str, protein_fasta: str, timeout: int = 180, max_hits: int = 25) -> dict:
+    """Spliced protein-to-genome alignment (miniprot --gff): recovers CDS/exon boundaries, introns,
+    and frameshift/stop lesions from a bare genomic sequence WITHOUT a transcript. The reference
+    protein(s) are external evidence. Sequences are staged as files (data), never interpolated."""
+    av = available()
+    if not av["wsl2"]:
+        return {"ok": False, "error": "WSL2 not available"}
+    rid = "teagle_" + secrets.token_hex(6)
+    try:
+        rc, out, err = _wsl(f'[ -x "{_ENV}/bin/miniprot" ] && echo yes || echo no', timeout=20)
+        if "yes" not in out:
+            return {"ok": False, "error": "miniprot not installed in the WSL backend (re-run Install backend)"}
+        rc, out, err = _wsl(f'mkdir -p /tmp/{rid} && cat > /tmp/{rid}/ref.fa', stdin=genomic_fasta.encode(), timeout=60)
+        if rc != 0:
+            return {"ok": False, "error": "failed to stage genomic sequence: " + err.strip()[:200]}
+        rc, out, err = _wsl(f'cat > /tmp/{rid}/prot.faa', stdin=protein_fasta.encode(), timeout=60)
+        if rc != 0:
+            return {"ok": False, "error": "failed to stage reference protein(s): " + err.strip()[:200]}
+        script = f'cd /tmp/{rid} && {_MM} run -n te miniprot --gff ref.fa prot.faa 2>/dev/null'
+        rc, gff, err = _wsl(script, timeout=timeout)
+        _rcv, ver, _ = _wsl(f'{_ENV}/bin/miniprot --version 2>/dev/null', timeout=30)
+        _wsl(f'rm -rf /tmp/{rid}', timeout=30)
+        g = "".join(l.strip() for l in genomic_fasta.splitlines() if not l.startswith(">")).upper()
+        hits = _parse_miniprot_gff(gff, g, max_hits=max_hits)
+        if not hits:
+            return {"ok": False, "error": "no reference protein aligned to the sequence "
+                    "(too diverged, or the query is non-coding for these proteins)"}
+        return {"ok": True, "miniprot_version": ver.strip(), "hits": hits,
+                "counts": {"hits": len(hits),
+                           "with_introns": sum(1 for h in hits if h["counts"]["introns"]),
+                           "with_frameshift": sum(1 for h in hits if h["frameshifts"]),
+                           "with_inframe_stop": sum(1 for h in hits if h["inframe_stops"])}}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": f"miniprot timed out after {timeout}s"}
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}

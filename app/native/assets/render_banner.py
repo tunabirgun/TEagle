@@ -60,7 +60,7 @@ def _layout():
     # two separate paths so TE and AGLE can take different colors
     fm = QFontMetricsF(font); x = 0.0
     te = QPainterPath(); agle = QPainterPath()
-    for i, ch in enumerate("TEAGLE"):
+    for i, ch in enumerate("TEagle"):        # mixed-case brand wordmark: TE (caps) + agle (lowercase)
         p = QPainterPath(); p.addText(x, 0.0, font, ch)
         (te if i < 2 else agle).addPath(p)
         x += fm.horizontalAdvance(ch) + tracking
@@ -105,7 +105,7 @@ def render(variant, scale=4):
     print("wrote", png, "and", svg, f"({int(W)}x{int(Hh)})")
 
 def write_wordmark_asset():
-    """Freeze the clean Cascadia Code Bold 'TEAGLE' into a static two-tone SVG (tokens {TE}/{AGLE})
+    """Freeze the clean Cascadia Code Bold 'TEagle' into a static two-tone SVG (tokens {TE}/{AGLE})
     for the in-app header — no font dependency, identical to the banner wordmark."""
     r, mw, font, te, agle, text_w, gap, total_w, fm = _layout()
     both = QPainterPath(); both.addPath(te); both.addPath(agle)

@@ -57,12 +57,12 @@ hiddenimports = [
     "PySide6.QtCore", "PySide6.QtGui", "PySide6.QtWidgets", "PySide6.QtSvg",
 ]
 
-# C-extension packages: pull binaries, data (e.g. primer3 thermodynamic config) and dynamic submodules
-for pkg in ("primer3", "pyhmmer"):
+# C-extension packages + openpyxl (XLSX table export): pull binaries, data and dynamic submodules
+for pkg in ("primer3", "pyhmmer", "openpyxl"):
     d, b, h = collect_all(pkg)
     datas += d; binaries += b; hiddenimports += h
     hiddenimports += collect_submodules(pkg)
-hiddenimports += ["pyhmmer.platform", "pyhmmer.platform.win32"]
+hiddenimports += ["pyhmmer.platform", "pyhmmer.platform.win32", "openpyxl", "et_xmlfile"]
 
 # trim the bundle: exclude heavy Qt modules the app never imports (keeps the installer small)
 excludes = [

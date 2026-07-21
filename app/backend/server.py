@@ -72,6 +72,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/eta": engine.run_eta,
         "/api/annotate": engine.run_annotate,
         "/api/splice": engine.run_splice,
+        "/api/miniprot": engine.run_miniprot,
         "/api/primers": engine.run_primers,
         "/api/pcr": engine.run_pcr,
     }

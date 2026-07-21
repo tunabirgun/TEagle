@@ -62,7 +62,7 @@ def _mark_pixmap(color: str, height: int, dpr: float = 1.0) -> QPixmap:
         _MARK_SVG = _load_asset("teagle-mark.svg")
     return _svg_pixmap(_MARK_SVG.replace("currentColor", color), height, dpr)
 
-# wordmark: clean Cascadia Code Bold 'TEAGLE' frozen to static paths, TE/AGLE recolored per theme
+# wordmark: clean Cascadia Code Bold 'TEagle' frozen to static paths, TE/agle recolored per theme
 _WORD_SVG = None
 def _word_pixmap(te: str, agle: str, height: int, dpr: float = 1.0) -> QPixmap:
     global _WORD_SVG
@@ -189,6 +189,14 @@ def _empty(text):
 def _sl(text):
     """A section label — mono, uppercase, tracked (the web UI's `.lbl`)."""
     l = QLabel(text.upper()); l.setObjectName("sectionlabel"); l.setWordWrap(True); return l
+
+
+def _export_table_btn(table, base, parent):
+    """Visible CSV/TSV/XLSX export for a DataTable (the right-click menu also has it, less discoverably).
+    Exports in the table's current on-screen (sorted) order."""
+    b = QPushButton("⭳ Export table"); b.setProperty("sm", True)
+    b.clicked.connect(lambda _=False: widgets.export_table(table._headers, table.rows_data(), base, parent))
+    return b
 
 
 class MainWindow(QMainWindow):
@@ -782,6 +790,8 @@ class MainWindow(QMainWindow):
                                                      doms[r]["domain"], protein=doms[r].get("protein")))
             t.setMaximumHeight(180)
             card.bodylay.addWidget(t)
+            drow = QHBoxLayout(); drow.addStretch(1); drow.addWidget(_export_table_btn(t, "TEagle_domains", self))
+            card.bodylay.addLayout(drow)
 
         # gene model (exon/intron/CDS) — only when a fetched accession carries feature annotation
         gm = self.state.get("features")
@@ -1120,12 +1130,12 @@ class MainWindow(QMainWindow):
             if dd.get("provenance"):
                 provs.append(dd["provenance"])
         self.state["lastPcr"] = {"lanes": lanes, "amplicons": amps}
-        self._render_pcr(lanes, amps, results if run["single"] else None)
+        self._render_pcr(lanes, amps)
         self._uppercase_buttons()
         if provs:
             self._render_provenance(provs[0])
 
-    def _render_pcr(self, lanes, amps, single_results):
+    def _render_pcr(self, lanes, amps):
         while self.pcrBody.count():
             w = self.pcrBody.takeAt(0).widget()
             if w:
@@ -1139,7 +1149,9 @@ class MainWindow(QMainWindow):
             headers = ["Pair", "Source", "Coords", "Len", "Mism F/R", "Call"]
             t = DataTable(headers, GLOSS)
             t.set_rows([[a["pair"], a["source"], f"{a['start']}–{a['end']}", a["length"],
-                         f"{a['fwd_mm']}/{a['rev_mm']}", "on-target" if a.get("on_target") else "off-target"] for a in amps])
+                         f"{a['fwd_mm']}/{a['rev_mm']}",
+                         ("on-target" if a.get("on_target") else "off-target")
+                         + (" · single-primer" if a.get("single_primer") else "")] for a in amps])
             t.set_row_menu(lambda r: self._feat_menu(amps[r]["start"], amps[r]["end"], "+",
                                                      f"amplicon_{amps[r]['pair']}", dna=amps[r].get("seq", "")))
             t.setMaximumHeight(200)
@@ -1149,7 +1161,8 @@ class MainWindow(QMainWindow):
                 seq_amps = [aa[i] for i in order if 0 <= i < len(aa)] or aa
                 fasta = "\n".join(
                     f">amplicon_{a['pair']}_{a['start']}-{a['end']}_{a['length']}bp_"
-                    f"{'on' if a.get('on_target') else 'off'}target\n{a.get('seq','')}" for a in seq_amps)
+                    f"{'on' if a.get('on_target') else 'off'}target"
+                    f"{'_singleprimer' if a.get('single_primer') else ''}\n{a.get('seq','')}" for a in seq_amps)
                 widgets.save_fasta(fasta, "TEagle_amplicons", self)
             cp = QPushButton("⭳ Export amplicons → FASTA"); cp.setProperty("sm", True)
             cp.clicked.connect(_amps_fasta)
@@ -1157,7 +1170,11 @@ class MainWindow(QMainWindow):
         else:
             self.pcrBody.addWidget(_empty("No amplicon predicted for any pair under the criteria."))
         onN = sum(1 for a in amps if a.get("on_target"))
-        note = QLabel(f"{len(lanes)} lane(s) · {onN} on-target band(s) · ladder lane “L”. Not a claim of experimental specificity.")
+        spN = sum(1 for a in amps if a.get("single_primer"))
+        sp_txt = f" · {spN} single-primer band(s)" if spN else ""
+        note = QLabel(f"{len(lanes)} lane(s) · {onN} on-target band(s){sp_txt} · ladder lane “L”. "
+                      "Bands co-migrating at one size are drawn once; intensity tracks priming efficiency. "
+                      "Not a claim of experimental specificity.")
         note.setObjectName("orient"); self.pcrBody.addWidget(note)
 
     # =================== WSL family annotation ===================
@@ -1265,6 +1282,8 @@ class MainWindow(QMainWindow):
                                                  te[r]["family"], src_seq=self.state.get("family_seq")))
         cont = QWidget(); cl = QVBoxLayout(cont); cl.setContentsMargins(0, 0, 0, 0); cl.setSpacing(6)
         cl.addWidget(head); cl.addWidget(t)
+        frow = QHBoxLayout(); frow.addStretch(1); frow.addWidget(_export_table_btn(t, "TEagle_family", self))
+        cl.addLayout(frow)
         self._set_body(self.wslBody, cont)
 
     def _open_installer(self):
@@ -1398,6 +1417,15 @@ def selftest():
     p = QPainter(img); rd.render(p); p.end()
     if not (rd.isValid() and any(img.pixelColor(x, y).alpha() > 0 for x in range(0, 200, 10) for y in range(0, 150, 10))):
         problems.append("QtSvg did not render (figure plugin missing from bundle)")
+    # XLSX table export must be importable AND functional (save() pulls openpyxl's lazy writer submodules)
+    try:
+        import io
+        if not widgets._HAS_XLSX:
+            problems.append("openpyxl (XLSX table export) missing from bundle")
+        else:
+            wb = widgets._XlWorkbook(); wb.active.append(["h", 1]); wb.save(io.BytesIO())
+    except Exception as e:
+        problems.append(f"XLSX export self-check failed: {type(e).__name__}: {e}")
     # the installer dialog must construct offscreen (it ships in the frozen build)
     try:
         from install_dialog import InstallDialog

@@ -434,19 +434,61 @@ class _GenomeCanvas(QWidget):
 # ---------- data tables ----------
 def _csv_escape(v, sep):
     v = "" if v is None else str(v)
-    if v[:1] in ("=", "+", "-", "@", "\t", "\r"):     # neutralise spreadsheet formula injection (CWE-1236)
+    # neutralise spreadsheet formula injection (CWE-1236) but keep a bare +/- (e.g. a strand cell) intact
+    if v[:1] in ("=", "@", "\t", "\r") or (v[:1] in ("+", "-") and len(v) > 1):
         v = "'" + v
     if sep in v or '"' in v or "\n" in v:
         v = '"' + v.replace('"', '""') + '"'
     return v
 
 
+try:                                                     # Excel export is optional: degrade to CSV/TSV if openpyxl is absent
+    from openpyxl import Workbook as _XlWorkbook
+    from openpyxl.styles import Font as _XlFont
+    _HAS_XLSX = True
+except Exception:
+    _HAS_XLSX = False
+
+
+def _xlsx_val(v):
+    """Write a real number when the whole cell is numeric (so Excel sorts/filters it), else guarded
+    text. A leading formula char is neutralised the same way as the CSV path (CWE-1236)."""
+    s = "" if v is None else str(v)
+    t = s.strip()
+    if t:
+        try:
+            return int(t) if t.lstrip("-").isdigit() else float(t)
+        except ValueError:
+            pass
+    if s[:1] in ("=", "@") or (s[:1] in ("+", "-") and len(s) > 1):    # bare +/- (strand) stays literal
+        return "'" + s
+    return s
+
+
+def _export_xlsx(headers, rows, path):
+    wb = _XlWorkbook()
+    ws = wb.active
+    ws.title = "TEagle"
+    ws.append([str(h) for h in headers])
+    for cell in ws[1]:
+        cell.font = _XlFont(bold=True)
+    for r in rows:
+        ws.append([_xlsx_val(c) for c in r])
+    ws.freeze_panes = "A2"                                # keep the header visible while scrolling
+    wb.save(path)
+
+
 def export_table(headers, rows, base, parent=None):
-    path, sel = QFileDialog.getSaveFileName(parent, "Export table", base + ".csv",
-                                            "CSV (*.csv);;TSV (*.tsv)")
+    filters = (["Excel (*.xlsx)"] if _HAS_XLSX else []) + ["CSV (*.csv)", "TSV (*.tsv)"]
+    default = ".xlsx" if _HAS_XLSX else ".csv"
+    path, _sel = QFileDialog.getSaveFileName(parent, "Export table", base + default, ";;".join(filters))
     if not path:
         return
-    sep = "\t" if path.lower().endswith(".tsv") else ","
+    low = path.lower()
+    if low.endswith(".xlsx") and _HAS_XLSX:
+        _export_xlsx(headers, rows, path)
+        return
+    sep = "\t" if low.endswith(".tsv") else ","
     lines = [sep.join(_csv_escape(h, sep) for h in headers)]
     lines += [sep.join(_csv_escape(c, sep) for c in r) for r in rows]
     with open(path, "w", encoding="utf-8-sig", newline="") as f:      # BOM so Excel reads UTF-8

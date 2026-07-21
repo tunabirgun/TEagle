@@ -87,7 +87,9 @@ def in_silico_pcr(fwd: str, rev: str, seq: str, seq_id: str = "template",
                   target_span: list | None = None):
     """Pair-aware in-silico PCR. Searches both strands, applies a strict 3' rule
     (zero mismatches in the terminal `tp` bases), builds amplicons from inward-facing
-    compatible pairs within [prod_min, prod_max]. Returns real amplicon list."""
+    sites within [prod_min, prod_max] — both two-primer (F+R) products and single-primer
+    (F+F / R+R) self-priming products across inverted repeats (marked single_primer).
+    Returns real amplicon list."""
     fwd, rev, seq = fwd.upper(), rev.upper(), seq.upper()     # case-insensitive: a lowercase primer must still bind
     max_mm, tp = max(0, int(max_mm)), max(0, int(tp))         # non-negative ints; tp<0 must not silently disable the 3' rule
     MAX_SITES, MAX_AMPS = 4000, 4000                          # bound work + memory on repetitive templates
@@ -123,15 +125,14 @@ def in_silico_pcr(fwd: str, rev: str, seq: str, seq_id: str = "template",
     capped = False
     for fo, fs in fset:
         for ro, rs in rset:
-            if fo == ro:
-                continue                              # a pair uses the two distinct primers
             left, right = fs["left"], rs["right"]
             plen = right - left
             if left < right and prod_min <= plen <= prod_max:
+                single = fo == ro                     # same primer at both ends: self-priming across a TIR/LTR
                 on = bool(target_span and left >= target_span[0] - 5 and right <= target_span[1] + 5)
                 amps.append({
                     "source": seq_id, "start": left, "end": right, "length": plen,
-                    "fwd_primer": fo, "rev_primer": ro,
+                    "fwd_primer": fo, "rev_primer": ro, "single_primer": single,
                     "fwd_mm": fs["mm"], "rev_mm": rs["mm"],
                     "on_target": on,
                     "amplicon_5p": seq[left:left + 30] + ("…" if plen > 60 else ""),
@@ -142,5 +143,6 @@ def in_silico_pcr(fwd: str, rev: str, seq: str, seq_id: str = "template",
                     break
         if capped:
             break
-    amps.sort(key=lambda a: (not a["on_target"], a["fwd_mm"] + a["rev_mm"], a["start"]))
+    # on-target first, then strongest priming (fewest mismatches), then two-primer before self-priming, then position
+    amps.sort(key=lambda a: (not a["on_target"], a["fwd_mm"] + a["rev_mm"], a["single_primer"], a["start"]))
     return amps

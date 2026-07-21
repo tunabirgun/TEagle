@@ -63,6 +63,19 @@ def _require_nt(seq, label="sequence"):
         raise BadRequest(f"{label} does not look like nucleotide sequence — if you meant an accession, fetch it first")
 
 
+_AA_ALPHABET = set("ACDEFGHIKLMNPQRSTVWYBXZUO*")
+def _require_aa(seq, label="protein"):
+    """Reject a reference protein that is actually nucleotide (miniprot needs amino acids), so a
+    pasted DNA sequence fails clearly instead of mis-aligning as a degenerate protein."""
+    s = (seq or "").upper()
+    if not s:
+        raise BadRequest(f"empty {label}")
+    if sum(1 for c in s if c in "ACGTUN") / len(s) > 0.9:
+        raise BadRequest(f"{label} looks like nucleotide, not amino acids — miniprot needs a protein sequence")
+    if sum(1 for c in s if c in _AA_ALPHABET) / len(s) < 0.9:
+        raise BadRequest(f"{label} does not look like a valid amino-acid sequence")
+
+
 # ---------- health / environment ----------
 def run_health():
     return {"ok": True, "primer3": primers.PRIMER3_VERSION, "core": provenance.TEAGLE_VERSION}
@@ -232,6 +245,44 @@ def run_splice(body):
     return r
 
 
+# ---------- homology-based coding/intron recovery (WSL / miniprot) ----------
+def run_miniprot(body):
+    grecs = sequtil.parse_fasta(body.get("sequence", ""))
+    if not grecs:
+        raise BadRequest("no genomic sequence")
+    _require_nt(grecs[0][1], "genomic sequence")
+    prot_text = body.get("protein", "")
+    if not isinstance(prot_text, str):
+        raise BadRequest("protein must be a string of FASTA / raw amino-acid sequence")
+    precs = sequtil.parse_protein(prot_text) if prot_text.strip() else []
+    if not precs:                                    # library-default source is wired in a later step
+        raise BadRequest("no reference protein supplied — paste or fetch a related TE protein "
+                         "(Gag-Pol, transposase, reverse transcriptase, integrase)")
+    for pid, pseq in precs:
+        _require_aa(pseq, f"reference protein '{pid}'")
+    protein_fasta = "\n".join(f">{pid}\n{pseq}" for pid, pseq in precs)
+    # hash the FASTA text (headers + record boundaries) so IDs and multi-record splits seal distinctly
+    protein_sha = hashlib.sha256(protein_fasta.encode()).hexdigest()
+    t0 = time.time()
+    r = wsl.protein_align(f">{grecs[0][0]}\n{grecs[0][1]}", protein_fasta,
+                          timeout=int(_num(body.get("timeout"), 180)))
+    if r.get("ok"):
+        el = time.time() - t0
+        timing.record("homology", len(grecs[0][1]), el)
+        r["elapsed_s"] = round(el, 1)
+        references = refs.for_run("homology", fetched=bool(body.get("source")))
+        r["references"] = references
+        # the reference protein IS the evidence: its sha256 must seal the run (different protein -> different result)
+        r["provenance"] = provenance.build_manifest(
+            "homology", grecs[0][1], grecs[0][0],
+            {"tool": "miniprot", "mode": "--gff", "miniprot": r.get("miniprot_version"),
+             "protein_source": "user", "protein_sha256": protein_sha, "n_reference_proteins": len(precs)},
+            not_run=["De novo ab-initio gene prediction (no transcript, no protein)",
+                     "Curated TE-protein library (bundled default)"],
+            source=body.get("source"), references=references)
+    return r
+
+
 # ---------- primer design (Primer3) ----------
 def run_primers(body):
     recs = sequtil.parse_fasta(body.get("sequence", ""))
@@ -311,7 +362,7 @@ def run_pcr(body):
         "amplicons": amps,
         "backgroundsSearched": [bg["id"] for bg in backgrounds],
         "notSearched": ["Reference assembly (needs WSL/NCBI)", "External NCBI Primer-BLAST",
-                        "Single-primer (self-priming) products", "IUPAC-ambiguous template bases"],
+                        "IUPAC-ambiguous template bases"],
         "criteria": {"max_mismatch": mm, "three_prime_strict": tp,
                      "product_size": [int(_num(p.get("prod_min", 70), 70)), int(_num(p.get("prod_max", 1000), 1000))]},
         "references": refs.for_run("in-silico-pcr"),

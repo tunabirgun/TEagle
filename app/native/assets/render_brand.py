@@ -49,7 +49,9 @@ def wizard_images():                                     # Inno Setup wizard eag
     instdir = os.path.join(ROOT, "installer")
     for n in (55, 83, 110, 138):                         # DPI ladder; Inno picks the closest to the current scaling
         p = os.path.join(instdir, "wizard-small" + ("" if n == 55 else f"-{n}") + ".bmp")
-        _bmp(ICON_TEAL, n, n, fill=0.92).save(p, "BMP"); print("wrote", p)
+        # fill 0.72 → the eagle sits inset from the header corner with an equal ~14% margin on every side
+        # (Inno anchors this image top-right, so the centered mark reads equally spaced from top and right)
+        _bmp(ICON_TEAL, n, n, fill=0.72).save(p, "BMP"); print("wrote", p)
     for w, hh in ((164, 314), (246, 459), (328, 604), (410, 797)):
         p = os.path.join(instdir, "wizard-large" + ("" if w == 164 else f"-{w}") + ".bmp")
         _bmp(ICON_TEAL, w, hh, fill=0.66).save(p, "BMP"); print("wrote", p)

@@ -51,6 +51,10 @@ REFS = {
         "name": "minimap2 (splice-aware alignment)",
         "citation": "Li H (2018) Minimap2: pairwise alignment for nucleotide sequences. Bioinformatics 34(18):3094-3100.",
         "doi": "10.1093/bioinformatics/bty191", "license": "MIT", "url": "https://github.com/lh3/minimap2"},
+    "miniprot": {
+        "name": "miniprot (protein-to-genome spliced alignment)",
+        "citation": "Li H (2023) Protein-to-genome alignment with miniprot. Bioinformatics 39(1):btad014.",
+        "doi": "10.1093/bioinformatics/btad014", "license": "MIT", "url": "https://github.com/lh3/miniprot"},
 }
 
 
@@ -67,6 +71,8 @@ def for_run(run_type: str, domains=None, fetched: bool = False):
         keys += ["RepeatMasker", "Dfam", "Wicker2007"]
     if run_type == "splice":
         keys += ["minimap2"]
+    if run_type == "homology":                 # protein-to-genome evidence; Dfam added when the bundled library is used
+        keys += ["miniprot"]
     if fetched:
         keys += ["NCBI-Eutilities"]
     out, seen = [], set()
