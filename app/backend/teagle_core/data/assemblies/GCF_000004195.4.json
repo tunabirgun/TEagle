@@ -1,0 +1,74 @@
+{
+ "organism": "Xenopus tropicalis",
+ "assemblyName": "UCB_Xtro_10.0",
+ "assemblyAccession": "GCF_000004195.4",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "1",
+   "ucscStyleName": "chr1",
+   "refseqAccession": "NC_030677.2",
+   "length": 217471166
+  },
+  {
+   "chrName": "2",
+   "ucscStyleName": "chr2",
+   "refseqAccession": "NC_030678.2",
+   "length": 181034961
+  },
+  {
+   "chrName": "3",
+   "ucscStyleName": "chr3",
+   "refseqAccession": "NC_030679.2",
+   "length": 153873357
+  },
+  {
+   "chrName": "4",
+   "ucscStyleName": "chr4",
+   "refseqAccession": "NC_030680.2",
+   "length": 153961319
+  },
+  {
+   "chrName": "5",
+   "ucscStyleName": "chr5",
+   "refseqAccession": "NC_030681.2",
+   "length": 164033575
+  },
+  {
+   "chrName": "6",
+   "ucscStyleName": "chr6",
+   "refseqAccession": "NC_030682.2",
+   "length": 154486312
+  },
+  {
+   "chrName": "7",
+   "ucscStyleName": "chr7",
+   "refseqAccession": "NC_030683.2",
+   "length": 133565930
+  },
+  {
+   "chrName": "8",
+   "ucscStyleName": "chr8",
+   "refseqAccession": "NC_030684.2",
+   "length": 147241510
+  },
+  {
+   "chrName": "9",
+   "ucscStyleName": "chr9",
+   "refseqAccession": "NC_030685.2",
+   "length": 91218944
+  },
+  {
+   "chrName": "10",
+   "ucscStyleName": "chr10",
+   "refseqAccession": "NC_030686.2",
+   "length": 52432566
+  },
+  {
+   "chrName": "MT",
+   "ucscStyleName": "chrM",
+   "refseqAccession": "NC_006839.1",
+   "length": 17610
+  }
+ ]
+}

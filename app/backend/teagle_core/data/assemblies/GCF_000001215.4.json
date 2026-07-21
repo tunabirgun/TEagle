@@ -1,0 +1,50 @@
+{
+ "organism": "Drosophila melanogaster",
+ "assemblyName": "Release 6 plus ISO1 MT",
+ "assemblyAccession": "GCF_000001215.4",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "X",
+   "ucscStyleName": "chrX",
+   "refseqAccession": "NC_004354.4",
+   "length": 23542271
+  },
+  {
+   "chrName": "2L",
+   "ucscStyleName": "chr2L",
+   "refseqAccession": "NT_033779.5",
+   "length": 23513712
+  },
+  {
+   "chrName": "2R",
+   "ucscStyleName": "chr2R",
+   "refseqAccession": "NT_033778.4",
+   "length": 25286936
+  },
+  {
+   "chrName": "3L",
+   "ucscStyleName": "chr3L",
+   "refseqAccession": "NT_037436.4",
+   "length": 28110227
+  },
+  {
+   "chrName": "3R",
+   "ucscStyleName": "chr3R",
+   "refseqAccession": "NT_033777.3",
+   "length": 32079331
+  },
+  {
+   "chrName": "4",
+   "ucscStyleName": "chr4",
+   "refseqAccession": "NC_004353.4",
+   "length": 1348131
+  },
+  {
+   "chrName": "Y",
+   "ucscStyleName": "chrY",
+   "refseqAccession": "NC_024512.1",
+   "length": 3667352
+  }
+ ]
+}

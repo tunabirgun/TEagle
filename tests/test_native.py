@@ -93,6 +93,51 @@ def win():
     w.close()
 
 
+def test_coord_fetch_submits_and_renders(win):
+    # curated organism -> fetch_coords op with the right body; render clears accMeta, sets coordMeta + source
+    ops = []
+    win.engine.submit = lambda op, body=None, key=None: ops.append((op, body, key))
+    win.asmSel.setCurrentIndex(win.asmSel.findData("Homo sapiens"))
+    win.coord.setPlainText("chr13:33,016,423-33,066,143")
+    win.coordStrand.setCurrentIndex(1)                        # minus strand
+    win._fetch_coord()
+    assert ops[0] == ("fetch_coords", {"regions": "chr13:33,016,423-33,066,143", "strand": "-",
+                                       "organism": "Homo sapiens", "customQuery": ""}, "fetch")
+    res = {"ok": True, "runType": "coordinate", "fasta": ">x\n" + "A" * 100 + "\n", "organism": "Homo sapiens",
+           "assemblyName": "GRCh38.p14", "displayLocus": "chr13:1-100",
+           "regions": [{"chrAccession": "NC_000013.11", "start": 1, "stop": 100, "strand": 2, "chromLabel": "chr13"}],
+           "source": {"displayLocus": "chr13:1-100", "accession": "NC_000013.11", "runType": "coordinate"}}
+    win._on_fetch(res)
+    assert "chr13" in win.coordMeta.text() and win.accMeta.text() == ""
+    assert win.state["source"].get("displayLocus") == "chr13:1-100"
+
+
+def test_coord_custom_organism_path(win):
+    ops = []
+    win.engine.submit = lambda op, body=None, key=None: ops.append((op, body, key))
+    win.asmSel.setCurrentIndex(win.asmSel.findData("__custom__"))
+    win.coordCustom.setText("GCF_000001405.40"); win.coord.setPlainText("chr7:1-100")
+    win._fetch_coord()
+    assert ops[0][1]["customQuery"] == "GCF_000001405.40" and ops[0][1]["organism"] == ""
+    # empty custom field -> banner, no submit
+    win.coordCustom.setText(""); ops.clear(); win._fetch_coord()
+    assert not ops
+
+
+def test_coord_meta_cleared_only_when_in_flight(win):
+    # a failed coordinate fetch must clear the 'fetching…' indicator, not leave it stuck
+    win.coordMeta.setText("fetching…")
+    win._on_failed("fetch", "boom", "trace")
+    assert win.coordMeta.text() == ""
+    win.coordMeta.setText("fetching…")
+    win._on_user_error("fetch", "bad input")
+    assert win.coordMeta.text() == ""
+    # a prior successful result on the OTHER panel must survive a failed fetch
+    win.accMeta.setText("M18706.1 · Tnt1"); win.coordMeta.setText("fetching…")
+    win._on_failed("fetch", "boom", "trace")
+    assert win.coordMeta.text() == "" and win.accMeta.text() == "M18706.1 · Tnt1"
+
+
 def test_analyze_to_pcr_workflow(win):
     win._load_sample()
     win._run_analysis()

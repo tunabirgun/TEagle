@@ -1,0 +1,158 @@
+{
+ "organism": "Danio rerio",
+ "assemblyName": "GRCz11",
+ "assemblyAccession": "GCF_000002035.6",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "1",
+   "ucscStyleName": "chr1",
+   "refseqAccession": "NC_007112.7",
+   "length": 59578282
+  },
+  {
+   "chrName": "2",
+   "ucscStyleName": "chr2",
+   "refseqAccession": "NC_007113.7",
+   "length": 59640629
+  },
+  {
+   "chrName": "3",
+   "ucscStyleName": "chr3",
+   "refseqAccession": "NC_007114.7",
+   "length": 62628489
+  },
+  {
+   "chrName": "4",
+   "ucscStyleName": "chr4",
+   "refseqAccession": "NC_007115.7",
+   "length": 78093715
+  },
+  {
+   "chrName": "5",
+   "ucscStyleName": "chr5",
+   "refseqAccession": "NC_007116.7",
+   "length": 72500376
+  },
+  {
+   "chrName": "6",
+   "ucscStyleName": "chr6",
+   "refseqAccession": "NC_007117.7",
+   "length": 60270059
+  },
+  {
+   "chrName": "7",
+   "ucscStyleName": "chr7",
+   "refseqAccession": "NC_007118.7",
+   "length": 74282399
+  },
+  {
+   "chrName": "8",
+   "ucscStyleName": "chr8",
+   "refseqAccession": "NC_007119.7",
+   "length": 54304671
+  },
+  {
+   "chrName": "9",
+   "ucscStyleName": "chr9",
+   "refseqAccession": "NC_007120.7",
+   "length": 56459846
+  },
+  {
+   "chrName": "10",
+   "ucscStyleName": "chr10",
+   "refseqAccession": "NC_007121.7",
+   "length": 45420867
+  },
+  {
+   "chrName": "11",
+   "ucscStyleName": "chr11",
+   "refseqAccession": "NC_007122.7",
+   "length": 45484837
+  },
+  {
+   "chrName": "12",
+   "ucscStyleName": "chr12",
+   "refseqAccession": "NC_007123.7",
+   "length": 49182954
+  },
+  {
+   "chrName": "13",
+   "ucscStyleName": "chr13",
+   "refseqAccession": "NC_007124.7",
+   "length": 52186027
+  },
+  {
+   "chrName": "14",
+   "ucscStyleName": "chr14",
+   "refseqAccession": "NC_007125.7",
+   "length": 52660232
+  },
+  {
+   "chrName": "15",
+   "ucscStyleName": "chr15",
+   "refseqAccession": "NC_007126.7",
+   "length": 48040578
+  },
+  {
+   "chrName": "16",
+   "ucscStyleName": "chr16",
+   "refseqAccession": "NC_007127.7",
+   "length": 55266484
+  },
+  {
+   "chrName": "17",
+   "ucscStyleName": "chr17",
+   "refseqAccession": "NC_007128.7",
+   "length": 53461100
+  },
+  {
+   "chrName": "18",
+   "ucscStyleName": "chr18",
+   "refseqAccession": "NC_007129.7",
+   "length": 51023478
+  },
+  {
+   "chrName": "19",
+   "ucscStyleName": "chr19",
+   "refseqAccession": "NC_007130.7",
+   "length": 48449771
+  },
+  {
+   "chrName": "20",
+   "ucscStyleName": "chr20",
+   "refseqAccession": "NC_007131.7",
+   "length": 55201332
+  },
+  {
+   "chrName": "21",
+   "ucscStyleName": "chr21",
+   "refseqAccession": "NC_007132.7",
+   "length": 45934066
+  },
+  {
+   "chrName": "22",
+   "ucscStyleName": "chr22",
+   "refseqAccession": "NC_007133.7",
+   "length": 39133080
+  },
+  {
+   "chrName": "23",
+   "ucscStyleName": "chr23",
+   "refseqAccession": "NC_007134.7",
+   "length": 46223584
+  },
+  {
+   "chrName": "24",
+   "ucscStyleName": "chr24",
+   "refseqAccession": "NC_007135.7",
+   "length": 42172926
+  },
+  {
+   "chrName": "25",
+   "ucscStyleName": "chr25",
+   "refseqAccession": "NC_007136.7",
+   "length": 37502051
+  }
+ ]
+}

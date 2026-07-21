@@ -1,0 +1,50 @@
+{
+ "organism": "Arabidopsis thaliana",
+ "assemblyName": "TAIR10.1",
+ "assemblyAccession": "GCF_000001735.4",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "1",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_003070.9",
+   "length": 30427671
+  },
+  {
+   "chrName": "2",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_003071.7",
+   "length": 19698289
+  },
+  {
+   "chrName": "3",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_003074.8",
+   "length": 23459830
+  },
+  {
+   "chrName": "4",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_003075.7",
+   "length": 18585056
+  },
+  {
+   "chrName": "5",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_003076.8",
+   "length": 26975502
+  },
+  {
+   "chrName": "MT",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_037304.1",
+   "length": 367808
+  },
+  {
+   "chrName": "Pltd",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_000932.1",
+   "length": 154478
+  }
+ ]
+}

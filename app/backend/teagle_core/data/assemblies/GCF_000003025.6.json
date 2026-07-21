@@ -1,0 +1,134 @@
+{
+ "organism": "Sus scrofa",
+ "assemblyName": "Sscrofa11.1",
+ "assemblyAccession": "GCF_000003025.6",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "1",
+   "ucscStyleName": "chr1",
+   "refseqAccession": "NC_010443.5",
+   "length": 274330532
+  },
+  {
+   "chrName": "2",
+   "ucscStyleName": "chr2",
+   "refseqAccession": "NC_010444.4",
+   "length": 151935994
+  },
+  {
+   "chrName": "3",
+   "ucscStyleName": "chr3",
+   "refseqAccession": "NC_010445.4",
+   "length": 132848913
+  },
+  {
+   "chrName": "4",
+   "ucscStyleName": "chr4",
+   "refseqAccession": "NC_010446.5",
+   "length": 130910915
+  },
+  {
+   "chrName": "5",
+   "ucscStyleName": "chr5",
+   "refseqAccession": "NC_010447.5",
+   "length": 104526007
+  },
+  {
+   "chrName": "6",
+   "ucscStyleName": "chr6",
+   "refseqAccession": "NC_010448.4",
+   "length": 170843587
+  },
+  {
+   "chrName": "7",
+   "ucscStyleName": "chr7",
+   "refseqAccession": "NC_010449.5",
+   "length": 121844099
+  },
+  {
+   "chrName": "8",
+   "ucscStyleName": "chr8",
+   "refseqAccession": "NC_010450.4",
+   "length": 138966237
+  },
+  {
+   "chrName": "9",
+   "ucscStyleName": "chr9",
+   "refseqAccession": "NC_010451.4",
+   "length": 139512083
+  },
+  {
+   "chrName": "10",
+   "ucscStyleName": "chr10",
+   "refseqAccession": "NC_010452.4",
+   "length": 69359453
+  },
+  {
+   "chrName": "11",
+   "ucscStyleName": "chr11",
+   "refseqAccession": "NC_010453.5",
+   "length": 79169978
+  },
+  {
+   "chrName": "12",
+   "ucscStyleName": "chr12",
+   "refseqAccession": "NC_010454.4",
+   "length": 61602749
+  },
+  {
+   "chrName": "13",
+   "ucscStyleName": "chr13",
+   "refseqAccession": "NC_010455.5",
+   "length": 208334590
+  },
+  {
+   "chrName": "14",
+   "ucscStyleName": "chr14",
+   "refseqAccession": "NC_010456.5",
+   "length": 141755446
+  },
+  {
+   "chrName": "15",
+   "ucscStyleName": "chr15",
+   "refseqAccession": "NC_010457.5",
+   "length": 140412725
+  },
+  {
+   "chrName": "16",
+   "ucscStyleName": "chr16",
+   "refseqAccession": "NC_010458.4",
+   "length": 79944280
+  },
+  {
+   "chrName": "17",
+   "ucscStyleName": "chr17",
+   "refseqAccession": "NC_010459.5",
+   "length": 63494081
+  },
+  {
+   "chrName": "18",
+   "ucscStyleName": "chr18",
+   "refseqAccession": "NC_010460.4",
+   "length": 55982971
+  },
+  {
+   "chrName": "X",
+   "ucscStyleName": "chrX",
+   "refseqAccession": "NC_010461.5",
+   "length": 125939595
+  },
+  {
+   "chrName": "Y",
+   "ucscStyleName": "chrY",
+   "refseqAccession": "NC_010462.3",
+   "length": 43547828
+  },
+  {
+   "chrName": "MT",
+   "ucscStyleName": "chrM",
+   "refseqAccession": "NC_000845.1",
+   "length": 16613
+  }
+ ]
+}

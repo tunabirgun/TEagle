@@ -1,0 +1,158 @@
+{
+ "organism": "Homo sapiens",
+ "assemblyName": "GRCh38.p14",
+ "assemblyAccession": "GCF_000001405.40",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "1",
+   "ucscStyleName": "chr1",
+   "refseqAccession": "NC_000001.11",
+   "length": 248956422
+  },
+  {
+   "chrName": "2",
+   "ucscStyleName": "chr2",
+   "refseqAccession": "NC_000002.12",
+   "length": 242193529
+  },
+  {
+   "chrName": "3",
+   "ucscStyleName": "chr3",
+   "refseqAccession": "NC_000003.12",
+   "length": 198295559
+  },
+  {
+   "chrName": "4",
+   "ucscStyleName": "chr4",
+   "refseqAccession": "NC_000004.12",
+   "length": 190214555
+  },
+  {
+   "chrName": "5",
+   "ucscStyleName": "chr5",
+   "refseqAccession": "NC_000005.10",
+   "length": 181538259
+  },
+  {
+   "chrName": "6",
+   "ucscStyleName": "chr6",
+   "refseqAccession": "NC_000006.12",
+   "length": 170805979
+  },
+  {
+   "chrName": "7",
+   "ucscStyleName": "chr7",
+   "refseqAccession": "NC_000007.14",
+   "length": 159345973
+  },
+  {
+   "chrName": "8",
+   "ucscStyleName": "chr8",
+   "refseqAccession": "NC_000008.11",
+   "length": 145138636
+  },
+  {
+   "chrName": "9",
+   "ucscStyleName": "chr9",
+   "refseqAccession": "NC_000009.12",
+   "length": 138394717
+  },
+  {
+   "chrName": "10",
+   "ucscStyleName": "chr10",
+   "refseqAccession": "NC_000010.11",
+   "length": 133797422
+  },
+  {
+   "chrName": "11",
+   "ucscStyleName": "chr11",
+   "refseqAccession": "NC_000011.10",
+   "length": 135086622
+  },
+  {
+   "chrName": "12",
+   "ucscStyleName": "chr12",
+   "refseqAccession": "NC_000012.12",
+   "length": 133275309
+  },
+  {
+   "chrName": "13",
+   "ucscStyleName": "chr13",
+   "refseqAccession": "NC_000013.11",
+   "length": 114364328
+  },
+  {
+   "chrName": "14",
+   "ucscStyleName": "chr14",
+   "refseqAccession": "NC_000014.9",
+   "length": 107043718
+  },
+  {
+   "chrName": "15",
+   "ucscStyleName": "chr15",
+   "refseqAccession": "NC_000015.10",
+   "length": 101991189
+  },
+  {
+   "chrName": "16",
+   "ucscStyleName": "chr16",
+   "refseqAccession": "NC_000016.10",
+   "length": 90338345
+  },
+  {
+   "chrName": "17",
+   "ucscStyleName": "chr17",
+   "refseqAccession": "NC_000017.11",
+   "length": 83257441
+  },
+  {
+   "chrName": "18",
+   "ucscStyleName": "chr18",
+   "refseqAccession": "NC_000018.10",
+   "length": 80373285
+  },
+  {
+   "chrName": "19",
+   "ucscStyleName": "chr19",
+   "refseqAccession": "NC_000019.10",
+   "length": 58617616
+  },
+  {
+   "chrName": "20",
+   "ucscStyleName": "chr20",
+   "refseqAccession": "NC_000020.11",
+   "length": 64444167
+  },
+  {
+   "chrName": "21",
+   "ucscStyleName": "chr21",
+   "refseqAccession": "NC_000021.9",
+   "length": 46709983
+  },
+  {
+   "chrName": "22",
+   "ucscStyleName": "chr22",
+   "refseqAccession": "NC_000022.11",
+   "length": 50818468
+  },
+  {
+   "chrName": "X",
+   "ucscStyleName": "chrX",
+   "refseqAccession": "NC_000023.11",
+   "length": 156040895
+  },
+  {
+   "chrName": "Y",
+   "ucscStyleName": "chrY",
+   "refseqAccession": "NC_000024.10",
+   "length": 57227415
+  },
+  {
+   "chrName": "MT",
+   "ucscStyleName": "chrM",
+   "refseqAccession": "NC_012920.1",
+   "length": 16569
+  }
+ ]
+}

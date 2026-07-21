@@ -1,0 +1,80 @@
+{
+ "organism": "Zea mays",
+ "assemblyName": "Zm-B73-REFERENCE-NAM-5.0",
+ "assemblyAccession": "GCF_902167145.1",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "1",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_050096.1",
+   "length": 308452471
+  },
+  {
+   "chrName": "2",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_050097.1",
+   "length": 243675191
+  },
+  {
+   "chrName": "3",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_050098.1",
+   "length": 238017767
+  },
+  {
+   "chrName": "4",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_050099.1",
+   "length": 250330460
+  },
+  {
+   "chrName": "5",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_050100.1",
+   "length": 226353449
+  },
+  {
+   "chrName": "6",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_050101.1",
+   "length": 181357234
+  },
+  {
+   "chrName": "7",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_050102.1",
+   "length": 185808916
+  },
+  {
+   "chrName": "8",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_050103.1",
+   "length": 182411202
+  },
+  {
+   "chrName": "9",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_050104.1",
+   "length": 163004744
+  },
+  {
+   "chrName": "10",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_050105.1",
+   "length": 152435371
+  },
+  {
+   "chrName": "MT",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_007982.1",
+   "length": 569630
+  },
+  {
+   "chrName": "Pltd",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_001666.2",
+   "length": 140384
+  }
+ ]
+}

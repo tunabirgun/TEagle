@@ -75,6 +75,46 @@ def test_export_xlsx_strand_column_not_corrupted(tmp_path):
     assert rows[0][2] == 40720 and isinstance(rows[0][2], int)
 
 
+def test_available_formats_lists_all_when_xlsx_present():
+    fmts = [f for _, f in widgets._available_formats()]
+    if widgets._HAS_XLSX:
+        assert fmts == ["xlsx", "csv", "tsv"]
+    else:
+        assert fmts == ["csv", "tsv"]
+
+
+@pytest.mark.parametrize("fmt,ext,sep", [("csv", ".csv", ","), ("tsv", ".tsv", "\t")])
+def test_export_table_fmt_writes_chosen_delimiter(fmt, ext, sep, tmp_path, monkeypatch):
+    out = str(tmp_path / ("t" + ext))
+    monkeypatch.setattr(widgets.QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
+    widgets.export_table(["type", "start"], [["LTR", "1,000"]], "base", None, fmt=fmt)
+    text = open(out, encoding="utf-8-sig").read()
+    assert text.splitlines()[0] == sep.join(["type", "start"])
+    if fmt == "csv":
+        assert '"1,000"' in text                              # comma cell quoted only in CSV
+    else:
+        assert "1,000" in text and '"1,000"' not in text      # TSV needs no quoting
+
+
+def test_export_table_fmt_appends_missing_extension(tmp_path, monkeypatch):
+    noext = str(tmp_path / "table")
+    monkeypatch.setattr(widgets.QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (noext, "")))
+    widgets.export_table(["c"], [["v"]], "base", None, fmt="tsv")
+    assert os.path.isfile(noext + ".tsv")
+
+
+def test_export_submenu_actions_route_to_each_format(monkeypatch):
+    from PySide6.QtWidgets import QMenu, QWidget
+    calls = []
+    monkeypatch.setattr(widgets, "export_table", lambda h, r, b, p, fmt=None: calls.append(fmt))
+    host = QWidget(); m = QMenu(host)
+    sub = widgets.add_export_submenu(m, ["c"], lambda: [["v"]], "base", host)
+    import gc; gc.collect()                                    # the parented submenu must outlive a GC pass
+    for a in list(sub.actions()):
+        a.trigger()
+    assert calls == [f for _, f in widgets._available_formats()]
+
+
 @pytest.mark.parametrize("theme", ["dark", "white"])
 def test_genome_export(theme, tmp_path):
     sys.path.insert(0, os.path.join(os.path.dirname(_NATIVE), "backend"))

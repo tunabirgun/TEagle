@@ -44,3 +44,54 @@ def test_annotate_manifest_not_self_contradictory():
     assert m["databases"], "an annotate run must record the DB it used"
     joined = " ".join(m["notRun"]).lower()
     assert "dfam" not in joined and "repeatmasker" not in joined        # cannot claim the step it ran did not run
+
+
+# ---------- coordinate-fetch provenance: identity sealed, display labels excluded ----------
+def _coord_src(**over):
+    src = {"accession": "NC_000013.11", "organism": "Homo sapiens", "taxid": "9606",
+           "assemblyAccession": "GCF_000001405.40",
+           "regions": [{"chrAccession": "NC_000013.11", "start": 33016423, "stop": 33066143, "strand": 1}],
+           "coordSystem": "1-based-inclusive", "retrievalType": "coordinate",
+           "assemblyName": "GRCh38.p14", "displayLocus": "chr13:33,016,423-33,066,143", "chromName": "chr13",
+           "source": "NCBI E-utilities", "endpoint": "efetch", "retrievedUtc": "2026-07-21T10:00:00+00:00"}
+    src.update(over)
+    return src
+
+
+def _seal(src):
+    return provenance.build_manifest("analysis", "ACGTACGT", "coord", {"orf_min_aa": 40}, source=src)["manifestSha256"]
+
+
+def test_coord_seal_records_identity_and_labels():
+    m = provenance.build_manifest("analysis", "ACGTACGT", "coord", {}, source=_coord_src())
+    inp = m["input"]
+    for k in ("assemblyAccession", "regions", "coordSystem", "retrievalType",   # sealed identity...
+              "assemblyName", "displayLocus", "chromName"):                      # ...and recorded labels
+        assert k in inp, k                                                       # everything is recorded verbatim
+
+
+def test_coord_seal_invariant_to_display_labels():
+    # cosmetic labels (assembly display name, human locus string, chrom label) must NOT change the seal
+    base = _seal(_coord_src())
+    assert base == _seal(_coord_src(assemblyName="Genome Reference Consortium h38"))
+    assert base == _seal(_coord_src(displayLocus="chr13 : 33016423 - 33066143"))
+    assert base == _seal(_coord_src(chromName="13"))
+    assert base == _seal(_coord_src(retrievedUtc="2026-01-01T00:00:00+00:00"))   # wall-clock never sealed
+
+
+def test_coord_seal_changes_with_identity():
+    # the pinned assembly, taxid, coordinates, and strand are the reproducible identity — each flips the seal
+    base = _seal(_coord_src())
+    assert base != _seal(_coord_src(assemblyAccession="GCF_009914755.1"))
+    assert base != _seal(_coord_src(taxid="10090"))          # organism pin is sealed (curated must carry the real taxid)
+    moved = [{"chrAccession": "NC_000013.11", "start": 33016424, "stop": 33066143, "strand": 1}]
+    assert base != _seal(_coord_src(regions=moved))
+    minus = [{"chrAccession": "NC_000013.11", "start": 33016423, "stop": 33066143, "strand": 2}]
+    assert base != _seal(_coord_src(regions=minus))
+
+
+def test_coord_and_accession_seals_are_distinct():
+    # a coordinate run and a bare-accession run of the same bytes must not collide
+    acc_src = {"accession": "NC_000013.11", "organism": "Homo sapiens", "taxid": "9606",
+               "source": "NCBI nuccore", "endpoint": "efetch", "retrievedUtc": "2026-07-21T10:00:00+00:00"}
+    assert _seal(_coord_src()) != _seal(acc_src)

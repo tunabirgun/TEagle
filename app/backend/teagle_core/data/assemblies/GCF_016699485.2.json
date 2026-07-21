@@ -1,0 +1,260 @@
+{
+ "organism": "Gallus gallus",
+ "assemblyName": "GRCg7b",
+ "assemblyAccession": "GCF_016699485.2",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "1",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052532.1",
+   "length": 196449156
+  },
+  {
+   "chrName": "2",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052533.1",
+   "length": 149539284
+  },
+  {
+   "chrName": "3",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052534.1",
+   "length": 110642502
+  },
+  {
+   "chrName": "4",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052535.1",
+   "length": 90861225
+  },
+  {
+   "chrName": "5",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052536.1",
+   "length": 59506338
+  },
+  {
+   "chrName": "6",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052537.1",
+   "length": 36220557
+  },
+  {
+   "chrName": "7",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052538.1",
+   "length": 36382834
+  },
+  {
+   "chrName": "8",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052539.1",
+   "length": 29578256
+  },
+  {
+   "chrName": "9",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052540.1",
+   "length": 23733309
+  },
+  {
+   "chrName": "10",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052541.1",
+   "length": 20453248
+  },
+  {
+   "chrName": "11",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052542.1",
+   "length": 19638187
+  },
+  {
+   "chrName": "12",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052543.1",
+   "length": 20119077
+  },
+  {
+   "chrName": "13",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052544.1",
+   "length": 17905061
+  },
+  {
+   "chrName": "14",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052545.1",
+   "length": 15331188
+  },
+  {
+   "chrName": "15",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052546.1",
+   "length": 12703657
+  },
+  {
+   "chrName": "16",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052547.1",
+   "length": 2706039
+  },
+  {
+   "chrName": "17",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052548.1",
+   "length": 11092391
+  },
+  {
+   "chrName": "18",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052549.1",
+   "length": 11623896
+  },
+  {
+   "chrName": "19",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052550.1",
+   "length": 10455293
+  },
+  {
+   "chrName": "20",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052551.1",
+   "length": 14265659
+  },
+  {
+   "chrName": "21",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052552.1",
+   "length": 6970754
+  },
+  {
+   "chrName": "22",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052553.1",
+   "length": 4686657
+  },
+  {
+   "chrName": "23",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052554.1",
+   "length": 6253421
+  },
+  {
+   "chrName": "24",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052555.1",
+   "length": 6478339
+  },
+  {
+   "chrName": "25",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052556.1",
+   "length": 3067737
+  },
+  {
+   "chrName": "26",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052557.1",
+   "length": 5349051
+  },
+  {
+   "chrName": "27",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052558.1",
+   "length": 5228753
+  },
+  {
+   "chrName": "28",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052559.1",
+   "length": 5437364
+  },
+  {
+   "chrName": "29",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052560.1",
+   "length": 726478
+  },
+  {
+   "chrName": "30",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052561.1",
+   "length": 755666
+  },
+  {
+   "chrName": "31",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052562.1",
+   "length": 2457334
+  },
+  {
+   "chrName": "32",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052563.1",
+   "length": 125424
+  },
+  {
+   "chrName": "33",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052564.1",
+   "length": 3839931
+  },
+  {
+   "chrName": "34",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052565.1",
+   "length": 3469343
+  },
+  {
+   "chrName": "35",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052566.1",
+   "length": 554126
+  },
+  {
+   "chrName": "36",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052567.1",
+   "length": 358375
+  },
+  {
+   "chrName": "37",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052568.1",
+   "length": 157853
+  },
+  {
+   "chrName": "38",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052569.1",
+   "length": 667312
+  },
+  {
+   "chrName": "39",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052570.1",
+   "length": 177356
+  },
+  {
+   "chrName": "W",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052571.1",
+   "length": 9109940
+  },
+  {
+   "chrName": "Z",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_052572.1",
+   "length": 86044486
+  },
+  {
+   "chrName": "MT",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_053523.1",
+   "length": 16784
+  }
+ ]
+}

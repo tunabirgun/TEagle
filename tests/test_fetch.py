@@ -65,3 +65,148 @@ def test_retrieve_real_accession():
     assert meta["seq_length"] == 5146
     assert meta["fasta"].startswith(">")
     assert meta["endpoint"].startswith("https://")
+
+
+# ---------- coordinate fetch (UCSC-style) ----------
+def test_parse_regions_single():
+    r = fetch.parse_regions("chr13:33,016,423-33,066,143")
+    assert len(r) == 1
+    assert r[0] == {"chromKey": "13", "chromLabel": "chr13", "start": 33016423, "end": 33066143}
+
+
+def test_parse_regions_comma_is_thousands_not_delimiter():
+    # a comma inside the coordinate is a thousands separator, never a region delimiter
+    r = fetch.parse_regions("chr1:1,000-2,000")
+    assert len(r) == 1 and r[0]["start"] == 1000 and r[0]["end"] == 2000
+
+
+def test_parse_regions_multi_newline_and_semicolon():
+    r = fetch.parse_regions("chr1:1-10\nchr2:5-9 ; chrX:100-200")
+    assert [x["chromLabel"] for x in r] == ["chr1", "chr2", "chrX"]
+    assert r[1] == {"chromKey": "2", "chromLabel": "chr2", "start": 5, "end": 9}
+
+
+def test_parse_regions_organism_specific_names_kept_verbatim():
+    # roman numerals (yeast), arm names (fly), no 'chr' prefix — passed through for the resolver
+    assert fetch.parse_regions("II:1-100")[0]["chromKey"] == "II"
+    assert fetch.parse_regions("2L:1-100")[0]["chromKey"] == "2L"
+    assert fetch.parse_regions("chrMT:1-5")[0]["chromKey"] == "MT"
+
+
+@pytest.mark.parametrize("bad", ["", "   ", "chr1", "chr1:100", "chr1:abc-def", "chr1:200-100",
+                                 "chr1:0-100", "chr1:,-100", "chr1:100-,", "chr1: , - , "])
+def test_parse_regions_rejects_malformed(bad):
+    # a comma/space-only coordinate group must raise CoordError, never a bare int('') ValueError
+    with pytest.raises(fetch.CoordError):
+        fetch.parse_regions(bad)
+
+
+def test_datasets_json_non_json_body_is_coorderror(monkeypatch):
+    # NCBI Datasets 200 with an HTML/maintenance body must surface as a clean CoordError, not JSONDecodeError
+    monkeypatch.setattr(fetch, "_get", lambda *a, **k: "<html>maintenance</html>")
+    with pytest.raises(fetch.CoordError):
+        fetch._datasets_json("genome/taxon/foo/dataset_report")
+    with pytest.raises(fetch.FetchError):                     # and it propagates as FetchError through resolve_assembly
+        fetch.resolve_assembly("Homo sapiens")
+
+
+_FAKE_MAP = {"assemblyAccession": "GCF_TEST.1", "molecules": [
+    {"chrName": "13", "ucscStyleName": "chr13", "refseqAccession": "NC_000013.11", "length": 114364328},
+    {"chrName": "I", "ucscStyleName": "chrI", "refseqAccession": "NC_001133.9", "length": 230218},
+    {"chrName": "MT", "ucscStyleName": "chrM", "refseqAccession": "NC_012920.1", "length": 16569},
+]}
+
+
+def test_resolve_chrom_matches_and_mt_alias(monkeypatch):
+    monkeypatch.setattr(fetch, "_load_assembly_map", lambda acc, refresh=False: _FAKE_MAP)
+    assert fetch.resolve_chrom("GCF_TEST.1", "13")["refseqAccession"] == "NC_000013.11"
+    assert fetch.resolve_chrom("GCF_TEST.1", "I")["refseqAccession"] == "NC_001133.9"    # roman numeral
+    assert fetch.resolve_chrom("GCF_TEST.1", "M")["refseqAccession"] == "NC_012920.1"    # M -> MT alias
+    assert fetch.resolve_chrom("GCF_TEST.1", "chrMT")["refseqAccession"] == "NC_012920.1"
+    with pytest.raises(fetch.CoordError):
+        fetch.resolve_chrom("GCF_TEST.1", "99")
+
+
+def test_fetch_fasta_range_length_guard(monkeypatch):
+    # efetch silently clamps a stop past the sequence end — the length assert must catch it
+    monkeypatch.setattr(fetch, "_get", lambda *a, **k: ">x:1-100\n" + "A" * 50 + "\n")
+    with pytest.raises(fetch.FetchError):
+        fetch.fetch_fasta_range("NC_000013.11", 1, 100, "+")
+
+
+def _stub_coord_backend(monkeypatch, tmp_path):
+    monkeypatch.setattr(fetch, "CACHE_DIR", str(tmp_path))
+    monkeypatch.setattr(fetch, "resolve_chrom",
+                        lambda acc, key, refresh=False: {"refseqAccession": "NC_000013.11",
+                        "length": 114364328, "ucscStyleName": "chr13", "chrName": "13"})
+    calls = {"n": 0}
+    def fake_range(acc, start, end, strand="+"):
+        calls["n"] += 1
+        return f">{acc}:{start}-{end}\n" + "ACGT" * ((end - start + 1 + 3) // 4)
+    monkeypatch.setattr(fetch, "fetch_fasta_range", fake_range)
+    return calls
+
+
+def test_retrieve_coords_caches_and_strand_keys_differ(tmp_path, monkeypatch):
+    calls = _stub_coord_backend(monkeypatch, tmp_path)
+    a = fetch.retrieve_coords("chr13:1-100", "GCF_TEST.1", "GRCh38", "Homo sapiens")
+    assert a["fromCache"] is False and calls["n"] == 1
+    assert a["runType"] == "coordinate" and a["source"]["retrievalType"] == "coordinate"
+    b = fetch.retrieve_coords("chr13:1-100", "GCF_TEST.1", "GRCh38", "Homo sapiens")
+    assert b["fromCache"] is True and calls["n"] == 1                    # served from disk
+    c = fetch.retrieve_coords("chr13:1-100", "GCF_TEST.1", "GRCh38", "Homo sapiens", strand="-")
+    assert c["fromCache"] is False and calls["n"] == 2                   # strand is part of the cache identity
+
+
+def test_retrieve_coords_assembly_and_taxid_in_cache_key(tmp_path, monkeypatch):
+    # the stub resolves every assembly to the SAME chr accession/coords, so only the assembly+taxid in the
+    # cache key can keep two genuinely different runs from colliding (patch assemblies share primary-chr RefSeq IDs)
+    calls = _stub_coord_backend(monkeypatch, tmp_path)
+    a = fetch.retrieve_coords("chr13:1-100", "GCF_000001405.40", "GRCh38.p14", "Homo sapiens")
+    assert a["fromCache"] is False and calls["n"] == 1
+    b = fetch.retrieve_coords("chr13:1-100", "GCF_000001405.39", "GRCh38.p13", "Homo sapiens")   # different assembly
+    assert b["fromCache"] is False and calls["n"] == 2                                            # must NOT collide
+    c = fetch.retrieve_coords("chr13:1-100", "GCF_000001405.40", "GRCh38.p14", "Homo sapiens", taxid="9606")
+    assert c["fromCache"] is False and calls["n"] == 3                                            # different taxid path
+    d = fetch.retrieve_coords("chr13:1-100", "GCF_000001405.40", "GRCh38.p14", "Homo sapiens")   # identical identity
+    assert d["fromCache"] is True and calls["n"] == 3                                             # DOES hit cache
+
+
+def test_retrieve_coords_multi_region_seal_fields(tmp_path, monkeypatch):
+    _stub_coord_backend(monkeypatch, tmp_path)
+    m = fetch.retrieve_coords("chr13:1-100\nchr13:200-300", "GCF_TEST.1", "GRCh38", "Homo sapiens")
+    assert len(m["source"]["regions"]) == 2
+    assert m["source"]["regions"][0] == {"chrAccession": "NC_000013.11", "start": 1, "stop": 100, "strand": 1}
+    assert m["source"]["coordSystem"] == "1-based-inclusive"
+    assert "+1 more" in m["displayLocus"]
+
+
+def test_retrieve_coords_rejects_out_of_bounds(tmp_path, monkeypatch):
+    monkeypatch.setattr(fetch, "CACHE_DIR", str(tmp_path))
+    monkeypatch.setattr(fetch, "resolve_chrom",
+                        lambda acc, key, refresh=False: {"refseqAccession": "NC_x.1", "length": 500,
+                        "ucscStyleName": "chr13", "chrName": "13"})
+    with pytest.raises(fetch.CoordError):
+        fetch.retrieve_coords("chr13:1-999", "GCF_TEST.1", "GRCh38", "Homo sapiens")
+
+
+def test_coord_assemblies_are_pinned_accessions():
+    # every curated organism pins a versioned GCF/GCA assembly accession + numeric taxid (complete organism pin)
+    for org, a in fetch.COORD_ASSEMBLIES.items():
+        assert fetch._ASM_ACC_RE.match(a["assemblyAccession"]), org
+        assert a["assemblyName"]
+        assert a["taxid"].isdigit(), org                      # taxid recorded so curated runs seal the same identity
+
+
+def test_retrieve_coords_records_taxid(tmp_path, monkeypatch):
+    _stub_coord_backend(monkeypatch, tmp_path)
+    m = fetch.retrieve_coords("chr13:1-100", "GCF_000001405.40", "GRCh38.p14", "Homo sapiens", taxid="9606")
+    assert m["source"]["taxid"] == "9606"                     # sealed organism identity, not left blank
+
+
+@pytest.mark.network
+def test_retrieve_coords_real_no_off_by_one(tmp_path, monkeypatch):
+    monkeypatch.setattr(fetch, "CACHE_DIR", str(tmp_path))
+    a = fetch.COORD_ASSEMBLIES["Homo sapiens"]
+    m = fetch.retrieve_coords("chr13:33,016,423-33,066,143", a["assemblyAccession"], a["assemblyName"], "Homo sapiens")
+    assert m["seq_length"] == 33066143 - 33016423 + 1                    # UCSC display == efetch, no conversion

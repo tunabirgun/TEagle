@@ -67,6 +67,7 @@ class Handler(BaseHTTPRequestHandler):
     # POST path -> engine handler. Each returns a dict or raises BadRequest (-> 400).
     _ROUTES = {
         "/api/fetch": engine.run_fetch,
+        "/api/fetch_coords": engine.run_fetch_coords,
         "/api/analyze": engine.run_analyze,
         "/api/wsl/install": lambda b: engine.run_wsl_install(),
         "/api/eta": engine.run_eta,

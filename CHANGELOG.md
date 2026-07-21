@@ -9,6 +9,17 @@ and propagates to the backend health endpoint, the UI header badge, every run
 provenance manifest, the packaged executable's Windows file-version metadata, and
 the LaTeX report title page.
 
+## [2.4.0] — 2026-07-21
+
+Fetch by genomic coordinate, an explicit table-export format menu, and a fixed Windows taskbar icon.
+
+### Added
+- **Fetch by coordinate (UCSC-style).** Alongside accession fetch, the Specimen panel gains a **Fetch by coordinate** section: pick an organism from 17 curated reference assemblies (or **Other organism / assembly…** to resolve any species or GCF/GCA accession through NCBI Datasets), choose the strand, and paste one or more loci in browser notation — `chr13:33,016,423-33,066,143`, one region per line for multi-region. Coordinates are 1-based inclusive, identical to the UCSC/NCBI browser display, so the numbers pass through with no conversion. Organism-specific chromosome names (`2L`, roman numerals, `X`, `MT`) resolve against the assembly's own map. Each region is fetched from NCBI E-utilities as an exact base range; multi-region fetches concatenate all regions into the sequence box, and analysis runs on the first region. The pinned assembly accession, taxon id, resolved chromosome RefSeq accessions, coordinates, and strand are recorded in the run provenance seal, so a coordinate run is as reproducible as an accession run.
+- **Explicit table-export format menu.** The **Export table** button and the table right-click menu now offer **Excel (.xlsx)**, **CSV**, and **TSV** as named choices instead of hiding the format behind a save-dialog filter. The save dialog opens pre-set to the chosen format and appends the extension if you omit it.
+
+### Fixed
+- **Windows taskbar icon.** The running app and its top-level window now set the bundled icon explicitly, so TEagle shows its eagle mark in the taskbar and Alt-Tab instead of a generic placeholder.
+
 ## [2.3.0] — 2026-07-21
 
 Install WSL2 directly from the app, plus a crisper desktop-shortcut icon.
@@ -183,6 +194,7 @@ primer design, usable without a command line.
   the WebView2 runtime is absent. A kill-on-close Job Object ties the whole process tree to the
   launcher, so an in-place upgrade never orphans a window.
 
+[2.4.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.4.0
 [2.3.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.3.0
 [2.2.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.2.0
 [2.1.1]: https://github.com/tunabirgun/TEagle/releases/tag/v2.1.1

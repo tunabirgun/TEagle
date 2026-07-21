@@ -1,0 +1,110 @@
+{
+ "organism": "Saccharomyces cerevisiae",
+ "assemblyName": "R64",
+ "assemblyAccession": "GCF_000146045.2",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "I",
+   "ucscStyleName": "chrI",
+   "refseqAccession": "NC_001133.9",
+   "length": 230218
+  },
+  {
+   "chrName": "II",
+   "ucscStyleName": "chrII",
+   "refseqAccession": "NC_001134.8",
+   "length": 813184
+  },
+  {
+   "chrName": "III",
+   "ucscStyleName": "chrIII",
+   "refseqAccession": "NC_001135.5",
+   "length": 316620
+  },
+  {
+   "chrName": "IV",
+   "ucscStyleName": "chrIV",
+   "refseqAccession": "NC_001136.10",
+   "length": 1531933
+  },
+  {
+   "chrName": "V",
+   "ucscStyleName": "chrV",
+   "refseqAccession": "NC_001137.3",
+   "length": 576874
+  },
+  {
+   "chrName": "VI",
+   "ucscStyleName": "chrVI",
+   "refseqAccession": "NC_001138.5",
+   "length": 270161
+  },
+  {
+   "chrName": "VII",
+   "ucscStyleName": "chrVII",
+   "refseqAccession": "NC_001139.9",
+   "length": 1090940
+  },
+  {
+   "chrName": "VIII",
+   "ucscStyleName": "chrVIII",
+   "refseqAccession": "NC_001140.6",
+   "length": 562643
+  },
+  {
+   "chrName": "IX",
+   "ucscStyleName": "chrIX",
+   "refseqAccession": "NC_001141.2",
+   "length": 439888
+  },
+  {
+   "chrName": "X",
+   "ucscStyleName": "chrX",
+   "refseqAccession": "NC_001142.9",
+   "length": 745751
+  },
+  {
+   "chrName": "XI",
+   "ucscStyleName": "chrXI",
+   "refseqAccession": "NC_001143.9",
+   "length": 666816
+  },
+  {
+   "chrName": "XII",
+   "ucscStyleName": "chrXII",
+   "refseqAccession": "NC_001144.5",
+   "length": 1078177
+  },
+  {
+   "chrName": "XIII",
+   "ucscStyleName": "chrXIII",
+   "refseqAccession": "NC_001145.3",
+   "length": 924431
+  },
+  {
+   "chrName": "XIV",
+   "ucscStyleName": "chrXIV",
+   "refseqAccession": "NC_001146.8",
+   "length": 784333
+  },
+  {
+   "chrName": "XV",
+   "ucscStyleName": "chrXV",
+   "refseqAccession": "NC_001147.6",
+   "length": 1091291
+  },
+  {
+   "chrName": "XVI",
+   "ucscStyleName": "chrXVI",
+   "refseqAccession": "NC_001148.4",
+   "length": 948066
+  },
+  {
+   "chrName": "MT",
+   "ucscStyleName": "chrM",
+   "refseqAccession": "NC_001224.1",
+   "length": 85779
+  }
+ ]
+}

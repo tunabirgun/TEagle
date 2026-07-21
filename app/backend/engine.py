@@ -193,6 +193,35 @@ def run_fetch(body):
         return {"ok": False, "error": str(fe)}
 
 
+# ---------- coordinate-based fetch (organism + chr:start-end) ----------
+def run_fetch_coords(body):
+    regions = body.get("regions")
+    if not isinstance(regions, str) or not regions.strip():
+        raise BadRequest("no regions provided (e.g. chr13:33,016,423-33,066,143)")
+    strand = body.get("strand", "+")
+    if strand not in ("+", "-"):
+        raise BadRequest("strand must be '+' or '-'")
+    org = body.get("organism", "")
+    custom = body.get("customQuery", "")
+    if not isinstance(org, str) or not isinstance(custom, str):
+        raise BadRequest("organism / customQuery must be strings")
+    try:
+        if org in fetch.COORD_ASSEMBLIES:
+            a = fetch.COORD_ASSEMBLIES[org]
+            meta = fetch.retrieve_coords(regions, a["assemblyAccession"], a["assemblyName"], org,
+                                         taxid=a.get("taxid", ""), strand=strand, refresh=bool(body.get("refresh")))
+        elif custom.strip():
+            asm = fetch.resolve_assembly(custom)          # organism/taxon name or GCF/GCA accession
+            meta = fetch.retrieve_coords(regions, asm["assemblyAccession"], asm["assemblyName"],
+                                         asm["organism"], taxid=asm["taxid"], strand=strand,
+                                         refresh=bool(body.get("refresh")))
+        else:
+            raise fetch.CoordError("select an organism or enter a custom organism / assembly accession")
+        return {"ok": True, **meta}
+    except fetch.FetchError as fe:
+        return {"ok": False, "error": str(fe)}
+
+
 # ---------- calibrated ETA ----------
 def run_eta(body):
     return timing.estimate(str(body.get("job", "")), int(_num(body.get("size"), 0)))

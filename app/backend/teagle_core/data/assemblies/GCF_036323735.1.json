@@ -1,0 +1,140 @@
+{
+ "organism": "Rattus norvegicus",
+ "assemblyName": "GRCr8",
+ "assemblyAccession": "GCF_036323735.1",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "1",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086019.1",
+   "length": 270518180
+  },
+  {
+   "chrName": "2",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086020.1",
+   "length": 251712708
+  },
+  {
+   "chrName": "3",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086021.1",
+   "length": 189428310
+  },
+  {
+   "chrName": "4",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086022.1",
+   "length": 184426481
+  },
+  {
+   "chrName": "5",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086023.1",
+   "length": 172190305
+  },
+  {
+   "chrName": "6",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086024.1",
+   "length": 147156653
+  },
+  {
+   "chrName": "7",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086025.1",
+   "length": 137014596
+  },
+  {
+   "chrName": "8",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086026.1",
+   "length": 132782436
+  },
+  {
+   "chrName": "9",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086027.1",
+   "length": 121768150
+  },
+  {
+   "chrName": "10",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086028.1",
+   "length": 107713808
+  },
+  {
+   "chrName": "11",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086029.1",
+   "length": 99753367
+  },
+  {
+   "chrName": "12",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086030.1",
+   "length": 52308831
+  },
+  {
+   "chrName": "13",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086031.1",
+   "length": 109350286
+  },
+  {
+   "chrName": "14",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086032.1",
+   "length": 109089856
+  },
+  {
+   "chrName": "15",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086033.1",
+   "length": 108192169
+  },
+  {
+   "chrName": "16",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086034.1",
+   "length": 91442908
+  },
+  {
+   "chrName": "17",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086035.1",
+   "length": 93515804
+  },
+  {
+   "chrName": "18",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086036.1",
+   "length": 86134022
+  },
+  {
+   "chrName": "19",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086037.1",
+   "length": 74246245
+  },
+  {
+   "chrName": "20",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086038.1",
+   "length": 56021148
+  },
+  {
+   "chrName": "X",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086039.1",
+   "length": 157758123
+  },
+  {
+   "chrName": "Y",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_086040.1",
+   "length": 59846084
+  }
+ ]
+}

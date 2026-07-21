@@ -11,6 +11,9 @@
 #define MyAppPublisher "Tuna Birgun"
 #define MyAppExeName "TEagle.exe"
 #define MyAppId "{A7F3C2E9-5D41-4B8A-9E2F-1C6D8B3A0F51}"
+; must stay byte-identical to SetCurrentProcessExplicitAppUserModelID(...) in app/native/main.py, so Windows
+; binds the running window's taskbar button to this shortcut's icon. NEVER change the value (invalidates pins).
+#define MyAppAumid "TEagle.desktop.2"
 
 [Setup]
 AppId={{#MyAppId}
@@ -59,8 +62,8 @@ Name: "cleaninstall"; Description: "Clean install — remove previous TEagle set
 Source: "..\dist\TEagle\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{userdesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; AppUserModelID: "{#MyAppAumid}"
+Name: "{userdesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; AppUserModelID: "{#MyAppAumid}"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 
 [Run]

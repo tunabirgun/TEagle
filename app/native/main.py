@@ -9,7 +9,7 @@ from PySide6.QtCore import Qt, QTimer, QByteArray
 from PySide6.QtGui import QGuiApplication, QFont, QPixmap, QPainter, QIcon, QCursor
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QFrame, QVBoxLayout, QHBoxLayout,
-                               QGridLayout, QLabel, QLineEdit, QTextEdit, QPushButton, QComboBox,
+                               QGridLayout, QLabel, QLineEdit, QTextEdit, QPlainTextEdit, QPushButton, QComboBox,
                                QScrollArea, QSplitter, QFileDialog, QSizePolicy, QToolTip)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -25,6 +25,7 @@ from widgets import FigurePanel, GenomePanel, DataTable
 from sample import make_sample
 import theme as theme_mod
 from teagle_core import appdirs
+from teagle_core.fetch import COORD_ASSEMBLIES        # organism -> pinned assembly, for the coordinate-fetch dropdown
 
 APP_VERSION = "2.1.1"
 # common model organisms for RepeatMasker/Dfam lineage (display, value passed to -species).
@@ -70,12 +71,11 @@ def _word_pixmap(te: str, agle: str, height: int, dpr: float = 1.0) -> QPixmap:
         _WORD_SVG = _load_asset("teagle-wordmark.svg")
     return _svg_pixmap(_WORD_SVG.replace("{TE}", te).replace("{AGLE}", agle), height, dpr)
 
-def _app_icon() -> QIcon:                                 # window/taskbar icon from the mark, mid-teal on transparent
-    icon = QIcon()
-    for s in (16, 20, 24, 32, 40, 48, 64, 96, 128, 256):
-        big = _mark_pixmap(ICON_TEAL, s * 8)              # supersample x8 then smooth-scale -> clean small frames
-        icon.addPixmap(big.scaled(s, s, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-    return icon
+def _app_icon() -> QIcon:                                 # OS window/taskbar icon: the bundled multi-frame ICO
+    # use the same crisp 16..256 teagle.ico the exe + installer shortcut embed, so the running window icon is
+    # pixel-identical to the shortcut icon (which is what Windows needs to bind the taskbar button via the AUMID)
+    path = appdirs.resource("teagle.ico") or os.path.join(_HERE, "..", "..", "installer", "teagle.ico")
+    return QIcon(path)
 
 STRUCT_COLS = ["Feature", "Coords (0-based)", "Len", "Metric", "Method"]
 ORF_COLS = ["Strand", "Frame", "Start", "End", "aa"]
@@ -192,10 +192,14 @@ def _sl(text):
 
 
 def _export_table_btn(table, base, parent):
-    """Visible CSV/TSV/XLSX export for a DataTable (the right-click menu also has it, less discoverably).
-    Exports in the table's current on-screen (sorted) order."""
-    b = QPushButton("⭳ Export table"); b.setProperty("sm", True)
-    b.clicked.connect(lambda _=False: widgets.export_table(table._headers, table.rows_data(), base, parent))
+    """Visible Excel/CSV/TSV export for a DataTable: the button pops a format menu, then a save dialog
+    pre-set to the chosen type. Exports in the table's current on-screen (sorted) order."""
+    b = QPushButton("⭳ Export table ▾"); b.setProperty("sm", True)
+    def pop():
+        fmt = widgets.pick_table_format(b, b.mapToGlobal(b.rect().bottomLeft()))
+        if fmt:
+            widgets.export_table(table._headers, table.rows_data(), base, parent, fmt=fmt)
+    b.clicked.connect(lambda _=False: pop())
     return b
 
 
@@ -203,6 +207,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("TEagle")
+        self.setWindowIcon(_app_icon())                   # also set on the top-level window (some Qt/Windows paths key the taskbar HICON off WM_SETICON)
         self.resize(round(1240 * theme_mod.UI_SCALE), round(860 * theme_mod.UI_SCALE))
         self.theme = "dark"
         self.state = {"seq": "", "source": None, "last_rec": None}
@@ -276,6 +281,36 @@ class MainWindow(QMainWindow):
         self.accMeta = QLabel(""); self.accMeta.setObjectName("cardmeta"); self.accMeta.setWordWrap(True)
         self.accMeta.setTextFormat(Qt.RichText); self.accMeta.setOpenExternalLinks(True)
         lay.addWidget(self.accMeta)
+
+        # coordinate fetch (collapsed) — organism + chr:start-end, like the UCSC browser position box
+        self.coordToggle = QPushButton("⌖ Fetch by coordinate ▾"); self.coordToggle.setProperty("link", True)
+        self.coordToggle.clicked.connect(self._toggle_coord); lay.addWidget(self.coordToggle)
+        self.coordBox = QWidget(); cb = QVBoxLayout(self.coordBox); cb.setContentsMargins(0, 2, 0, 2); cb.setSpacing(5)
+        orow = QHBoxLayout()
+        self.asmSel = QComboBox()
+        for org in sorted(COORD_ASSEMBLIES):
+            self.asmSel.addItem(f"{org} · {COORD_ASSEMBLIES[org]['assemblyName']}", org)
+        self.asmSel.addItem("Other organism / assembly…", "__custom__")
+        orow.addWidget(self.asmSel, 1)
+        self.coordStrand = QComboBox(); self.coordStrand.addItems(["+ strand", "− strand"])
+        self.coordStrand.setMaximumWidth(104); orow.addWidget(self.coordStrand)
+        cb.addLayout(orow)
+        self.coordCustom = QLineEdit(); self.coordCustom.setPlaceholderText("organism name or assembly accession (e.g. GCF_000001405.40)")
+        self.coordCustom.setVisible(False); cb.addWidget(self.coordCustom)
+        self.asmSel.currentIndexChanged.connect(lambda _=0: self.coordCustom.setVisible(self.asmSel.currentData() == "__custom__"))
+        self.coord = QPlainTextEdit(); self.coord.setMaximumHeight(66)
+        self.coord.setPlaceholderText("chr13:33,016,423-33,066,143   (one region per line for multi-region)")
+        cb.addWidget(self.coord)
+        crow = QHBoxLayout()
+        cfb = QPushButton("↓ Fetch region(s)"); cfb.setProperty("sm", True); cfb.clicked.connect(self._fetch_coord)
+        crow.addWidget(cfb); crow.addStretch(1); cb.addLayout(crow)
+        self.coordMeta = QLabel(""); self.coordMeta.setObjectName("cardmeta"); self.coordMeta.setWordWrap(True)
+        self.coordMeta.setTextFormat(Qt.RichText); self.coordMeta.setOpenExternalLinks(True); cb.addWidget(self.coordMeta)
+        cnote = QLabel("UCSC-style, 1-based (same numbers as the browser). Multi-region: all fetched + recorded; "
+                       "analysis runs on the first region.")
+        cnote.setObjectName("orient"); cnote.setWordWrap(True); cb.addWidget(cnote)
+        self.coordBox.setVisible(False); lay.addWidget(self.coordBox)
+
         ub = QPushButton("⭱ Upload FASTA (.fa / .fasta / .gz)"); ub.setProperty("sm", True)
         ub.clicked.connect(self._upload); lay.addWidget(ub)
         self.seq = QTextEdit(); self.seq.setPlaceholderText("…or paste DNA (FASTA or raw). Real IUPAC validation runs on analyze.")
@@ -643,7 +678,9 @@ class MainWindow(QMainWindow):
         elif key == "splice":
             self.spliceBtn.setEnabled(True); self.spliceBtn.setText("▶ Detect exons / introns")
         elif key == "fetch":
-            self.accMeta.setText("")
+            for lbl in (self.accMeta, self.coordMeta):        # clear only the in-flight indicator, keep a prior result
+                if lbl.text() == "fetching…":
+                    lbl.setText("")
 
     def _on_user_error(self, key, msg):
         self._reset_buttons(key)
@@ -675,22 +712,58 @@ class MainWindow(QMainWindow):
             f"<b>wsl2</b> {bw.get('wsl2','—')}<br>"
             f"<b>signature</b> {e.get('signature','—')}")
 
+    def _toggle_coord(self):
+        vis = not self.coordBox.isVisible()
+        self.coordBox.setVisible(vis)
+        self.coordToggle.setText("⌖ Fetch by coordinate ▴" if vis else "⌖ Fetch by coordinate ▾")
+
+    def _fetch_coord(self):
+        self._clear_banner()
+        org = self.asmSel.currentData()
+        custom = self.coordCustom.text().strip() if org == "__custom__" else ""
+        if org == "__custom__" and not custom:
+            return self._banner("enter a custom organism name or an assembly accession (e.g. GCF_000001405.40)")
+        regions = self.coord.toPlainText().strip()
+        if not regions:
+            return self._banner("enter at least one region, e.g. chr13:33,016,423-33,066,143")
+        strand = "-" if self.coordStrand.currentIndex() == 1 else "+"
+        self.coordMeta.setText("fetching…")
+        self.engine.submit("fetch_coords", {"regions": regions, "strand": strand,
+                           "organism": "" if org == "__custom__" else org, "customQuery": custom}, key="fetch")
+
+    def _render_coord_fetch(self, res):
+        self.accMeta.setText("")                          # only one specimen identity shows at a time
+        regions = res.get("regions", [])
+        cached = " · cached (local)" if res.get("fromCache") else ""
+        ncbi = (self._src_html("NCBI", "https://www.ncbi.nlm.nih.gov/nuccore/" + regions[0]["chrAccession"])
+                if regions else "")
+        lines = [f"{r.get('chromLabel','')}:{r.get('start'):,}-{r.get('stop'):,} · {r.get('chrAccession','')} · "
+                 f"{r.get('stop',0)-r.get('start',0)+1:,} bp" + ("  (−)" if r.get('strand') == 2 else "")
+                 for r in regions]
+        self.coordMeta.setText(f"{res.get('assemblyName','')} · {res.get('organism','')}{cached}{ncbi}<br>" + "<br>".join(lines))
+        self.state["source"] = res.get("source", {})
+        self.state["features"] = None
+
     def _on_fetch(self, res):
         if not res.get("ok"):
-            self.accMeta.setText("")
+            self.accMeta.setText(""); self.coordMeta.setText("")
             return self._banner(res.get("error", "fetch failed"))
         self._clear_banner()
         seqtext = res.get("fasta") or res.get("sequence") or ""
         if seqtext:
             self.seq.setPlainText(seqtext)
         org = res.get("organism", "")
-        length = res.get("length") or res.get("seq_length") or ""
-        cached = " · cached (local)" if res.get("fromCache") else ""
-        acc = res.get("accession", "")
-        ncbi = self._src_html("NCBI", "https://www.ncbi.nlm.nih.gov/nuccore/" + acc) if acc else ""
-        self.accMeta.setText(f"{acc} · {org} · {length} bp{cached}{ncbi}<br>{res.get('title','')}")
-        self.state["source"] = {k: res.get(k) for k in ("accession", "organism", "title", "length", "moltype") if res.get(k) is not None}
-        self.state["features"] = res.get("features")
+        if res.get("runType") == "coordinate":
+            self._render_coord_fetch(res)
+        else:
+            length = res.get("length") or res.get("seq_length") or ""
+            cached = " · cached (local)" if res.get("fromCache") else ""
+            acc = res.get("accession", "")
+            ncbi = self._src_html("NCBI", "https://www.ncbi.nlm.nih.gov/nuccore/" + acc) if acc else ""
+            self.accMeta.setText(f"{acc} · {org} · {length} bp{cached}{ncbi}<br>{res.get('title','')}")
+            self.coordMeta.setText("")                    # clear the other specimen identity
+            self.state["source"] = {k: res.get(k) for k in ("accession", "organism", "title", "length", "moltype") if res.get(k) is not None}
+            self.state["features"] = res.get("features")
         # auto-fill species for WSL family annotation if present
         if hasattr(self, "wslSpecies") and org:
             self._set_species(org)
@@ -894,7 +967,7 @@ class MainWindow(QMainWindow):
             return
         src = self.state.get("source") or {}
         n = len(self._clean_seq(seq))
-        who = src.get("accession") or "pasted / uploaded specimen"
+        who = src.get("displayLocus") or src.get("accession") or "pasted / uploaded specimen"
         org = f" · {src.get('organism')}" if src.get("organism") else ""
         self.spliceRef.setText(f"Genomic reference: <b>{who}</b>{org} · {n:,} bp (from panel 01)")
 

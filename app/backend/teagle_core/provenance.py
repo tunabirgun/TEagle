@@ -11,7 +11,7 @@ _SEAL_EXCLUDE_TOP = ("createdUtc", "environment")
 # volatile / label-only input fields: retrieval time, and the raw FASTA-header id (differs between the
 # NCBI and ENA-fallback fetch paths for the SAME accession+sequence). The sequence sha256 + the resolved
 # accession/organism/taxid still seal the scientific identity.
-_SEAL_EXCLUDE_INPUT = ("retrievedUtc", "id")
+_SEAL_EXCLUDE_INPUT = ("retrievedUtc", "id", "assemblyName", "displayLocus", "chromName")
 
 
 def _software(run_type: str) -> list:
@@ -34,9 +34,10 @@ def build_manifest(run_type: str, input_seq: str, input_id: str, params: dict,
         "length": len(input_seq),
         "sha256": hashlib.sha256(input_seq.encode()).hexdigest(),
     }
-    if isinstance(source, dict):                # accession retrieval provenance, if fetched (ignore malformed source)
-        inp.update({k: source[k] for k in ("accession", "organism", "taxid",
-                    "source", "endpoint", "retrievedUtc") if k in source})
+    if isinstance(source, dict):                # accession/coordinate retrieval provenance, if fetched
+        inp.update({k: source[k] for k in ("accession", "organism", "taxid", "source", "endpoint", "retrievedUtc",
+                    "assemblyAccession", "regions", "coordSystem", "retrievalType",     # coordinate: sealed identity
+                    "assemblyName", "displayLocus", "chromName") if k in source})        # coordinate: recorded-but-excluded labels
     m = {
         "teagleVersion": TEAGLE_VERSION,
         "schemaVersion": "0.1",

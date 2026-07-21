@@ -1,0 +1,140 @@
+{
+ "organism": "Macaca mulatta",
+ "assemblyName": "Mmul_10",
+ "assemblyAccession": "GCF_003339765.1",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "1",
+   "ucscStyleName": "chr1",
+   "refseqAccession": "NC_041754.1",
+   "length": 223616942
+  },
+  {
+   "chrName": "2",
+   "ucscStyleName": "chr2",
+   "refseqAccession": "NC_041755.1",
+   "length": 196197964
+  },
+  {
+   "chrName": "3",
+   "ucscStyleName": "chr3",
+   "refseqAccession": "NC_041756.1",
+   "length": 185288947
+  },
+  {
+   "chrName": "4",
+   "ucscStyleName": "chr4",
+   "refseqAccession": "NC_041757.1",
+   "length": 169963040
+  },
+  {
+   "chrName": "5",
+   "ucscStyleName": "chr5",
+   "refseqAccession": "NC_041758.1",
+   "length": 187317192
+  },
+  {
+   "chrName": "6",
+   "ucscStyleName": "chr6",
+   "refseqAccession": "NC_041759.1",
+   "length": 179085566
+  },
+  {
+   "chrName": "7",
+   "ucscStyleName": "chr7",
+   "refseqAccession": "NC_041760.1",
+   "length": 169868564
+  },
+  {
+   "chrName": "8",
+   "ucscStyleName": "chr8",
+   "refseqAccession": "NC_041761.1",
+   "length": 145679320
+  },
+  {
+   "chrName": "9",
+   "ucscStyleName": "chr9",
+   "refseqAccession": "NC_041762.1",
+   "length": 134124166
+  },
+  {
+   "chrName": "10",
+   "ucscStyleName": "chr10",
+   "refseqAccession": "NC_041763.1",
+   "length": 99517758
+  },
+  {
+   "chrName": "11",
+   "ucscStyleName": "chr11",
+   "refseqAccession": "NC_041764.1",
+   "length": 133066086
+  },
+  {
+   "chrName": "12",
+   "ucscStyleName": "chr12",
+   "refseqAccession": "NC_041765.1",
+   "length": 130043856
+  },
+  {
+   "chrName": "13",
+   "ucscStyleName": "chr13",
+   "refseqAccession": "NC_041766.1",
+   "length": 108737130
+  },
+  {
+   "chrName": "14",
+   "ucscStyleName": "chr14",
+   "refseqAccession": "NC_041767.1",
+   "length": 128056306
+  },
+  {
+   "chrName": "15",
+   "ucscStyleName": "chr15",
+   "refseqAccession": "NC_041768.1",
+   "length": 113283604
+  },
+  {
+   "chrName": "16",
+   "ucscStyleName": "chr16",
+   "refseqAccession": "NC_041769.1",
+   "length": 79627064
+  },
+  {
+   "chrName": "17",
+   "ucscStyleName": "chr17",
+   "refseqAccession": "NC_041770.1",
+   "length": 95433459
+  },
+  {
+   "chrName": "18",
+   "ucscStyleName": "chr18",
+   "refseqAccession": "NC_041771.1",
+   "length": 74474043
+  },
+  {
+   "chrName": "19",
+   "ucscStyleName": "chr19",
+   "refseqAccession": "NC_041772.1",
+   "length": 58315233
+  },
+  {
+   "chrName": "20",
+   "ucscStyleName": "chr20",
+   "refseqAccession": "NC_041773.1",
+   "length": 77137495
+  },
+  {
+   "chrName": "X",
+   "ucscStyleName": "chrX",
+   "refseqAccession": "NC_041774.1",
+   "length": 153388924
+  },
+  {
+   "chrName": "Y",
+   "ucscStyleName": "chrY",
+   "refseqAccession": "NC_027914.1",
+   "length": 11753682
+  }
+ ]
+}

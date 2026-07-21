@@ -1,0 +1,98 @@
+{
+ "organism": "Oryza sativa",
+ "assemblyName": "IRGSP-1.0",
+ "assemblyAccession": "GCF_001433935.1",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "1",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_029256.1",
+   "length": 43270923
+  },
+  {
+   "chrName": "2",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_029257.1",
+   "length": 35937250
+  },
+  {
+   "chrName": "3",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_029258.1",
+   "length": 36413819
+  },
+  {
+   "chrName": "4",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_029259.1",
+   "length": 35502694
+  },
+  {
+   "chrName": "5",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_029260.1",
+   "length": 29958434
+  },
+  {
+   "chrName": "6",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_029261.1",
+   "length": 31248787
+  },
+  {
+   "chrName": "7",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_029262.1",
+   "length": 29697621
+  },
+  {
+   "chrName": "8",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_029263.1",
+   "length": 28443022
+  },
+  {
+   "chrName": "9",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_029264.1",
+   "length": 23012720
+  },
+  {
+   "chrName": "10",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_029265.1",
+   "length": 23207287
+  },
+  {
+   "chrName": "11",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_029266.1",
+   "length": 29021106
+  },
+  {
+   "chrName": "12",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_029267.1",
+   "length": 27531856
+  },
+  {
+   "chrName": "MT",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_011033.1",
+   "length": 490520
+  },
+  {
+   "chrName": "Pltd",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_001320.1",
+   "length": 134525
+  },
+  {
+   "chrName": "B1",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_001751.1",
+   "length": 2135
+  }
+ ]
+}

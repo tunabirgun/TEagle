@@ -63,6 +63,7 @@ class Engine(QObject):
         "wsl_repair": engine.run_wsl_repair,
         "wsl_integrity": lambda b: engine.run_wsl_integrity(),
         "fetch": engine.run_fetch,
+        "fetch_coords": engine.run_fetch_coords,
         "analyze": engine.run_analyze,
         "eta": engine.run_eta,
         "annotate": engine.run_annotate,

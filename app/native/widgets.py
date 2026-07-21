@@ -478,10 +478,49 @@ def _export_xlsx(headers, rows, path):
     wb.save(path)
 
 
-def export_table(headers, rows, base, parent=None):
-    filters = (["Excel (*.xlsx)"] if _HAS_XLSX else []) + ["CSV (*.csv)", "TSV (*.tsv)"]
-    default = ".xlsx" if _HAS_XLSX else ".csv"
-    path, _sel = QFileDialog.getSaveFileName(parent, "Export table", base + default, ";;".join(filters))
+_TABLE_FORMATS = [("Excel workbook (.xlsx)", "xlsx"),
+                  ("CSV — comma-separated (.csv)", "csv"),
+                  ("TSV — tab-separated (.tsv)", "tsv")]
+_FMT_FILTER = {"xlsx": "Excel workbook (*.xlsx)", "csv": "CSV (*.csv)", "tsv": "TSV (*.tsv)"}
+
+
+def _available_formats():
+    return [(lbl, fmt) for lbl, fmt in _TABLE_FORMATS if fmt != "xlsx" or _HAS_XLSX]
+
+
+def pick_table_format(parent, global_pos):
+    """Pop a format menu (Excel/CSV/TSV) at global_pos; return 'xlsx'|'csv'|'tsv' or None if dismissed."""
+    m = QMenu(parent)
+    amap = {m.addAction(label): fmt for label, fmt in _available_formats()}
+    return amap.get(m.exec(global_pos))
+
+
+def add_export_submenu(menu, headers, rows_fn, base, parent):
+    """Attach a '⭳ Export table ▸ Excel/CSV/TSV' submenu; rows_fn is called at click time (current order).
+    The submenu is parented to `menu` so C++ keeps it alive after this returns (a bare addMenu(str) can
+    be GC'd out from under the menu)."""
+    sub = QMenu("⭳ Export table", menu)
+    for label, fmt in _available_formats():
+        sub.addAction(label, lambda _=False, f=fmt: export_table(headers, rows_fn(), base, parent, fmt=f))
+    menu.addMenu(sub)
+    return sub
+
+
+def export_table(headers, rows, base, parent=None, fmt=None):
+    """Write a table to a user-chosen file. `fmt` in {'xlsx','csv','tsv'} pre-selects the format so the
+    save dialog offers exactly that type; fmt=None falls back to a multi-filter dialog."""
+    if fmt is None:
+        filters = (["Excel (*.xlsx)"] if _HAS_XLSX else []) + ["CSV (*.csv)", "TSV (*.tsv)"]
+        path, _sel = QFileDialog.getSaveFileName(parent, "Export table",
+                                                 base + (".xlsx" if _HAS_XLSX else ".csv"), ";;".join(filters))
+    else:
+        if fmt == "xlsx" and not _HAS_XLSX:
+            fmt = "csv"
+        ext = "." + fmt
+        path, _sel = QFileDialog.getSaveFileName(parent, f"Export table as {fmt.upper()}",
+                                                 base + ext, _FMT_FILTER[fmt])
+        if path and not path.lower().endswith(ext):
+            path += ext                                       # honor the chosen format if the user omits the extension
     if not path:
         return
     low = path.lower()
@@ -601,7 +640,7 @@ class DataTable(QTableWidget):
                 m.addAction(label, fn)
             m.addSeparator()
         m.addAction("Copy row", lambda: self._copy_row(row))
-        m.addAction("Export CSV / TSV…", self._export)
+        add_export_submenu(m, self._headers, self.rows_data, "TEagle_table", self)
         m.exec(self.viewport().mapToGlobal(pos))
 
     def _copy_row(self, row):
@@ -613,6 +652,3 @@ class DataTable(QTableWidget):
     def rows_data(self):
         return [[self.item(i, j).text() if self.item(i, j) else "" for j in range(self.columnCount())]
                 for i in range(self.rowCount())]
-
-    def _export(self):
-        export_table(self._headers, self.rows_data(), "TEagle_table", self)

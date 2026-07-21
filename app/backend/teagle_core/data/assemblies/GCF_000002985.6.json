@@ -1,0 +1,50 @@
+{
+ "organism": "Caenorhabditis elegans",
+ "assemblyName": "WBcel235",
+ "assemblyAccession": "GCF_000002985.6",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "I",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_003279.8",
+   "length": 15072434
+  },
+  {
+   "chrName": "II",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_003280.10",
+   "length": 15279421
+  },
+  {
+   "chrName": "III",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_003281.10",
+   "length": 13783801
+  },
+  {
+   "chrName": "IV",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_003282.8",
+   "length": 17493829
+  },
+  {
+   "chrName": "V",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_003283.11",
+   "length": 20924180
+  },
+  {
+   "chrName": "X",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_003284.9",
+   "length": 17718942
+  },
+  {
+   "chrName": "MT",
+   "ucscStyleName": "chrM",
+   "refseqAccession": "NC_001328.1",
+   "length": 13794
+  }
+ ]
+}

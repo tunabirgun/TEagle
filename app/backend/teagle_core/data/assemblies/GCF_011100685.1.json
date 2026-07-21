@@ -1,0 +1,242 @@
+{
+ "organism": "Canis lupus familiaris",
+ "assemblyName": "UU_Cfam_GSD_1.0",
+ "assemblyAccession": "GCF_011100685.1",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "1",
+   "ucscStyleName": "chr1",
+   "refseqAccession": "NC_049222.1",
+   "length": 123556469
+  },
+  {
+   "chrName": "2",
+   "ucscStyleName": "chr2",
+   "refseqAccession": "NC_049223.1",
+   "length": 84979418
+  },
+  {
+   "chrName": "3",
+   "ucscStyleName": "chr3",
+   "refseqAccession": "NC_049224.1",
+   "length": 92479059
+  },
+  {
+   "chrName": "4",
+   "ucscStyleName": "chr4",
+   "refseqAccession": "NC_049225.1",
+   "length": 89535178
+  },
+  {
+   "chrName": "5",
+   "ucscStyleName": "chr5",
+   "refseqAccession": "NC_049226.1",
+   "length": 89562946
+  },
+  {
+   "chrName": "6",
+   "ucscStyleName": "chr6",
+   "refseqAccession": "NC_049227.1",
+   "length": 78113029
+  },
+  {
+   "chrName": "7",
+   "ucscStyleName": "chr7",
+   "refseqAccession": "NC_049228.1",
+   "length": 81081596
+  },
+  {
+   "chrName": "8",
+   "ucscStyleName": "chr8",
+   "refseqAccession": "NC_049229.1",
+   "length": 76405709
+  },
+  {
+   "chrName": "9",
+   "ucscStyleName": "chr9",
+   "refseqAccession": "NC_049230.1",
+   "length": 61171909
+  },
+  {
+   "chrName": "10",
+   "ucscStyleName": "chr10",
+   "refseqAccession": "NC_049231.1",
+   "length": 70643054
+  },
+  {
+   "chrName": "11",
+   "ucscStyleName": "chr11",
+   "refseqAccession": "NC_049232.1",
+   "length": 74805798
+  },
+  {
+   "chrName": "12",
+   "ucscStyleName": "chr12",
+   "refseqAccession": "NC_049233.1",
+   "length": 72970719
+  },
+  {
+   "chrName": "13",
+   "ucscStyleName": "chr13",
+   "refseqAccession": "NC_049234.1",
+   "length": 64299765
+  },
+  {
+   "chrName": "14",
+   "ucscStyleName": "chr14",
+   "refseqAccession": "NC_049235.1",
+   "length": 61112200
+  },
+  {
+   "chrName": "15",
+   "ucscStyleName": "chr15",
+   "refseqAccession": "NC_049236.1",
+   "length": 64676183
+  },
+  {
+   "chrName": "16",
+   "ucscStyleName": "chr16",
+   "refseqAccession": "NC_049237.1",
+   "length": 60362399
+  },
+  {
+   "chrName": "17",
+   "ucscStyleName": "chr17",
+   "refseqAccession": "NC_049238.1",
+   "length": 65088165
+  },
+  {
+   "chrName": "18",
+   "ucscStyleName": "chr18",
+   "refseqAccession": "NC_049239.1",
+   "length": 56472973
+  },
+  {
+   "chrName": "19",
+   "ucscStyleName": "chr19",
+   "refseqAccession": "NC_049240.1",
+   "length": 55516201
+  },
+  {
+   "chrName": "20",
+   "ucscStyleName": "chr20",
+   "refseqAccession": "NC_049241.1",
+   "length": 58627490
+  },
+  {
+   "chrName": "21",
+   "ucscStyleName": "chr21",
+   "refseqAccession": "NC_049242.1",
+   "length": 51742555
+  },
+  {
+   "chrName": "22",
+   "ucscStyleName": "chr22",
+   "refseqAccession": "NC_049243.1",
+   "length": 61573679
+  },
+  {
+   "chrName": "23",
+   "ucscStyleName": "chr23",
+   "refseqAccession": "NC_049244.1",
+   "length": 53134997
+  },
+  {
+   "chrName": "24",
+   "ucscStyleName": "chr24",
+   "refseqAccession": "NC_049245.1",
+   "length": 48566227
+  },
+  {
+   "chrName": "25",
+   "ucscStyleName": "chr25",
+   "refseqAccession": "NC_049246.1",
+   "length": 51730745
+  },
+  {
+   "chrName": "26",
+   "ucscStyleName": "chr26",
+   "refseqAccession": "NC_049247.1",
+   "length": 39257614
+  },
+  {
+   "chrName": "27",
+   "ucscStyleName": "chr27",
+   "refseqAccession": "NC_049248.1",
+   "length": 46662488
+  },
+  {
+   "chrName": "28",
+   "ucscStyleName": "chr28",
+   "refseqAccession": "NC_049249.1",
+   "length": 41733330
+  },
+  {
+   "chrName": "29",
+   "ucscStyleName": "chr29",
+   "refseqAccession": "NC_049250.1",
+   "length": 42517134
+  },
+  {
+   "chrName": "30",
+   "ucscStyleName": "chr30",
+   "refseqAccession": "NC_049251.1",
+   "length": 40643782
+  },
+  {
+   "chrName": "31",
+   "ucscStyleName": "chr31",
+   "refseqAccession": "NC_049252.1",
+   "length": 39901454
+  },
+  {
+   "chrName": "32",
+   "ucscStyleName": "chr32",
+   "refseqAccession": "NC_049253.1",
+   "length": 40225481
+  },
+  {
+   "chrName": "33",
+   "ucscStyleName": "chr33",
+   "refseqAccession": "NC_049254.1",
+   "length": 32139216
+  },
+  {
+   "chrName": "34",
+   "ucscStyleName": "chr34",
+   "refseqAccession": "NC_049255.1",
+   "length": 42397973
+  },
+  {
+   "chrName": "35",
+   "ucscStyleName": "chr35",
+   "refseqAccession": "NC_049256.1",
+   "length": 28051305
+  },
+  {
+   "chrName": "36",
+   "ucscStyleName": "chr36",
+   "refseqAccession": "NC_049257.1",
+   "length": 31223415
+  },
+  {
+   "chrName": "37",
+   "ucscStyleName": "chr37",
+   "refseqAccession": "NC_049258.1",
+   "length": 30785915
+  },
+  {
+   "chrName": "38",
+   "ucscStyleName": "chr38",
+   "refseqAccession": "NC_049259.1",
+   "length": 24803098
+  },
+  {
+   "chrName": "X",
+   "ucscStyleName": "chrX",
+   "refseqAccession": "NC_049260.1",
+   "length": 124992030
+  }
+ ]
+}

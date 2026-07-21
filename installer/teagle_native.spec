@@ -34,7 +34,11 @@ datas = [
     (os.path.join(ROOT, "app", "backend", "requirements.txt"), "."),            # for the in-app environment panel
     (os.path.join(ROOT, "app", "native", "assets", "teagle-mark.svg"), "native/assets"),      # header brand mark
     (os.path.join(ROOT, "app", "native", "assets", "teagle-wordmark.svg"), "native/assets"),  # header wordmark (Cascadia Code)
+    (os.path.join(SPECPATH, "teagle.ico"), "."),                                # runtime window/taskbar QIcon (same crisp ICO the exe embeds)
 ]
+# bundled per-assembly chromosome maps for coordinate fetch -> teagle_core/data/assemblies/*.json
+_asmdir = os.path.join(ROOT, "app", "backend", "teagle_core", "data", "assemblies")
+datas += [(os.path.join(_asmdir, f), "teagle_core/data/assemblies") for f in os.listdir(_asmdir) if f.endswith(".json")]
 # bundle the Cascadia fonts (SIL OFL) so the UI renders identically without them installed -> native/assets/fonts
 _fontdir = os.path.join(ROOT, "app", "native", "assets", "fonts")
 datas += [(os.path.join(_fontdir, fn), "native/assets/fonts") for fn in os.listdir(_fontdir)]

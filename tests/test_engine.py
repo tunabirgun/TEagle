@@ -90,6 +90,66 @@ def test_run_fetch_nonstring_accession_is_badrequest():
         engine.run_fetch({"accession": 12345})
 
 
+# --- run_fetch_coords: malformed transport is a BadRequest; an unresolvable request is a soft error ---
+def test_run_fetch_coords_missing_regions_is_badrequest():
+    with pytest.raises(BadRequest):
+        engine.run_fetch_coords({"organism": "Homo sapiens"})
+
+
+def test_run_fetch_coords_bad_strand_is_badrequest():
+    with pytest.raises(BadRequest):
+        engine.run_fetch_coords({"regions": "chr1:1-10", "strand": "sense", "organism": "Homo sapiens"})
+
+
+def test_run_fetch_coords_nonstring_organism_is_badrequest():
+    with pytest.raises(BadRequest):
+        engine.run_fetch_coords({"regions": "chr1:1-10", "organism": 123})
+
+
+def test_run_fetch_coords_no_organism_is_soft_error():
+    r = engine.run_fetch_coords({"regions": "chr1:1-10", "organism": "", "customQuery": ""})
+    assert r["ok"] is False and "organism" in r["error"].lower()
+
+
+def test_run_fetch_coords_comma_only_region_is_soft_error():
+    # a comma-only coordinate group must be a soft {ok:False}, not an uncaught ValueError/500
+    r = engine.run_fetch_coords({"regions": "chr13:,-100", "organism": "Homo sapiens"})
+    assert r["ok"] is False
+
+
+def test_run_fetch_coords_custom_non_json_is_soft_error(monkeypatch):
+    # a custom-organism resolve against a non-JSON Datasets body must be a soft {ok:False}, not a 500
+    monkeypatch.setattr(engine.fetch, "_get", lambda *a, **k: "<html>rate limited</html>")
+    r = engine.run_fetch_coords({"regions": "chr1:1-100", "organism": "", "customQuery": "Foo bar"})
+    assert r["ok"] is False and r["error"]
+
+
+def test_run_fetch_coords_curated_uses_pinned_assembly(monkeypatch):
+    # a curated organism routes to its pinned assembly accession without touching resolve_assembly
+    seen = {}
+    def fake(regions, acc, name, org, taxid="", strand="+", refresh=False):
+        seen.update(accession=acc, organism=org, strand=strand, taxid=taxid)
+        return {"fasta": ">x\nACGT", "runType": "coordinate", "source": {}}
+    monkeypatch.setattr(engine.fetch, "retrieve_coords", fake)
+    r = engine.run_fetch_coords({"regions": "chr13:1-100", "strand": "-", "organism": "Homo sapiens"})
+    assert r["ok"] is True
+    assert seen["accession"] == engine.fetch.COORD_ASSEMBLIES["Homo sapiens"]["assemblyAccession"]
+    assert seen["organism"] == "Homo sapiens" and seen["strand"] == "-"
+    assert seen["taxid"] == "9606"                            # curated path threads the pinned taxid into the seal
+
+
+def test_run_fetch_coords_custom_routes_through_resolve(monkeypatch):
+    monkeypatch.setattr(engine.fetch, "resolve_assembly",
+                        lambda q: {"organism": "Foo bar", "taxid": "9", "assemblyName": "FooAsm",
+                                   "assemblyAccession": "GCF_999.1"})
+    seen = {}
+    monkeypatch.setattr(engine.fetch, "retrieve_coords",
+                        lambda regions, acc, name, org, taxid="", strand="+", refresh=False:
+                        (seen.update(accession=acc, taxid=taxid), {"runType": "coordinate", "source": {}})[1])
+    r = engine.run_fetch_coords({"regions": "chr1:1-10", "organism": "", "customQuery": "GCF_999.1"})
+    assert r["ok"] is True and seen["accession"] == "GCF_999.1" and seen["taxid"] == "9"
+
+
 # --- run_analyze end to end on a trivial sequence returns the expected shape ---
 def test_run_analyze_shape():
     r = engine.run_analyze({"sequence": "ACGTACGTACGTACGTACGT"})
