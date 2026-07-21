@@ -65,7 +65,7 @@ def test_csv_escape_keeps_bare_sign():
 
 
 def test_export_xlsx_strand_column_not_corrupted(tmp_path):
-    from openpyxl import load_workbook
+    load_workbook = pytest.importorskip("openpyxl").load_workbook
     p = str(tmp_path / "t.xlsx")
     widgets._export_xlsx(["Dfam family", "Str", "Score"], [["Copia_I", "-", 40720], ["Copia_LTR", "+", 2405]], p)
     ws = load_workbook(p).active
