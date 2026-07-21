@@ -57,6 +57,8 @@ class Engine(QObject):
         "wsl_status": lambda b: engine.run_wsl_status(),
         "wsl_install": lambda b: engine.run_wsl_install(),
         "wsl_install_log": lambda b: engine.run_wsl_install_log(),
+        "wsl_install_wsl2": lambda b: engine.run_wsl_install_wsl2(),
+        "wsl2_install_log": lambda b: engine.run_wsl2_install_log(),
         "wsl_components": lambda b: engine.run_wsl_components(),
         "wsl_repair": engine.run_wsl_repair,
         "wsl_integrity": lambda b: engine.run_wsl_integrity(),

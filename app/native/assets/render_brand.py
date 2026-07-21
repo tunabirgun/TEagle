@@ -8,7 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import QByteArray, QBuffer, QRectF, QSizeF, QMarginsF
 from PySide6.QtGui import QImage, QPainter, QPdfWriter, QPageSize
 from PySide6.QtSvg import QSvgRenderer
-from PIL import Image
+from PIL import Image, ImageFilter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
@@ -31,11 +31,14 @@ def _png(color, h):                                      # aspect-preserved PNG 
     img.save(b, "PNG"); b.close()
     return bytes(buf)
 
-def _square(color, n, ss=8):                             # mark on an n x n transparent canvas, supersampled ss x
+def _square(color, n, ss=12):                            # mark on an n x n transparent canvas, supersampled ss x
     big = Image.open(io.BytesIO(_png(color, round(n * ss * 0.94)))).convert("RGBA")
     canvas = Image.new("RGBA", (n * ss, n * ss), (0, 0, 0, 0))
     canvas.alpha_composite(big, ((n * ss - big.width) // 2, (n * ss - big.height) // 2))
-    return canvas.resize((n, n), Image.LANCZOS)          # downscale = clean anti-aliasing at small sizes
+    out = canvas.resize((n, n), Image.LANCZOS)           # downscale = clean anti-aliasing at small sizes
+    if n <= 64:                                          # the detailed eagle/DNA trace blurs when reduced;
+        out = out.filter(ImageFilter.UnsharpMask(radius=0.7, percent=110, threshold=0))  # restore edge crispness
+    return out
 
 def _bmp(color, w, h, fill, ss=4):                       # eagle centered on an opaque white canvas (Inno wizard image, no alpha)
     r = _renderer(color); s = r.defaultSize()

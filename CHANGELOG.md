@@ -9,6 +9,16 @@ and propagates to the backend health endpoint, the UI header badge, every run
 provenance manifest, the packaged executable's Windows file-version metadata, and
 the LaTeX report title page.
 
+## [2.3.0] — 2026-07-21
+
+Install WSL2 directly from the app, plus a crisper desktop-shortcut icon.
+
+### Added
+- **Install WSL2 from the backend installer.** When the Windows Subsystem for Linux is absent, the installer now offers an **Install WSL** action that installs WSL2 + Ubuntu through an elevated helper (Windows UAC) instead of only printing manual steps. It distinguishes an absent WSL from a registered-but-won't-start distro (guiding you to unregister and reinstall), surfaces progress in the log, and reports when a Windows restart is required. The **Install / update all** button routes through the WSL install first when WSL is missing.
+
+### Changed
+- **Sharper app and desktop-shortcut icon** — the eagle icon is rendered at higher supersampling with edge sharpening on the small frames, so the shortcut and taskbar read crisply instead of soft.
+
 ## [2.2.0] — 2026-07-21
 
 In-silico PCR and gel-imaging upgrades for repeat-rich elements, plus spreadsheet-native table export.
@@ -173,6 +183,8 @@ primer design, usable without a command line.
   the WebView2 runtime is absent. A kill-on-close Job Object ties the whole process tree to the
   launcher, so an in-place upgrade never orphans a window.
 
+[2.3.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.3.0
+[2.2.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.2.0
 [2.1.1]: https://github.com/tunabirgun/TEagle/releases/tag/v2.1.1
 [2.1.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.1.0
 [2.0.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.0.0

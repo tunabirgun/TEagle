@@ -400,9 +400,19 @@ def components_status() -> dict:
     comp["wsl2"]["ok"] = bool(av["wsl2"])
     comp["wsl2"]["detail"] = av.get("distro") or av.get("error") or "not installed"
     if not av["wsl2"]:
-        comp["wsl2"]["guide"] = "Open PowerShell as Administrator, run: wsl --install  (then restart Windows)"
-        return {"wsl2": False, "installing": False, "ready": False,
-                "components": [comp[c[0]] for c in _COMP_META]}
+        # distinguish absent (no distro) from registered-but-won't-start (broken ext4.vhdx) — different actions
+        broken = bool(av.get("distro"))
+        win = os.name == "nt"
+        if broken:
+            comp["wsl2"]["detail"] = f"'{av['distro']}' registered but won't start"
+            comp["wsl2"]["guide"] = (f"In an Administrator PowerShell run:  wsl --unregister {av['distro']}  "
+                                     "then click Install WSL to reinstall (a restart may be required).")
+        else:
+            comp["wsl2"]["guide"] = ("Click Install WSL to install WSL2 + Ubuntu (needs Administrator; "
+                                     "a Windows restart may be required before first use).")
+        comp["wsl2"]["installable"] = win           # the dialog shows an in-app Install WSL button on Windows
+        return {"wsl2": False, "installing": _wsl2_installing(),
+                "ready": False, "components": [comp[c[0]] for c in _COMP_META]}
     try:
         rc, out, err = _wsl_script(_STATUS_PROBE, timeout=90)
     except Exception as e:
@@ -478,6 +488,90 @@ def install_log(tail: int = 40) -> str:
         return out
     except Exception as e:
         return f"(log unavailable: {e})"
+
+
+# ---------- WSL2 itself (Windows-side, elevated) — install the distro when WSL is absent ----------
+_WIN_WSL_LOG = "wsl_win_install.log"
+_wsl2_thread = None
+
+
+def wsl2_install_log(tail: int = 200) -> str:
+    """Tail the Windows-side WSL-install log. The in-WSL log can't exist until WSL is up, so the
+    elevated installer logs here; wsl.exe emits UTF-16LE, so NULs are stripped for readability."""
+    p = os.path.join(appdirs.user_data_dir(), _WIN_WSL_LOG)
+    try:
+        with open(p, "rb") as f:
+            txt = f.read().decode("utf-8", "ignore").replace("\x00", "")
+        return "\n".join(txt.splitlines()[-int(tail):])
+    except Exception:
+        return ""
+
+
+def _wsl2_installing() -> bool:
+    """A WSL2 install is in progress = the Windows-side log exists but has no terminal marker yet."""
+    log = wsl2_install_log(500)
+    return bool(log) and "DONE-WSL" not in log and "[teagle] FAILED" not in log
+
+
+def _wsl2_bat_script(log: str) -> str:
+    """The elevated batch: install WSL2 + Ubuntu (no interactive launch), tolerant of pre-reboot state,
+    logging everything (incl. a terminal DONE-WSL marker) to the Windows-side `log` the dialog polls."""
+    return (
+        "@echo off\r\n"
+        f'> "{log}" echo [teagle] installing WSL2 + Ubuntu (elevated)\r\n'
+        f'wsl.exe --install -d Ubuntu --no-launch >> "{log}" 2>&1\r\n'
+        "if %ERRORLEVEL% NEQ 0 (\r\n"
+        f'  >> "{log}" echo [teagle] first attempt returned %ERRORLEVEL%; retrying: wsl --install\r\n'
+        f'  wsl.exe --install >> "{log}" 2>&1\r\n'
+        ")\r\n"
+        f'wsl.exe --set-default-version 2 >> "{log}" 2>&1 || rem VirtualMachinePlatform is inactive until reboot\r\n'
+        f'>> "{log}" echo [teagle] wsl --status:\r\n'
+        f'wsl.exe --status >> "{log}" 2>&1\r\n'
+        f'>> "{log}" echo [teagle] DONE-WSL %ERRORLEVEL% (restart Windows if the distro is not usable yet, then reopen this installer)\r\n'
+    )
+
+
+def install_wsl2() -> dict:
+    """Install WSL2 + Ubuntu from an ELEVATED helper (`wsl --install` requires Administrator).
+    Fire-and-forget: an elevated .bat runs `wsl --install -d Ubuntu --no-launch` (falling back to a
+    plain `wsl --install` on older wsl.exe) and logs to a Windows-side file the dialog polls. If the
+    UAC prompt is declined or the user is not an admin, a terminal FAILED marker is written so the
+    poller never hangs. A Windows restart may be required before the new distro is usable."""
+    global _wsl2_thread
+    if os.name != "nt":
+        return {"started": False, "error": "WSL installation is only available on Windows"}
+    if _wsl2_thread is not None and _wsl2_thread.is_alive():
+        return {"started": False, "error": "WSL install already running"}
+    d = appdirs.user_data_dir()
+    bat = os.path.join(d, "install_wsl.bat")
+    log = os.path.join(d, _WIN_WSL_LOG)
+    try:
+        with open(bat, "w", encoding="ascii", errors="ignore", newline="") as f:
+            f.write(_wsl2_bat_script(log))
+        with open(log, "w", encoding="utf-8", newline="") as f:
+            f.write("[teagle] launching the elevated WSL installer - accept the Windows (UAC) prompt...\n")
+    except Exception as e:
+        return {"started": False, "error": f"could not stage the WSL installer: {type(e).__name__}: {e}"}
+
+    def _run():
+        try:
+            import ctypes
+            # ShellExecuteW verb 'runas' -> UAC. Return > 32 = launched; <= 32 = failed (e.g. 1223 = declined).
+            rc = int(ctypes.windll.shell32.ShellExecuteW(None, "runas", bat, None, None, 0))
+            if rc <= 32:
+                with open(log, "a", encoding="utf-8") as f:
+                    f.write(f"\n[teagle] FAILED - could not elevate (code {rc}); the UAC prompt was declined or you "
+                            "are not an administrator.\n[teagle] Manual: open PowerShell as Administrator and run:  wsl --install\n")
+        except Exception as e:
+            try:
+                with open(log, "a", encoding="utf-8") as f:
+                    f.write(f"\n[teagle] FAILED - {type(e).__name__}: {e}\n")
+            except Exception:
+                pass
+
+    _wsl2_thread = threading.Thread(target=_run, daemon=True)
+    _wsl2_thread.start()
+    return {"started": True, "windows_log": True}
 
 
 def annotate(fasta_text: str, species: str | None = None, threads: int = 4, timeout: int = 600) -> dict:

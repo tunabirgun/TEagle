@@ -105,6 +105,14 @@ def run_wsl_install_log():
     return {"log": wsl.install_log(60)}
 
 
+def run_wsl_install_wsl2():
+    return wsl.install_wsl2()
+
+
+def run_wsl2_install_log():
+    return {"log": wsl.wsl2_install_log(200)}
+
+
 def run_wsl_components():
     try:
         return wsl.components_status()

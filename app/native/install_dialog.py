@@ -5,7 +5,7 @@ Check-integrity pass and a live log. Runs all WSL work off the GUI thread throug
 worker so the window stays responsive. Designed to make install failures diagnosable and fixable
 one component at a time on any PC (no/broken WSL, no/broken conda env, partial Dfam download)."""
 from __future__ import annotations
-import os, sys
+import os, re, sys
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont, QDesktopServices
@@ -34,6 +34,10 @@ class InstallDialog(QDialog):
         self._rows = {}
         self._log_seen = ""
         self._busy = False
+        self._wsl2_ok = True             # last-seen WSL2 availability (drives Install-all routing)
+        self._wsl2_installing = False    # a Windows-side elevated WSL install is in progress
+        self._wsl2_ticks = 0
+        self._wsl2_reboot_pending = False  # a WSL install completed this session but Windows needs a restart
 
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 14, 16, 14); root.setSpacing(10)
@@ -112,6 +116,9 @@ class InstallDialog(QDialog):
         if res.get("error"):
             self.statusLine.setText(res["error"][:70]); return
         installing = res.get("installing")
+        self._wsl2_ok = bool(res.get("wsl2"))
+        if self._wsl2_ok:
+            self._wsl2_reboot_pending = False       # WSL came up -> the reboot is done, clear the sticky state
         for c in res.get("components", []):
             row = self._ensure_row(c["key"], c["name"], c.get("desc", ""))
             ok = c.get("ok")
@@ -122,13 +129,32 @@ class InstallDialog(QDialog):
             if c.get("guide"):
                 det += "  —  " + c["guide"]
             row["detail"].setText(det)
-            repairable = bool(c.get("repairable") and res.get("wsl2"))
-            row["repairable_now"] = repairable          # remembered so _set_busy can restore it, not read a clobbered isEnabled()
-            row["btn"].setEnabled(repairable and not self._busy)
-            row["btn"].setText("Repair" if not ok else "Reinstall")
-            row["btn"].setVisible(bool(c.get("repairable")))
-        if not res.get("wsl2"):
-            self.statusLine.setText("WSL2 not installed — see the first row")
+            if c["key"] == "wsl2":
+                if self._wsl2_reboot_pending and not ok:
+                    # a just-completed install shows as registered-but-won't-start pre-reboot; DON'T advise
+                    # the destructive unregister — the distro is fine, Windows just needs a restart
+                    row["detail"].setText("installed — restart Windows to finish setup, then reopen this installer")
+                    row["repairable_now"] = False
+                    row["btn"].setVisible(False)
+                else:
+                    # WSL itself installs from an elevated helper — the button is live even though WSL is absent
+                    actionable = bool(c.get("installable")) and not ok
+                    row["repairable_now"] = actionable
+                    row["btn"].setEnabled(actionable and not self._busy)
+                    row["btn"].setText("Install WSL")
+                    row["btn"].setVisible(actionable)
+            else:
+                repairable = bool(c.get("repairable") and res.get("wsl2"))
+                row["repairable_now"] = repairable      # remembered so _set_busy can restore it, not read a clobbered isEnabled()
+                row["btn"].setEnabled(repairable and not self._busy)
+                row["btn"].setText("Repair" if not ok else "Reinstall")
+                row["btn"].setVisible(bool(c.get("repairable")))
+        if self._wsl2_installing:
+            pass                                        # keep the install-in-progress status line
+        elif self._wsl2_reboot_pending:
+            self.statusLine.setText("Restart Windows to finish WSL setup, then reopen this installer")
+        elif not res.get("wsl2"):
+            self.statusLine.setText("WSL2 not installed — click Install WSL on the first row")
         elif res.get("ready"):
             self.statusLine.setText("● ready — family naming & splice detection available")
         elif installing:
@@ -166,29 +192,59 @@ class InstallDialog(QDialog):
         self.engine.submit(op, body, key=op)
 
     def _install_all(self):
+        if not self._wsl2_ok:
+            self._repair("wsl2")            # WSL must exist before the Linux stack; route to the elevated installer
+            return
         self._start("wsl_install", None, "starting full install…")
 
     def _repair(self, key):
-        self._start("wsl_repair", {"component": key}, f"repairing {key}…")
+        if key == "wsl2":
+            self._wsl2_installing = True; self._wsl2_ticks = 0
+            self._start("wsl_install_wsl2", None, "installing WSL2 — accept the Windows (UAC) prompt…")
+        else:
+            self._start("wsl_repair", {"component": key}, f"repairing {key}…")
 
     def _check_integrity(self):
         self._set_busy(True, "running integrity check…")
         self.engine.submit("wsl_integrity", key="wsl_integrity")
 
     def _tick(self):
-        self.engine.submit("wsl_install_log", key="log")
+        if self._wsl2_installing:
+            self._wsl2_ticks += 1
+            if self._wsl2_ticks > 480:              # ~20 min guard so a stuck WSL install never polls forever
+                self._poll.stop(); self._set_busy(False); self._wsl2_installing = False
+                self.statusLine.setText("WSL install timed out — see the log, or run `wsl --install` in an admin PowerShell")
+                return
+            self.engine.submit("wsl2_install_log", key="wsl2_log")
+        else:
+            self.engine.submit("wsl_install_log", key="log")
         self.engine.submit("wsl_components", key="components")
 
     # ---------- results ----------
     def _on_done(self, key, res):
         if key == "components":
             self._render_components(res)
-        elif key in ("wsl_install", "wsl_repair"):
+        elif key in ("wsl_install", "wsl_repair", "wsl_install_wsl2"):
             if not res.get("started"):
-                self._set_busy(False)
+                self._set_busy(False); self._wsl2_installing = False
                 self.statusLine.setText("could not start: " + str(res.get("error", "unknown")))
                 return
             self._poll.start(); self._tick()
+        elif key == "wsl2_log":
+            log = res.get("log", "")
+            self._append_log(log)
+            m = re.search(r"DONE-WSL\s+(-?\d+)", log)
+            if m or "[teagle] FAILED" in log:
+                self._poll.stop(); self._set_busy(False); self._wsl2_installing = False
+                if "[teagle] FAILED" in log:
+                    self.statusLine.setText("WSL install failed — see the log")
+                elif m and m.group(1) != "0":          # elevation ran but wsl.exe returned nonzero
+                    self._wsl2_reboot_pending = True
+                    self.statusLine.setText("WSL install reported errors — see the log; a Windows restart may still be required")
+                else:
+                    self._wsl2_reboot_pending = True    # success: pre-reboot the distro shows registered-but-unstartable
+                    self.statusLine.setText("WSL installed — restart Windows to finish setup, then reopen this installer")
+                self._refresh()
         elif key == "log":
             log = res.get("log", "")
             self._append_log(log)
@@ -209,10 +265,12 @@ class InstallDialog(QDialog):
             self.statusLine.setText("integrity: " + ("OK" if res.get("ok") else "problems found"))
 
     def _on_user_error(self, key, msg):
-        self._poll.stop(); self._set_busy(False); self.statusLine.setText(msg[:70])
+        self._poll.stop(); self._set_busy(False); self._wsl2_installing = False
+        self.statusLine.setText(msg[:70])
 
     def _on_failed(self, key, msg, trace):
-        self._poll.stop(); self._set_busy(False); self.statusLine.setText("error: " + msg[:60])
+        self._poll.stop(); self._set_busy(False); self._wsl2_installing = False
+        self.statusLine.setText("error: " + msg[:60])
         sys.stderr.write(trace + "\n")
 
     def closeEvent(self, e):
