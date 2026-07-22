@@ -156,6 +156,7 @@ class FigurePanel(QWidget):
         self.base_name = base_name
         self.modes = list(modes)
         self.bg = self.modes[0]
+        self._theme_locked = False        # a manual bg pick pins this panel; app-theme toggles stop following it
         self._hit_regions = hit_regions
         self._on_menu = on_menu
         lay = QVBoxLayout(self)
@@ -185,8 +186,24 @@ class FigurePanel(QWidget):
         self.render()
 
     def _set_bg(self, m):
+        self._theme_locked = True         # user chose a bg explicitly -> keep it across later app-theme changes
         self.bg = m
         self.render()
+
+    def apply_app_theme(self, app_theme):
+        """Follow the app's dark/light theme (app 'light' -> figure bg 'white') UNTIL the user picks a bg
+        manually, after which this panel keeps that choice (incl. uv/mono) and ignores app-theme toggles.
+        Re-renders WITHOUT refitting, so the user's zoom/pan is preserved. No-op if the mapped mode isn't
+        offered by this panel."""
+        if self._theme_locked:            # user's manual bg pick wins over app-theme propagation
+            return
+        m = "white" if app_theme == "light" else "dark"
+        if m not in self.modes or m == self.bg:
+            return
+        self.bg = m
+        for mm, b in self._mode_btns.items():
+            b.setProperty("primary", mm == self.bg); b.style().unpolish(b); b.style().polish(b)
+        self.canvas.set_svg(self.build_fn(self.bg), refit=False)
 
     def render(self):
         for m, b in self._mode_btns.items():
@@ -223,6 +240,7 @@ class GenomePanel(QWidget):
         self.base_name = base_name
         self.model = {"length": 1, "tracks": []}
         self.theme = "dark"
+        self._theme_locked = False        # a manual bg pick pins this viewer; app-theme toggles stop following it
         self.view = {"start": 0.0, "end": 1.0}
         self.on_feature_menu = None       # callable(region) -> list[(label, fn)] for right-click
         lay = QVBoxLayout(self)
@@ -233,7 +251,7 @@ class GenomePanel(QWidget):
         self._th_btns = {}
         for th, lab in (("dark", "DARK"), ("white", "LIGHT")):
             b = QPushButton(lab); b.setProperty("sm", True)
-            b.clicked.connect(lambda _=False, t=th: self._set_theme(t))
+            b.clicked.connect(lambda _=False, t=th: self._set_theme(t, user=True))
             bar.addWidget(b); self._th_btns[th] = b
         self.pos = QLabel(""); self.pos.setObjectName("gvpos")
         bar.addWidget(self.pos)
@@ -256,9 +274,19 @@ class GenomePanel(QWidget):
         """cb(region) -> list[(label, fn)] built on right-click over a feature glyph."""
         self.on_feature_menu = cb
 
-    def _set_theme(self, t):
+    def _set_theme(self, t, user=False):
+        if user:                          # user chose a bg explicitly -> keep it across later app-theme changes
+            self._theme_locked = True
         self.theme = t
         self._render()
+
+    def apply_app_theme(self, app_theme):
+        """Follow the app's dark/light theme (app 'light' -> viewer 'white') UNTIL the user picks a bg
+        manually, after which this viewer keeps that choice and ignores app-theme toggles. Re-renders in
+        place so the current pan/zoom window (self.view) is preserved."""
+        if self._theme_locked:            # user's manual bg pick wins over app-theme propagation
+            return
+        self._set_theme("white" if app_theme == "light" else "dark")
 
     def _cur_svg(self, w, for_export=False, theme=None):
         return self._svg_genome(self.model, {"start": self.view["start"], "end": self.view["end"]},

@@ -13,7 +13,10 @@ FIGFONT = "Cascadia Mono, Consolas, monospace"   # bundled UI font; mono digits 
 OK = {"RT": "#0072B2", "INT": "#E69F00", "RNaseH": "#009E73", "PR": "#CC79A7", "GAG": "#7A7A7A",
       "CHR": "#D55E00", "TPase": "#D55E00", "LTR": "#56B4E9", "TIR": "#E69F00", "tail": "#CC79A7",
       "ORF": "#4C6C97", "on": "#009E73", "off": "#D55E00", "ladder": "#999999"}
-GENECOL = {"exon": "#009E73", "intron": "#8792a0", "cds": "#D55E00"}
+# exon_derived = a lighter tint of the annotated-exon green: same family, reads "inferred, not annotated";
+# gap kept distinct (light) from the darker slate flank so filler regions aren't a single ambiguous colour.
+GENECOL = {"exon": "#009E73", "exon_derived": "#7fd3b8", "intron": "#8792a0",
+           "cds": "#D55E00", "flank": "#5b6b7a", "gap": "#c3ccd6"}
 
 
 def esc(s) -> str:
@@ -76,14 +79,49 @@ def gv_tracks_from_rec(rec: dict) -> dict:
     return {"length": rec.get("composition", {}).get("length", 1) or 1, "tracks": tracks}
 
 
-def gv_tracks_from_gene(gm: dict, length: int) -> dict:
+def _flanks_and_gaps(exons: list, introns: list, length: int) -> list:
+    """Flanking + inter-feature regions that are neither exon nor intron: the 5' upstream flank
+    (0 .. first feature), the 3' downstream flank (last feature .. length), and any interior gap not
+    covered by an exon or intron. Returned as clickable region dicts so the user can copy/design there
+    too. Labels avoid spaces/apostrophes so they read cleanly in a FASTA header."""
+    spans = [(f["start"], f["end"]) for f in (exons + introns)]
+    if not spans:
+        return []
+    lo = min(s for s, _ in spans); hi = max(e for _, e in spans)
+    out = []
+    if lo > 0:
+        out.append({"start": 0, "end": lo, "label": "5prime_flank", "kind": "flank", "name": "5′ flank"})
+    if length and hi < length:
+        out.append({"start": hi, "end": length, "label": "3prime_flank", "kind": "flank", "name": "3′ flank"})
+    covered = sorted(spans)                                    # interior gaps = holes in the exon∪intron cover
+    cur = lo
+    for s, e in covered:
+        if s > cur:
+            out.append({"start": cur, "end": s, "label": "gap", "kind": "gap", "name": "gap"})
+        cur = max(cur, e)
+    return [r for r in out if r["end"] > r["start"]]           # skip zero/negative-length regions
+
+
+def gv_tracks_from_gene(gm: dict, length: int, include_flanks: bool = False) -> dict:
     tracks = []
-    feat = [{"start": e["start"], "end": e["end"], "color": GENECOL["exon"], "label": "exon",
-             "tip": f"exon {e['start']}–{e['end']} ({e['end']-e['start']} bp)"} for e in gm.get("exons", [])]
+    # a CDS-implied exon that the record does NOT annotate is marked distinctly (lighter green + 'exon*' +
+    # tip) so a tool-inferred coordinate is never mistaken for a GenBank-annotated exon.
+    feat = [{"start": e["start"], "end": e["end"],
+             "color": GENECOL["exon_derived"] if e.get("derived") else GENECOL["exon"],
+             "label": "exon*" if e.get("derived") else "exon",
+             "tip": f"exon {e['start']}–{e['end']} ({e['end']-e['start']} bp)"
+                    + (" · derived from the record's CDS/mRNA — not a separate exon annotation" if e.get("derived") else "")}
+            for e in gm.get("exons", [])]
     feat += [{"start": i["start"], "end": i["end"], "color": GENECOL["intron"], "intron": True,
               "tip": f"intron {i['start']}–{i['end']}" + (
                   f" · {i['donor']}…{i['acceptor']}{' (canonical)' if i.get('canonical') else ''}"
                   if i.get("donor") else "")} for i in gm.get("introns", [])]
+    if include_flanks:                                        # 5'/3' flanks + interior gaps, clickable for copy/design
+        for r in _flanks_and_gaps(gm.get("exons", []), gm.get("introns", []), length):
+            feat.append({"start": r["start"], "end": r["end"],
+                         "color": GENECOL["gap"] if r["kind"] == "gap" else GENECOL["flank"],
+                         "label": r["name"],                  # readable on-glyph name; FASTA id is sanitised in _feat_menu
+                         "tip": f"{r['name']} {r['start']}–{r['end']} ({r['end']-r['start']} bp) · not exon/intron"})
     if feat:
         tracks.append({"name": "exons / introns", "height": 22, "features": feat})
     cds = [{"start": c["start"], "end": c["end"], "color": GENECOL["cds"], "label": "CDS",
@@ -317,7 +355,7 @@ def svg_gel(data: dict, bg: str) -> str:
     if P["paper"] != "none":
         s += f'<rect width="{W}" height="{H}" fill="{P["paper"]}"/>'
 
-    def draw_lane(col, r, label, bands, is_ladder):
+    def draw_lane(col, r, label, bands, is_ladder, advisory=False):
         nonlocal s
         lx = laneX(col)
         rtop = row_top(r); rbot = rtop + BODY
@@ -335,9 +373,9 @@ def svg_gel(data: dict, bg: str) -> str:
         if not is_ladder:
             if not (bands or []):
                 s += f'<text x="{lx+laneW/2:.1f}" y="{rbot+13}" fill="{P["ink"]}" font-size="7" text-anchor="middle">—</text>'
-            elif not any(b.get("on") for b in bands):        # bands present but none intended
-                s += (f'<text x="{lx+laneW/2:.1f}" y="{rbot+13}" fill="{P["off"]}" font-size="6.5" '
-                      f'text-anchor="middle">no on-target</text>')
+            elif not advisory and not any(b.get("on") for b in bands):   # bands present but none intended
+                s += (f'<text x="{lx+laneW/2:.1f}" y="{rbot+13}" fill="{P["off"]}" font-size="6.5" '   # (a genome scan is
+                      f'text-anchor="middle">no on-target</text>')                                     # all-off-target by design)
 
     for r, idxs in enumerate(rows):
         rtop = row_top(r)
@@ -350,7 +388,7 @@ def svg_gel(data: dict, bg: str) -> str:
         draw_lane(0, r, "L", [{"size": m, "color": P["ladder"]} for m in LADDER], True)
         for j, li in enumerate(idxs):
             l = lanes[li]
-            draw_lane(j + 1, r, l["label"], _lane_bands(l.get("amplicons") or [], P), False)
+            draw_lane(j + 1, r, l["label"], _lane_bands(l.get("amplicons") or [], P), False, l.get("advisory", False))
 
     any_single = any(a.get("single_primer") for l in lanes for a in (l.get("amplicons") or []))
     ly = H - 8

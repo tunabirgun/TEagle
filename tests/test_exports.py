@@ -75,6 +75,51 @@ def test_export_xlsx_strand_column_not_corrupted(tmp_path):
     assert rows[0][2] == 40720 and isinstance(rows[0][2], int)
 
 
+def test_gene_flanks_and_gaps_regions():
+    # 5' + 3' flanks surface; an intron-covered middle is NOT a gap
+    fg = figures._flanks_and_gaps([{"start": 100, "end": 200}, {"start": 400, "end": 500}],
+                                  [{"start": 200, "end": 400}], 700)
+    got = {(r["label"], r["start"], r["end"]) for r in fg}
+    assert got == {("5prime_flank", 0, 100), ("3prime_flank", 500, 700)}
+    # an uncovered interior hole IS a gap
+    fg2 = figures._flanks_and_gaps([{"start": 100, "end": 200}, {"start": 400, "end": 500}], [], 500)
+    assert ("gap", 200, 400) in {(r["label"], r["start"], r["end"]) for r in fg2}
+
+
+def test_gene_model_track_includes_flanks_when_requested():
+    m0 = figures.gv_tracks_from_gene({"exons": [{"start": 100, "end": 200}], "introns": [], "cds": []}, 500)
+    m1 = figures.gv_tracks_from_gene({"exons": [{"start": 100, "end": 200}], "introns": [], "cds": []}, 500,
+                                     include_flanks=True)
+    labels0 = [f.get("label") for t in m0["tracks"] for f in t["features"]]
+    labels1 = [f.get("label") for t in m1["tracks"] for f in t["features"]]
+    assert "5′ flank" not in labels0                          # off by default (splice viewer must stay clean)
+    assert "5′ flank" in labels1 and "3′ flank" in labels1    # readable on-glyph names (FASTA id sanitised in _feat_menu)
+
+
+def test_derived_exon_marked_distinctly():
+    # a CDS-inferred exon must be visually distinct from an annotated one (honesty: never cite an
+    # inferred coord as a GenBank annotation)
+    gm = {"exons": [{"start": 0, "end": 100}, {"start": 300, "end": 400, "derived": True}],
+          "introns": [], "cds": []}
+    feats = figures.gv_tracks_from_gene(gm, 500)["tracks"][0]["features"]
+    ann = next(f for f in feats if f["label"] == "exon")
+    der = next(f for f in feats if f["label"] == "exon*")
+    assert ann["color"] == figures.GENECOL["exon"]
+    assert der["color"] == figures.GENECOL["exon_derived"] != figures.GENECOL["exon"]
+    assert "derived from the record's CDS/mRNA" in der["tip"]
+
+
+def test_gap_and_flank_use_distinct_colors():
+    # an interior gap and a terminal flank must not render as one ambiguous colour
+    gm = {"exons": [{"start": 100, "end": 150}, {"start": 300, "end": 350}], "introns": [], "cds": []}
+    feats = figures.gv_tracks_from_gene(gm, 500, include_flanks=True)["tracks"][0]["features"]
+    gap = next(f for f in feats if f["label"] == "gap")       # hole between the two exons
+    flank = next(f for f in feats if f["label"] == "5′ flank")
+    assert gap["color"] == figures.GENECOL["gap"]
+    assert flank["color"] == figures.GENECOL["flank"]
+    assert gap["color"] != flank["color"]
+
+
 def test_available_formats_lists_all_when_xlsx_present():
     fmts = [f for _, f in widgets._available_formats()]
     if widgets._HAS_XLSX:

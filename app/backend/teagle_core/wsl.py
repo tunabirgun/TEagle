@@ -15,7 +15,9 @@ _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 
 
 _ENV = "$HOME/micromamba/envs/te"
 _MM = "$HOME/bin/micromamba"
+_GENOMES = "$HOME/teagle_genomes"                       # per-assembly downloaded genome cache (kept after first prepare)
 _SPECIES_RE = re.compile(r"^[A-Za-z0-9 _.-]{1,60}$")
+_ACC_RE = re.compile(r"^GC[AF]_\d+\.\d+$")              # RefSeq/GenBank assembly accession (the reproducibility pin)
 _distro_cache = None
 _DISTRO_FILE = os.path.join(appdirs.user_data_dir(), "wsl_distro.txt")   # the installer reads this to clean the RIGHT distro
 
@@ -178,6 +180,26 @@ if ! mkdir "$LOCK" 2>/dev/null; then echo "[teagle] FAILED: install already runn
 echo $$ > "$LOCK/pid"
 trap 'rm -rf "$LOCK" 2>/dev/null' EXIT
 fail(){ echo "[teagle] FAILED: $1"; exit 1; }
+# A truncated/corrupt repodata shard (interrupted or concurrent fetch) makes every solve die with
+# "Could not load repodata.json ... after retry" and stays stuck across re-runs. On the first failure
+# purge the index cache + pkgs cache (mamba's own advice: `clean -a`) and retry once — never touch the
+# env prefix, the multi-GB Dfam .h5 libraries live inside it.
+mm_reset_cache(){
+  echo "[teagle] purging ALL conda caches (corrupted/incompatible repodata recovery), then retrying"
+  "$MM" clean --all --yes >/dev/null 2>&1 || "$MM" clean --index-cache --yes >/dev/null 2>&1 || true
+  # --index-cache does NOT clear the newer SHARDED repodata cache; remove every known cache dir by hand.
+  rm -rf "$MAMBA_ROOT_PREFIX/pkgs/cache" "$HOME/.cache/mamba" "$HOME/.cache/rattler" \
+         "$HOME/.cache/conda" 2>/dev/null || true
+}
+mm_create(){   # create the shared 'te' env if absent; clean-index + retry once on a solve failure
+  [ -d "$ENV/conda-meta" ] && return 0
+  "$MM" create -y -n te -c conda-forge -c bioconda && return 0
+  mm_reset_cache; "$MM" create -y -n te -c conda-forge -c bioconda
+}
+mm_install(){  # install package(s) into 'te'; clean-index + force-reinstall retry once on a solve failure
+  "$MM" install -y -n te -c conda-forge -c bioconda "$@" && return 0
+  mm_reset_cache; "$MM" install --force-reinstall -y -n te -c conda-forge -c bioconda "$@"
+}
 echo "[teagle] START $(date -u +%FT%TZ)"
 '''
 
@@ -254,13 +276,10 @@ echo "[teagle] STEP micromamba OK"
 echo "[teagle] STEP repeatmasker START"
 [ -x "$MM" ] || fail "micromamba required first (repair micromamba)"
 if "$MM" run -n te RepeatMasker -v >/dev/null 2>&1; then echo "[teagle] RepeatMasker already present"; else
-  [ -d "$ENV/conda-meta" ] || "$MM" create -y -n te -c conda-forge -c bioconda || fail "create te env"
-  if ! "$MM" install -y -n te -c conda-forge -c bioconda repeatmasker; then
-    # never `env remove` here: the Dfam .h5 libraries (multi-GB) live INSIDE this env prefix,
-    # so recreating the env would silently wipe them. Force a clean package reinstall instead.
-    echo "[teagle] install failed — forcing a clean reinstall of repeatmasker (env + Dfam preserved)"
-    "$MM" install --force-reinstall -y -n te -c conda-forge -c bioconda repeatmasker || fail "install repeatmasker"
-  fi
+  # never `env remove` here: the Dfam .h5 libraries (multi-GB) live INSIDE this env prefix.
+  # mm_create / mm_install self-recover from a corrupted repodata shard (clean-index + retry once).
+  mm_create || fail "create te env"
+  mm_install repeatmasker || fail "install repeatmasker"
   "$MM" run -n te RepeatMasker -v >/dev/null 2>&1 || fail "RepeatMasker not runnable after install"
 fi
 echo "[teagle] STEP repeatmasker OK"
@@ -269,8 +288,8 @@ echo "[teagle] STEP repeatmasker OK"
 echo "[teagle] STEP minimap2 START"
 [ -x "$MM" ] || fail "micromamba required first (repair micromamba)"
 if [ -x "$ENV/bin/minimap2" ]; then echo "[teagle] minimap2 already present"; else
-  [ -d "$ENV/conda-meta" ] || "$MM" create -y -n te -c conda-forge -c bioconda || fail "create te env"
-  "$MM" install -y -n te -c conda-forge -c bioconda minimap2 || fail "install minimap2"
+  mm_create || fail "create te env"
+  mm_install minimap2 || fail "install minimap2"
   [ -x "$ENV/bin/minimap2" ] || fail "minimap2 missing after install"
 fi
 echo "[teagle] STEP minimap2 OK"
@@ -279,11 +298,26 @@ echo "[teagle] STEP minimap2 OK"
 echo "[teagle] STEP miniprot START"
 [ -x "$MM" ] || fail "micromamba required first (repair micromamba)"
 if [ -x "$ENV/bin/miniprot" ]; then echo "[teagle] miniprot already present"; else
-  [ -d "$ENV/conda-meta" ] || "$MM" create -y -n te -c conda-forge -c bioconda || fail "create te env"
-  "$MM" install -y -n te -c conda-forge -c bioconda miniprot || fail "install miniprot"
+  mm_create || fail "create te env"
+  mm_install miniprot || fail "install miniprot"
   [ -x "$ENV/bin/miniprot" ] || fail "miniprot missing after install"
 fi
 echo "[teagle] STEP miniprot OK"
+''',
+    "genomescan": r'''
+echo "[teagle] STEP genomescan START"
+[ -x "$MM" ] || fail "micromamba required first (repair micromamba)"
+if [ -x "$ENV/bin/isPcr" ] && [ -x "$ENV/bin/datasets" ]; then echo "[teagle] isPcr + datasets already present"; else
+  mm_create || fail "create te env"
+  mm_install ispcr ncbi-datasets-cli || fail "install ispcr + ncbi-datasets-cli"
+  [ -x "$ENV/bin/isPcr" ] || fail "isPcr missing after install"
+  [ -x "$ENV/bin/datasets" ] || fail "datasets missing after install"
+fi
+# faToTwoBit is best-effort: it makes cached genomes compact + fast to load, but scans still work on plain
+# FASTA if it is unavailable, so a missing package must NOT fail the step.
+[ -x "$ENV/bin/faToTwoBit" ] || "$MM" install -y -n te -c bioconda -c conda-forge ucsc-fatotwobit >/dev/null 2>&1 \
+  || echo "[teagle] note: faToTwoBit unavailable (genomes cached as FASTA — larger, still functional)"
+echo "[teagle] STEP genomescan OK"
 ''',
     "dfam_root": _dfam_step("dfam_root"),
     "dfam_curated": _dfam_step("dfam_curated"),
@@ -305,7 +339,7 @@ echo "[teagle] STEP famdb_conf OK"
 
 # miniprot (homology tier) is intentionally NOT in the default install list while that tier is on hold;
 # its step + parser stay in the code, dormant, ready to re-enable when the homology UI ships.
-_ALL_STEPS = ["micromamba", "repeatmasker", "minimap2", "dfam_root", "dfam_curated", "famdb_conf"]
+_ALL_STEPS = ["micromamba", "repeatmasker", "minimap2", "genomescan", "dfam_root", "dfam_curated", "famdb_conf"]
 
 # component metadata surfaced to the install dialog (order = install order)
 _COMP_META = [
@@ -313,6 +347,7 @@ _COMP_META = [
     ("micromamba",   "micromamba (conda)",        True,  "Small conda package manager, installed under your Linux home."),
     ("repeatmasker", "RepeatMasker",              True,  "Homology-based TE annotator that names Dfam families."),
     ("minimap2",     "minimap2",                  True,  "Splice-aware aligner for de-novo exon / intron detection."),
+    ("genomescan",   "isPcr + NCBI Datasets",     True,  "Local whole-genome in-silico PCR engine + genome downloader."),
     ("dfam_root",    "Dfam 4.0 root library",     True,  "Dfam root partition (dfam40.0.h5)."),
     ("dfam_curated", "Dfam 4.0 curated library",  True,  "Dfam curated consensus partition."),
     ("famdb_conf",   "FamDB configuration",       True,  "Points RepeatMasker at the downloaded Dfam library."),
@@ -383,6 +418,7 @@ MM="$HOME/bin/micromamba"; ENV="$HOME/micromamba/envs/te"; FAMDIR="$ENV/share/Re
 echo "micromamba=$([ -x "$MM" ] && echo 1 || echo 0)"
 rmv=$("$MM" run -n te RepeatMasker -v 2>/dev/null | grep -oiE 'version [0-9][0-9.]*' | head -1 | awk '{print $2}'); echo "repeatmasker=${rmv:-0}"
 mmv=$([ -x "$ENV/bin/minimap2" ] && "$ENV/bin/minimap2" --version 2>/dev/null); echo "minimap2=${mmv:-0}"
+echo "genomescan=$([ -x "$ENV/bin/isPcr" ] && [ -x "$ENV/bin/datasets" ] && echo 1 || echo 0)"
 echo "dfam_root=$([ -f "$FAMDIR/dfam40.0.h5" ] && echo 1 || echo 0)"
 echo "dfam_curated=$([ -f "$FAMDIR/dfam40.curated.consensus.0.h5" ] && echo 1 || echo 0)"
 echo "famdb_conf=$( { ls "$ENV"/share/famdb-*/famdb.conf >/dev/null 2>&1 || [ -f "$ENV/share/RepeatMasker/famdb.conf" ]; } && echo 1 || echo 0)"
@@ -433,6 +469,7 @@ def components_status() -> dict:
     present("repeatmasker", rm not in ("0", ""), (f"v{rm}" if rm not in ("0", "") else "missing"))
     mm = kv.get("minimap2", "0")
     present("minimap2", mm not in ("0", ""), (mm if mm not in ("0", "") else "missing"))
+    present("genomescan", kv.get("genomescan") == "1", "installed" if kv.get("genomescan") == "1" else "missing")
     present("dfam_root", kv.get("dfam_root") == "1", "present" if kv.get("dfam_root") == "1" else "missing")
     present("dfam_curated", kv.get("dfam_curated") == "1", "present" if kv.get("dfam_curated") == "1" else "missing")
     present("famdb_conf", kv.get("famdb_conf") == "1", "configured" if kv.get("famdb_conf") == "1" else "missing")
@@ -823,3 +860,199 @@ def protein_align(genomic_fasta: str, protein_fasta: str, timeout: int = 180, ma
         return {"ok": False, "error": f"miniprot timed out after {timeout}s"}
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+# ---------- local whole-genome in-silico PCR (WSL / isPcr against a downloaded RefSeq assembly) ----------
+def _parse_meta(text: str) -> dict:
+    """Parse the key=value meta.txt (accession/target/sha256/n_seqs/bytes) written by genome_prepare."""
+    d = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if "=" in line and not line.startswith(("[", "FAIL", "PREPARED", "NOTPREP")):
+            k, v = line.split("=", 1)
+            d[k.strip()] = v.strip()
+    return d
+
+
+def _ispcr_ver(banner: str) -> str:
+    m = re.search(r"v\s*([\w.]+)", banner or "")
+    return m.group(1) if m else "unknown"
+
+
+# download the assembly, convert to compact 2bit (best-effort), seal the SOURCE FASTA sha256 (machine-
+# independent, unlike the version-dependent 2bit), mark .done for idempotent resume. __ACC__ is a
+# validated accession (safe to interpolate); no untrusted input enters the script.
+_GENOME_PREP_LOG = "$HOME/teagle_genome_prepare.log"    # milestones the UI tails for a liveness indicator
+
+_PREP_SCRIPT = r'''#!/usr/bin/env bash
+set -uo pipefail
+cd "$HOME" || exit 1
+export MAMBA_ROOT_PREFIX="$HOME/micromamba"
+ENV="$HOME/micromamba/envs/te"
+ACC="__ACC__"
+GDIR="$HOME/teagle_genomes/$ACC"
+LOG="$HOME/teagle_genome_prepare.log"
+plog(){ echo "[prep] $1"; echo "$1" >> "$LOG"; }
+mkdir -p "$GDIR" || { echo "FAIL mkdir"; exit 1; }
+if [ -f "$GDIR/.done" ] && [ -f "$GDIR/meta.txt" ]; then echo "PREPARED"; cat "$GDIR/meta.txt"; exit 0; fi
+# atomic per-genome lock so two concurrent prepares of the same accession can't race on dl.zip / genome.2bit
+# / meta.txt and leave a half-written cache; a lock orphaned by a crash (dead PID) is reaped.
+LOCK="$GDIR/.lock"
+if [ -d "$LOCK" ] && { [ ! -f "$LOCK/pid" ] || ! kill -0 "$(cat "$LOCK/pid" 2>/dev/null)" 2>/dev/null; }; then rm -rf "$LOCK" 2>/dev/null; fi
+if ! mkdir "$LOCK" 2>/dev/null; then echo "FAIL a download for this genome is already running"; exit 1; fi
+echo $$ > "$LOCK/pid"
+trap 'rm -rf "$LOCK" 2>/dev/null' EXIT
+[ -f "$GDIR/.done" ] && { echo "PREPARED"; cat "$GDIR/meta.txt"; exit 0; }   # another prepare finished while we waited
+cd "$GDIR"
+avail=$(df -BG --output=avail . 2>/dev/null | tail -1 | tr -dc '0-9'); avail=${avail:-0}
+# blanket floor sized for a mammalian genome's peak (extracted FASTA ~3G + 2bit ~0.8G); the zip is freed
+# before the conversion to keep the peak below this.
+[ "$avail" -ge 8 ] || { echo "FAIL insufficient disk (${avail}G free, need >=8G for a genome)"; exit 1; }
+plog "downloading $ACC (NCBI Datasets) — can take several minutes for a large genome"
+# a ~1 GB mammalian download can drop mid-transfer; datasets writes a fresh zip each time, so retry a few
+# times (the partial is discarded) rather than failing the whole prepare on one transient network blip.
+ok=0
+for attempt in 1 2 3; do
+  if "$ENV/bin/datasets" download genome accession "$ACC" --include genome --filename dl.zip >/dev/null 2>&1; then ok=1; break; fi
+  plog "download attempt $attempt failed — retrying"; rm -f dl.zip; sleep 5
+done
+[ "$ok" = 1 ] || { echo "FAIL download (after 3 attempts)"; exit 1; }
+plog "extracting genome FASTA"
+rm -rf ex; mkdir -p ex
+unzip -oq dl.zip -d ex || { echo "FAIL unzip"; exit 1; }
+rm -f dl.zip                                            # free the zip before the (large) 2bit conversion -> lower peak disk
+FNA=$(find ex -name '*_genomic.fna' | head -1)
+[ -n "$FNA" ] || { echo "FAIL no genomic fna in package"; exit 1; }
+plog "checksumming source FASTA"
+FSHA=$(sha256sum "$FNA" | cut -d' ' -f1)
+[ -n "$FSHA" ] || { echo "FAIL checksum failed"; exit 1; }   # never write .done/meta with an empty seal hash
+NSEQ=$(grep -c '^>' "$FNA")
+plog "building compact isPcr target (2bit)"
+TARGET=""
+if [ -x "$ENV/bin/faToTwoBit" ] && "$ENV/bin/faToTwoBit" "$FNA" genome.2bit 2>/dev/null; then
+  TARGET="genome.2bit"
+else
+  mv "$FNA" genome.fna 2>/dev/null || cp "$FNA" genome.fna; TARGET="genome.fna"
+fi
+TBYTES=$(stat -c %s "$TARGET" 2>/dev/null || echo 0)
+rm -rf ex
+printf 'accession=%s\ntarget=%s\nsha256=%s\nn_seqs=%s\nbytes=%s\n' "$ACC" "$TARGET" "$FSHA" "$NSEQ" "$TBYTES" > meta.txt
+touch .done
+plog "done"
+echo "PREPARED"
+cat meta.txt
+'''
+
+
+def genome_prepare(accession: str, assembly_name: str = "", timeout: int = 3600) -> dict:
+    """One-time: download the RefSeq assembly (NCBI Datasets), build a compact isPcr target, and record
+    the source-FASTA sha256 + contig count. Idempotent (a completed prepare returns instantly). Slow for
+    large genomes — run it off the UI thread. The cache is kept for later scans."""
+    if not _ACC_RE.match(accession or ""):
+        return {"ok": False, "error": "invalid assembly accession"}
+    av = available()
+    if not av["wsl2"]:
+        return {"ok": False, "error": "WSL2 not available"}
+    rc, out, _ = _wsl(f'[ -x "{_ENV}/bin/datasets" ] && [ -x "{_ENV}/bin/isPcr" ] && echo yes || echo no', timeout=20)
+    if "yes" not in out:
+        return {"ok": False, "error": "genome-scan tools not installed in the WSL backend (run Install backend)"}
+    try:
+        rc, out, err = _wsl_script(_PREP_SCRIPT.replace("__ACC__", accession), timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": f"genome preparation timed out after {timeout}s (large genome — try again to resume)"}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    meta = _parse_meta(out)
+    if "PREPARED" not in out or not meta.get("sha256"):
+        fl = next((l for l in out.splitlines() if l.startswith("FAIL")), "") or err.strip()[:200]
+        return {"ok": False, "error": "genome preparation failed: " + (fl.replace("FAIL", "").strip() or "unknown error")}
+    return {"ok": True, "accession": accession, "assembly_name": assembly_name,
+            "target": meta.get("target"), "sha256": meta.get("sha256"),
+            "n_seqs": int(meta.get("n_seqs", 0) or 0), "bytes": int(meta.get("bytes", 0) or 0)}
+
+
+def genome_prepare_log(tail: int = 1) -> str:
+    """Tail the genome-prepare milestone log for a UI liveness indicator during a long download."""
+    try:
+        _, out, _ = _wsl(f'tail -n {int(tail)} "{_GENOME_PREP_LOG}" 2>/dev/null || true', timeout=15)
+        return out.strip()
+    except Exception:
+        return ""
+
+
+def genome_scan(accession: str, query_text: str, max_size: int = 4000, min_size: int = 0,
+                min_perfect: int = 15, min_good: int = 15, timeout: int = 600) -> dict:
+    """Run isPcr for a prepared assembly against the query file (name<TAB>fwd<TAB>rev rows, staged as
+    STDIN data). Returns the raw isPcr FASTA + the sealed genome sha256 + isPcr version. If the genome
+    is not prepared yet, returns need_prepare so the UI can offer to download it first."""
+    if not _ACC_RE.match(accession or ""):
+        return {"ok": False, "error": "invalid assembly accession"}
+    av = available()
+    if not av["wsl2"]:
+        return {"ok": False, "error": "WSL2 not available"}
+    rc, out, _ = _wsl(f'[ -f "{_GENOMES}/{accession}/.done" ] && cat "{_GENOMES}/{accession}/meta.txt" || echo NOTPREP',
+                      timeout=20)
+    if "NOTPREP" in out or "accession=" not in out:
+        return {"ok": False, "error": "genome not prepared — download it first", "need_prepare": True}
+    meta = _parse_meta(out)
+    target = meta.get("target") or "genome.fna"
+    rid = "teagle_" + secrets.token_hex(6)
+    try:
+        rc, _o, err = _wsl(f'mkdir -p /tmp/{rid} && cat > /tmp/{rid}/q.txt', stdin=query_text.encode(), timeout=60)
+        if rc != 0:
+            return {"ok": False, "error": "failed to stage the primer query: " + err.strip()[:200]}
+        # NB: isPcr v33 lists -minSize in its help but the binary REJECTS it (exit 255) — a lower size bound
+        # is applied downstream in the parser, not here. -maxSize / -minPerfect / -minGood are honoured.
+        opts = f"-maxSize={int(max_size)} -minPerfect={int(min_perfect)} -minGood={int(min_good)}"
+        # Verify the cached target exists AND is non-empty AND isPcr exits cleanly. A missing/corrupt genome
+        # (or any isPcr failure) MUST surface as an error, never a silent empty result — otherwise "0 off-target
+        # sites" would falsely certify a primer pair as specific when the scan never actually ran. An isPcr
+        # exit 0 with no products is the one legitimate empty case and stays ok. Delivered via STDIN (not an
+        # inline `bash -lc` arg) so the shell variable survives wsl.exe's command-line rebuild.
+        run = (f'cd /tmp/{rid} || exit 1\n'
+               f'T="{_GENOMES}/{accession}/{target}"\n'
+               f'[ -s "$T" ] || exit 9\n'
+               f'"{_ENV}/bin/isPcr" {opts} "$T" q.txt stdout\n')
+        rc, raw, err = _wsl_script(run, timeout=timeout)
+        if rc != 0:
+            return {"ok": False, "error": "genome scan failed — the cached genome may be missing or incomplete; "
+                    "re-download it from ⚙ Manage genomes. " + err.strip()[:160]}
+        ver = _wsl(f'"{_ENV}/bin/isPcr" 2>&1 | head -1', timeout=20)[1]
+        return {"ok": True, "raw": raw, "isPcr_version": _ispcr_ver(ver), "target": target,
+                "sha256": meta.get("sha256"), "n_seqs": int(meta.get("n_seqs", 0) or 0)}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": f"isPcr timed out after {timeout}s"}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    finally:
+        try:
+            _wsl(f'rm -rf /tmp/{rid}', timeout=30)             # always clean the staged query dir, even on timeout
+        except Exception:
+            pass
+
+
+def genome_list() -> dict:
+    """List prepared (cached) genomes: accession, on-disk target, sealed sha256, contig count, bytes."""
+    av = available()
+    if not av["wsl2"]:
+        return {"ok": False, "error": "WSL2 not available", "genomes": []}
+    rc, out, _ = _wsl('for d in "$HOME"/teagle_genomes/*/; do [ -f "$d/.done" ] && cat "$d/meta.txt" && echo "==="; done 2>/dev/null || true',
+                      timeout=30)
+    genomes = []
+    for block in out.split("==="):
+        m = _parse_meta(block)
+        if m.get("accession"):
+            genomes.append({"accession": m["accession"], "target": m.get("target"), "sha256": m.get("sha256"),
+                            "n_seqs": int(m.get("n_seqs", 0) or 0), "bytes": int(m.get("bytes", 0) or 0)})
+    return {"ok": True, "genomes": genomes}
+
+
+def genome_remove(accession: str) -> dict:
+    """Delete a cached genome to reclaim disk."""
+    if not _ACC_RE.match(accession or ""):
+        return {"ok": False, "error": "invalid assembly accession"}
+    av = available()
+    if not av["wsl2"]:
+        return {"ok": False, "error": "WSL2 not available"}
+    rc, out, _ = _wsl(f'rm -rf "{_GENOMES}/{accession}" && echo REMOVED', timeout=60)
+    return {"ok": "REMOVED" in out, "accession": accession}

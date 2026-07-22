@@ -181,6 +181,104 @@ def test_staleness_guard_blocks_stale_primer(win):
 
 
 # ---------- specimen-identity / stale-state provenance integrity (Loop-1 fixes) ----------
+def test_genome_scan_submits_local(win):
+    win.genomeOrg.setCurrentIndex(win.genomeOrg.findData("Homo sapiens"))
+    ops = []
+    win.engine.submit = lambda op, body=None, key=None: ops.append((op, body, key))
+    cand = {"left_seq": "TTCACCACCATGGAGAAGGC", "right_seq": "GGCATGGACTGTGGTCATGAG", "id": "P1"}
+    win._scan_genome(cand)
+    assert ops[0][0] == "genome_pcr" and ops[0][2] == "genome_pcr"
+    assert ops[0][1]["organism"] == "Homo sapiens" and ops[0][1]["params"]["min_perfect"] == 15
+    # cand + the org that started the scan are captured, so a later dropdown change can't retarget it
+    assert win._pending_scan == {"cand": cand, "org": "Homo sapiens"} and win._genome_inflight is True
+
+
+def test_genome_scan_requires_organism(win):
+    win.genomeOrg.setCurrentIndex(0)                          # the "— select organism —" placeholder (data=None)
+    ops = []
+    win.engine.submit = lambda op, body=None, key=None: ops.append(op)
+    win._scan_genome({"left_seq": "ACGT" * 5, "right_seq": "TTTT" * 5, "id": "P1"})
+    assert ops == [] and win._genome_inflight is False        # no wrong-species scan runs without an explicit pick
+
+
+def test_on_genome_pcr_renders_sealed_advisory(win):
+    win._genome_inflight = True
+    win._on_genome_pcr({"ok": True, "organism": "Saccharomyces cerevisiae", "assemblyName": "R64",
+        "assemblyAccession": "GCF_000146045.2", "n_seqs": 17,
+        "advisory_note": "candidate priming sites — not wet-lab-validated amplicons",
+        "amplicons": [{"source": "NC_001133.9", "start": 1001, "end": 1240, "length": 240, "strand": "+",
+                       "single_primer": False, "on_target": False, "pair": "pair"}],
+        "provenance": {"manifestSha256": "de" * 32,
+                       "databases": [{"name": "RefSeq assembly R64", "version": "GCF_000146045.2", "sha256": "abc123"}]}})
+    lp = win.state["lastPcr"]
+    assert len(lp["amplicons"]) == 1 and lp["lanes"][0]["advisory"] is True   # advisory lane -> no "no on-target" stamp
+    assert win._genome_inflight is False
+
+
+def test_genome_prepare_resumes_pending_scan(win):
+    ops = []
+    win.engine.submit = lambda op, body=None, key=None: ops.append((op, body, key))
+    cand = {"left_seq": "ACGT" * 5, "right_seq": "TTTT" * 5, "id": "P1"}
+    win.genomeOrg.setCurrentIndex(win.genomeOrg.findData("Saccharomyces cerevisiae"))
+    win._prepare_genome("Saccharomyces cerevisiae", then_scan={"cand": cand, "org": "Saccharomyces cerevisiae"})
+    assert ops[0][0] == "genome_prepare" and win._genome_prep_inflight is True
+    ops.clear()
+    win._on_genome_prepare({"ok": True, "organism": "Saccharomyces cerevisiae",
+                            "assemblyAccession": "GCF_000146045.2", "n_seqs": 17, "bytes": 12_000_000})
+    assert win._genome_prep_inflight is False and ops and ops[0][0] == "genome_pcr"   # resumed into the SAME scan (captured org)
+
+
+def test_genome_manager_stale_refresh_does_not_reopen(win):
+    # a genome_list result landing AFTER the manager was closed must not resurrect the dialog (M1 completeness)
+    win._genome_mgr = None
+    win._genome_mgr_open = False
+    win._on_genome_list({"ok": True, "genomes": []})
+    assert win._genome_mgr is None                            # stale refresh -> no-op
+    win._genome_mgr_open = True                               # an explicit open does build one
+    win._on_genome_list({"ok": True, "genomes": []})
+    assert win._genome_mgr is not None
+    win._genome_mgr.close()
+
+
+def test_genome_need_prepare_uses_captured_org(win, monkeypatch):
+    # start a scan for organism X, change the dropdown mid-scan; the download must target X, not the new pick
+    win.genomeOrg.setCurrentIndex(win.genomeOrg.findData("Saccharomyces cerevisiae"))
+    ops = []
+    win.engine.submit = lambda op, body=None, key=None: ops.append((op, body))
+    win._scan_genome({"left_seq": "ACGT" * 5, "right_seq": "TTTT" * 5, "id": "P1"})   # captures org = yeast
+    win.genomeOrg.setCurrentIndex(0)                          # user flips the dropdown to the placeholder (data=None)
+    from PySide6.QtWidgets import QMessageBox
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: QMessageBox.Yes)
+    ops.clear()
+    win._on_genome_pcr({"ok": False, "need_prepare": True})
+    assert ops and ops[0][0] == "genome_prepare"
+    assert ops[0][1]["organism"] == "Saccharomyces cerevisiae"   # the captured org, not the live placeholder
+
+
+def test_flank_region_clickable_and_slices_analyzed_seq(win):
+    # a 5' flank region from the gene-model viewer must offer copy/design and slice the analyzed snapshot
+    win.state["analyzed_seq"] = ">x\n" + "ACGTACGTAC" + "N" * 190       # first 10 bases are ACGTACGTAC
+    items = win._region_menu({"start": 0, "end": 10, "label": "5prime_flank", "strand": "+"})
+    labels = [lbl for lbl, _ in items]
+    assert any("Copy FASTA" in l for l in labels) and any("primer" in l.lower() for l in labels)
+    assert win._slice(0, 10) == "ACGTACGTAC"                             # flank coords index analyzed_seq
+
+
+def test_app_theme_propagates_to_genome_viewers(win):
+    import widgets
+    win._load_sample(); win._run_analysis()
+    assert _spin(lambda: win.state.get("analyzed_clean"))
+    gvs = win.findChildren(widgets.GenomePanel)
+    assert gvs and gvs[0].theme == "dark" and win.theme == "dark"
+    gvs[0].view = {"start": 100.0, "end": 500.0}; saved = dict(gvs[0].view)
+    win._toggle_theme()                                        # app -> light
+    assert win.theme == "light" and gvs[0].theme == "white"    # viewer follows
+    assert gvs[0].view == saved                                # pan/zoom preserved (in-place re-render)
+    gvs[0]._set_theme("dark", user=True)                       # per-viewer MANUAL override (button click)
+    win._toggle_theme(); win._toggle_theme()                   # two app toggles must NOT stomp a manual pick (H1)
+    assert win.theme == "light" and gvs[0].theme == "dark"     # user's choice is kept across app-theme changes
+
+
 def test_feature_slice_uses_analyzed_snapshot_not_live_box(win):
     # #1 (Loop-3): after an unanalyzed edit, a panel-01 feature copy must slice the ANALYZED sequence,
     # not the live box (which now backs splice/annotate) — else copies return wrong bases under a header

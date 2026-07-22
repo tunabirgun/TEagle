@@ -62,11 +62,11 @@ hiddenimports = [
 ]
 
 # C-extension packages + openpyxl (XLSX table export): pull binaries, data and dynamic submodules
-for pkg in ("primer3", "pyhmmer", "openpyxl"):
+for pkg in ("primer3", "pyhmmer", "openpyxl", "certifi"):
     d, b, h = collect_all(pkg)
     datas += d; binaries += b; hiddenimports += h
     hiddenimports += collect_submodules(pkg)
-hiddenimports += ["pyhmmer.platform", "pyhmmer.platform.win32", "openpyxl", "et_xmlfile"]
+hiddenimports += ["pyhmmer.platform", "pyhmmer.platform.win32", "openpyxl", "et_xmlfile", "certifi"]
 
 # trim the bundle: exclude heavy Qt modules the app never imports (keeps the installer small)
 excludes = [

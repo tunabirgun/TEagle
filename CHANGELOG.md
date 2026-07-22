@@ -9,6 +9,25 @@ and propagates to the backend health endpoint, the UI header badge, every run
 provenance manifest, the packaged executable's Windows file-version metadata, and
 the LaTeX report title page.
 
+## [2.5.0] — 2026-07-22
+
+A whole-genome off-target scan that runs entirely locally, primer design on flanks and gaps, automatic transcript-based exon/intron detection, and theme-following genome viewers.
+
+### Added
+- **Whole-genome off-target scan (local, no timeouts).** Right-click a designed primer pair → **⊕ Scan whole genome for off-targets**, pick an organism, and TEagle runs UCSC isPcr against that organism's RefSeq genome to report every candidate off-target priming site as a to-scale gel + coordinate table. The genome is downloaded once through NCBI Datasets and kept locally (a **⚙ Manage genomes** dialog lists cached genomes with sizes and lets you pre-download or delete them), so the first scan of an organism triggers a one-time download and every later scan is a fast local search — no remote query, no server-side queue, no timeouts. Validated end-to-end on the yeast, *Drosophila*, and human genomes. The scan is **reproducible and sealed**: the run provenance records the assembly accession *with version*, the source-genome SHA-256, the isPcr version, and the priming parameters, so an identical scan seals identically on any machine. Results are advisory — candidate priming sites under isPcr's ≥15 bp 3′-perfect-match rule, not wet-lab-validated amplicons.
+- **Primer design on flanks and gaps.** The gene-model viewer now exposes the 5′/3′ flanking regions and interior gaps (neither exon nor intron) as clickable features — copy their FASTA or design primers there, the same as on exons, introns, and domains.
+- **Automatic exon/intron detection with an annotation cross-check.** Splice detection aligns a transcript / cDNA / mRNA to the loaded genomic sequence (minimap2) and, when the specimen is a fetched record, reports an independent advisory cross-check of the alignment against the record's own feature-table annotation (matched / alignment-only / annotation-only introns).
+- **Benchmarks.** Ten family-level naming specimens (Dfam / RepeatMasker) and de-novo splice / exon–intron benchmarks, each with the expected result verified against NCBI.
+- **WSL backend components.** The managed Linux backend adds isPcr and NCBI Datasets (with a compact 2bit genome cache) for the local genome scan.
+
+### Changed
+- **Genome viewers follow the app theme.** Switching the app between dark and light now propagates to every open genome viewer and gel by default; a manual per-viewer background pick (including the gel's UV/mono modes) is kept and no longer reset by the next app-theme toggle. Pan and zoom are preserved.
+- **Gene-model completion, honestly marked.** A coding exon the record implies through its CDS but omits from its exon annotation (e.g. the middle exon of insulin gene J00265) is now shown so the model is complete — rendered in a distinct lighter green with an `exon*` label and a legend entry, so a tool-inferred exon is never mistaken for a GenBank-annotated one.
+
+### Fixed
+- **WSL conda-cache recovery.** A corrupted or incompatible package-index shard (which made every environment solve fail with a repodata parse error) is now cleared with a full cache purge and the solve retried once, so installing the backend recovers instead of getting stuck.
+- **HTTPS certificate verification.** certifi's CA bundle is bundled and used for NCBI / EBI / UCSC requests, fixing certificate-verification failures on Windows Python builds that lack a usable system trust store.
+
 ## [2.4.1] — 2026-07-21
 
 Correctness and robustness release from a comprehensive multi-agent debug pass (three adversarial review loops with independent verification and advisor review). No feature changes.
@@ -210,6 +229,7 @@ primer design, usable without a command line.
   the WebView2 runtime is absent. A kill-on-close Job Object ties the whole process tree to the
   launcher, so an in-place upgrade never orphans a window.
 
+[2.5.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.5.0
 [2.4.1]: https://github.com/tunabirgun/TEagle/releases/tag/v2.4.1
 [2.4.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.4.0
 [2.3.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.3.0

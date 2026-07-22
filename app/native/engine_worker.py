@@ -70,6 +70,11 @@ class Engine(QObject):
         "splice": engine.run_splice,
         "primers": engine.run_primers,
         "pcr": engine.run_pcr,
+        "genome_pcr": engine.run_genome_pcr,
+        "genome_prepare": engine.run_genome_prepare,
+        "genome_prepare_log": engine.run_genome_prepare_log,
+        "genome_list": engine.run_genome_list,
+        "genome_remove": engine.run_genome_remove,
     }
 
     def __init__(self, parent=None, max_threads: int | None = None):

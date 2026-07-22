@@ -43,10 +43,75 @@ def test_feature_table_parse_and_gene_model():
         "3397\t>3615\texon", "\t\t\tnumber\t2",
     ]) + "\n")
     gm = fetch.build_gene_model(fetch.parse_feature_table(ft))
-    assert gm["counts"] == {"exons": 2, "introns": 2, "cds": 2}
-    assert gm["derived_introns"] is False and gm["derived_exons"] is False
+    # build_gene_model now completes the model: the middle exon (only 2 exon features annotated, but the
+    # first CDS segment implies a third) is derived -> 3 exons, and derived_exons flips True.
+    assert gm["counts"] == {"exons": 3, "introns": 2, "cds": 2}
+    assert gm["derived_introns"] is False and gm["derived_exons"] is True
     assert gm["exons"][0] == {"start": 2185, "end": 2227, "strand": "+", "note": "1"}   # 1-based -> 0-based
+    assert any(e.get("derived") and (e["start"], e["end"]) == (2406, 2610) for e in gm["exons"])   # middle exon
     assert (gm["cds"][0]["start"], gm["cds"][0]["end"]) == (2423, 2610)                  # spliced CDS interval
+
+
+def test_complete_gene_model_fills_cds_implied_exon():
+    # J00265-shaped: exon features for exon 1 + the last exon only, a 2-segment CDS, 2 explicit introns.
+    # The middle CDS segment is in no exon -> a derived exon must be synthesized at its true (inter-intron) extent.
+    gm = {"exons": [{"start": 2185, "end": 2227, "strand": "+"}, {"start": 3396, "end": 3615, "strand": "+"}],
+          "introns": [{"start": 2227, "end": 2406}, {"start": 2610, "end": 3396}],
+          "cds": [{"start": 2423, "end": 2610, "strand": "+"}, {"start": 3396, "end": 3542, "strand": "+"}],
+          "counts": {"exons": 2, "introns": 2, "cds": 2}, "derived_exons": False, "derived_introns": False}
+    out = fetch.complete_gene_model(gm)
+    assert out["counts"]["exons"] == 3 and out["derived_exons"] is True
+    mid = [e for e in out["exons"] if e.get("derived")]
+    assert len(mid) == 1 and (mid[0]["start"], mid[0]["end"]) == (2406, 2610)   # spans between the two introns
+    # every CDS segment now lies inside an exon
+    assert all(any(e["start"] <= c["start"] and c["end"] <= e["end"] for e in out["exons"]) for c in out["cds"])
+
+
+def test_cross_check_models_matches_within_tolerance():
+    ann = [{"start": 100, "end": 200}, {"start": 400, "end": 500}]
+    aln = [{"start": 101, "end": 199}, {"start": 402, "end": 500}]     # both within ±2 bp
+    cc = fetch.cross_check_models(ann, aln, tol=2)
+    assert cc["matched"] == 2 and not cc["annotation_only"] and not cc["aligned_only"]
+
+
+def test_cross_check_models_flags_discrepancies():
+    ann = [{"start": 100, "end": 200}, {"start": 400, "end": 500}]     # annotation has 2 introns
+    aln = [{"start": 100, "end": 200}, {"start": 700, "end": 800}]     # alignment: 1 shared, 1 novel
+    cc = fetch.cross_check_models(ann, aln, tol=2)
+    assert cc["matched"] == 1
+    assert len(cc["annotation_only"]) == 1 and len(cc["aligned_only"]) == 1
+
+
+def test_complete_gene_model_recomputes_derived_introns():
+    # partial exons + a CDS-implied middle exon + DERIVED introns (no explicit intron features): inserting the
+    # middle exon must NOT leave a stale intron overlapping it — the derived introns are recomputed.
+    gm = {"exons": [{"start": 0, "end": 100}, {"start": 500, "end": 600}],
+          "introns": [{"start": 100, "end": 500}],                # derived from the 2-exon gap
+          "cds": [{"start": 200, "end": 300}],
+          "counts": {"exons": 2, "introns": 1, "cds": 1}, "derived_exons": False, "derived_introns": True}
+    out = fetch.complete_gene_model(gm)
+    assert out["counts"]["exons"] == 3 and out["counts"]["introns"] == 2
+    for i in out["introns"]:                                       # no intron may overlap any exon
+        for e in out["exons"]:
+            assert not (i["start"] < e["end"] and e["start"] < i["end"]), ("overlap", i, e)
+
+
+def test_explicit_exons_derived_introns_flag_no_derived_exon():
+    # a normal multi-exon record (explicit exons, introns derived from the gaps) must NOT flag any exon as
+    # derived — otherwise the gene-model title/legend would claim CDS-inferred exons the figure never draws
+    # (Loop-6 MED: gate the exon* legend on the per-exon flag, not the model-level derived_introns).
+    ft = ">Feature gb|X.1|Y\n100\t200\texon\n300\t400\texon\n"
+    gm = fetch.build_gene_model(fetch.parse_feature_table(ft))
+    assert gm["derived_introns"] is True and gm["derived_exons"] is False
+    assert not any(e.get("derived") for e in gm["exons"])
+
+
+def test_complete_gene_model_idempotent():
+    gm = {"exons": [{"start": 0, "end": 50}], "introns": [], "cds": [{"start": 100, "end": 200}],
+          "counts": {"exons": 1, "introns": 0, "cds": 1}, "derived_exons": False, "derived_introns": False}
+    once = fetch.complete_gene_model(gm)
+    twice = fetch.complete_gene_model(once)
+    assert once["counts"] == twice["counts"] and len(once["exons"]) == len(twice["exons"])
 
 
 def test_gene_model_derives_introns_from_cds_join():
@@ -56,6 +121,9 @@ def test_gene_model_derives_introns_from_cds_join():
     assert gm["derived_exons"] and gm["derived_introns"]
     assert gm["counts"]["exons"] == 2 and gm["counts"]["introns"] == 1
     assert (gm["introns"][0]["start"], gm["introns"][0]["end"]) == (200, 299)            # gap between exon ends
+    # honesty invariant: model-level derived_exons implies EVERY wholesale-derived exon is flagged, so the
+    # viewer marks them exon* and the legend's derived/annotated distinction matches the figure (Loop-5 MED)
+    assert all(e.get("derived") for e in gm["exons"])
 
 
 @pytest.mark.network

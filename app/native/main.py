@@ -3,14 +3,14 @@ column of collapsible result cards. All science runs in-process through the shar
 GUI thread via engine_worker.Engine. This module wires the analyze workflow, primer/PCR, WSL family
 annotation, splice detection, provenance and exports."""
 from __future__ import annotations
-import gzip, os, sys
+import gzip, os, re, sys
 
 from PySide6.QtCore import Qt, QTimer, QByteArray
 from PySide6.QtGui import QGuiApplication, QFont, QPixmap, QPainter, QIcon, QCursor
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QFrame, QVBoxLayout, QHBoxLayout,
                                QGridLayout, QLabel, QLineEdit, QTextEdit, QPlainTextEdit, QPushButton, QComboBox,
-                               QScrollArea, QSplitter, QFileDialog, QSizePolicy, QToolTip)
+                               QScrollArea, QSplitter, QFileDialog, QSizePolicy, QToolTip, QMessageBox, QDialog)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
@@ -25,7 +25,7 @@ from widgets import FigurePanel, GenomePanel, DataTable
 from sample import make_sample
 import theme as theme_mod
 from teagle_core import appdirs
-from teagle_core.fetch import COORD_ASSEMBLIES        # organism -> pinned assembly, for the coordinate-fetch dropdown
+from teagle_core.fetch import COORD_ASSEMBLIES, complete_gene_model, cross_check_models   # pinned assemblies + gene model
 from teagle_core import __version__ as APP_VERSION    # single source of truth (never hardcode a duplicate version)
 # common model organisms for RepeatMasker/Dfam lineage (display, value passed to -species).
 # 'Other…' at the end reveals a free-text field for anything not listed.
@@ -214,6 +214,9 @@ class MainWindow(QMainWindow):
         self._loading = False                                 # True while a programmatic load writes the specimen box
         self._pcr_gen = 0                                     # monotonic in-silico-PCR batch id (drops stale sibling results)
         self._design_inflight = False                         # one primer design at a time (self._design_tmpl is shared state)
+        self._genome_inflight = False                         # one whole-genome isPcr scan at a time
+        self._genome_prep_inflight = False                    # one genome download/prepare at a time (large, one-time)
+        self._pending_scan = None                             # a scan queued behind a just-started genome download
 
         self.engine = Engine(self)
         self.engine.done.connect(self._on_done)
@@ -538,6 +541,22 @@ class MainWindow(QMainWindow):
         self.pcrBg = QTextEdit(); self.pcrBg.setMaximumHeight(60)
         self.pcrBg.setPlaceholderText("Optional: paste extra background sequence(s) to reveal off-target amplicons.")
         card.bodylay.addWidget(self.pcrBg)
+        # whole-genome off-target scan — LOCAL isPcr against a downloaded RefSeq assembly (no remote query)
+        card.bodylay.addWidget(_sl("Whole-genome off-target scan — organism (local isPcr, downloaded genome)"))
+        gorow = QHBoxLayout()
+        self.genomeOrg = QComboBox()
+        self.genomeOrg.addItem("— select organism —", None)   # placeholder so no wrong-species scan runs by default
+        for org in sorted(COORD_ASSEMBLIES):
+            self.genomeOrg.addItem(f"{org} · {COORD_ASSEMBLIES[org]['assemblyName']}", org)
+        gorow.addWidget(self.genomeOrg, 1)
+        self.genomeManageBtn = QPushButton("⚙ Manage genomes"); self.genomeManageBtn.setProperty("sm", True)
+        self.genomeManageBtn.clicked.connect(self._open_genome_manager)
+        gorow.addWidget(self.genomeManageBtn)
+        card.bodylay.addLayout(gorow)
+        gnote = QLabel("Right-click a designed pair → “⊕ Scan whole genome”. First scan of an organism downloads its "
+                       "RefSeq genome once (kept locally); later scans are fast. Every genome-wide amplicon is an "
+                       "off-target candidate (isPcr 3′-perfect-match) — sealed with the assembly version + checksum.")
+        gnote.setObjectName("orient"); gnote.setWordWrap(True); card.bodylay.addWidget(gnote)
         row = QHBoxLayout()
         self.runPcrBtn = QPushButton("▶ Run loaded pairs"); self.runPcrBtn.setProperty("primary", True)
         self.runPcrBtn.setEnabled(False); self.runPcrBtn.clicked.connect(self._run_pcr)
@@ -570,6 +589,16 @@ class MainWindow(QMainWindow):
         self.word.setPixmap(_word_pixmap(word_te, accent, round(WORD_H * z), dpr))   # AGLE = accent = eagle-mark colour
         self.headrule.setStyleSheet(f"QFrame#headrule {{ background: {theme_mod.HEADRULE[self.theme]}; }}")
         self._uppercase_buttons()
+        self._sync_viewer_themes()
+
+    def _sync_viewer_themes(self):
+        """Push the app theme into every live genome viewer + figure panel (gel), by default, so they follow
+        dark/light. A live findChildren walk (no persistent registry -> no dangling C++ refs across the
+        constant card rebuilds); each viewer re-renders in place, preserving its pan/zoom. Per-viewer buttons
+        still override until the next app-theme toggle."""
+        from widgets import GenomePanel, FigurePanel
+        for v in self.findChildren(GenomePanel) + self.findChildren(FigurePanel):
+            v.apply_app_theme(self.theme)
 
     def _uppercase_buttons(self):
         """Mono uppercase action buttons (the web '.btn' look). Skips link buttons and leaves glyphs/
@@ -690,6 +719,16 @@ class MainWindow(QMainWindow):
             self._on_primers(res)
         elif key.startswith("pcr#"):
             self._pcr_slot(key, res)
+        elif key == "genome_pcr":
+            self._on_genome_pcr(res)
+        elif key == "genome_prepare":
+            self._on_genome_prepare(res)
+        elif key == "genome_prepare_log":
+            self._on_genome_prepare_log(res)
+        elif key == "genome_list":
+            self._on_genome_list(res)
+        elif key == "genome_remove":
+            self._on_genome_remove(res)
 
     def _reset_buttons(self, key):
         if key == "analyze":
@@ -710,6 +749,13 @@ class MainWindow(QMainWindow):
     def _on_user_error(self, key, msg):
         if key.startswith("pcr#"):                            # a failed pair fills its slot so the batch still renders
             self._pcr_slot(key, {"error": msg, "amplicons": []})
+        elif key == "genome_pcr":
+            self._genome_inflight = False; self._render_pcr_status("Genome scan failed — " + msg)
+        elif key == "genome_prepare":
+            self._genome_prep_inflight = False; self._pending_scan = None
+            self._render_pcr_status("Genome download failed — " + msg)
+        elif key == "genome_prepare_log":
+            return                                            # a background poll blip: never banner
         else:
             self._reset_buttons(key)
         self._banner(msg)
@@ -717,6 +763,13 @@ class MainWindow(QMainWindow):
     def _on_failed(self, key, msg, trace):
         if key.startswith("pcr#"):
             self._pcr_slot(key, {"error": msg, "amplicons": []})
+        elif key == "genome_pcr":                             # clear the in-flight guard + stuck status on a hard fault
+            self._genome_inflight = False; self._render_pcr_status("Genome scan failed — " + msg)
+        elif key == "genome_prepare":
+            self._genome_prep_inflight = False; self._pending_scan = None
+            self._render_pcr_status("Genome download failed — " + msg)
+        elif key == "genome_prepare_log":
+            return                                            # a background poll blip: never banner
         else:
             self._reset_buttons(key)
         sys.stderr.write(trace + "\n")
@@ -857,6 +910,7 @@ class MainWindow(QMainWindow):
         model = figures.gv_tracks_from_rec(rec)
         if model["tracks"]:
             gv = GenomePanel(svg_genome, "TEagle_genome")
+            gv.apply_app_theme(self.theme)                # open in the current app theme
             gv.set_model(model)
             gv.set_feature_menu(self._region_menu)
             gv.setMinimumHeight(260)
@@ -904,11 +958,27 @@ class MainWindow(QMainWindow):
         # gene model (exon/intron/CDS) — only when a fetched accession carries feature annotation
         gm = self.state.get("features")
         if isinstance(gm, dict) and (gm.get("exons") or gm.get("cds")):
-            card.bodylay.addWidget(_sl("Gene model (NCBI feature table)"))
+            gm = complete_gene_model(gm)                       # fill CDS-implied exons (idempotent; covers old caches)
+            # gate the title suffix + the exon* legend on the SAME condition the figure uses to draw an exon*
+            # glyph (a per-exon derived flag), so they can never claim inferred exons the figure doesn't show —
+            # NOT on the model-level derived_introns flag, which is True for any ordinary multi-exon record.
+            derived = any(e.get("derived") for e in gm.get("exons", []))
+            title = "Gene model (NCBI feature table" + (" + CDS-inferred exons)" if derived else ")")
+            card.bodylay.addWidget(_sl(title))
+            legend = ("<span style='color:#009E73'>■</span> exon · "
+                      "<span style='color:#8792a0'>■</span> intron · "
+                      "<span style='color:#D55E00'>■</span> CDS · "
+                      "<span style='color:#5b6b7a'>■</span> flank · "
+                      "<span style='color:#c3ccd6'>■</span> gap")
+            if derived:
+                legend += (" · <span style='color:#7fd3b8'>■</span> <b>exon*</b> = derived from the record's "
+                           "CDS/mRNA, not a separate exon annotation")
+            leg = QLabel(legend); leg.setTextFormat(Qt.RichText); leg.setWordWrap(True); leg.setObjectName("orient")
+            card.bodylay.addWidget(leg)
             length = rec.get("composition", {}).get("length") or 1
-            gmodel = figures.gv_tracks_from_gene(gm, length)
+            gmodel = figures.gv_tracks_from_gene(gm, length, include_flanks=True)   # flanks + gaps clickable too
             if gmodel["tracks"]:
-                gvg = GenomePanel(svg_genome, "TEagle_genemodel"); gvg.set_model(gmodel)
+                gvg = GenomePanel(svg_genome, "TEagle_genemodel"); gvg.apply_app_theme(self.theme); gvg.set_model(gmodel)
                 gvg.set_feature_menu(self._region_menu); gvg.setMinimumHeight(200)
                 card.bodylay.addWidget(gvg)
 
@@ -993,14 +1063,15 @@ class MainWindow(QMainWindow):
                 self._design_for_domain(start, end, label, seq=src_seq)
             else:
                 self._design_for_domain(start, end, label)
-        items = [(f"⧉ Copy FASTA", lambda: self._copy(f">{label}_{start}-{end}{rev}\n{dna}")),
+        fid = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(label)).strip("_") or "feature"   # FASTA-safe id (label may hold '5′ flank')
+        items = [(f"⧉ Copy FASTA", lambda: self._copy(f">{fid}_{start}-{end}{rev}\n{dna}")),
                  (f"⧉ Copy DNA", lambda: self._copy(dna)),
                  (f"⧉ Copy coords ({start}–{end} {strand})", lambda: self._copy(f"{start}-{end} {strand}"))]
         if protein:
             items.append(("⧉ Copy protein", lambda: self._copy(protein)))
         items.append(("⌖ Design primer here", _design))
         items.append(("◧ Send to splice detection",
-                      lambda: self._send_to_splice(f">{label}_{start}-{end}{rev}\n{dna}")))
+                      lambda: self._send_to_splice(f">{fid}_{start}-{end}{rev}\n{dna}")))
         return items
 
     def _send_to_splice(self, fasta):
@@ -1171,6 +1242,7 @@ class MainWindow(QMainWindow):
         t.set_rows([[c["id"], c["left_seq"], c["right_seq"], c["product_size"],
                      f"{c['left_tm']}/{c['right_tm']}", f"{c['left_gc']}/{c['right_gc']}", c["penalty"]] for c in cands])
         t.set_row_menu(lambda r: [("→ send to in-silico PCR", lambda rr=r: self._add_pcr_pair(cands[rr])),
+                                  ("⊕ Scan whole genome for off-targets", lambda rr=r: self._scan_genome(cands[rr])),
                                   ("⧉ Copy pair FASTA", lambda rr=r: self._copy(
                                       f">{cands[rr]['id']}_F\n{cands[rr]['left_seq']}\n>{cands[rr]['id']}_R\n{cands[rr]['right_seq']}"))])
         t.setMaximumHeight(200)
@@ -1237,6 +1309,8 @@ class MainWindow(QMainWindow):
     # =================== run in-silico PCR ===================
     def _run_pcr(self):
         self._clear_banner()
+        if self._genome_inflight or self._genome_prep_inflight:
+            return self._banner("A whole-genome scan / download is running — wait for it before an in-silico PCR run.")
         if self._stale_block():
             return
         pairs = self.state.get("pcrPairs", [])
@@ -1258,6 +1332,185 @@ class MainWindow(QMainWindow):
             body = {"sequence": self.state["seq"], "background": bg, "fwd": c["left_seq"], "rev": c["right_seq"],
                     "target_span": ts, "params": p}
             self.engine.submit("pcr", body, key=f"pcr#{self._pcr_gen}#{i}")
+
+    def _scan_genome(self, cand, org=None):
+        """Whole-genome scan of one primer pair via LOCAL isPcr against a downloaded RefSeq assembly. Fast
+        once the genome is cached; if it is not yet downloaded the backend replies need_prepare and we offer
+        a one-time download. Every genome-wide amplicon is an off-target candidate (not a validated band).
+        `org` is captured at scan start so a later dropdown change can't retarget an in-flight scan/download."""
+        self._clear_banner()
+        if self._genome_inflight or self._genome_prep_inflight:
+            return self._banner("A whole-genome scan / download is already running — wait for it to finish.")
+        run = getattr(self, "_pcr_run", None)
+        if run and any(r is None for r in run.get("results", [])):
+            return self._banner("An in-silico PCR run is still in progress — wait for it before a genome scan.")
+        if org is None:
+            org = self.genomeOrg.currentData()
+        if not org:
+            return self._banner("Select an organism for the whole-genome scan (dropdown in the in-silico PCR card).")
+        self._pending_scan = {"cand": cand, "org": org}        # cand + org captured so a download resumes the SAME target
+        self._genome_inflight = True
+        self.card_pcr.expand()
+        self._render_pcr_status(f"Scanning the {org} genome locally (isPcr) for off-target priming sites "
+                                "(up to ~1–2 min on a large genome)…")
+        # fixed wide window (isPcr defaults) — decoupled from the local-PCR size fields the user never sets for a
+        # right-click genome scan (coupling them silently capped genome products at the pcrPmax default of 1 kb)
+        p = {"min_perfect": 15, "min_good": 15, "prod_max": 4000, "prod_min": 0}
+        self.engine.submit("genome_pcr", {"fwd": cand["left_seq"], "rev": cand["right_seq"],
+                                          "organism": org, "params": p}, key="genome_pcr")
+
+    def _prepare_genome(self, org, then_scan=None):
+        """Download + cache an organism's RefSeq genome for local scanning (one-time, non-blocking)."""
+        if self._genome_prep_inflight or self._genome_inflight:   # also block while a scan runs (reachable via the manager)
+            return self._banner("A whole-genome scan / download is already running — wait for it to finish.")
+        if not org:
+            return self._banner("Select an organism to download.")
+        self._pending_scan = then_scan
+        self._genome_prep_inflight = True
+        self.card_pcr.expand()
+        acc = (COORD_ASSEMBLIES.get(org, {}) or {}).get("assemblyAccession", "")
+        self._prep_org = org
+        self._render_pcr_status(f"Downloading the {org} genome ({acc}) — one-time, kept for future scans. "
+                                "This can take several minutes (larger for mammalian genomes)…")
+        self.engine.submit("genome_prepare", {"organism": org}, key="genome_prepare")
+        if getattr(self, "_prep_timer", None) is None:        # poll the prepare log so a long download shows liveness
+            self._prep_timer = QTimer(self); self._prep_timer.setInterval(2500)
+            self._prep_timer.timeout.connect(self._poll_prepare_log)
+        self._prep_timer.start()
+
+    def _poll_prepare_log(self):
+        if not self._genome_prep_inflight:
+            self._prep_timer.stop(); return
+        self.engine.submit("genome_prepare_log", {}, key="genome_prepare_log")
+
+    def _on_genome_prepare_log(self, d):
+        if self._genome_prep_inflight and d.get("log"):
+            org = getattr(self, "_prep_org", "")
+            self._render_pcr_status(f"Downloading the {org} genome — {d['log']}…")
+
+    def _on_genome_prepare(self, d):
+        self._genome_prep_inflight = False
+        if getattr(self, "_prep_timer", None):
+            self._prep_timer.stop()
+        if not d.get("ok"):
+            self._render_pcr_status("Genome download failed — " + d.get("error", "unknown error"))
+            return self._banner("Genome download failed — " + d.get("error", ""))
+        mb = (d.get("bytes", 0) or 0) / 1e6
+        self._banner(f"Genome ready · {d.get('organism','')} ({d.get('assemblyAccession','')}) · "
+                     f"{d.get('n_seqs','?')} sequences · {mb:.0f} MB cached.")
+        ps = self._pending_scan
+        if ps:                                                # resume straight into the SAME scan the download was for
+            self._pending_scan = None
+            self._scan_genome(ps["cand"], org=ps["org"])
+        else:
+            self._render_pcr_status(f"{d.get('organism','')} genome downloaded — right-click a pair to scan it.")
+        mgr = getattr(self, "_genome_mgr", None)              # refresh only an OPEN manager (never pop it back up)
+        if mgr is not None and mgr.isVisible():
+            self.engine.submit("genome_list", {}, key="genome_list")
+
+    # =================== cached-genome manager ===================
+    def _open_genome_manager(self):
+        """Show cached genomes (size, contigs) with delete + pre-download, so the user can manage disk."""
+        self._genome_mgr_open = True                          # explicit open — distinguishes from a background refresh
+        self.engine.submit("genome_list", {}, key="genome_list")
+
+    def _on_genome_list(self, d):
+        dlg = getattr(self, "_genome_mgr", None)
+        if dlg is None:
+            if not getattr(self, "_genome_mgr_open", False):  # a refresh that landed AFTER the user closed the manager
+                return                                        # -> a no-op; never resurrect a dismissed dialog
+            dlg = QDialog(self); dlg.setAttribute(Qt.WA_DeleteOnClose)
+            dlg.finished.connect(lambda *_: (setattr(self, "_genome_mgr", None),
+                                             setattr(self, "_genome_mgr_open", False)))
+            self._genome_mgr = dlg
+        dlg.setWindowTitle("Cached genomes")
+        dlg.setMinimumWidth(460)
+        old = dlg.layout()
+        if old is not None:                                   # rebuild the body in place on refresh
+            QWidget().setLayout(old)
+        lay = QVBoxLayout(dlg); lay.setSpacing(8)
+        genomes = d.get("genomes", []) if d.get("ok") else []
+        if not d.get("ok"):
+            lay.addWidget(QLabel("Could not list genomes — " + d.get("error", "WSL backend unavailable")))
+        elif not genomes:
+            lay.addWidget(QLabel("No genomes downloaded yet. Pick an organism below and download one, or just "
+                                 "right-click a primer pair → “⊕ Scan whole genome”."))
+        else:
+            for g in genomes:
+                row = QHBoxLayout()
+                mb = (g.get("bytes", 0) or 0) / 1e6
+                lab = QLabel(f"<b>{g['accession']}</b> · {g.get('n_seqs','?')} seq · {mb:.0f} MB")
+                lab.setTextFormat(Qt.RichText); row.addWidget(lab, 1)
+                dbtn = QPushButton("🗑 delete"); dbtn.setProperty("sm", True)
+                dbtn.clicked.connect(lambda _=False, a=g["accession"]: self._remove_genome(a))
+                row.addWidget(dbtn); lay.addLayout(row)
+        lay.addWidget(_sl("Download a genome now (optional — scans auto-download on demand)"))
+        drow = QHBoxLayout()
+        sel = QComboBox()
+        for org in sorted(COORD_ASSEMBLIES):
+            sel.addItem(f"{org} · {COORD_ASSEMBLIES[org]['assemblyName']}", org)
+        drow.addWidget(sel, 1)
+        dl = QPushButton("⭳ download"); dl.setProperty("sm", True)
+        dl.clicked.connect(lambda: (self._prepare_genome(sel.currentData()), dlg.accept()))
+        drow.addWidget(dl); lay.addLayout(drow)
+        close = QPushButton("Close"); close.clicked.connect(dlg.accept)
+        lay.addWidget(close)
+        dlg.show(); dlg.raise_()
+
+    def _remove_genome(self, accession):
+        self.engine.submit("genome_remove", {"assemblyAccession": accession}, key="genome_remove")
+
+    def _on_genome_remove(self, d):
+        mgr = getattr(self, "_genome_mgr", None)              # refresh the list after a delete, only while the manager is open
+        if mgr is not None and mgr.isVisible():
+            self.engine.submit("genome_list", {}, key="genome_list")
+
+    def _render_pcr_status(self, msg):
+        while self.pcrBody.count():
+            w = self.pcrBody.takeAt(0).widget()
+            if w:
+                w.setParent(None)
+        self.pcrBody.addWidget(_empty(msg))
+
+    def _on_genome_pcr(self, d):
+        self._genome_inflight = False
+        if not d.get("ok"):
+            if d.get("need_prepare"):                         # genome not downloaded yet — offer the one-time download
+                ps = self._pending_scan or {}
+                org = ps.get("org") or self.genomeOrg.currentData()   # the org that STARTED this scan, not the live dropdown
+                acc = (COORD_ASSEMBLIES.get(org, {}) or {}).get("assemblyAccession", "")
+                self._render_pcr_status(f"The {org} genome ({acc}) is not downloaded yet.")
+                box = QMessageBox(self)
+                box.setWindowTitle("Download genome?")
+                box.setText(f"The {org} genome ({acc}) is not on this machine yet.\n\n"
+                            "Download it once now? It is kept locally so future scans are fast. "
+                            "Mammalian genomes are large (~1 GB download, a few minutes).")
+                box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+                box.setDefaultButton(QMessageBox.Yes)
+                if org and box.exec() == QMessageBox.Yes:
+                    self._prepare_genome(org, then_scan=ps)
+                else:
+                    self._pending_scan = None
+                    self._render_pcr_status("Genome scan cancelled — no genome downloaded.")
+                return
+            self._render_pcr_status("No genome scan result — " + d.get("error", "scan failed"))
+            return self._banner(d.get("error", "genome scan failed"))
+        self._pending_scan = None
+        amps = [{**a, "pair": "genome", "remote": True} for a in d.get("amplicons", [])]
+        lanes = [{"label": "genome", "amplicons": d.get("amplicons", []), "advisory": True}]   # all off-target: no "no on-target" stamp
+        self.state["lastPcr"] = {"lanes": lanes, "amplicons": amps}
+        self._render_pcr(lanes, amps)
+        m = d.get("provenance", {})
+        db = (m.get("databases") or [{}])[0]
+        seal = m.get("manifestSha256", "")
+        prov = (f" · assembly {d.get('assemblyAccession','')}"
+                + (f" · sha256 {db.get('sha256','')[:12]}…" if db.get("sha256") else "")
+                + (f" · seal {seal[:12]}…" if seal else ""))
+        self._banner(f"Whole-genome scan · {d.get('organism','')} ({d.get('assemblyName','')}): "
+                     f"{len(amps)} off-target candidate product(s) across {d.get('n_seqs','?')} sequence(s). "
+                     f"{d.get('advisory_note','candidate priming sites — not validated amplicons')}{prov}.")
+        if m:
+            self._render_provenance(m)
 
     def _pcr_slot(self, key, result):
         """Fill one batch slot (a success dict OR an error placeholder) and render once the whole batch
@@ -1296,30 +1549,37 @@ class MainWindow(QMainWindow):
         gel = FigurePanel(lambda bg, L=lanes: figures.svg_gel({"lanes": L}, bg),
                           "TEagle_gel", modes=("dark", "white", "uv", "mono"),
                           hit_regions=figures.gel_regions({"lanes": lanes}), on_menu=self._gel_menu)
+        gel.apply_app_theme(self.theme)                   # gel opens in the current app theme (uv/mono stay manual)
         gel.setMinimumHeight(420)
         self.pcrBody.addWidget(gel)
         if amps:
             headers = ["Pair", "Source", "Coords", "Len", "Mism F/R", "Call"]
             t = DataTable(headers, GLOSS)
             t.set_rows([[a["pair"], a["source"], f"{a['start']}–{a['end']}", a["length"],
-                         f"{a['fwd_mm']}/{a['rev_mm']}",
+                         f"{a.get('fwd_mm', '—')}/{a.get('rev_mm', '—')}",   # genome (isPcr) hits carry no per-primer mismatch count
                          ("on-target" if a.get("on_target") else "off-target")
                          + (" · single-primer" if a.get("single_primer") else "")] for a in amps])
-            t.set_row_menu(lambda r: self._feat_menu(amps[r]["start"], amps[r]["end"], "+",
-                                                     f"amplicon_{amps[r]['pair']}", dna=amps[r].get("seq", "")))
+            def _amp_menu(r):
+                a = amps[r]
+                if a.get("remote"):                           # genome hit on a remote chromosome — no local bases to copy/design
+                    return [("⧉ Copy locus (genome hit — no local bases to design)",
+                             lambda a=a: self._copy(f"{a['source']}:{a['start']}-{a['end']}"))]
+                return self._feat_menu(a["start"], a["end"], "+", f"amplicon_{a['pair']}", dna=a.get("seq", ""))
+            t.set_row_menu(_amp_menu)
             t.setMaximumHeight(200)
             self.pcrBody.addWidget(t)
-            def _amps_fasta(_=False, aa=amps, tbl=t):
-                order = [tbl._orig(r) for r in range(tbl.rowCount())]      # follow the table's current (sorted) order
-                seq_amps = [aa[i] for i in order if 0 <= i < len(aa)] or aa
-                fasta = "\n".join(
-                    f">amplicon_{a['pair']}_{a['start']}-{a['end']}_{a['length']}bp_"
-                    f"{'on' if a.get('on_target') else 'off'}target"
-                    f"{'_singleprimer' if a.get('single_primer') else ''}\n{a.get('seq','')}" for a in seq_amps)
-                widgets.save_fasta(fasta, "TEagle_amplicons", self)
-            cp = QPushButton("⭳ Export amplicons → FASTA"); cp.setProperty("sm", True)
-            cp.clicked.connect(_amps_fasta)
-            self.pcrBody.addWidget(cp)
+            if any(a.get("seq") for a in amps):           # genome (isPcr) hits carry no local bases -> nothing to export as FASTA
+                def _amps_fasta(_=False, aa=amps, tbl=t):
+                    order = [tbl._orig(r) for r in range(tbl.rowCount())]      # follow the table's current (sorted) order
+                    seq_amps = [aa[i] for i in order if 0 <= i < len(aa)] or aa
+                    fasta = "\n".join(
+                        f">amplicon_{a['pair']}_{a['start']}-{a['end']}_{a['length']}bp_"
+                        f"{'on' if a.get('on_target') else 'off'}target"
+                        f"{'_singleprimer' if a.get('single_primer') else ''}\n{a.get('seq','')}" for a in seq_amps)
+                    widgets.save_fasta(fasta, "TEagle_amplicons", self)
+                cp = QPushButton("⭳ Export amplicons → FASTA"); cp.setProperty("sm", True)
+                cp.clicked.connect(_amps_fasta)
+                self.pcrBody.addWidget(cp)
         else:
             self.pcrBody.addWidget(_empty("No amplicon predicted for any pair under the criteria."))
         onN = sum(1 for a in amps if a.get("on_target"))
@@ -1477,10 +1737,27 @@ class MainWindow(QMainWindow):
                       f"{d.get('canonical_introns',0)}/{d['counts']['introns']} canonical splice site(s) · strand {d.get('strand','')}"
                       f"{self._src_html('minimap2')}")
         head.setTextFormat(Qt.RichText); head.setWordWrap(True); head.setOpenExternalLinks(True); cl.addWidget(head)
+        # independent cross-check: does this de-novo (external-transcript) alignment agree with the record's
+        # own annotation? Only meaningful when the genomic IS the fetched record (source accession present).
+        src, feats = self.state.get("source"), self.state.get("features")
+        if src and src.get("accession") and isinstance(feats, dict) and feats.get("introns"):
+            cc = cross_check_models(complete_gene_model(feats).get("introns", []), d.get("introns", []))
+            if cc["annotation_total"]:
+                extra = ((f" · {len(cc['aligned_only'])} alignment-only" if cc["aligned_only"] else "")
+                         + (f" · {len(cc['annotation_only'])} annotation-only" if cc["annotation_only"] else ""))
+                note = QLabel(f"<b>Cross-check vs {src['accession']} annotation (advisory):</b> "
+                              f"{cc['matched']}/{cc['annotation_total']} intron(s) confirmed{extra}. "
+                              "Independent comparison of this alignment against the record's current annotation — "
+                              "not part of the sealed result (the annotation may be revised).")
+                note.setTextFormat(Qt.RichText); note.setWordWrap(True); note.setObjectName("orient"); cl.addWidget(note)
+                if cc["matched"] == 0:                        # a genomic slice pasted as the 'transcript' aligns gaplessly
+                    hint = QLabel("No introns matched — if you aligned a genomic subsequence rather than a spliced "
+                                  "transcript / mRNA / cDNA, that is expected (a genomic slice has no spliced-out introns).")
+                    hint.setWordWrap(True); hint.setObjectName("orient"); cl.addWidget(hint)
         length = (self.state.get("last_rec") or {}).get("composition", {}).get("length") or len(self._clean_seq(self.state.get("seq", ""))) or 1
         model = figures.gv_tracks_from_gene({"exons": d.get("exons", []), "introns": d.get("introns", []), "cds": []}, length)
         if model["tracks"]:
-            gv = GenomePanel(svg_genome, "TEagle_splice"); gv.set_model(model)
+            gv = GenomePanel(svg_genome, "TEagle_splice"); gv.apply_app_theme(self.theme); gv.set_model(model)
             gv.set_feature_menu(self._region_menu); gv.setMinimumHeight(220)
             cl.addWidget(gv)
         introns = d.get("introns", [])
@@ -1503,7 +1780,7 @@ class MainWindow(QMainWindow):
         inp = m.get("input", {})
         sw = "<br>".join(f"{s['name']} · {s['version']}" for s in m.get("software", []))
         pr = "<br>".join(f"{k} · {'—' if v is None else v}" for k, v in (m.get("parameters") or {}).items()) or "defaults"
-        db = "<br>".join(f"{d['name']} · {d.get('version') or (d.get('sha256','')[:12]+'…' if d.get('sha256') else d.get('file','—'))}"
+        db = "<br>".join(f"{d.get('name','—')} · {d.get('version') or (d.get('sha256','')[:12]+'…' if d.get('sha256') else d.get('file','—'))}"
                          for d in m.get("databases", []))
         env = m.get("environment", {})
         nr = "<br>".join("✕ " + n for n in m.get("notRun", []))

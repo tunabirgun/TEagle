@@ -60,6 +60,72 @@ def test_run_pcr_nonstring_background_is_badrequest():
         engine.run_pcr(body)
 
 
+def test_run_genome_pcr_requires_primers():
+    with pytest.raises(BadRequest):
+        engine.run_genome_pcr({"organism": "Homo sapiens"})
+
+
+def test_run_genome_pcr_rejects_non_dna_primers():
+    with pytest.raises(BadRequest):
+        engine.run_genome_pcr({"fwd": "hello world", "rev": "TTTT" * 5, "organism": "Homo sapiens"})
+
+
+def test_run_genome_pcr_requires_resolvable_assembly():
+    with pytest.raises(BadRequest):                     # no organism and no accession -> cannot resolve a genome
+        engine.run_genome_pcr({"fwd": "ACGT" * 5, "rev": "TTTT" * 5})
+
+
+def test_run_genome_pcr_local_scan_seals_assembly(monkeypatch):
+    raw = ">NC_000012.12:100+336 pair 237bp ACGTACGTACGTACGTACGT TTTTGGGGCCCCAAAATTTT\nACGT\n"
+    seen = {}
+    def fake_scan(acc, query, **k):
+        seen["acc"] = acc; seen["query"] = query
+        return {"ok": True, "raw": raw, "isPcr_version": "33x2", "target": "genome.2bit",
+                "sha256": "abc123", "n_seqs": 24}
+    monkeypatch.setattr(engine.wsl, "genome_scan", fake_scan)
+    r = engine.run_genome_pcr({"fwd": "ACGTACGTACGTACGTACGT", "rev": "TTTTGGGGCCCCAAAATTTT",
+                               "organism": "Homo sapiens"})
+    assert r["ok"] and seen["acc"] == "GCF_000001405.40"
+    assert r["assemblyAccession"] == "GCF_000001405.40" and r["scope"] == "whole-genome"
+    assert r["n_amplicons"] == 1 and r["amplicons"][0]["on_target"] is False
+    # a local scan IS sealed + reproducible: the assembly (accession + source-FASTA sha256) and isPcr
+    # version are in the content-addressed manifest
+    m = r["provenance"]
+    assert m["runType"] == "genome-scan" and m["manifestSha256"]
+    assert any(d["version"] == "GCF_000001405.40" and d["sha256"] == "abc123" for d in m["databases"])
+    assert m["parameters"]["isPcr_version"] == "33x2"
+    assert "fwdonly" in seen["query"] and "revonly" in seen["query"]   # all three isPcr query rows sent
+
+
+def test_run_genome_pcr_seal_ignores_assembly_name(monkeypatch):
+    # the human-readable assemblyName is a label, not sealing content: the SAME genome (accession + source
+    # sha256) + primers must seal identically whether the name is populated (dropdown) or empty (bare accession)
+    raw = ">NC_1:100+300 pair 201bp AAAAAAAAAAAAAAAAAAAA CCCCCCCCCCCCCCCCCCCC\n"
+    monkeypatch.setattr(engine.wsl, "genome_scan",
+                        lambda acc, query, **k: {"ok": True, "raw": raw, "isPcr_version": "33x2",
+                                                 "target": "genome.2bit", "sha256": "SAME", "n_seqs": 1})
+    base = {"fwd": "A" * 20, "rev": "C" * 20, "assemblyAccession": "GCF_9.9", "taxid": "1"}
+    r1 = engine.run_genome_pcr({**base, "assemblyName": "Some Assembly v1"})
+    r2 = engine.run_genome_pcr({**base, "assemblyName": ""})
+    assert r1["provenance"]["manifestSha256"] == r2["provenance"]["manifestSha256"]
+
+
+def test_run_genome_pcr_passes_through_need_prepare(monkeypatch):
+    monkeypatch.setattr(engine.wsl, "genome_scan",
+                        lambda acc, query, **k: {"ok": False, "error": "genome not prepared", "need_prepare": True})
+    r = engine.run_genome_pcr({"fwd": "ACGT" * 5, "rev": "TTTT" * 5, "organism": "Homo sapiens"})
+    assert r["ok"] is False and r.get("need_prepare") is True
+
+
+def test_run_genome_prepare_resolves_accession(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(engine.wsl, "genome_prepare",
+                        lambda acc, name, **k: (seen.update(acc=acc, name=name),
+                        {"ok": True, "accession": acc, "target": "genome.2bit", "sha256": "s", "n_seqs": 24, "bytes": 100})[1])
+    r = engine.run_genome_prepare({"organism": "Saccharomyces cerevisiae"})
+    assert r["ok"] and seen["acc"] == "GCF_000146045.2" and r["assemblyAccession"] == "GCF_000146045.2"
+
+
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
 def test_run_pcr_nonfinite_target_span_is_badrequest(bad):
     # a NaN/Inf target_span would otherwise seal into the reproducibility manifest

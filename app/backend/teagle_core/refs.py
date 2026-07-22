@@ -55,6 +55,14 @@ REFS = {
         "name": "miniprot (protein-to-genome spliced alignment)",
         "citation": "Li H (2023) Protein-to-genome alignment with miniprot. Bioinformatics 39(1):btad014.",
         "doi": "10.1093/bioinformatics/btad014", "license": "MIT", "url": "https://github.com/lh3/miniprot"},
+    "isPcr": {                                     # UCSC In-Silico PCR; shares the BLAT tiling method (no separate isPcr paper)
+        "name": "isPcr (UCSC In-Silico PCR)",
+        "citation": "Kent WJ (2002) BLAT—the BLAST-like alignment tool. Genome Res 12(4):656-664.",
+        "doi": "10.1101/gr.229202", "license": "Non-commercial (UCSC)", "url": "https://genome.ucsc.edu/cgi-bin/hgPcr"},
+    "NCBI-RefSeq": {
+        "name": "NCBI RefSeq genome assemblies (retrieved via NCBI Datasets)",
+        "citation": "O'Leary NA, Wright MW, Brister JR, et al. (2016) Reference sequence (RefSeq) database at NCBI: current status, taxonomic expansion, and functional annotation. Nucleic Acids Res 44(D1):D733-D745.",
+        "doi": "10.1093/nar/gkv1189", "license": "Public Domain", "url": "https://www.ncbi.nlm.nih.gov/refseq/"},
 }
 
 
@@ -73,6 +81,8 @@ def for_run(run_type: str, domains=None, fetched: bool = False):
         keys += ["minimap2"]
     if run_type == "homology":                 # protein-to-genome evidence; Dfam added when the bundled library is used
         keys += ["miniprot"]
+    if run_type == "genome-scan":              # local whole-genome in-silico PCR against a downloaded RefSeq assembly
+        keys += ["isPcr", "NCBI-RefSeq"]
     if fetched:
         keys += ["NCBI-Eutilities"]
     out, seen = [], set()

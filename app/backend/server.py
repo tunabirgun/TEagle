@@ -77,6 +77,11 @@ class Handler(BaseHTTPRequestHandler):
         "/api/miniprot": engine.run_miniprot,
         "/api/primers": engine.run_primers,
         "/api/pcr": engine.run_pcr,
+        "/api/genome_pcr": engine.run_genome_pcr,
+        "/api/genome_prepare": engine.run_genome_prepare,
+        "/api/genome_prepare_log": engine.run_genome_prepare_log,
+        "/api/genome_list": engine.run_genome_list,
+        "/api/genome_remove": engine.run_genome_remove,
     }
 
     def do_POST(self):

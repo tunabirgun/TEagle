@@ -11,10 +11,10 @@ Error taxonomy (consumed by the Qt worker, obs 4702):
   - raises anything else      -> unexpected fault (HTTP 500 / error banner + traceback to log)
 """
 from __future__ import annotations
-import hashlib, time
+import hashlib, re, time
 
 from teagle_core import (sequtil, structural, primers, provenance, fetch,
-                         domains, classify, refs, wsl, timing)
+                         domains, classify, refs, wsl, timing, genomepcr)
 import envcheck
 
 
@@ -411,3 +411,89 @@ def run_pcr(body):
         "references": refs.for_run("in-silico-pcr"),
         "provenance": provenance.build_manifest("in-silico-pcr", seq, recs[0][0], seal_p,
                       references=refs.for_run("in-silico-pcr"))}
+
+
+_PRIMER_RE = re.compile(r"^[ACGTRYSWKMBDHVN]+$")
+
+
+def _resolve_assembly(body):
+    """Resolve the organism (or a directly supplied accession) to a pinned RefSeq assembly. Returns
+    (organism, accession, assembly_name, taxid) or raises BadRequest."""
+    org = body.get("organism", "")
+    if not isinstance(org, str):
+        raise BadRequest("organism must be a string")
+    acc = str(body.get("assemblyAccession", "") or (fetch.COORD_ASSEMBLIES.get(org, {}) or {}).get("assemblyAccession", "")).strip()
+    if not re.match(r"^GC[AF]_\d+\.\d+$", acc):
+        raise BadRequest("select an organism (or provide a RefSeq assembly accession GCF_…) for the whole-genome scan")
+    info = fetch.COORD_ASSEMBLIES.get(org, {}) or {}
+    name = str(body.get("assemblyName", "") or info.get("assemblyName", "")).strip()
+    taxid = str(body.get("taxid", "") or info.get("taxid", "")).strip()
+    return org, acc, name, taxid
+
+
+def run_genome_prepare(body):
+    """One-time download + cache of an organism's RefSeq assembly for LOCAL whole-genome scanning (no
+    remote query at scan time). Slow for large genomes; runs off the UI thread. Idempotent."""
+    org, acc, name, taxid = _resolve_assembly(body)
+    r = wsl.genome_prepare(acc, name, timeout=int(_num(body.get("timeout"), 3600)))
+    if not r.get("ok"):
+        return r
+    return {"ok": True, "organism": org, "taxid": taxid, "assemblyAccession": acc, "assemblyName": name, **r}
+
+
+def run_genome_prepare_log(body):
+    """Latest genome-download milestone (for the UI liveness indicator during a long prepare)."""
+    return {"log": wsl.genome_prepare_log(int(_num((body or {}).get("tail"), 1)))}
+
+
+def run_genome_list(body):
+    """List locally cached genomes (accession, size, contig count) for the genome manager."""
+    return wsl.genome_list()
+
+
+def run_genome_remove(body):
+    """Delete a cached genome to reclaim disk."""
+    acc = str(body.get("assemblyAccession", "")).strip()
+    return wsl.genome_remove(acc)
+
+
+def run_genome_pcr(body):
+    """Whole-genome off-target scan of one primer pair against a LOCAL, downloaded RefSeq assembly (isPcr).
+    No remote query, no timeouts. The assembly is a fixed checksummed file, so the result IS reproducible
+    and sealed (accession + source-FASTA sha256 + isPcr version + params). Every genome-wide product is an
+    off-target candidate — a specificity screen, not validated bands."""
+    fwd, rev = body.get("fwd"), body.get("rev")
+    if not isinstance(fwd, str) or not isinstance(rev, str):
+        raise BadRequest("a forward and reverse primer are required for the genome scan")
+    fwd, rev = fwd.strip().upper(), rev.strip().upper()
+    if not _PRIMER_RE.match(fwd) or not _PRIMER_RE.match(rev):
+        raise BadRequest("primers must be DNA (A/C/G/T plus IUPAC ambiguity codes)")
+    org, acc, name, taxid = _resolve_assembly(body)
+    p = _clean_params(body.get("params", {}))
+    min_perfect = int(_num(p.get("min_perfect"), 15))
+    min_good = int(_num(p.get("min_good"), 15))
+    max_size = int(_num(p.get("prod_max"), 4000))
+    min_size = int(_num(p.get("prod_min"), 0))
+    r = wsl.genome_scan(acc, genomepcr.query_rows(fwd, rev), max_size=max_size, min_size=min_size,
+                        min_perfect=min_perfect, min_good=min_good, timeout=int(_num(body.get("timeout"), 600)))
+    if not r.get("ok"):
+        return r                                     # {ok:False, error, [need_prepare]} — surfaced to the UI
+    amps = genomepcr.parse_ispcr(r["raw"])
+    if min_size > 0:                                 # isPcr has no -minSize; apply the lower product bound here
+        amps = [a for a in amps if a["length"] >= min_size]
+    seal_params = {"fwd": fwd, "rev": rev, "engine": "isPcr", "isPcr_version": r.get("isPcr_version"),
+                   "min_perfect": min_perfect, "min_good": min_good, "max_size": max_size, "min_size": min_size}
+    # Seal the genome by its accession (with version) + source-FASTA sha256 ONLY. The human-readable
+    # assemblyName is a label (like input.assemblyName in the seal-exclude list) — folding it into the sealed
+    # database entry would make the same genome seal differently on the dropdown path (name populated) vs a
+    # bare-accession call (name empty), so the db name is a stable, accession-independent constant.
+    manifest = provenance.build_manifest(
+        "genome-scan", f"{fwd}/{rev}", f"{org or acc} whole-genome scan", seal_params,
+        databases=[{"name": "RefSeq genome assembly", "version": acc, "sha256": r.get("sha256")}],
+        references=refs.for_run("genome-scan"),
+        not_run=["Wet-lab validation of predicted products", "Off-target scan of unlisted organisms"])
+    return {"ok": True, "organism": org, "taxid": taxid, "scope": "whole-genome", "assemblyAccession": acc,
+            "assemblyName": name, "amplicons": amps, "n_amplicons": len(amps), "n_seqs": r.get("n_seqs"),
+            "advisory_note": "candidate priming sites (isPcr, ≥15 bp 3'-perfect match) — not wet-lab-validated amplicons; "
+                             "products priming off a shorter 3' match are not flagged",
+            "references": refs.for_run("genome-scan"), "provenance": manifest}

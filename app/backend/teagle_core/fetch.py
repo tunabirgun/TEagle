@@ -2,7 +2,15 @@
 Verifies metadata (esummary) before pulling the sequence (efetch). Errors are typed
 and explicit; a failed or empty fetch is never returned as a sequence."""
 from __future__ import annotations
-import os, urllib.request, urllib.parse, urllib.error, json, re, datetime, hashlib, time
+import os, ssl, urllib.request, urllib.parse, urllib.error, json, re, datetime, hashlib, time
+
+# Verify TLS against certifi's CA bundle when available (some Windows Pythons lack the roots for UCSC/EBI/
+# NCBI chains); falls back to the system default. Hardens every HTTPS call the app makes.
+try:
+    import certifi
+    _SSL_CTX = ssl.create_default_context(cafile=certifi.where())
+except Exception:
+    _SSL_CTX = None
 
 EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
 ENA = "https://www.ebi.ac.uk/ena/browser/api/fasta/"
@@ -46,7 +54,7 @@ class FetchError(Exception):
 def _get(url: str, timeout: int = 25) -> str:
     req = urllib.request.Request(url, headers={"User-Agent": "TEagle/0.1 (+local)"})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with urllib.request.urlopen(req, timeout=timeout, context=_SSL_CTX) as r:
             return r.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
         raise FetchError(f"HTTP {e.code} from source")
@@ -175,7 +183,7 @@ def build_gene_model(feats: list) -> dict:
     exons, introns, cds, mrna = collect("exon"), collect("intron"), collect("CDS"), collect("mRNA")
     derived_exons = derived_introns = False
     if not exons and (mrna or cds):                            # derive exons from a spliced transcript/CDS
-        exons = [dict(x) for x in (mrna or cds)]
+        exons = [{**dict(x), "derived": True} for x in (mrna or cds)]   # flag each so the viewer marks them exon* (honest)
         derived_exons = True
     exons = _dedup(exons)
     if not introns and len(exons) > 1:                         # introns = gaps between consecutive exons
@@ -184,12 +192,65 @@ def build_gene_model(feats: list) -> dict:
                 introns.append({"start": a["end"], "end": b["start"], "strand": a.get("strand", "+"), "note": ""})
         derived_introns = bool(introns)
     exons, introns, cds = _dedup(exons), _dedup(introns), _dedup(cds)
-    return {
+    return complete_gene_model({
         "exons": exons, "introns": introns, "cds": cds,
         "counts": {"exons": len(exons), "introns": len(introns), "cds": len(cds)},
         "derived_exons": derived_exons, "derived_introns": derived_introns,
         "source": "NCBI feature table (efetch rettype=ft)",
-    }
+    })
+
+
+def complete_gene_model(gm: dict) -> dict:
+    """Fill in exons implied by the CDS/mRNA when a record annotates some exons but omits others — e.g.
+    J00265 annotates exon 1 and the last exon but NOT the middle exon that carries the first CDS segment.
+    A CDS segment must lie inside an exon; where none does, synthesize a derived exon spanning the flanking
+    intron boundaries (its true extent), or the CDS segment span if introns don't bracket it. Idempotent, so
+    it is safe to re-apply to an already-complete or cached model."""
+    exons = [dict(e) for e in gm.get("exons", [])]
+    introns, cds = gm.get("introns", []), gm.get("cds", [])
+    covered = lambda iv: any(e["start"] <= iv["start"] and iv["end"] <= e["end"] for e in exons)
+    added = False
+    for c in cds:
+        if covered(c):
+            continue
+        left = max([i["end"] for i in introns if i["end"] <= c["start"]], default=c["start"])
+        right = min([i["start"] for i in introns if i["start"] >= c["end"]], default=c["end"])
+        exons.append({"start": min(left, c["start"]), "end": max(right, c["end"]),
+                      "strand": c.get("strand", "+"), "note": c.get("note", ""), "derived": True})
+        added = True
+    if not added:
+        return gm
+    exons = _dedup(exons)
+    out = dict(gm)
+    out["exons"] = exons
+    out["derived_exons"] = True
+    # if the introns were DERIVED from the OLD exon gaps, a newly inserted exon leaves a stale intron
+    # overlapping it -> recompute derived introns from the completed exon set. Explicit introns are authoritative.
+    if gm.get("derived_introns"):
+        introns = [{"start": a["end"], "end": b["start"], "strand": a.get("strand", "+"), "note": ""}
+                   for a, b in zip(exons, exons[1:]) if b["start"] > a["end"]]
+        out["introns"] = introns
+    out["counts"] = {"exons": len(exons), "introns": len(out.get("introns", introns)), "cds": len(cds)}
+    return out
+
+
+def cross_check_models(annotation_introns: list, aligned_introns: list, tol: int = 2) -> dict:
+    """Compare the record's (completed) annotation introns against an INDEPENDENT alignment's introns
+    (an external transcript aligned to the genome — NOT a transcript rebuilt from the same annotation,
+    which would be circular). An intron matches when both boundaries agree within `tol` bp. Returns the
+    match count plus the introns seen on only one side, so the UI can flag agreement vs discrepancies."""
+    aln = list(aligned_introns)
+    used, matched, ann_only = set(), 0, []
+    for a in annotation_introns:
+        hit = next((j for j, b in enumerate(aln) if j not in used
+                    and abs(a["start"] - b["start"]) <= tol and abs(a["end"] - b["end"]) <= tol), None)
+        if hit is None:
+            ann_only.append(a)
+        else:
+            used.add(hit); matched += 1
+    aln_only = [aln[j] for j in range(len(aln)) if j not in used]
+    return {"matched": matched, "annotation_total": len(annotation_introns), "aligned_total": len(aln),
+            "annotation_only": ann_only, "aligned_only": aln_only}
 
 
 def fetch_features(acc: str) -> dict:
