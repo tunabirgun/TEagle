@@ -41,6 +41,20 @@ def test_tc1_is_dna_transposon():
     assert "Class II" in cl["class"]
 
 
+def test_classify_flags_composite_rt_plus_tpase():
+    # a transposase co-occurring with RT (nested/composite locus) must be surfaced + confidence capped —
+    # not silently dropped by the `elif tpase` branch that is unreachable once rt is present
+    st = [{"type": "LTR (5')"}, {"type": "LTR (3')"}]
+    dm = [{"domain": "RT", "nt": [1000, 1500], "strand": "+", "score": 100.0},
+          {"domain": "INT", "nt": [500, 900], "strand": "+", "score": 90.0},     # INT before RT -> Copia, order resolvable
+          {"domain": "TPase", "nt": [2000, 2400], "strand": "+", "score": 80.0, "class": "hAT"}]
+    cl = classify.classify(st, dm)
+    assert cl["superfamily"].startswith("Copia")                                  # primary call unchanged
+    assert any("transposase domain also present" in e for e in cl["evidence"])    # composite surfaced
+    assert cl["confidence"] != "High"                                             # capped from High by the composite signal
+    assert "Class I" in cl["class"]                                               # still a Class I retrotransposon primary call
+
+
 def test_ac_is_hat():
     cl, dcodes = _classify("X05424")
     assert cl["te_class"] == "DNA/hAT"

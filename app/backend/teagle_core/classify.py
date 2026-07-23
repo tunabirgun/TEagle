@@ -97,6 +97,14 @@ def classify(structural, domains):
         else:
             superfamily, te_class = "no clear TE signature", "none"
 
+    # a transposase domain co-occurring with RT is never inspected by the RT branch (the `elif tpase` above is
+    # unreachable once rt is True), so surface it explicitly: it flags a nested/composite locus rather than a
+    # confident single element. Mirrors the tpase_conflict downgrade below.
+    composite = rt and tpase
+    if composite:
+        ev.append("transposase domain also present alongside reverse transcriptase — possible nested / composite "
+                  "element (e.g. a DNA transposon within a retroelement, or two overlapping TE fragments)")
+
     # domain-architecture order shows ONLY the domains actually detected, in the superfamily's
     # canonical order — never a full 5-domain template presented as if it were observed
     _CANON = {"Copia": ["GAG", "PR", "INT", "RT", "RNaseH", "CHR"],
@@ -121,6 +129,8 @@ def classify(structural, domains):
         confidence = "Candidate"
     if tpase_conflict:                             # conflicting transposase classes -> don't overstate
         confidence = "Candidate"
+    if composite and confidence == "High":         # a co-occurring transposase makes a confident single-element call unsafe
+        confidence = "Moderate"
 
     dom_str = " · ".join(codes) or "none"
     struct_str = ", ".join(e["type"].split(" (")[0] for e in structural) or "none"

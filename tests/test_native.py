@@ -182,6 +182,8 @@ def test_staleness_guard_blocks_stale_primer(win):
 
 # ---------- specimen-identity / stale-state provenance integrity (Loop-1 fixes) ----------
 def test_genome_scan_submits_local(win):
+    win._prepared_genomes = [{"accession": "GCF_000001405.40", "n_seqs": 24, "bytes": 1_000_000}]
+    win._refresh_genome_dropdown()                            # dropdown lists ONLY downloaded genomes now
     win.genomeOrg.setCurrentIndex(win.genomeOrg.findData("Homo sapiens"))
     ops = []
     win.engine.submit = lambda op, body=None, key=None: ops.append((op, body, key))
@@ -228,6 +230,62 @@ def test_genome_prepare_resumes_pending_scan(win):
     assert win._genome_prep_inflight is False and ops and ops[0][0] == "genome_pcr"   # resumed into the SAME scan (captured org)
 
 
+def test_banner_level_distinguishes_success_from_error(win):
+    # a success/advisory message must not render in the red error style with a warning triangle
+    win._banner("Genome ready", level="success")
+    assert win.errbanner.property("level") == "success" and not win.errbanner.isHidden()
+    assert win.errbanner.text().startswith("✓")
+    win._banner("bad input")                                   # default level = error
+    assert win.errbanner.property("level") == "error" and win.errbanner.text().startswith("⚠")
+
+
+def test_busybar_is_indeterminate_and_updatable():
+    from widgets import BusyBar
+    b = BusyBar("working…")
+    assert b.bar.minimum() == 0 and b.bar.maximum() == 0       # 0..0 = indeterminate 'busy' animation
+    b.set_text("stage 2")
+    assert b.caption.text() == "stage 2"
+
+
+def test_genome_dropdown_lists_only_prepared(win):
+    # the PCR organism dropdown must show ONLY downloaded+verified genomes, never the full catalog
+    win._on_genome_list({"ok": True, "genomes": []})
+    assert [win.genomeOrg.itemData(i) for i in range(win.genomeOrg.count())] == [None]   # placeholder only
+    win._on_genome_list({"ok": True, "genomes": [{"accession": "GCF_000146045.2", "n_seqs": 17, "bytes": 12_000_000}]})
+    orgs = [win.genomeOrg.itemData(i) for i in range(win.genomeOrg.count())]
+    assert orgs == [None, "Saccharomyces cerevisiae"]        # placeholder + the one downloaded organism
+
+
+def test_on_genome_list_refreshes_dropdown_even_when_manager_closed(win):
+    # the split handler must update the dropdown on EVERY genome_list, not only when the manager dialog is open
+    win._genome_mgr = None; win._genome_mgr_open = False
+    win._on_genome_list({"ok": True, "genomes": [{"accession": "GCF_000001405.40", "n_seqs": 24, "bytes": 1_000_000}]})
+    assert win._genome_mgr is None                            # no dialog resurrected
+    assert win.genomeOrg.findData("Homo sapiens") >= 0        # ...but the dropdown still refreshed
+
+
+def test_genome_list_failure_keeps_cached_dropdown(win):
+    # a transient genome_list failure must NOT blank the dropdown while genomes are still cached on disk
+    win._on_genome_list({"ok": True, "genomes": [{"accession": "GCF_000146045.2", "n_seqs": 17, "bytes": 12_000_000}]})
+    assert win.genomeOrg.findData("Saccharomyces cerevisiae") >= 0
+    win._on_genome_list({"ok": False, "error": "WSL backend hiccup"})    # transient blip
+    assert win._prepared_genomes and win.genomeOrg.findData("Saccharomyces cerevisiae") >= 0   # last-good set preserved
+
+
+def test_scan_completion_refreshes_open_manager(win):
+    # a manager opened mid-scan disables its row buttons; scan completion must refresh it so they re-enable
+    win._genome_mgr_open = True
+    win._on_genome_list({"ok": True, "genomes": []})          # open the (non-modal) manager dialog
+    assert win._genome_mgr is not None and win._genome_mgr.isVisible()
+    ops = []
+    win.engine.submit = lambda op, body=None, key=None: ops.append(op)
+    win._genome_inflight = True
+    win._on_genome_pcr({"ok": True, "organism": "x", "assemblyName": "y", "assemblyAccession": "GCF_9.9",
+                        "n_seqs": 1, "amplicons": [], "summary": {}, "provenance": {}})
+    assert "genome_list" in ops                                # scan completion re-lists -> manager rebuilt, buttons re-enabled
+    win._genome_mgr.close()
+
+
 def test_genome_manager_stale_refresh_does_not_reopen(win):
     # a genome_list result landing AFTER the manager was closed must not resurrect the dialog (M1 completeness)
     win._genome_mgr = None
@@ -242,6 +300,8 @@ def test_genome_manager_stale_refresh_does_not_reopen(win):
 
 def test_genome_need_prepare_uses_captured_org(win, monkeypatch):
     # start a scan for organism X, change the dropdown mid-scan; the download must target X, not the new pick
+    win._prepared_genomes = [{"accession": "GCF_000146045.2", "n_seqs": 17, "bytes": 12_000_000}]
+    win._refresh_genome_dropdown()                            # dropdown lists ONLY downloaded genomes now
     win.genomeOrg.setCurrentIndex(win.genomeOrg.findData("Saccharomyces cerevisiae"))
     ops = []
     win.engine.submit = lambda op, body=None, key=None: ops.append((op, body))

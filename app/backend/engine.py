@@ -459,9 +459,10 @@ def run_genome_remove(body):
 
 def run_genome_pcr(body):
     """Whole-genome off-target scan of one primer pair against a LOCAL, downloaded RefSeq assembly (isPcr).
-    No remote query, no timeouts. The assembly is a fixed checksummed file, so the result IS reproducible
-    and sealed (accession + source-FASTA sha256 + isPcr version + params). Every genome-wide product is an
-    off-target candidate — a specificity screen, not validated bands."""
+    No remote query; a local safety timeout applies (body.timeout, default 600s — a very large genome may need
+    it raised). The assembly is a fixed checksummed file, so the result IS reproducible and sealed (accession +
+    source-FASTA sha256 + isPcr version + params). Every genome-wide product is an off-target candidate — a
+    specificity screen, not validated bands."""
     fwd, rev = body.get("fwd"), body.get("rev")
     if not isinstance(fwd, str) or not isinstance(rev, str):
         raise BadRequest("a forward and reverse primer are required for the genome scan")
@@ -492,8 +493,13 @@ def run_genome_pcr(body):
         databases=[{"name": "RefSeq genome assembly", "version": acc, "sha256": r.get("sha256")}],
         references=refs.for_run("genome-scan"),
         not_run=["Wet-lab validation of predicted products", "Off-target scan of unlisted organisms"])
+    # off-target interpretation (pair-vs-single split, per-chromosome spread, family-generic verdict). DERIVED
+    # from the discovered products — NOT a sealed input, so it is added to the return dict only, never to
+    # build_manifest (folding it into the seal would make the same primers+genome seal differently per run).
+    summary = genomepcr.summarize(amps)
     return {"ok": True, "organism": org, "taxid": taxid, "scope": "whole-genome", "assemblyAccession": acc,
             "assemblyName": name, "amplicons": amps, "n_amplicons": len(amps), "n_seqs": r.get("n_seqs"),
+            "summary": summary,
             "advisory_note": "candidate priming sites (isPcr, ≥15 bp 3'-perfect match) — not wet-lab-validated amplicons; "
                              "products priming off a shorter 3' match are not flagged",
             "references": refs.for_run("genome-scan"), "provenance": manifest}

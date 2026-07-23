@@ -10,7 +10,8 @@ from PySide6.QtGui import QGuiApplication, QFont, QPixmap, QPainter, QIcon, QCur
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QFrame, QVBoxLayout, QHBoxLayout,
                                QGridLayout, QLabel, QLineEdit, QTextEdit, QPlainTextEdit, QPushButton, QComboBox,
-                               QScrollArea, QSplitter, QFileDialog, QSizePolicy, QToolTip, QMessageBox, QDialog)
+                               QScrollArea, QSplitter, QFileDialog, QSizePolicy, QToolTip, QMessageBox, QDialog,
+                               QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
@@ -21,7 +22,7 @@ import fonts
 import figures
 from figures import svg_genome
 import widgets
-from widgets import FigurePanel, GenomePanel, DataTable
+from widgets import FigurePanel, GenomePanel, DataTable, BusyBar
 from sample import make_sample
 import theme as theme_mod
 from teagle_core import appdirs
@@ -217,6 +218,7 @@ class MainWindow(QMainWindow):
         self._genome_inflight = False                         # one whole-genome isPcr scan at a time
         self._genome_prep_inflight = False                    # one genome download/prepare at a time (large, one-time)
         self._pending_scan = None                             # a scan queued behind a just-started genome download
+        self._prepared_genomes = []                           # downloaded+verified (.done) genomes; the ONLY source for the PCR organism dropdown
 
         self.engine = Engine(self)
         self.engine.done.connect(self._on_done)
@@ -541,21 +543,24 @@ class MainWindow(QMainWindow):
         self.pcrBg = QTextEdit(); self.pcrBg.setMaximumHeight(60)
         self.pcrBg.setPlaceholderText("Optional: paste extra background sequence(s) to reveal off-target amplicons.")
         card.bodylay.addWidget(self.pcrBg)
-        # whole-genome off-target scan — LOCAL isPcr against a downloaded RefSeq assembly (no remote query)
+        # whole-genome off-target scan — LOCAL isPcr against a downloaded RefSeq assembly (no remote query).
+        # The dropdown lists ONLY downloaded+verified genomes (populated from genome_list, refreshed on
+        # WSL-ready / download / delete) — you cannot scan an organism you have not downloaded first.
         card.bodylay.addWidget(_sl("Whole-genome off-target scan — organism (local isPcr, downloaded genome)"))
         gorow = QHBoxLayout()
         self.genomeOrg = QComboBox()
-        self.genomeOrg.addItem("— select organism —", None)   # placeholder so no wrong-species scan runs by default
-        for org in sorted(COORD_ASSEMBLIES):
-            self.genomeOrg.addItem(f"{org} · {COORD_ASSEMBLIES[org]['assemblyName']}", org)
         gorow.addWidget(self.genomeOrg, 1)
         self.genomeManageBtn = QPushButton("⚙ Manage genomes"); self.genomeManageBtn.setProperty("sm", True)
         self.genomeManageBtn.clicked.connect(self._open_genome_manager)
         gorow.addWidget(self.genomeManageBtn)
         card.bodylay.addLayout(gorow)
-        gnote = QLabel("Right-click a designed pair → “⊕ Scan whole genome”. First scan of an organism downloads its "
-                       "RefSeq genome once (kept locally); later scans are fast. Every genome-wide amplicon is an "
-                       "off-target candidate (isPcr 3′-perfect-match) — sealed with the assembly version + checksum.")
+        self.genomeOrgHint = QLabel()
+        self.genomeOrgHint.setObjectName("orient"); self.genomeOrgHint.setWordWrap(True)
+        card.bodylay.addWidget(self.genomeOrgHint)
+        self._refresh_genome_dropdown()                       # render from cached prepared set (empty at first build)
+        gnote = QLabel("Right-click a designed pair → “⊕ Scan whole genome” to run a local isPcr scan against a "
+                       "downloaded genome; download / manage genomes via ⚙ Manage genomes. Every genome-wide amplicon "
+                       "is an off-target candidate (isPcr 3′-perfect-match) — sealed with the assembly version + checksum.")
         gnote.setObjectName("orient"); gnote.setWordWrap(True); card.bodylay.addWidget(gnote)
         row = QHBoxLayout()
         self.runPcrBtn = QPushButton("▶ Run loaded pairs"); self.runPcrBtn.setProperty("primary", True)
@@ -751,9 +756,11 @@ class MainWindow(QMainWindow):
             self._pcr_slot(key, {"error": msg, "amplicons": []})
         elif key == "genome_pcr":
             self._genome_inflight = False; self._render_pcr_status("Genome scan failed — " + msg)
+            self._refresh_genome_manager()                    # scan settled (failed) — re-enable a manager opened mid-scan
         elif key == "genome_prepare":
             self._genome_prep_inflight = False; self._pending_scan = None
             self._render_pcr_status("Genome download failed — " + msg)
+            self._refresh_genome_manager()                    # download settled (failed) — re-enable a manager opened during it
         elif key == "genome_prepare_log":
             return                                            # a background poll blip: never banner
         else:
@@ -765,9 +772,11 @@ class MainWindow(QMainWindow):
             self._pcr_slot(key, {"error": msg, "amplicons": []})
         elif key == "genome_pcr":                             # clear the in-flight guard + stuck status on a hard fault
             self._genome_inflight = False; self._render_pcr_status("Genome scan failed — " + msg)
+            self._refresh_genome_manager()                    # scan settled (failed) — re-enable a manager opened mid-scan
         elif key == "genome_prepare":
             self._genome_prep_inflight = False; self._pending_scan = None
             self._render_pcr_status("Genome download failed — " + msg)
+            self._refresh_genome_manager()                    # download settled (failed) — re-enable a manager opened during it
         elif key == "genome_prepare_log":
             return                                            # a background poll blip: never banner
         else:
@@ -775,8 +784,13 @@ class MainWindow(QMainWindow):
         sys.stderr.write(trace + "\n")
         self._banner(f"unexpected error: {msg}")
 
-    def _banner(self, msg):
-        self.errbanner.setText("⚠ " + msg)
+    def _banner(self, msg, level="error"):
+        # level drives colour + glyph so a success/advisory message is not painted as a red error (theme.py
+        # styles #errbanner[level=...]). Default stays 'error' so every existing call keeps its red styling.
+        glyph = {"error": "⚠", "warn": "⚠", "success": "✓", "info": "ℹ"}.get(level, "⚠")
+        self.errbanner.setText(f"{glyph} {msg}")
+        self.errbanner.setProperty("level", level)
+        self._repolish(self.errbanner)                    # re-evaluate the level-aware QSS
         self.errbanner.setVisible(True)
 
     def _clear_banner(self):
@@ -861,13 +875,13 @@ class MainWindow(QMainWindow):
         self.runBtn.setEnabled(True); self.runBtn.setText("▶ Run analysis")
         self._clear_banner()
         if res.get("warning"):
-            self._banner(res["warning"])
+            self._banner(res["warning"], level="warn")
         recs = res.get("records", [])
         if not recs:
             return
         rec = recs[0]
         self.state["last_rec"] = rec
-        self.state["analyzed_clean"] = self._clean_seq(self.state.get("seq", ""))
+        self.state["analyzed_clean"] = self._clean_seq(self.state.get("analyzed_seq", ""))   # snapshot, not the live box — a keystroke mid-analysis must not defeat the stale-block guard
         self._update_splice_ref()
         self.designBtn.setEnabled(True); self.designHint.setText("")
         comp = rec.get("composition", {})
@@ -1351,8 +1365,8 @@ class MainWindow(QMainWindow):
         self._pending_scan = {"cand": cand, "org": org}        # cand + org captured so a download resumes the SAME target
         self._genome_inflight = True
         self.card_pcr.expand()
-        self._render_pcr_status(f"Scanning the {org} genome locally (isPcr) for off-target priming sites "
-                                "(up to ~1–2 min on a large genome)…")
+        self._render_pcr_busy(f"Scanning the {org} genome locally (isPcr) for off-target priming sites "
+                              "(up to ~1–2 min on a large genome)…")
         # fixed wide window (isPcr defaults) — decoupled from the local-PCR size fields the user never sets for a
         # right-click genome scan (coupling them silently capped genome products at the pcrPmax default of 1 kb)
         p = {"min_perfect": 15, "min_good": 15, "prod_max": 4000, "prod_min": 0}
@@ -1370,8 +1384,8 @@ class MainWindow(QMainWindow):
         self.card_pcr.expand()
         acc = (COORD_ASSEMBLIES.get(org, {}) or {}).get("assemblyAccession", "")
         self._prep_org = org
-        self._render_pcr_status(f"Downloading the {org} genome ({acc}) — one-time, kept for future scans. "
-                                "This can take several minutes (larger for mammalian genomes)…")
+        self._render_pcr_busy(f"Downloading the {org} genome ({acc}) — one-time, kept for future scans. "
+                              "This can take several minutes (larger for mammalian genomes)…")
         self.engine.submit("genome_prepare", {"organism": org}, key="genome_prepare")
         if getattr(self, "_prep_timer", None) is None:        # poll the prepare log so a long download shows liveness
             self._prep_timer = QTimer(self); self._prep_timer.setInterval(2500)
@@ -1384,9 +1398,18 @@ class MainWindow(QMainWindow):
         self.engine.submit("genome_prepare_log", {}, key="genome_prepare_log")
 
     def _on_genome_prepare_log(self, d):
-        if self._genome_prep_inflight and d.get("log"):
-            org = getattr(self, "_prep_org", "")
-            self._render_pcr_status(f"Downloading the {org} genome — {d['log']}…")
+        if not (self._genome_prep_inflight and d.get("log")):
+            return
+        org = getattr(self, "_prep_org", "")
+        txt = f"Downloading the {org} genome — {d['log']}…"    # stream the milestone into the busy bar's caption
+        b = getattr(self, "_pcr_busy", None)
+        try:
+            if b is not None:
+                b.set_text(txt)
+            else:
+                self._render_pcr_busy(txt)
+        except RuntimeError:                                  # busy bar was replaced (C++ object gone) — re-render
+            self._render_pcr_busy(txt)
 
     def _on_genome_prepare(self, d):
         self._genome_prep_inflight = False
@@ -1397,73 +1420,145 @@ class MainWindow(QMainWindow):
             return self._banner("Genome download failed — " + d.get("error", ""))
         mb = (d.get("bytes", 0) or 0) / 1e6
         self._banner(f"Genome ready · {d.get('organism','')} ({d.get('assemblyAccession','')}) · "
-                     f"{d.get('n_seqs','?')} sequences · {mb:.0f} MB cached.")
+                     f"{d.get('n_seqs','?')} sequences · {mb:.0f} MB cached.", level="success")
         ps = self._pending_scan
         if ps:                                                # resume straight into the SAME scan the download was for
             self._pending_scan = None
             self._scan_genome(ps["cand"], org=ps["org"])
         else:
             self._render_pcr_status(f"{d.get('organism','')} genome downloaded — right-click a pair to scan it.")
-        mgr = getattr(self, "_genome_mgr", None)              # refresh only an OPEN manager (never pop it back up)
+        # refresh unconditionally: the just-downloaded organism must appear in the PCR dropdown even if the
+        # manager is closed. The split _on_genome_list updates the dropdown always, the manager only if open.
+        self.engine.submit("genome_list", {}, key="genome_list")
+
+    # =================== cached-genome manager ===================
+    def _refresh_genome_dropdown(self):
+        """Rebuild the PCR organism dropdown from the prepared (downloaded+verified) genome set only —
+        an organism cannot be scanned until it is downloaded. userData stays the ORGANISM string (what
+        _scan_genome and the need_prepare fallback consume via currentData()); a downloaded accession
+        outside the curated map is skipped. Selection is preserved across the rebuild."""
+        box = getattr(self, "genomeOrg", None)
+        if box is None:                                       # genome_list can resolve before the PCR card is built
+            return
+        prev = box.currentData()
+        acc2org = {v["assemblyAccession"]: k for k, v in COORD_ASSEMBLIES.items()}
+        box.blockSignals(True)
+        box.clear()
+        box.addItem("— select organism —", None)              # placeholder so no wrong-species scan runs by default
+        n = 0
+        for g in self._prepared_genomes:
+            org = acc2org.get(g.get("accession"))
+            if not org:
+                continue
+            box.addItem(f"{org} · {COORD_ASSEMBLIES[org]['assemblyName']}", org)
+            n += 1
+        if prev is not None:
+            i = box.findData(prev)
+            if i >= 0:
+                box.setCurrentIndex(i)
+        box.blockSignals(False)
+        hint = getattr(self, "genomeOrgHint", None)
+        if hint is not None:
+            hint.setText("" if n else "No genomes downloaded yet — open ⚙ Manage genomes to download one for scanning.")
+
+    def _refresh_genome_manager(self):
+        """Rebuild a LIVE (open) genome manager. Its row buttons are disabled while a scan/download runs;
+        this re-enables them when the work settles. No-op when the manager is closed (never resurrects it)."""
+        mgr = getattr(self, "_genome_mgr", None)
         if mgr is not None and mgr.isVisible():
             self.engine.submit("genome_list", {}, key="genome_list")
 
-    # =================== cached-genome manager ===================
     def _open_genome_manager(self):
         """Show cached genomes (size, contigs) with delete + pre-download, so the user can manage disk."""
         self._genome_mgr_open = True                          # explicit open — distinguishes from a background refresh
         self.engine.submit("genome_list", {}, key="genome_list")
 
     def _on_genome_list(self, d):
+        # This handler is the SINGLE fan-out for every genome_list submit (WSL-ready, download, delete,
+        # manager-open). ALWAYS update the dropdown first; the dialog rebuild below is the only part guarded
+        # by manager-open — so a download finishing with the manager closed still refreshes the dropdown.
+        if d.get("ok"):                                       # only overwrite on success — a transient WSL blip must not
+            self._prepared_genomes = d.get("genomes", [])     # blank the dropdown while genomes are still cached on disk
+        self._refresh_genome_dropdown()
+
         dlg = getattr(self, "_genome_mgr", None)
         if dlg is None:
             if not getattr(self, "_genome_mgr_open", False):  # a refresh that landed AFTER the user closed the manager
-                return                                        # -> a no-op; never resurrect a dismissed dialog
+                return                                        # -> only skip the DIALOG; the dropdown is already updated
             dlg = QDialog(self); dlg.setAttribute(Qt.WA_DeleteOnClose)
             dlg.finished.connect(lambda *_: (setattr(self, "_genome_mgr", None),
                                              setattr(self, "_genome_mgr_open", False)))
             self._genome_mgr = dlg
-        dlg.setWindowTitle("Cached genomes")
-        dlg.setMinimumWidth(460)
+        dlg.setWindowTitle("Manage genomes")
+        dlg.setMinimumWidth(760)
         old = dlg.layout()
         if old is not None:                                   # rebuild the body in place on refresh
             QWidget().setLayout(old)
         lay = QVBoxLayout(dlg); lay.setSpacing(8)
-        genomes = d.get("genomes", []) if d.get("ok") else []
         if not d.get("ok"):
             lay.addWidget(QLabel("Could not list genomes — " + d.get("error", "WSL backend unavailable")))
-        elif not genomes:
-            lay.addWidget(QLabel("No genomes downloaded yet. Pick an organism below and download one, or just "
-                                 "right-click a primer pair → “⊕ Scan whole genome”."))
-        else:
-            for g in genomes:
-                row = QHBoxLayout()
-                mb = (g.get("bytes", 0) or 0) / 1e6
-                lab = QLabel(f"<b>{g['accession']}</b> · {g.get('n_seqs','?')} seq · {mb:.0f} MB")
-                lab.setTextFormat(Qt.RichText); row.addWidget(lab, 1)
-                dbtn = QPushButton("🗑 delete"); dbtn.setProperty("sm", True)
-                dbtn.clicked.connect(lambda _=False, a=g["accession"]: self._remove_genome(a))
-                row.addWidget(dbtn); lay.addLayout(row)
-        lay.addWidget(_sl("Download a genome now (optional — scans auto-download on demand)"))
-        drow = QHBoxLayout()
-        sel = QComboBox()
-        for org in sorted(COORD_ASSEMBLIES):
-            sel.addItem(f"{org} · {COORD_ASSEMBLIES[org]['assemblyName']}", org)
-        drow.addWidget(sel, 1)
-        dl = QPushButton("⭳ download"); dl.setProperty("sm", True)
-        dl.clicked.connect(lambda: (self._prepare_genome(sel.currentData()), dlg.accept()))
-        drow.addWidget(dl); lay.addLayout(drow)
+            close = QPushButton("Close"); close.clicked.connect(dlg.accept)
+            lay.addWidget(close); dlg.show(); dlg.raise_(); return
+        lay.addWidget(QLabel("Download a genome once to enable its whole-genome off-target scan. It is kept locally "
+                             "and then appears in the in-silico PCR organism dropdown. Mammalian genomes are large "
+                             "(~1 GB, a few minutes)."))
+        prepared = {g["accession"]: g for g in d.get("genomes", [])}
+        orgs = sorted(COORD_ASSEMBLIES)
+        busy = self._genome_prep_inflight or self._genome_inflight   # lock every row while any download/scan runs
+        headers = ["Organism", "Assembly", "Accession", "Status", "Size (MB)", "Contigs", "Action"]
+        tbl = QTableWidget(len(orgs), len(headers))
+        tbl.setHorizontalHeaderLabels(headers)
+        tbl.verticalHeader().setVisible(False)
+        tbl.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        tbl.setSelectionMode(QAbstractItemView.NoSelection)
+        tbl.setSortingEnabled(False)                          # static catalog; sorting conflicts with setCellWidget buttons
+        tbl.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        tbl.horizontalHeader().setStretchLastSection(True)
+        for r, org in enumerate(orgs):
+            meta = COORD_ASSEMBLIES[org]
+            acc = meta["assemblyAccession"]
+            g = prepared.get(acc)
+            if g:
+                cells = [org, meta["assemblyName"], acc, "Downloaded ✓",
+                         f"{(g.get('bytes', 0) or 0) / 1e6:.0f}", str(g.get("n_seqs", "?"))]
+            else:
+                cells = [org, meta["assemblyName"], acc, "not downloaded", "—", "—"]
+            for c, txt in enumerate(cells):
+                it = QTableWidgetItem(txt); it.setTextAlignment(Qt.AlignCenter)
+                tbl.setItem(r, c, it)
+            btn = QPushButton("🗑 Delete" if g else "⭳ Download"); btn.setProperty("sm", True)
+            if g:
+                btn.clicked.connect(lambda _=False, a=acc: self._remove_genome(a))
+            else:
+                btn.clicked.connect(lambda _=False, o=org: self._on_manager_download(o))
+            btn.setEnabled(not busy)
+            tbl.setCellWidget(r, 6, btn)
+        tbl.resizeColumnsToContents()
+        lay.addWidget(tbl)
+        self._genome_mgr_table = tbl
+        if busy:
+            lay.addWidget(QLabel("A download or scan is running — actions are disabled until it finishes."))
         close = QPushButton("Close"); close.clicked.connect(dlg.accept)
         lay.addWidget(close)
         dlg.show(); dlg.raise_()
+
+    def _on_manager_download(self, org):
+        """Download a genome from the manager table without closing the dialog; disable every row button
+        immediately for feedback (the authoritative rebuild lands when _on_genome_prepare fires genome_list)."""
+        self._prepare_genome(org)
+        tbl = getattr(self, "_genome_mgr_table", None)
+        if tbl is not None:
+            for r in range(tbl.rowCount()):
+                w = tbl.cellWidget(r, 6)
+                if w is not None:
+                    w.setEnabled(False)
 
     def _remove_genome(self, accession):
         self.engine.submit("genome_remove", {"assemblyAccession": accession}, key="genome_remove")
 
     def _on_genome_remove(self, d):
-        mgr = getattr(self, "_genome_mgr", None)              # refresh the list after a delete, only while the manager is open
-        if mgr is not None and mgr.isVisible():
-            self.engine.submit("genome_list", {}, key="genome_list")
+        # refresh BOTH the dropdown and the manager (if open); the split _on_genome_list self-selects what to update
+        self.engine.submit("genome_list", {}, key="genome_list")
 
     def _render_pcr_status(self, msg):
         while self.pcrBody.count():
@@ -1472,8 +1567,19 @@ class MainWindow(QMainWindow):
                 w.setParent(None)
         self.pcrBody.addWidget(_empty(msg))
 
+    def _render_pcr_busy(self, text):
+        """Long-op liveness in the in-silico PCR panel: an animated indeterminate bar (genome download / scan),
+        so a multi-minute WSL call visibly reads as working, not hung. set_text() updates it from the log poll."""
+        while self.pcrBody.count():
+            w = self.pcrBody.takeAt(0).widget()
+            if w:
+                w.setParent(None)
+        self._pcr_busy = BusyBar(text)
+        self.pcrBody.addWidget(self._pcr_busy)
+
     def _on_genome_pcr(self, d):
         self._genome_inflight = False
+        self._refresh_genome_manager()                        # scan settled — re-enable a manager opened mid-scan
         if not d.get("ok"):
             if d.get("need_prepare"):                         # genome not downloaded yet — offer the one-time download
                 ps = self._pending_scan or {}
@@ -1498,17 +1604,21 @@ class MainWindow(QMainWindow):
         self._pending_scan = None
         amps = [{**a, "pair": "genome", "remote": True} for a in d.get("amplicons", [])]
         lanes = [{"label": "genome", "amplicons": d.get("amplicons", []), "advisory": True}]   # all off-target: no "no on-target" stamp
-        self.state["lastPcr"] = {"lanes": lanes, "amplicons": amps}
-        self._render_pcr(lanes, amps)
+        summary = d.get("summary") or {}
+        self.state["lastPcr"] = {"lanes": lanes, "amplicons": amps, "summary": summary}
+        self._render_pcr(lanes, amps, summary=summary)
         m = d.get("provenance", {})
         db = (m.get("databases") or [{}])[0]
         seal = m.get("manifestSha256", "")
         prov = (f" · assembly {d.get('assemblyAccession','')}"
                 + (f" · sha256 {db.get('sha256','')[:12]}…" if db.get("sha256") else "")
                 + (f" · seal {seal[:12]}…" if seal else ""))
+        n_pair = summary.get("n_pair", len(amps)); n_single = summary.get("n_single", 0)
+        single_txt = f" (plus {n_single} single-primer F+F/R+R artefact(s))" if n_single else ""
         self._banner(f"Whole-genome scan · {d.get('organism','')} ({d.get('assemblyName','')}): "
-                     f"{len(amps)} off-target candidate product(s) across {d.get('n_seqs','?')} sequence(s). "
-                     f"{d.get('advisory_note','candidate priming sites — not validated amplicons')}{prov}.")
+                     f"{summary.get('verdict', 'off-target scan complete')}. "
+                     f"{n_pair} pair product(s) across {summary.get('n_sources', '?')} sequence(s){single_txt} — "
+                     f"a floor at ≥15 bp 3′-perfect match (more-diverged copies are not counted){prov}.", level="info")
         if m:
             self._render_provenance(m)
 
@@ -1541,7 +1651,8 @@ class MainWindow(QMainWindow):
         if provs:
             self._render_provenance(provs[0])
 
-    def _render_pcr(self, lanes, amps):
+    def _render_pcr(self, lanes, amps, summary=None):
+        genome = summary is not None                      # whole-genome off-target scan: interpret, don't just dump coords
         while self.pcrBody.count():
             w = self.pcrBody.takeAt(0).widget()
             if w:
@@ -1552,13 +1663,21 @@ class MainWindow(QMainWindow):
         gel.apply_app_theme(self.theme)                   # gel opens in the current app theme (uv/mono stay manual)
         gel.setMinimumHeight(420)
         self.pcrBody.addWidget(gel)
+        if genome:
+            self._add_genome_summary(summary)
         if amps:
-            headers = ["Pair", "Source", "Coords", "Len", "Mism F/R", "Call"]
-            t = DataTable(headers, GLOSS)
-            t.set_rows([[a["pair"], a["source"], f"{a['start']}–{a['end']}", a["length"],
+            if genome:                                    # genome hits: Pair/Mism are constant — show strand + pair/single kind instead
+                headers = ["Source", "Coords", "Len", "Strand", "Kind"]
+                rows = [[a["source"], f"{a['start']}–{a['end']}", a["length"], a.get("strand", "?"),
+                         ("single-primer" if a.get("single_primer") else "pair")] for a in amps]
+            else:
+                headers = ["Pair", "Source", "Coords", "Len", "Mism F/R", "Call"]
+                rows = [[a["pair"], a["source"], f"{a['start']}–{a['end']}", a["length"],
                          f"{a.get('fwd_mm', '—')}/{a.get('rev_mm', '—')}",   # genome (isPcr) hits carry no per-primer mismatch count
                          ("on-target" if a.get("on_target") else "off-target")
-                         + (" · single-primer" if a.get("single_primer") else "")] for a in amps])
+                         + (" · single-primer" if a.get("single_primer") else "")] for a in amps]
+            t = DataTable(headers, GLOSS)
+            t.set_rows(rows)
             def _amp_menu(r):
                 a = amps[r]
                 if a.get("remote"):                           # genome hit on a remote chromosome — no local bases to copy/design
@@ -1566,7 +1685,7 @@ class MainWindow(QMainWindow):
                              lambda a=a: self._copy(f"{a['source']}:{a['start']}-{a['end']}"))]
                 return self._feat_menu(a["start"], a["end"], "+", f"amplicon_{a['pair']}", dna=a.get("seq", ""))
             t.set_row_menu(_amp_menu)
-            t.setMaximumHeight(200)
+            t.setMaximumHeight(240 if genome else 200)
             self.pcrBody.addWidget(t)
             if any(a.get("seq") for a in amps):           # genome (isPcr) hits carry no local bases -> nothing to export as FASTA
                 def _amps_fasta(_=False, aa=amps, tbl=t):
@@ -1581,14 +1700,44 @@ class MainWindow(QMainWindow):
                 cp.clicked.connect(_amps_fasta)
                 self.pcrBody.addWidget(cp)
         else:
-            self.pcrBody.addWidget(_empty("No amplicon predicted for any pair under the criteria."))
-        onN = sum(1 for a in amps if a.get("on_target"))
-        spN = sum(1 for a in amps if a.get("single_primer"))
-        sp_txt = f" · {spN} single-primer band(s)" if spN else ""
-        note = QLabel(f"{len(lanes)} lane(s) · {onN} on-target band(s){sp_txt} · ladder lane “L”. "
-                      "Bands co-migrating at one size are drawn once; intensity tracks priming efficiency. "
-                      "Not a claim of experimental specificity.")
-        note.setObjectName("orient"); self.pcrBody.addWidget(note)
+            self.pcrBody.addWidget(_empty("No genome-wide product for this pair under the criteria."
+                                          if genome else "No amplicon predicted for any pair under the criteria."))
+        if genome:
+            spN = summary.get("n_single", 0)
+            sp_txt = f" · {spN} single-primer artefact(s), sorted last" if spN else ""
+            note = QLabel(f"{summary.get('n_pair', 0)} genome-wide pair product(s){sp_txt}. Every product is an "
+                          "off-target candidate — a specificity screen, not validated bands. The verdict is a "
+                          "heuristic read of the count/spread; the numbers carry the claim.")
+        else:
+            onN = sum(1 for a in amps if a.get("on_target"))
+            spN = sum(1 for a in amps if a.get("single_primer"))
+            sp_txt = f" · {spN} single-primer band(s)" if spN else ""
+            note = QLabel(f"{len(lanes)} lane(s) · {onN} on-target band(s){sp_txt} · ladder lane “L”. "
+                          "Bands co-migrating at one size are drawn once; intensity tracks priming efficiency. "
+                          "Not a claim of experimental specificity.")
+        note.setObjectName("orient"); note.setWordWrap(True); self.pcrBody.addWidget(note)
+
+    def _add_genome_summary(self, summary):
+        """Interpretation block above the genome amplicon table: the verdict (bold), per-sequence spread
+        (capped at 10), and the product-size cluster. Leads with raw numbers — the verdict is advisory."""
+        verdict = QLabel("▸ " + summary.get("verdict", ""))
+        verdict.setObjectName("orient"); verdict.setWordWrap(True)
+        vf = verdict.font(); vf.setBold(True); verdict.setFont(vf)
+        self.pcrBody.addWidget(verdict)
+        per = summary.get("per_source", [])
+        if per:
+            spread = " · ".join(f"{src}: {n}" for src, n in per[:10])
+            if len(per) > 10:
+                spread += f" · … (+{len(per) - 10} more)"
+            lab = QLabel("per sequence — " + spread)
+            lab.setObjectName("orient"); lab.setWordWrap(True); self.pcrBody.addWidget(lab)
+        mode = summary.get("size_mode")
+        if mode is not None:
+            lo, hi = summary.get("size_min"), summary.get("size_max")
+            rng = f"; range {lo}–{hi} bp" if lo != hi else ""
+            sz = QLabel(f"product size clusters at ~{mode} bp "
+                        f"({summary.get('size_mode_n', 0)}/{summary.get('n_pair', 0)} pair hits){rng}")
+            sz.setObjectName("orient"); sz.setWordWrap(True); self.pcrBody.addWidget(sz)
 
     # =================== WSL family annotation ===================
     def _init_wsl(self):
@@ -1599,10 +1748,12 @@ class MainWindow(QMainWindow):
             self.wslStatus.setText(f"<span style='color:#E06A5A'>WSL status error: {w['error']}</span>"); return
         if not w.get("wsl2"):
             self.wslStatus.setText("<b>WSL2 not installed</b> — this optional step names the Dfam family. "
-                                   "The domain-based superfamily above works without it. Install: open PowerShell as "
-                                   "Administrator and run <code>wsl --install</code>, then restart Windows.")
+                                   "The domain-based superfamily above works without it. Install it in one click with "
+                                   "<b>⚙ Backend installer</b> below (it runs the elevated <code>wsl --install</code> for you; "
+                                   "a Windows restart may be required), or run <code>wsl --install</code> in an Administrator PowerShell.")
             self.spliceStatus.setText("<b>WSL2 not installed</b> — de-novo splice detection needs it (optional).")
             return
+        self.engine.submit("genome_list", {}, key="genome_list")   # WSL is up — populate the downloaded-genome dropdown
         if w.get("ready"):
             self.wslStatus.setText(f"<span style='color:#33D6B8'>● ready</span> · RepeatMasker {w.get('repeatmasker')} "
                                    f"· Dfam curated · distro {w.get('distro')}")
@@ -1647,6 +1798,7 @@ class MainWindow(QMainWindow):
             self.wslSpeciesOther.setText(name)
 
     def _annotate(self):
+        self._clear_banner()                                  # drop any stale error before a retry (matches _design/_run_pcr)
         if self.wslSource.currentIndex() == 1:
             seq = self.wslPaste.toPlainText().strip()
             src = None
@@ -1657,6 +1809,7 @@ class MainWindow(QMainWindow):
             return self._banner("no sequence to annotate — load a specimen or paste one")
         self.state["family_seq"] = self._norm_seq(seq)    # hit coords index THIS sequence (backend-normalized), not always panel-01
         self.annotateBtn.setEnabled(False); self.annotateBtn.setText("◴ annotating…")
+        self._set_body(self.wslBody, BusyBar("Running RepeatMasker against Dfam — this can take a minute or two…"))
         self.engine.submit("annotate", {"sequence": seq, "species": self._species(),
                                         "source": src}, key="annotate")
 
@@ -1709,6 +1862,7 @@ class MainWindow(QMainWindow):
 
     # =================== splice detection ===================
     def _splice(self):
+        self._clear_banner()                                  # drop any stale error before a retry (matches _design/_run_pcr)
         genomic = self.state.get("seq") or self.seq.toPlainText().strip()
         tx = self.spliceTx.toPlainText().strip()
         if not genomic.strip():
@@ -1717,6 +1871,7 @@ class MainWindow(QMainWindow):
             return self._banner("Paste a transcript / cDNA / mRNA to align.")
         self.state["splice_seq"] = self._norm_seq(genomic)    # intron menus slice THIS (backend-normalized) sequence, not a later box edit
         self.spliceBtn.setEnabled(False); self.spliceBtn.setText("◴ aligning…")
+        self._set_body(self.spliceBody, BusyBar("Aligning the transcript to the genomic sequence (minimap2 -x splice)…"))
         self.engine.submit("splice", {"sequence": genomic, "transcript": tx, "source": self.state.get("source"),
                                       "timeout": 300}, key="splice")
 
@@ -1771,6 +1926,12 @@ class MainWindow(QMainWindow):
             cl.addWidget(t)
         else:
             cl.addWidget(_empty("single exon — no introns detected"))
+            # foot-gun guard for the common novice case (works for any input, not only fetched+annotated records):
+            # a gapless alignment reads as a real single-exon finding but usually means a genomic slice was pasted.
+            slice_note = QLabel("A gapless alignment (0 introns) is consistent with either a genuine single-exon "
+                                "transcript OR a genomic slice pasted into the transcript box (a genomic slice has no "
+                                "spliced-out introns). To resolve splicing, align an mRNA / cDNA / EST, not genomic DNA.")
+            slice_note.setWordWrap(True); slice_note.setObjectName("orient"); cl.addWidget(slice_note)
         self._set_body(self.spliceBody, cont)
 
     # =================== provenance ===================
@@ -1808,7 +1969,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(widget)
 
     def closeEvent(self, e):
-        it = getattr(self, "_install_timer", None)
+        it = getattr(self, "_prep_timer", None)               # the genome-download poll timer (the only QTimer here)
         if it is not None:
             it.stop()
         super().closeEvent(e)

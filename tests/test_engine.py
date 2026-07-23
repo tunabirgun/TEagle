@@ -110,6 +110,42 @@ def test_run_genome_pcr_seal_ignores_assembly_name(monkeypatch):
     assert r1["provenance"]["manifestSha256"] == r2["provenance"]["manifestSha256"]
 
 
+def test_run_genome_pcr_returns_offtarget_summary(monkeypatch):
+    raw = "\n".join([
+        ">NC_1:100+300 pair 201bp AAAAAAAAAAAAAAAAAAAA CCCCCCCCCCCCCCCCCCCC",
+        ">NC_1:900+1100 pair 201bp AAAAAAAAAAAAAAAAAAAA CCCCCCCCCCCCCCCCCCCC",
+        ">NC_2:10+210 pair 201bp AAAAAAAAAAAAAAAAAAAA CCCCCCCCCCCCCCCCCCCC",
+        ">NC_1:5+55 fwdonly 51bp AAAAAAAAAAAAAAAAAAAA AAAAAAAAAAAAAAAAAAAA",
+    ]) + "\n"
+    monkeypatch.setattr(engine.wsl, "genome_scan",
+                        lambda acc, query, **k: {"ok": True, "raw": raw, "isPcr_version": "33x2",
+                                                 "target": "genome.2bit", "sha256": "s", "n_seqs": 5})
+    r = engine.run_genome_pcr({"fwd": "A" * 20, "rev": "C" * 20, "organism": "Homo sapiens"})
+    s = r["summary"]
+    assert s["n_pair"] == 3 and s["n_single"] == 1 and s["n_sources"] == 2
+    assert s["n_pair"] + s["n_single"] == r["n_amplicons"]
+    assert dict(s["per_source"])["NC_1"] == 2 and s["tier"] == "low-copy"
+
+
+def test_run_genome_pcr_summary_not_in_seal(monkeypatch):
+    # the off-target summary is DERIVED from the discovered products; folding it into the seal would make the
+    # SAME primers+genome+params seal differently as the product set changes. Two scans with different product
+    # sets but identical inputs MUST produce an identical manifest seal.
+    base = {"fwd": "A" * 20, "rev": "C" * 20, "assemblyAccession": "GCF_9.9", "taxid": "1"}
+    one = ">NC_1:100+300 pair 201bp AAAAAAAAAAAAAAAAAAAA CCCCCCCCCCCCCCCCCCCC\n"
+    many = "\n".join(f">NC_{i}:100+300 pair 201bp AAAAAAAAAAAAAAAAAAAA CCCCCCCCCCCCCCCCCCCC"
+                     for i in range(1, 8)) + "\n"
+    def scan_of(raw):
+        return lambda acc, query, **k: {"ok": True, "raw": raw, "isPcr_version": "33x2",
+                                        "target": "genome.2bit", "sha256": "SAME", "n_seqs": 3}
+    monkeypatch.setattr(engine.wsl, "genome_scan", scan_of(one))
+    r1 = engine.run_genome_pcr(dict(base))
+    monkeypatch.setattr(engine.wsl, "genome_scan", scan_of(many))
+    r2 = engine.run_genome_pcr(dict(base))
+    assert r1["summary"]["n_pair"] == 1 and r2["summary"]["n_pair"] == 7       # different product sets
+    assert r1["provenance"]["manifestSha256"] == r2["provenance"]["manifestSha256"]   # identical seal
+
+
 def test_run_genome_pcr_passes_through_need_prepare(monkeypatch):
     monkeypatch.setattr(engine.wsl, "genome_scan",
                         lambda acc, query, **k: {"ok": False, "error": "genome not prepared", "need_prepare": True})

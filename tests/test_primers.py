@@ -56,3 +56,31 @@ def test_in_silico_pcr_requires_inward_pair():
     seq = "C" * 40 + fwd + "A" * 150 + fwd + "C" * 40
     amps = primers.in_silico_pcr(fwd, rev, seq, "t", max_mm=1, tp=5, prod_min=50, prod_max=500)
     assert amps == [], "independent same-strand hits must not form an amplicon"
+
+
+def test_base_ok_iupac_matching():
+    assert primers._base_ok("R", "A") and primers._base_ok("R", "G")       # R = A/G
+    assert not primers._base_ok("R", "C") and not primers._base_ok("R", "T")
+    assert primers._base_ok("N", "A") and primers._base_ok("Y", "T") and primers._base_ok("A", "A")
+    assert not primers._base_ok("A", "G")                                   # a concrete primer base stays strict
+    assert not primers._base_ok("R", "N")                                   # an ambiguous TEMPLATE base is a mismatch (conservative)
+
+
+def test_in_silico_pcr_matches_iupac_degenerate_primer():
+    # a degenerate consensus primer (IUPAC at the 3' end) must still bind — the genome-scan path (isPcr) is
+    # ambiguity-aware, so local in-silico PCR must agree rather than silently report the pair as non-binding
+    concrete, rev = "GACTGACTGTCAGTCAGGCA", "TTGGCCATTGGCACTGGCAT"          # concrete fwd ends in A
+    seq, left, right = _amplicon_template(concrete, rev)                    # template carries the literal A at the fwd 3' end
+    degen = concrete[:-1] + "R"                                             # R (A/G) covers the template's A
+    amps = primers.in_silico_pcr(degen, rev, seq, "t", max_mm=0, tp=5, prod_min=100, prod_max=600)
+    pair = [a for a in amps if not a.get("single_primer")]
+    assert len(pair) == 1 and pair[0]["start"] == left                      # degenerate 3' base binds -> amplicon found
+
+
+def test_in_silico_pcr_degenerate_primer_stays_specific():
+    # R (A/G) must NOT match a template carrying C at that 3' position -> the strict 3' rule still abolishes it
+    concrete, rev = "GACTGACTGTCAGTCAGGCC", "TTGGCCATTGGCACTGGCAT"          # concrete fwd ends in C
+    seq, _l, _r = _amplicon_template(concrete, rev)
+    degen = concrete[:-1] + "R"                                             # R does not cover C
+    amps = primers.in_silico_pcr(degen, rev, seq, "t", max_mm=0, tp=5, prod_min=100, prod_max=600)
+    assert [a for a in amps if not a.get("single_primer")] == []

@@ -42,3 +42,53 @@ def test_parse_ispcr_ignores_sequence_and_malformed_lines():
     out = "not a header\n>bad header without coords\nACGTACGT\n>NC_1:1+50 pair 50bp AAA CCC\nACGT\n"
     amps = genomepcr.parse_ispcr(out)
     assert len(amps) == 1 and amps[0]["length"] == 50
+
+
+# --- summarize(): off-target interpretation (pair-vs-single split, per-chrom spread, verdict, size cluster) ---
+def _amps(*headers):
+    return genomepcr.parse_ispcr("".join(h + "\n" for h in headers))
+
+
+def test_summarize_splits_pair_and_single_primer_counts():
+    s = genomepcr.summarize(_amps(
+        ">NC_1:100+300 pair 201bp AAA CCC",
+        ">NC_2:10+210 pair 201bp AAA CCC",
+        ">NC_1:5+55 fwdonly 51bp AAA AAA",
+        ">NC_2:5+55 revonly 51bp CCC CCC"))
+    assert s["n_total"] == 4 and s["n_pair"] == 2 and s["n_single"] == 2
+
+
+def test_summarize_groups_per_source_pair_only_busiest_first():
+    # single-primer products must NOT inflate the per-chromosome pair-product counts
+    s = genomepcr.summarize(_amps(
+        ">NC_1:100+300 pair 201bp AAA CCC",
+        ">NC_1:900+1100 pair 201bp AAA CCC",
+        ">NC_2:10+210 pair 201bp AAA CCC",
+        ">NC_1:5+55 fwdonly 51bp AAA AAA"))
+    assert s["per_source"] == [("NC_1", 2), ("NC_2", 1)] and s["n_sources"] == 2
+
+
+def test_summarize_verdict_locus_specific_for_single_pair_product():
+    s = genomepcr.summarize(_amps(">NC_1:100+300 pair 201bp AAA CCC"))
+    assert s["tier"] == "locus-specific" and s["n_pair"] == 1
+
+
+def test_summarize_verdict_family_generic_for_many_copies():
+    s = genomepcr.summarize(_amps(*[f">NC_{i}:100+300 pair 201bp AAA CCC" for i in range(1, 9)]))
+    assert s["tier"] == "family-generic" and s["n_pair"] == 8 and s["n_sources"] == 8
+
+
+def test_summarize_size_cluster_over_pair_products():
+    s = genomepcr.summarize(_amps(
+        ">NC_1:1+200 pair 200bp AAA CCC",
+        ">NC_1:9+208 pair 200bp AAA CCC",
+        ">NC_2:1+250 pair 250bp AAA CCC"))
+    assert s["size_mode"] == 200 and s["size_mode_n"] == 2
+    assert s["size_min"] == 200 and s["size_max"] == 250
+
+
+def test_summarize_empty_scan_is_clean_not_error():
+    # an empty isPcr result is the legitimate 'specific primer' case, not a crash
+    s = genomepcr.summarize([])
+    assert s["n_total"] == 0 and s["n_pair"] == 0 and s["per_source"] == []
+    assert s["tier"] == "none" and s["size_mode"] is None

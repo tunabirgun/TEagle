@@ -106,7 +106,12 @@ QLabel#empty {{ font-family: {mono}; color: {faint}; font-size: 12px; }}
 QLabel#gvpos {{ font-family: {mono}; color: {faint}; font-size: 10px; }}
 QLabel#errbanner {{ font-family: {mono}; background: {badsoft}; color: {bad}; border: 1px solid {bad};
     border-radius: 2px; padding: 9px 12px; font-size: 11.5px; }}
+QLabel#errbanner[level="success"] {{ background: {goodsoft}; color: {good}; border: 1px solid {good}; }}
+QLabel#errbanner[level="warn"] {{ background: {warnsoft}; color: {warn}; border: 1px solid {warn}; }}
+QLabel#errbanner[level="info"] {{ background: {accentsoft}; color: {accent}; border: 1px solid {accent}; }}
 QLabel#queuerow {{ font-family: {mono}; color: {dim}; font-size: 11px; }}
+QProgressBar {{ background: {panel2}; border: 1px solid {line2}; border-radius: 2px; }}
+QProgressBar::chunk {{ background: {accent}; border-radius: 2px; }}
 
 /* scrollbars — thin, terminal */
 QScrollBar:vertical {{ background: {bg}; width: 10px; margin: 0; }}

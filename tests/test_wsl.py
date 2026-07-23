@@ -30,6 +30,51 @@ def test_parse_out_skips_headers_and_blanks():
     assert wsl.parse_out("garbage\n\n   header line\n") == []
 
 
+def test_prep_script_extracts_with_python3_zipfile():
+    # a fresh minimal Ubuntu WSL ships python3 (zipfile built into CPython) but NOT unzip; extraction must
+    # use python3 stdlib first so a first-time genome download does not fail with 'genome preparation failed: unzip'
+    script = wsl._PREP_SCRIPT
+    assert "python3 -m zipfile -e" in script            # primary extractor: guaranteed-present stdlib
+    assert "FAIL unzip" not in script                   # the old bare-unzip failure path is gone
+    if "unzip -oq" in script:                           # a fallback unzip is allowed ONLY if guarded on the system PATH
+        assert "command -v unzip" in script
+
+
+def test_prep_script_keeps_zip_free_and_fna_discovery():
+    # the extraction rewrite must not lose the peak-disk (free the zip) or FNA-discovery invariants
+    script = wsl._PREP_SCRIPT
+    assert "rm -f dl.zip" in script
+    assert "_genomic.fna" in script
+
+
+def test_prep_script_guards_empty_contig_count():
+    # a broken/empty FASTA must never be sealed as a valid 0-contig genome
+    assert "no sequences" in wsl._PREP_SCRIPT
+
+
+def test_integrity_probe_verifies_genome_scan_tools():
+    # integrity_check must verify isPcr + NCBI datasets, not certify the backend healthy while the scan is broken
+    # (same dependency-binding-truthfulness class as the fixed unzip gap)
+    p = wsl._INTEGRITY_PROBE
+    assert "=SCAN=" in p and "isPcr" in p and "datasets" in p
+
+
+def test_genome_list_delivered_via_stdin_not_inline():
+    # inline `bash -lc` mangles the loop variable $d (wsl.exe command-line rebuild), so an inline for-loop
+    # reports EVERY cached genome as missing; genome_list MUST deliver its loop via STDIN (_wsl_script)
+    import inspect
+    src = inspect.getsource(wsl.genome_list)
+    assert "_wsl_script(" in src and "for d in" in src and "_wsl(" not in src.replace("_wsl_script(", "")
+
+
+def test_genome_scan_distinguishes_missing_ispcr_from_missing_genome():
+    # a broken isPcr binary must not be misattributed to a missing genome (which would send the user to
+    # re-download a multi-GB assembly) — the run script guards the binary with a distinct exit code
+    import inspect
+    src = inspect.getsource(wsl.genome_scan)
+    assert "exit 8" in src and "isPcr tool is missing" in src
+
+
 def test_species_validation_rejects_injection():
     # invalid species tokens must be rejected before reaching the shell
     r = wsl.annotate(">x\nACGT", species="dros; rm -rf /")

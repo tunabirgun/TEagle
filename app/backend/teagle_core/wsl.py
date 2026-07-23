@@ -485,6 +485,7 @@ echo "=RM="; "$MM" run -n te RepeatMasker -v 2>&1 | head -1
 echo "=MM="; "$ENV/bin/minimap2" --version 2>&1 | head -1
 echo "=FAMDB="; "$MM" run -n te famdb.py info 2>&1 | grep -iE "version|families|consensus" | head -3
 echo "=FILES="; ls -l "$FAMDIR"/dfam40.0.h5 "$FAMDIR"/dfam40.curated.consensus.0.h5 2>&1 | awk '{print $5, $NF}'
+echo "=SCAN="; { [ -x "$ENV/bin/isPcr" ] && echo "isPcr present"; } || echo "isPcr MISSING"; { [ -x "$ENV/bin/datasets" ] && echo "datasets present"; } || echo "datasets MISSING"
 '''
 
 
@@ -510,11 +511,16 @@ def integrity_check() -> dict:
     mm_txt = " ".join(sec.get("MM", [])).strip()
     fam_txt = " ".join(sec.get("FAMDB", []))
     files = [l for l in sec.get("FILES", []) if l.strip()]
+    scan_txt = " ".join(sec.get("SCAN", []))
     checks = [
         {"name": "RepeatMasker runs", "ok": "RepeatMasker version" in rm_txt, "detail": rm_txt.strip()[:80] or "no version reported"},
         {"name": "minimap2 runs", "ok": bool(re.match(r"^\d+\.\d+", mm_txt)), "detail": mm_txt[:60] or "no version reported"},
         {"name": "FamDB loads", "ok": bool(re.search(r"(?i)version|families|consensus", fam_txt)), "detail": fam_txt.strip()[:90] or "famdb.py info returned nothing"},
         {"name": "Dfam library files present", "ok": len(files) >= 2 and all("No such" not in f for f in files), "detail": "; ".join(files)[:90] or "missing"},
+        # the whole-genome off-target scan needs isPcr + NCBI datasets; verify them here so a "healthy" deep-check
+        # never precedes a scan that fails at first use (same binding-truthfulness class as the fixed unzip gap)
+        {"name": "isPcr + NCBI datasets (whole-genome scan)", "ok": "isPcr present" in scan_txt and "datasets present" in scan_txt,
+         "detail": scan_txt.strip()[:80] or "not probed"},
     ]
     return {"ok": all(c["ok"] for c in checks), "checks": checks, "raw": out[-1500:]}
 
@@ -913,13 +919,20 @@ plog "downloading $ACC (NCBI Datasets) — can take several minutes for a large 
 # times (the partial is discarded) rather than failing the whole prepare on one transient network blip.
 ok=0
 for attempt in 1 2 3; do
-  if "$ENV/bin/datasets" download genome accession "$ACC" --include genome --filename dl.zip >/dev/null 2>&1; then ok=1; break; fi
+  if "$ENV/bin/datasets" download genome accession "$ACC" --include genome --filename dl.zip >/dev/null 2>dl.err; then ok=1; break; fi
   plog "download attempt $attempt failed — retrying"; rm -f dl.zip; sleep 5
 done
-[ "$ok" = 1 ] || { echo "FAIL download (after 3 attempts)"; exit 1; }
+# surface the last attempt's stderr (invalid/withdrawn accession, DNS/API/rate-limit) instead of an opaque failure
+[ "$ok" = 1 ] || { echo "FAIL download (after 3 attempts): $(tail -c 200 dl.err 2>/dev/null | tr '\n' ' ')"; exit 1; }
 plog "extracting genome FASTA"
 rm -rf ex; mkdir -p ex
-unzip -oq dl.zip -d ex || { echo "FAIL unzip"; exit 1; }
+# a fresh minimal Ubuntu WSL ships python3 (zipfile is built into CPython) but NOT unzip — extract with the
+# python3 stdlib first (guaranteed present), and fall back to a system unzip only if one happens to exist. The
+# te conda env is never activated in this login shell, so a conda unzip at $ENV/bin is not on PATH; the fallback
+# deliberately probes the system PATH. python3 -m zipfile -e preserves the internal ncbi_dataset/.../*.fna path.
+if python3 -m zipfile -e dl.zip ex/ 2>/dev/null; then :
+elif command -v unzip >/dev/null 2>&1 && unzip -oq dl.zip -d ex; then :
+else echo "FAIL extract (need python3 with zipfile, or unzip)"; exit 1; fi
 rm -f dl.zip                                            # free the zip before the (large) 2bit conversion -> lower peak disk
 FNA=$(find ex -name '*_genomic.fna' | head -1)
 [ -n "$FNA" ] || { echo "FAIL no genomic fna in package"; exit 1; }
@@ -927,6 +940,7 @@ plog "checksumming source FASTA"
 FSHA=$(sha256sum "$FNA" | cut -d' ' -f1)
 [ -n "$FSHA" ] || { echo "FAIL checksum failed"; exit 1; }   # never write .done/meta with an empty seal hash
 NSEQ=$(grep -c '^>' "$FNA")
+[ "${NSEQ:-0}" -ge 1 ] || { echo "FAIL extracted FASTA has no sequences"; exit 1; }   # never seal a 0-contig genome
 plog "building compact isPcr target (2bit)"
 TARGET=""
 if [ -x "$ENV/bin/faToTwoBit" ] && "$ENV/bin/faToTwoBit" "$FNA" genome.2bit 2>/dev/null; then
@@ -1011,9 +1025,13 @@ def genome_scan(accession: str, query_text: str, max_size: int = 4000, min_size:
         # inline `bash -lc` arg) so the shell variable survives wsl.exe's command-line rebuild.
         run = (f'cd /tmp/{rid} || exit 1\n'
                f'T="{_GENOMES}/{accession}/{target}"\n'
+               f'[ -x "{_ENV}/bin/isPcr" ] || exit 8\n'      # isPcr missing/broken -> repair the backend, NOT re-download the genome
                f'[ -s "$T" ] || exit 9\n'
                f'"{_ENV}/bin/isPcr" {opts} "$T" q.txt stdout\n')
         rc, raw, err = _wsl_script(run, timeout=timeout)
+        if rc == 8:                                           # distinguish a broken tool from a missing genome (don't misdirect the fix)
+            return {"ok": False, "error": "the isPcr tool is missing from the WSL backend — open ⚙ Backend installer and "
+                    "repair “isPcr + NCBI Datasets”. The cached genome is fine and does not need re-downloading."}
         if rc != 0:
             return {"ok": False, "error": "genome scan failed — the cached genome may be missing or incomplete; "
                     "re-download it from ⚙ Manage genomes. " + err.strip()[:160]}
@@ -1036,8 +1054,11 @@ def genome_list() -> dict:
     av = available()
     if not av["wsl2"]:
         return {"ok": False, "error": "WSL2 not available", "genomes": []}
-    rc, out, _ = _wsl('for d in "$HOME"/teagle_genomes/*/; do [ -f "$d/.done" ] && cat "$d/meta.txt" && echo "==="; done 2>/dev/null || true',
-                      timeout=30)
+    # deliver the loop via STDIN, never an inline `bash -lc` arg: wsl.exe rebuilds the Windows command line
+    # and mangles the loop variable $d to empty, so an inline for-loop reports EVERY cached genome as missing
+    # (reproduced live: inline `for d ... echo [$d]` prints []). STDIN bytes to `bash -l -s` round-trip intact.
+    rc, out, _ = _wsl_script('for d in "$HOME"/teagle_genomes/*/; do [ -f "$d/.done" ] && cat "$d/meta.txt" && echo "==="; done 2>/dev/null || true',
+                             timeout=30)
     genomes = []
     for block in out.split("==="):
         m = _parse_meta(block)

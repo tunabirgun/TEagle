@@ -10,7 +10,7 @@ from PySide6.QtGui import QImage, QPainter, QColor
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QSizePolicy,
                                QTableWidget, QTableWidgetItem, QMenu, QFileDialog, QApplication,
-                               QAbstractItemView, QHeaderView, QToolTip)
+                               QAbstractItemView, QHeaderView, QToolTip, QProgressBar)
 
 MODE_LABEL = {"dark": "dark", "white": "light", "uv": "UV", "mono": "mono", "transparent": "transparent"}
 
@@ -592,6 +592,23 @@ def _sortkey(text: str):
         return float(nums[0])
     except ValueError:
         return None
+
+
+class BusyBar(QWidget):
+    """Indeterminate progress bar + caption for a long operation with no parseable progress
+    (RepeatMasker / minimap2 / isPcr / genome download). The bar animates on its own (Qt-driven), so the
+    panel visibly stays alive without a hang-vs-working ambiguity; no manual QTimer to leak. Call set_text()
+    to update the caption (e.g. from the genome-download log poll)."""
+    def __init__(self, text="working…", parent=None):
+        super().__init__(parent)
+        lay = QVBoxLayout(self); lay.setContentsMargins(0, 0, 0, 0); lay.setSpacing(4)
+        self.caption = QLabel(text); self.caption.setObjectName("orient"); self.caption.setWordWrap(True)
+        self.bar = QProgressBar(); self.bar.setRange(0, 0)         # 0..0 = indeterminate 'busy' animation
+        self.bar.setTextVisible(False); self.bar.setFixedHeight(6)
+        lay.addWidget(self.caption); lay.addWidget(self.bar)
+
+    def set_text(self, text):
+        self.caption.setText(text)
 
 
 class _Cell(QTableWidgetItem):

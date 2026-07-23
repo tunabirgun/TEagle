@@ -9,6 +9,31 @@ and propagates to the backend health endpoint, the UI header badge, every run
 provenance manifest, the packaged executable's Windows file-version metadata, and
 the LaTeX report title page.
 
+## [2.6.0] — 2026-07-23
+
+Interpretable off-target results, honest backend health, progress on every long operation, IUPAC-degenerate primers, and a tabular genome manager — plus a critical fix that had left the cached-genome list empty.
+
+### Added
+- **Interpretable whole-genome off-target scan.** A scan now leads with a plain-language specificity verdict — *locus-specific*, *low-copy / paralogous*, or *family-generic* (expected for a TE-consensus pair) — computed over the true forward+reverse pair products, with a per-chromosome breakdown and a product-size cluster. Single-primer (F+F / R+R) artefacts are separated from real pair products, and the count is framed as a conservative floor (isPcr's ≥15 bp 3′-perfect rule does not count more-diverged copies). The genome-scan result table shows genome-specific columns (source, coordinates, length, strand, pair-vs-single-primer kind).
+- **IUPAC-degenerate primer support in local in-silico PCR.** Consensus / wobble primers (R, Y, N, …) — standard for transposable-element work — now bind correctly against a plain-ACGT template, matching the ambiguity-aware genome-scan (isPcr) path instead of silently reporting the pair as non-binding.
+- **Progress indicators on long operations.** Genome download, whole-genome scan, RepeatMasker family annotation, and minimap2 splice alignment now show an animated indeterminate progress bar, so a multi-minute backend call reads as working rather than hung.
+- **Tabular Manage genomes panel.** The genome manager is now a table with one row per organism — assembly, accession, download status, cached size, contig count — with a per-row download / delete action.
+- **Nested / composite element flag.** When a transposase domain co-occurs with reverse transcriptase (a nested or composite locus), the classification surfaces it as evidence and caps the confidence, instead of presenting a confident single-element call.
+
+### Changed
+- **The off-target scan organism menu lists only downloaded genomes.** Download an organism once from Manage genomes and it appears in the scan menu; this makes the "which genomes can I scan" state explicit and prevents a scan against a genome that is not on the machine.
+- **Status banners carry a level.** Success, informational, warning, and error messages are now styled distinctly (a tick for success, amber for advisory, red only for real failures) — a completed download or scan is no longer shown as a red error with a warning triangle.
+- **A single-exon splice result carries a caution.** A gapless alignment (0 introns) now always notes that it is consistent with either a genuine single-exon transcript or a genomic slice pasted as the transcript, so a common novice mistake is not read as a real biological finding.
+
+### Fixed
+- **Critical — the cached-genome list always came back empty.** `genome_list` ran its shell loop through an inline WSL command whose loop variable wsl.exe silently mangled to empty, so the whole-genome-scan organism menu and the Manage genomes panel reported zero cached genomes even when genomes were downloaded and present on disk. The loop is now delivered to the shell over STDIN, so cached genomes list correctly.
+- **Genome download failed on a fresh WSL with "genome preparation failed: unzip".** A freshly installed Ubuntu WSL ships no `unzip`; extraction now uses python3's built-in `zipfile` (guaranteed present) with a system-`unzip` fallback. Verified end-to-end with a fresh *Drosophila* download.
+- **The deep integrity check certified the backend healthy while the genome-scan tools were missing.** It now verifies isPcr and NCBI Datasets, so a "healthy" report is not immediately followed by a scan that fails at first use.
+- **A broken isPcr binary was misattributed to a missing genome**, sending users to re-download a multi-gigabyte assembly for the wrong cause; the scan now reports a missing tool distinctly from a missing genome.
+- **An edit to the sequence during an in-flight analysis could defeat the stale-sequence guard** and let primer design / PCR run against features indexed on the pre-edit sequence; the guard now compares against the analyzed snapshot, not the live box.
+- **Manage-genomes row buttons could stay disabled** after a failed download, or after a scan that was started while the dialog was open.
+- Corrected the "no timeouts" overstatement in the genome-scan documentation (a local safety timeout applies), the WSL-not-installed guidance (it now points at the in-app installer), and several banner-lifecycle and window-teardown-timer issues.
+
 ## [2.5.0] — 2026-07-22
 
 A whole-genome off-target scan that runs entirely locally, primer design on flanks and gaps, automatic transcript-based exon/intron detection, and theme-following genome viewers.
@@ -229,6 +254,7 @@ primer design, usable without a command line.
   the WebView2 runtime is absent. A kill-on-close Job Object ties the whole process tree to the
   launcher, so an in-place upgrade never orphans a window.
 
+[2.6.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.6.0
 [2.5.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.5.0
 [2.4.1]: https://github.com/tunabirgun/TEagle/releases/tag/v2.4.1
 [2.4.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.4.0

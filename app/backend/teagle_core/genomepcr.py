@@ -1,7 +1,7 @@
 """Local whole-genome in-silico PCR — parse UCSC isPcr output into amplicons.
 
 The scan itself runs in the WSL backend (wsl.genome_scan) with isPcr against a downloaded,
-checksummed RefSeq assembly — no remote query, no timeouts. isPcr applies the 3' perfect-match
+checksummed RefSeq assembly — no remote query (a local safety timeout still applies). isPcr applies the 3' perfect-match
 priming rule and amplicon assembly natively (it is the engine behind UCSC In-Silico PCR), so this
 module only has to parse its FASTA output and shape amplicon records. Kept pure (no WSL, no network)
 so the parser is unit-testable in isolation. Because the assembly is a fixed local file (accession +
@@ -9,6 +9,7 @@ sha256), a genome scan is reproducible and IS sealed — unlike the retired remo
 """
 from __future__ import annotations
 import re
+from collections import Counter
 
 from .fetch import FetchError
 
@@ -47,6 +48,39 @@ def parse_ispcr(fasta_text: str) -> list:
     # stable order: fewest surprises first — by chromosome then position
     amps.sort(key=lambda a: (a["single_primer"], a["source"], a["start"]))
     return amps
+
+
+def summarize(amps: list) -> dict:
+    """Interpret a whole-genome isPcr scan of ONE primer pair. 'pair' products (fwd+rev) are the real
+    off-target amplicons; fwdonly/revonly rows are single-primer artefacts counted separately. For a
+    TE-consensus pair every genomic copy of the family amplifies, so the pair-product count and how many
+    distinct sequences it spans ARE the answer (family-generic vs locus-specific), not noise. The verdict
+    is a heuristic read over pair products only — the raw count carries the claim; cutoffs are advisory.
+    Because isPcr requires a perfect 3' match (min_perfect), the count is a conservative floor on true
+    family copy number. Pure function of the parsed amplicon list; no WSL, no network."""
+    pair = [a for a in amps if not a.get("single_primer")]
+    single = [a for a in amps if a.get("single_primer")]
+    src_counts = Counter(a["source"] for a in pair)
+    per_source = sorted(src_counts.items(), key=lambda kv: (-kv[1], kv[0]))   # busiest sequence first
+    lengths = [a["length"] for a in pair]
+    size_mode = size_mode_n = size_min = size_max = None
+    if lengths:
+        size_mode, size_mode_n = Counter(lengths).most_common(1)[0]
+        size_min, size_max = min(lengths), max(lengths)
+    n_pair, n_sources = len(pair), len(src_counts)
+    if n_pair == 0:
+        tier, verdict = "none", "no genome-wide pair product (in this assembly, at the current 3' match length)"
+    elif n_pair == 1:
+        tier, verdict = "locus-specific", "locus-specific in this assembly (1 genome-wide pair product)"
+    elif n_pair <= 5:
+        tier, verdict = "low-copy", f"low-copy / paralogous ({n_pair} genomic loci)"
+    else:
+        tier, verdict = "family-generic", (f"family-generic — {n_pair} genomic copies across {n_sources} "
+                                           "sequence(s) (expected for a TE-consensus pair)")
+    return {"n_total": len(amps), "n_pair": n_pair, "n_single": len(single),
+            "n_sources": n_sources, "per_source": per_source,
+            "size_mode": size_mode, "size_mode_n": size_mode_n, "size_min": size_min, "size_max": size_max,
+            "tier": tier, "verdict": verdict}
 
 
 def query_rows(fwd: str, rev: str) -> str:

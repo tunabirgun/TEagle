@@ -64,15 +64,30 @@ def design_primers(template: str, params: dict | None = None, target: list | Non
             "explain_pair": r.get("PRIMER_PAIR_EXPLAIN", "")}
 
 
+# IUPAC ambiguity: a primer base (possibly degenerate) matches a template base when the template base is one
+# of the bases that code allows. Degenerate consensus primers are standard in TE work, and the genome-scan
+# path (isPcr) is ambiguity-aware — local in-silico PCR must be too, or the two disagree for the same pair.
+_IUPAC = {"A": "A", "C": "C", "G": "G", "T": "T", "U": "T",
+          "R": "AG", "Y": "CT", "S": "CG", "W": "AT", "K": "GT", "M": "AC",
+          "B": "CGT", "D": "AGT", "H": "ACT", "V": "ACG", "N": "ACGT"}
+
+
+def _base_ok(p: str, s: str) -> bool:
+    if p == s:
+        return True
+    allowed = _IUPAC.get(p)                                # a degenerate primer base matches any template base it covers;
+    return allowed is not None and s in allowed           # an ambiguous/unknown TEMPLATE base stays a mismatch (conservative)
+
+
 def _scan(pattern: str, seq: str, max_mm: int, tp: int):
-    """Return match positions of `pattern` on `seq` with <=max_mm mismatches.
-    Each hit: (start, mismatches, mm_positions, three_prime_end_exact_flag_left, ...)."""
+    """Return match positions of `pattern` on `seq` with <=max_mm mismatches. `pattern` may carry IUPAC
+    ambiguity codes (degenerate primers); the template is plain ACGT. Each hit: (start, mismatches, mm_positions)."""
     L = len(pattern)
     hits = []
     for i in range(len(seq) - L + 1):
         mm, pos = 0, []
         for k in range(L):
-            if pattern[k] != seq[i + k]:
+            if not _base_ok(pattern[k], seq[i + k]):
                 mm += 1
                 pos.append(k)
                 if mm > max_mm:
