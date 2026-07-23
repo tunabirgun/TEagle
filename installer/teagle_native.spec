@@ -43,7 +43,7 @@ datas += [(os.path.join(_asmdir, f), "teagle_core/data/assemblies") for f in os.
 _fontdir = os.path.join(ROOT, "app", "native", "assets", "fonts")
 datas += [(os.path.join(_fontdir, fn), "native/assets/fonts") for fn in os.listdir(_fontdir)]
 # metadata so envcheck's importlib.metadata.version(...) resolves for the bundled deps (env panel stays green)
-for dist in ("PySide6", "shiboken6", "primer3-py", "pyhmmer"):
+for dist in ("PySide6", "shiboken6", "primer3-py", "pyhmmer", "ViennaRNA"):
     try:
         datas += copy_metadata(dist)
     except Exception:
@@ -55,18 +55,18 @@ hiddenimports = [
     "main", "engine", "engine_worker", "figures", "widgets", "sample", "theme", "fonts", "install_dialog",
     "envcheck", "server",
     "teagle_core", "teagle_core.appdirs", "teagle_core.sequtil", "teagle_core.structural",
-    "teagle_core.classify", "teagle_core.domains", "teagle_core.primers", "teagle_core.fetch",
-    "teagle_core.refs", "teagle_core.provenance", "teagle_core.timing", "teagle_core.wsl",
+    "teagle_core.classify", "teagle_core.domains", "teagle_core.primers", "teagle_core.oligoqc",
+    "teagle_core.fetch", "teagle_core.refs", "teagle_core.provenance", "teagle_core.timing", "teagle_core.wsl",
     # Qt modules actually used (PySide6's hook collects the matching libs + plugins, incl. QtSvg)
     "PySide6.QtCore", "PySide6.QtGui", "PySide6.QtWidgets", "PySide6.QtSvg",
 ]
 
 # C-extension packages + openpyxl (XLSX table export): pull binaries, data and dynamic submodules
-for pkg in ("primer3", "pyhmmer", "openpyxl", "certifi"):
+for pkg in ("primer3", "pyhmmer", "openpyxl", "certifi", "RNA"):
     d, b, h = collect_all(pkg)
     datas += d; binaries += b; hiddenimports += h
     hiddenimports += collect_submodules(pkg)
-hiddenimports += ["pyhmmer.platform", "pyhmmer.platform.win32", "openpyxl", "et_xmlfile", "certifi"]
+hiddenimports += ["pyhmmer.platform", "pyhmmer.platform.win32", "openpyxl", "et_xmlfile", "certifi", "RNA"]
 
 # trim the bundle: exclude heavy Qt modules the app never imports (keeps the installer small)
 excludes = [

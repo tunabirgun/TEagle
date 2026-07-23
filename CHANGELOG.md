@@ -9,6 +9,23 @@ and propagates to the backend health endpoint, the UI header badge, every run
 provenance manifest, the packaged executable's Windows file-version metadata, and
 the LaTeX report title page.
 
+## [2.8.0] — 2026-07-23
+
+Dual-engine, cross-checked primer secondary-structure analysis (hairpin / self-dimer / cross-dimer / 3′-end ΔG), a feature sub-region picker that routes only a chosen interval to primer design or splice, a global UI-scale setting with a collapsible specimen panel for small screens, and an explicit statement of every detection method — plus a whole-genome scan that reads a real on-target from the design locus.
+
+### Added
+- **Primer secondary-structure QC, cross-checked by two engines.** Every designed pair now carries hairpin, self-dimer, cross-(hetero-)dimer, and 3′-end anneal free energies (ΔG, kcal/mol) the way IDT OligoAnalyzer reports them. Because a single engine can disagree with the numbers seen elsewhere, TEagle computes each with two independent nearest-neighbor implementations — Primer3 (`thal`, SantaLucia 1998 parameters) as primary, cross-checked against ViennaRNA (RNAfold/RNAcofold, DNA parameters) at matched conditions — and shows both side by side, flagging a pair only when the two agree (amber ≤ −5, red ≤ −9 kcal/mol; the 3′ end weighted more strictly), with a ‡ marker and a caution when they diverge. A per-pair detail dialog shows the full breakdown. Validated against 12 published primer pairs (PrimerBank, Funakoshi 2017, Misak 2025): 11 of 12 carry no flag and the engines agree on 11 of 12. The screen is advisory — it never removes a designed pair, and its method references are recorded but kept out of the run seal.
+- **Send a sub-region of a feature to primer design or splice.** Right-click any structural feature, ORF, protein domain, or amplicon and pick a coordinate sub-interval (e.g. bases 150–400 of the feature); only that subset is routed to primer design or splice detection, so you can target a specific part of a domain rather than the whole feature.
+- **Explicit *methods and databases* in the classification card.** A one-click panel states exactly what defines each evidence layer: protein domains via HMMER against a bundled Pfam-A TE-domain profile set (the 14 accessions, ORFs ≥ 40 aa, E-value ≤ 1e-3); structural features via heuristic terminal-repeat detectors with their thresholds; superfamily via the Wicker 2007 scheme and the integrase-vs-RT order; and family naming via RepeatMasker + Dfam 4.0 — so the annotation is never a black box.
+- **On-target vs off-target, from the design locus.** When the specimen was fetched at a known position in the scanned assembly, the whole-genome scan marks the product overlapping that position as the ON-TARGET and every other product as an off-target paralog, then leads with a specificity verdict over the split — *copy-specific*, *low-copy / paralogous*, *family-generic*, or *off-target-only*. A bare consensus with no genomic position yields neutral *genomic priming sites* rather than off-targets, so the gel, table, and verdict read neutrally. The scan renders in its own result card (06), separate from the in-silico PCR gel, and lists all products together, on-target first.
+
+### Changed
+- **Global UI scale and a collapsible specimen panel.** A new *⤢ Scale* control sets an overall interface scale (75–150%, persisted, applied on restart) so the whole window fits a small screen; the left specimen panel now collapses (Ctrl+B, or the header toggle) to give the results area full width and remove horizontal scrolling of the wider tables.
+- **A co-migrating off-target is drawn as off-target.** When an on-target product shares a band size with one or more off-targets, a real gel cannot resolve them, so the band is drawn in the off-target colour as a specificity warning; the full on/off-target list stays in the table below the gel.
+
+### Fixed
+- **Duplicate section labels across successive runs.** Re-rendering a result card cleared only its widgets and left orphaned nested layouts behind, so headings such as *Structural evidence* and *Protein domains* could accumulate and appear twice when a second sequence was analysed. Card bodies are now cleared recursively, so each run renders exactly one of each section.
+
 ## [2.6.0] — 2026-07-23
 
 Interpretable off-target results, honest backend health, progress on every long operation, IUPAC-degenerate primers, and a tabular genome manager — plus a critical fix that had left the cached-genome list empty.
@@ -254,6 +271,7 @@ primer design, usable without a command line.
   the WebView2 runtime is absent. A kill-on-close Job Object ties the whole process tree to the
   launcher, so an in-place upgrade never orphans a window.
 
+[2.8.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.8.0
 [2.6.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.6.0
 [2.5.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.5.0
 [2.4.1]: https://github.com/tunabirgun/TEagle/releases/tag/v2.4.1

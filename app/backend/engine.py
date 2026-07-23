@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib, re, time
 
 from teagle_core import (sequtil, structural, primers, provenance, fetch,
-                         domains, classify, refs, wsl, timing, genomepcr)
+                         domains, classify, refs, wsl, timing, genomepcr, oligoqc)
 import envcheck
 
 
@@ -346,6 +346,13 @@ def run_primers(body):
         if "PRIMER_PRODUCT_SIZE_RANGE" in msg or "SEQUENCE_INCLUDED_REGION" in msg:
             raise BadRequest("requested product size is larger than the sequence — lower the product-size range")
         raise BadRequest(f"primer parameters rejected: {type(e).__name__}: {e}")
+    for c in res.get("candidates", []):               # secondary-structure QC (hairpin/dimer/3'-end, dual-engine) per pair
+        try:
+            c["qc"] = oligoqc.qc_pair(c["left_seq"], c["right_seq"])
+        except Exception as e:                        # a QC fault must never drop the designed pair
+            c["qc"] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    res["oligoqc_engines"] = oligoqc.available()
+    res["oligoqc_references"] = refs.oligoqc_refs()    # advisory-method citations — reported, NOT sealed
     references = refs.for_run("primer")
     res["references"] = references
     seal_params = dict(params)                        # the target/included region drives the design -> must be in the seal
@@ -493,13 +500,37 @@ def run_genome_pcr(body):
         databases=[{"name": "RefSeq genome assembly", "version": acc, "sha256": r.get("sha256")}],
         references=refs.for_run("genome-scan"),
         not_run=["Wet-lab validation of predicted products", "Off-target scan of unlisted organisms"])
-    # off-target interpretation (pair-vs-single split, per-chromosome spread, family-generic verdict). DERIVED
-    # from the discovered products — NOT a sealed input, so it is added to the return dict only, never to
-    # build_manifest (folding it into the seal would make the same primers+genome seal differently per run).
-    summary = genomepcr.summarize(amps)
+    # on-target from the DESIGN LOCUS: if the specimen sits at a known position in this assembly, the product
+    # overlapping it is the on-target and the rest are off-target paralogs; with no locus there is no single
+    # intended target, so the products are neutral 'genomic priming sites'. This labeling is DERIVED, not sealed
+    # (like the summary): the isPcr product set — the sealed content — is identical with or without a design locus.
+    raw_loci = body.get("design_locus")
+    raw_loci = raw_loci if isinstance(raw_loci, list) else ([raw_loci] if isinstance(raw_loci, dict) else [])
+    loci = [{"acc": str(L["accession"]),
+             "lo": min(int(_num(L.get("start"), 0)), int(_num(L.get("stop"), 0))),
+             "hi": max(int(_num(L.get("start"), 0)), int(_num(L.get("stop"), 0)))}
+            for L in raw_loci if isinstance(L, dict) and L.get("accession")]
+    has_locus = bool(loci)
+    n_on = 0
+    if has_locus:
+        def _overlap(a):                                 # best 1-based-inclusive overlap of product a with any region
+            best = 0
+            for L in loci:
+                if a["source"] == L["acc"]:
+                    best = max(best, min(a["end"], L["hi"]) - max(a["start"], L["lo"]) + 1)
+            return best
+        overlapping = [(a, _overlap(a)) for a in amps if not a.get("single_primer")]
+        overlapping = [(a, ov) for a, ov in overlapping if ov > 0]
+        if overlapping:                                  # exactly ONE on-target = the best-overlapping product (never
+            best = max(overlapping, key=lambda t: (t[1], -t[0]["start"]))[0]   # every overlapper, or a clustered paralog
+            best["on_target"] = True                     # inside the window would falsely read 'copy-specific')
+            n_on = 1
+    # interpretation (on/off split, per-chromosome spread, verdict). DERIVED, NOT sealed — never passed to
+    # build_manifest, so the same primers+genome seal identically regardless of the design locus or the products.
+    summary = genomepcr.summarize(amps, has_locus=has_locus)
     return {"ok": True, "organism": org, "taxid": taxid, "scope": "whole-genome", "assemblyAccession": acc,
             "assemblyName": name, "amplicons": amps, "n_amplicons": len(amps), "n_seqs": r.get("n_seqs"),
-            "summary": summary,
-            "advisory_note": "candidate priming sites (isPcr, ≥15 bp 3'-perfect match) — not wet-lab-validated amplicons; "
-                             "products priming off a shorter 3' match are not flagged",
+            "summary": summary, "has_locus": has_locus, "n_on_target": n_on,
+            "advisory_note": ("candidate priming sites (isPcr, ≥15 bp 3'-perfect match) — not wet-lab-validated "
+                              "amplicons; products priming off a shorter 3' match are not flagged"),
             "references": refs.for_run("genome-scan"), "provenance": manifest}

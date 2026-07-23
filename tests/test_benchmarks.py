@@ -62,6 +62,45 @@ def test_family_naming_benchmark(acc, desc, klass):
     assert named, f"{acc} {desc}: no TE family named"
 
 
+# ---------------- primer secondary-structure QC benchmark (published primers, offline) ----------------
+# Verified published PCR primer pairs (exact sequences from PrimerBank + peer-reviewed papers; see the report
+# bibliography). A sound secondary-structure QC must NOT false-alarm on primers that were experimentally validated
+# in the literature: none should be flagged 'warn'. Pure/in-process (primer3 + ViennaRNA), so it runs offline.
+# This is a SPECIFICITY / false-alarm check (validated primers must not be flagged 'warn'), NOT a numerical
+# ΔG-accuracy validation against a reference tool. The full 12-pair set matches the report's benchmark table.
+LIT_PRIMERS = [
+    ("GAPDH-197",  "GGAGCGAGATCCCTCCAAAAT", "GGCTGTTGTCATACTTCTCATGG", "PrimerBank 378404907c1"),
+    ("GAPDH-101",  "ACAACTTTGGTATCGTGGAAGG", "GCCATCACGCCACAGTTTC",     "PrimerBank 378404907c2"),
+    ("ACTB-250",   "CATGTACGTTGCTATCCAGGC",  "CTCCTTAATGTCACGCACGAT",   "PrimerBank 4501885a1"),
+    ("B2M-248",    "GAGGCTATCCAGCGTACTCCA",  "CGGCAGGCATACTCATCTTTT",   "PrimerBank 37704380c1"),
+    ("GAPDH-Misak","ACCCAGAAGACTGTGGATGG",   "TTCAGCTCAGGGATGACCTT",    "Misak 2025 Methods (Sci Rep 15:32499)"),
+    ("Alu-Yb8",    "GGTGAAACCCCGTCTCTACT",   "GGTTCAAGCGATTCTCCTGC",    "Funakoshi 2017 (Sci Rep 7:13202)"),
+    ("L1PA-1",     "GACATCTACACCGAAAACCC",   "TCGTCAAAATCATTCTCCATCC",  "Misak 2025 (Sci Rep 15:32499)"),
+    ("L1PA-2",     "ACCAGCCACTGCAAAATC",     "CCAATTTGCCAGTCTGTGTC",    "Misak 2025 (Sci Rep 15:32499)"),
+    ("L1PA-3",     "ATGCACAAGCCTCAGTAGCC",   "TCCATTCTCCCCGTCACTTTC",   "Misak 2025 (Sci Rep 15:32499)"),
+    ("L1PA-4",     "TCCACACCAAAACCCCATC",    "CTCGTCAAAGTCATTCTCCATC",  "Misak 2025 (Sci Rep 15:32499)"),
+    ("L1PA-5",     "GACAAAGGTGACATTACAAC",   "CTTGGGAGATTGTGTGTTTC",    "Misak 2025 (Sci Rep 15:32499)"),
+    ("L1PA-6",     "AGAATGAAACTGGACCCCTA",   "GTCCAGAAGAGTATTTCCTA",    "Misak 2025 (Sci Rep 15:32499)"),
+]
+
+
+def test_literature_primer_qc_benchmark():
+    """Published, experimentally-validated primers must pass the dual-engine secondary-structure QC without a
+    'warn' flag, and both engines must return ΔG in a sane kcal/mol range. Offline (primer3 + ViennaRNA)."""
+    from teagle_core import oligoqc
+    warned = []
+    for name, F, R, cite in LIT_PRIMERS:
+        q = oligoqc.qc_pair(F, R)
+        assert q["ok"], f"{name}: QC failed"
+        for m in (q["left"]["hairpin"], q["left"]["self_dimer"], q["hetero_dimer"]):
+            for eng in ("p3", "vrna"):
+                v = m.get(eng)
+                assert v is None or -60.0 < v < 5.0, f"{name}: {eng} ΔG out of kcal/mol range ({v})"
+        if q["worst"] == "warn":
+            warned.append(name)
+    assert not warned, f"published validated primers should not be flagged 'warn': {warned}"
+
+
 @pytest.mark.wsl
 def test_denovo_splice_benchmark():
     """De-novo minimap2 splice alignment: an mRNA aligned to its genomic locus must recover introns that

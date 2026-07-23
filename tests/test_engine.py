@@ -146,6 +146,44 @@ def test_run_genome_pcr_summary_not_in_seal(monkeypatch):
     assert r1["provenance"]["manifestSha256"] == r2["provenance"]["manifestSha256"]   # identical seal
 
 
+def test_run_genome_pcr_marks_on_target_from_design_locus(monkeypatch):
+    # a product overlapping the design locus is the on-target; the sibling elsewhere is off-target
+    raw = "\n".join([
+        ">NC_1:1000+1240 pair 241bp AAAAAAAAAAAAAAAAAAAA CCCCCCCCCCCCCCCCCCCC",   # overlaps locus -> on-target
+        ">NC_1:5000+5240 pair 241bp AAAAAAAAAAAAAAAAAAAA CCCCCCCCCCCCCCCCCCCC",   # elsewhere -> off-target
+    ]) + "\n"
+    monkeypatch.setattr(engine.wsl, "genome_scan",
+                        lambda acc, query, **k: {"ok": True, "raw": raw, "isPcr_version": "33x2",
+                                                 "target": "genome.2bit", "sha256": "s", "n_seqs": 2})
+    r = engine.run_genome_pcr({"fwd": "A" * 20, "rev": "C" * 20, "organism": "Homo sapiens",
+                               "design_locus": {"accession": "NC_1", "start": 950, "stop": 1300}})
+    assert r["has_locus"] and r["n_on_target"] == 1 and r["summary"]["n_on"] == 1 and r["summary"]["n_off"] == 1
+    on = [a for a in r["amplicons"] if a.get("on_target")]
+    assert len(on) == 1 and on[0]["start"] == 1000
+
+
+def test_run_genome_pcr_no_locus_is_neutral(monkeypatch):
+    raw = ">NC_1:1000+1240 pair 241bp AAAAAAAAAAAAAAAAAAAA CCCCCCCCCCCCCCCCCCCC\n"
+    monkeypatch.setattr(engine.wsl, "genome_scan",
+                        lambda acc, query, **k: {"ok": True, "raw": raw, "isPcr_version": "33x2",
+                                                 "target": "genome.2bit", "sha256": "s", "n_seqs": 1})
+    r = engine.run_genome_pcr({"fwd": "A" * 20, "rev": "C" * 20, "organism": "Homo sapiens"})   # no design_locus
+    assert r["has_locus"] is False and r["n_on_target"] == 0 and not any(a.get("on_target") for a in r["amplicons"])
+
+
+def test_run_genome_pcr_design_locus_not_in_seal(monkeypatch):
+    # the on/off labeling from the design locus is DERIVED, not sealed: same primers+genome seal identically
+    raw = ">NC_1:1000+1240 pair 241bp AAAAAAAAAAAAAAAAAAAA CCCCCCCCCCCCCCCCCCCC\n"
+    monkeypatch.setattr(engine.wsl, "genome_scan",
+                        lambda acc, query, **k: {"ok": True, "raw": raw, "isPcr_version": "33x2",
+                                                 "target": "genome.2bit", "sha256": "SAME", "n_seqs": 1})
+    base = {"fwd": "A" * 20, "rev": "C" * 20, "assemblyAccession": "GCF_9.9", "taxid": "1"}
+    r1 = engine.run_genome_pcr(dict(base))                                                     # no locus
+    r2 = engine.run_genome_pcr({**base, "design_locus": {"accession": "NC_1", "start": 950, "stop": 1300}})
+    assert r2["n_on_target"] == 1 and r1["n_on_target"] == 0                                   # different labeling
+    assert r1["provenance"]["manifestSha256"] == r2["provenance"]["manifestSha256"]            # identical seal
+
+
 def test_run_genome_pcr_passes_through_need_prepare(monkeypatch):
     monkeypatch.setattr(engine.wsl, "genome_scan",
                         lambda acc, query, **k: {"ok": False, "error": "genome not prepared", "need_prepare": True})

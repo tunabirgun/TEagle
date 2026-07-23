@@ -93,6 +93,71 @@ def win():
     w.close()
 
 
+def test_rail_toggle_collapses_and_restores(win):
+    # the specimen panel collapses to free width and reopens, restoring the split (state tracked explicitly,
+    # since isVisible() is unreliable before the window is shown)
+    assert win._rail_collapsed is False and win.railToggle.text() == "◧"
+    win._rail_sizes = [340, 900]
+    win._toggle_rail()
+    assert win._rail_collapsed is True and win.rail.isHidden() is True and win.railToggle.text() == "▣"
+    win._toggle_rail()
+    assert win._rail_collapsed is False and win.rail.isHidden() is False and win.split.sizes()[0] > 0
+
+
+def test_ui_scale_applied_from_settings(monkeypatch):
+    import main
+    monkeypatch.delenv("QT_SCALE_FACTOR", raising=False)
+    monkeypatch.delenv("TEAGLE_UI_SCALE", raising=False)
+    class _FakeSettings:
+        def __init__(self, *a): pass
+        def value(self, k, d=None): return 1.25
+    monkeypatch.setattr(main, "QSettings", _FakeSettings)
+    try:
+        main._apply_saved_ui_scale()
+        assert os.environ.get("QT_SCALE_FACTOR") == "1.25"       # persisted scale -> QT_SCALE_FACTOR before QApplication
+        # an explicit env override must win (function returns without changing it)
+        os.environ["QT_SCALE_FACTOR"] = "2.0"
+        main._apply_saved_ui_scale()
+        assert os.environ["QT_SCALE_FACTOR"] == "2.0"
+    finally:
+        os.environ.pop("QT_SCALE_FACTOR", None)
+
+
+def test_methods_html_states_databases_and_params(win):
+    # the methodology surface must explicitly name the database/model/consensus + thresholds for each layer
+    html = win._methods_html()
+    assert "HMMER" in html and "Pfam" in html and "PF00078" in html and "PF00665" in html   # domains: HMMER vs Pfam profiles
+    assert "1e-3" in html                                                                     # domain E-value threshold
+    assert "k=13" in html and "80%" in html                                                   # structural heuristic params
+    assert "Wicker" in html                                                                   # classification scheme
+    assert "Dfam" in html and "RepeatMasker" in html                                          # family naming (WSL)
+
+
+def test_ui_scale_button_present(win):
+    from PySide6.QtWidgets import QPushButton
+    assert any("SCALE" in b.text() for b in win.findChildren(QPushButton))
+
+
+def test_feature_subregion_routes_subset(win, monkeypatch):
+    # a feature right-click offers a sub-region picker; a chosen 1-based-inclusive interval routes only that
+    # subset (offset into the feature's own sequence) to primer design / splice
+    from PySide6.QtWidgets import QSpinBox, QPushButton, QDialog, QApplication
+    dna = "ATCGATCGATCGATCGATCGGGGGCCCCCTTTTTAAAAAACGTACGTACGT"     # 51 bp
+    labels = [l for l, _ in win._feat_menu(0, len(dna), "+", "feat", dna=dna)]
+    assert any("sub-region" in l for l in labels)
+    calls = {}
+    monkeypatch.setattr(win, "_design_for_domain", lambda s, e, lab, seq=None: calls.setdefault("design", (s, e, lab, seq)))
+    monkeypatch.setattr(win, "_send_to_splice", lambda fasta: calls.setdefault("splice", fasta))
+    monkeypatch.setattr(QDialog, "exec", lambda self: 0)
+    win._subregion(dna, "feat")
+    dlg = [w for w in QApplication.topLevelWidgets()
+           if isinstance(w, QDialog) and w.windowTitle() == "Select a sub-region"][-1]
+    spins = dlg.findChildren(QSpinBox)
+    spins[0].setValue(10); spins[1].setValue(30)                     # bases 10..30 -> dna[9:30]
+    [b for b in dlg.findChildren(QPushButton) if "DESIGN" in b.text().upper()][0].click()
+    assert calls["design"][3] == dna[9:30] and calls["design"][2] == "feat_10-30"
+
+
 def test_coord_fetch_submits_and_renders(win):
     # curated organism -> fetch_coords op with the right body; render clears accMeta, sets coordMeta + source
     ops = []
@@ -203,6 +268,34 @@ def test_genome_scan_requires_organism(win):
     assert ops == [] and win._genome_inflight is False        # no wrong-species scan runs without an explicit pick
 
 
+def test_re_render_struct_card_no_duplicate_headers(win):
+    # regression: a widget-only clear left addLayout'd section headers (STRUCTURAL EVIDENCE / PROTEIN DOMAINS)
+    # orphaned but visible, so they DUPLICATED on a second Run analysis. _clear_layout must remove them.
+    from PySide6.QtWidgets import QLabel
+    from helpers import fixture_seq
+    import engine
+    seq = fixture_seq("M11240"); win.state["seq"] = seq; win.state["analyzed_seq"] = seq
+    def n_headers():
+        return sum(1 for w in win.card_struct.findChildren(QLabel) if w.text() == "STRUCTURAL EVIDENCE")
+    win._on_analyze(engine.run_analyze({"sequence": seq})); a = n_headers()
+    win._on_analyze(engine.run_analyze({"sequence": seq})); b = n_headers()
+    assert a == 1 and b == 1                                  # exactly one header, not accumulating across runs
+
+
+def test_genome_scan_renders_in_its_own_panel(win):
+    # the whole-genome scan is now a dedicated card (06), not the in-silico PCR card
+    assert hasattr(win, "card_genome") and hasattr(win, "genomeBody")
+    win._genome_inflight = True
+    win._on_genome_pcr({"ok": True, "organism": "x", "assemblyName": "y", "assemblyAccession": "GCF_9.9", "n_seqs": 1,
+        "amplicons": [{"source": "NC_1", "start": 10, "end": 210, "length": 201, "strand": "+",
+                       "single_primer": False, "on_target": True}],
+        "summary": {"n_on": 1, "n_off": 0, "n_pair": 1, "n_single": 0, "has_locus": True,
+                    "verdict": "copy-specific — 1 on-target", "per_source": [("NC_1", 1)],
+                    "size_mode": 201, "size_mode_n": 1, "size_min": 201, "size_max": 201},
+        "provenance": {}})
+    assert win.genomeBody.count() > 1                          # gel + verdict + table + note rendered in the genome panel
+
+
 def test_on_genome_pcr_renders_sealed_advisory(win):
     win._genome_inflight = True
     win._on_genome_pcr({"ok": True, "organism": "Saccharomyces cerevisiae", "assemblyName": "R64",
@@ -210,10 +303,11 @@ def test_on_genome_pcr_renders_sealed_advisory(win):
         "advisory_note": "candidate priming sites — not wet-lab-validated amplicons",
         "amplicons": [{"source": "NC_001133.9", "start": 1001, "end": 1240, "length": 240, "strand": "+",
                        "single_primer": False, "on_target": False, "pair": "pair"}],
+        "summary": {"n_pair": 1, "n_on": 0, "n_off": 1, "n_single": 0, "verdict": "1 genomic priming site", "has_locus": False},
         "provenance": {"manifestSha256": "de" * 32,
                        "databases": [{"name": "RefSeq assembly R64", "version": "GCF_000146045.2", "sha256": "abc123"}]}})
-    lp = win.state["lastPcr"]
-    assert len(lp["amplicons"]) == 1 and lp["lanes"][0]["advisory"] is True   # advisory lane -> no "no on-target" stamp
+    lp = win.state["lastGenomeScan"]                          # genome scan now renders in its OWN panel, not the PCR card
+    assert len(lp["amplicons"]) == 1 and lp["lanes"][0]["advisory"] is True
     assert win._genome_inflight is False
 
 

@@ -658,7 +658,10 @@ class DataTable(QTableWidget):
         d = it.data(Qt.UserRole) if it else None
         return d if d is not None else visual_row
 
-    def set_rows(self, rows):
+    def set_rows(self, rows, styles=None, tips=None):
+        """rows: list of row value-lists. Optional styles[i][j] = foreground colour (hex/QColor or None)
+        and tips[i][j] = tooltip override — both additive and sort-safe (the item carries its own colour
+        and tooltip when a sort moves it)."""
         self.setSortingEnabled(False)                # never sort mid-insert (it scrambles rows)
         self.setRowCount(0)
         for i, r in enumerate(rows):
@@ -667,7 +670,11 @@ class DataTable(QTableWidget):
                 text = "" if c is None else str(c)
                 item = _Cell(text)
                 item.setTextAlignment(Qt.AlignCenter)    # centered cells, matching the headers
-                item.setToolTip(text)                    # full value on hover, in case the cell elides
+                tip = tips[i][j] if (tips and tips[i] and j < len(tips[i]) and tips[i][j]) else text
+                item.setToolTip(tip)                     # full value / richer detail on hover
+                col = styles[i][j] if (styles and styles[i] and j < len(styles[i])) else None
+                if col:
+                    item.setForeground(QColor(col) if isinstance(col, str) else col)
                 if j == 0:
                     item.setData(Qt.UserRole, i)         # remember the original row index for menus
                 self.setItem(i, j, item)

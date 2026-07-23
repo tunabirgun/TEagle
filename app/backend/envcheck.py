@@ -96,7 +96,8 @@ def probe_backends() -> dict:
     return {"webview2": bool(wv), "wsl2": wsl or "not found"}
 
 
-_IMPORT_NAME = {"primer3-py": "primer3", "pyhmmer": "pyhmmer", "PySide6": "PySide6"}   # verify they truly import (dist name -> module)
+_IMPORT_NAME = {"primer3-py": "primer3", "pyhmmer": "pyhmmer", "PySide6": "PySide6",
+                "ViennaRNA": "RNA"}   # verify they truly import (dist name -> module; ViennaRNA imports as RNA)
 _SOURCE_ONLY = set()                                            # every pinned dep ships in the frozen native build
 
 

@@ -39,14 +39,34 @@ def figures():
     return f
 
 
-def test_comigration_collapses_to_one_band_on_target_wins(figures):
+def test_comigration_on_plus_off_flags_off_target(figures):
+    # a co-migrating off-target makes the band NOT a clean on-target: a real gel cannot separate equal sizes,
+    # so the band is drawn in the OFF-target colour (a specificity warning), while both products stay in the table.
     P = figures.GELPAL["dark"]
     amps = [{"length": 200, "on_target": True, "single_primer": False, "fwd_mm": 0, "rev_mm": 0},
             {"length": 200, "on_target": False, "single_primer": False, "fwd_mm": 1, "rev_mm": 0}]
     bands = figures._lane_bands(amps, P)
     assert len(bands) == 1                                   # equal sizes co-migrate into one band
-    assert bands[0]["color"] == P["on"] and bands[0]["on"]  # on-target colour is never painted over
+    assert bands[0]["color"] == P["off"]                    # off-target colour wins over on-target (worst-case)
+    assert bands[0]["on"] is True                           # an on-target IS present (kept for lane-level checks)
     assert bands[0]["count"] == 2 and "1 on-target" in bands[0]["t"] and "1 off-target" in bands[0]["t"]
+
+
+def test_pure_on_target_band_is_on_colour(figures):
+    P = figures.GELPAL["dark"]
+    bands = figures._lane_bands([{"length": 300, "on_target": True, "single_primer": False, "fwd_mm": 0, "rev_mm": 0}], P)
+    assert bands[0]["color"] == P["on"] and bands[0]["on"] is True   # no off-target here -> clean on-target colour
+
+
+def test_no_locus_scan_bands_are_neutral_priming_sites(figures):
+    # a whole-genome scan with no design locus has no on/off target -> neutral 'priming site' colour, NOT off-target,
+    # so the gel matches the neutral table/verdict instead of screaming red
+    P = figures.GELPAL["dark"]
+    amps = [{"length": 200, "on_target": False, "single_primer": False, "fwd_mm": 0, "rev_mm": 0},
+            {"length": 300, "on_target": False, "single_primer": False, "fwd_mm": 0, "rev_mm": 0}]
+    bands = figures._lane_bands(amps, P, has_locus=False)
+    assert all(b["color"] == P["site"] for b in bands) and all(not b["on"] for b in bands)
+    assert "priming site" in bands[0]["t"] and "off-target" not in bands[0]["t"]
 
 
 def test_single_primer_band_colour_and_disjoint_count(figures):
@@ -69,6 +89,30 @@ def test_gel_legend_and_no_on_target_caption(figures):
     svg = figures.svg_gel({"lanes": lanes}, "dark")
     assert ">single-primer<" in svg                         # legend gains the swatch only when present
     assert ">no on-target<" in svg                          # lane has a band but none intended
+
+
+def test_gel_legend_is_neutral_for_no_locus_scan(figures):
+    # a no-locus genome scan draws bands in the neutral 'priming site' colour, so the legend must show that
+    # swatch and NOT the green/orange on/off swatches (which would then match nothing on the gel)
+    neutral = {"label": "genome", "has_locus": False,
+               "amplicons": [{"length": 300, "on_target": False, "single_primer": False, "fwd_mm": 0, "rev_mm": 0}]}
+    svg = figures.svg_gel({"lanes": [neutral]}, "dark")
+    assert ">priming site<" in svg
+    assert ">on-target<" not in svg and ">off-target<" not in svg
+    # a lane WITH a locus (and local PCR, which shares this gel) keeps the on/off swatches
+    locus = {"label": "P1", "has_locus": True,
+             "amplicons": [{"length": 300, "on_target": True, "single_primer": False, "fwd_mm": 0, "rev_mm": 0}]}
+    svg2 = figures.svg_gel({"lanes": [locus]}, "dark")
+    assert ">on-target<" in svg2 and ">off-target<" in svg2 and ">priming site<" not in svg2
+
+
+def test_gel_regions_carry_has_locus_for_neutral_menu(figures):
+    # the per-band region must carry has_locus so the right-click FASTA label can stay neutral (not '_offtarget')
+    neutral = {"label": "genome", "has_locus": False,
+               "amplicons": [{"length": 300, "on_target": False, "single_primer": False, "fwd_mm": 0, "rev_mm": 0,
+                              "start": 10, "end": 310, "source": "chrX"}]}
+    regs = figures.gel_regions({"lanes": [neutral]})
+    assert regs and regs[0]["has_locus"] is False
 
 
 def test_gel_wraps_after_ten_lanes(figures):

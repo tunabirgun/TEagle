@@ -144,6 +144,10 @@ HEADRULE = {"dark": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #33D6B8, sto
             "light": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0E9E86, stop:0.42 transparent)"}
 ACCENT = {"dark": "#33D6B8", "light": "#0E9E86"}
 TEXT = {"dark": "#E6EDF1", "light": "#141B21"}         # wordmark "TE" ink, per theme
+# per-theme flag colours for QC ΔG cells — reuse the WCAG-tuned bad/warn palette (dark vs light), so amber/red
+# read correctly on both backgrounds instead of a single hardcoded dark-tuned hex
+FLAG = {"dark":  {"warn": _DARK["bad"],  "caution": _DARK["warn"]},
+        "light": {"warn": _LIGHT["bad"], "caution": _LIGHT["warn"]}}
 
 
 def _scale_px(css: str, f: float) -> str:

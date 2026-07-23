@@ -50,16 +50,21 @@ def parse_ispcr(fasta_text: str) -> list:
     return amps
 
 
-def summarize(amps: list) -> dict:
+def summarize(amps: list, has_locus: bool = False) -> dict:
     """Interpret a whole-genome isPcr scan of ONE primer pair. 'pair' products (fwd+rev) are the real
-    off-target amplicons; fwdonly/revonly rows are single-primer artefacts counted separately. For a
-    TE-consensus pair every genomic copy of the family amplifies, so the pair-product count and how many
-    distinct sequences it spans ARE the answer (family-generic vs locus-specific), not noise. The verdict
-    is a heuristic read over pair products only — the raw count carries the claim; cutoffs are advisory.
-    Because isPcr requires a perfect 3' match (min_perfect), the count is a conservative floor on true
-    family copy number. Pure function of the parsed amplicon list; no WSL, no network."""
+    amplicons; fwdonly/revonly rows are single-primer artefacts, counted separately.
+
+    On/off-target is defined relative to an intended locus. When the primers were designed on a locus that
+    sits in the scanned assembly (has_locus=True), the product overlapping that locus is the ON-TARGET
+    (marked on_target=True upstream) and the rest are OFF-target paralogs; the verdict is then a specificity
+    call — how many off-target sites accompany the intended one. When the primers are a bare consensus with
+    no genome position (has_locus=False), there is no single intended locus, so a genome-wide product is
+    neither on- nor off-target — it is a neutral GENOMIC PRIMING SITE (candidate), and the verdict reads
+    family-generic vs locus-specific. isPcr's perfect-3' rule makes the count a conservative floor. Pure."""
     pair = [a for a in amps if not a.get("single_primer")]
     single = [a for a in amps if a.get("single_primer")]
+    on = [a for a in pair if a.get("on_target")]
+    off = [a for a in pair if not a.get("on_target")]
     src_counts = Counter(a["source"] for a in pair)
     per_source = sorted(src_counts.items(), key=lambda kv: (-kv[1], kv[0]))   # busiest sequence first
     lengths = [a["length"] for a in pair]
@@ -67,18 +72,33 @@ def summarize(amps: list) -> dict:
     if lengths:
         size_mode, size_mode_n = Counter(lengths).most_common(1)[0]
         size_min, size_max = min(lengths), max(lengths)
-    n_pair, n_sources = len(pair), len(src_counts)
-    if n_pair == 0:
-        tier, verdict = "none", "no genome-wide pair product (in this assembly, at the current 3' match length)"
-    elif n_pair == 1:
-        tier, verdict = "locus-specific", "locus-specific in this assembly (1 genome-wide pair product)"
-    elif n_pair <= 5:
-        tier, verdict = "low-copy", f"low-copy / paralogous ({n_pair} genomic loci)"
+    n_pair, n_on, n_off, n_sources = len(pair), len(on), len(off), len(src_counts)
+    if has_locus:
+        # n_on is 0 or 1 (exactly one best-overlapping product is the on-target, chosen upstream)
+        if n_on == 0 and n_off == 0:
+            tier, verdict = "none", "no genome-wide product — the primers do not amplify anywhere in this assembly"
+        elif n_on == 0:
+            tier, verdict = "off-target-only", (f"{n_off} off-target site(s) and NO product at the intended locus — "
+                                                "the pair amplifies elsewhere, not the designed target")
+        elif n_off == 0:
+            tier, verdict = "specific", "copy-specific — 1 on-target product, no off-target site in this assembly"
+        elif n_off <= 5:
+            tier, verdict = "low-off-target", f"1 on-target + {n_off} off-target site(s) — low-copy / paralogous"
+        else:
+            tier, verdict = "family-generic", (f"1 on-target + {n_off} off-target site(s) across {n_sources} "
+                                               "sequence(s) — family-generic (expected for a TE-consensus pair)")
     else:
-        tier, verdict = "family-generic", (f"family-generic — {n_pair} genomic copies across {n_sources} "
-                                           "sequence(s) (expected for a TE-consensus pair)")
-    return {"n_total": len(amps), "n_pair": n_pair, "n_single": len(single),
-            "n_sources": n_sources, "per_source": per_source,
+        if n_pair == 0:
+            tier, verdict = "none", "no genome-wide priming site (in this assembly, at the current 3' match length)"
+        elif n_pair == 1:
+            tier, verdict = "locus-specific", "locus-specific in this assembly (1 genomic priming site)"
+        elif n_pair <= 5:
+            tier, verdict = "low-copy", f"low-copy / paralogous ({n_pair} genomic priming sites)"
+        else:
+            tier, verdict = "family-generic", (f"family-generic — {n_pair} genomic priming sites across {n_sources} "
+                                               "sequence(s) (expected for a TE-consensus pair)")
+    return {"n_total": len(amps), "n_pair": n_pair, "n_on": n_on, "n_off": n_off, "n_single": len(single),
+            "n_sources": n_sources, "per_source": per_source, "has_locus": has_locus,
             "size_mode": size_mode, "size_mode_n": size_mode_n, "size_min": size_min, "size_max": size_max,
             "tier": tier, "verdict": verdict}
 

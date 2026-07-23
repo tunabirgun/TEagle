@@ -222,17 +222,19 @@ def svg_genome(model: dict, view: dict, W: float, theme: str, for_export: bool =
 
 
 # ================= agarose gel =================
+# "site" = a NEUTRAL colour for a whole-genome scan with no design locus: the products are neither on- nor
+# off-target, just genomic priming sites, so they must not read as the off-target warning colour.
 GELPAL = {
     "transparent": {"paper": "none", "gel": "#0f1316", "well": "#04060a", "stroke": "#2a3138", "ink": "#5a656f",
-                    "on": OK["on"], "off": OK["off"], "single": "#0072B2", "ladder": OK["ladder"], "glow": 1.4, "band": 2.6},
+                    "on": OK["on"], "off": OK["off"], "single": "#0072B2", "site": "#56B4E9", "ladder": OK["ladder"], "glow": 1.4, "band": 2.6},
     "dark":        {"paper": "#0b0e11", "gel": "#0f1316", "well": "#04060a", "stroke": "#232a30", "ink": "#8792a0",
-                    "on": OK["on"], "off": OK["off"], "single": "#0072B2", "ladder": OK["ladder"], "glow": 1.4, "band": 2.6},
+                    "on": OK["on"], "off": OK["off"], "single": "#0072B2", "site": "#56B4E9", "ladder": OK["ladder"], "glow": 1.4, "band": 2.6},
     "white":       {"paper": "#ffffff", "gel": "#ededed", "well": "#c4c4c4", "stroke": "#cccccc", "ink": "#555555",
-                    "on": "#151515", "off": "#992222", "single": "#1f5fa8", "ladder": "#9a9a9a", "glow": 0.3, "band": 2.6},
+                    "on": "#151515", "off": "#992222", "single": "#1f5fa8", "site": "#2a6f97", "ladder": "#9a9a9a", "glow": 0.3, "band": 2.6},
     "uv":          {"paper": "#050310", "gel": "#0a0714", "well": "#000000", "stroke": "#1c1236", "ink": "#9fb4d8",
-                    "on": "#5bff6b", "off": "#ffcf47", "single": "#6fb2ff", "ladder": "#79d0ff", "glow": 3.2, "band": 3.1},
+                    "on": "#5bff6b", "off": "#ffcf47", "single": "#6fb2ff", "site": "#79d0ff", "ladder": "#79d0ff", "glow": 3.2, "band": 3.1},
     "mono":        {"paper": "#0d0d0d", "gel": "#181818", "well": "#000000", "stroke": "#2b2b2b", "ink": "#b2b2b2",
-                    "on": "#f2f2f2", "off": "#9a9a9a", "single": "#6f6f6f", "ladder": "#cfcfcf", "glow": 2.0, "band": 2.9},
+                    "on": "#f2f2f2", "off": "#9a9a9a", "single": "#6f6f6f", "site": "#c0c0c0", "ladder": "#cfcfcf", "glow": 2.0, "band": 2.9},
 }
 
 
@@ -242,32 +244,46 @@ def _band_opacity(total_mm: int) -> float:
     return round(max(0.4, 1.0 - 0.22 * max(0, total_mm)), 3)
 
 
-def _lane_bands(amplicons, P):
-    """Collapse a lane's amplicons into one band per product size (a real gel cannot resolve equal
-    lengths). On-target colour wins so it is never painted over; else single-primer, else off-target.
-    Band intensity follows the strongest (fewest-mismatch) product at that size."""
+def _lane_bands(amplicons, P, has_locus=True):
+    """Collapse a lane's amplicons into one band per product size (a real gel cannot resolve equal lengths).
+    Band intensity follows the strongest (fewest-mismatch) product at that size.
+
+    has_locus=True (a designed on-target exists): worst-case colour wins — a band whose size also carries an
+    off-target (or single-primer artefact) is NOT a clean on-target, so it reads off-target (a specificity
+    warning), never a reassuring on-target band. has_locus=False (whole-genome scan of a bare consensus pair):
+    there is no on/off target, so every product is a NEUTRAL 'genomic priming site' and must not read as the
+    off-target warning colour. Every product is still enumerated in the table below the gel."""
     groups = {}
     for a in (amplicons or []):
         groups.setdefault(a["length"], []).append(a)
     bands = []
     for size in sorted(groups):
         g = groups[size]
-        # disjoint buckets so a product is counted once (priority on-target > single-primer > off-target pair)
-        n_on = sum(1 for a in g if a.get("on_target"))
-        n_single = sum(1 for a in g if a.get("single_primer") and not a.get("on_target"))
-        n_off = len(g) - n_on - n_single
-        if n_on:                                          # on-target colour always wins (never overpainted)
-            color = P["on"]
-        elif n_single and not n_off:                      # every non-on-target product at this size is single-primer
-            color = P["single"]
+        n_single = sum(1 for a in g if a.get("single_primer"))
+        if not has_locus:                                 # neutral priming sites (single-primer artefacts still distinct)
+            n_site = len(g) - n_single
+            color = P["single"] if (n_single and not n_site) else P["site"]
+            parts = (([f"{n_site} priming site" + ("s" if n_site != 1 else "")] if n_site else [])
+                     + ([f"{n_single} single-primer"] if n_single else []))
+            on = False
         else:
-            color = P["off"]
+            n_on = sum(1 for a in g if a.get("on_target"))
+            n_off = len(g) - n_on - n_single
+            if n_off:                                     # any off-target co-migrating here -> flag the whole band off-target
+                color = P["off"]
+            elif n_single:
+                color = P["single"]
+            elif n_on:                                    # purely on-target at this size
+                color = P["on"]
+            else:
+                color = P["off"]
+            parts = (([f"{n_on} on-target"] if n_on else []) + ([f"{n_off} off-target"] if n_off else [])
+                     + ([f"{n_single} single-primer"] if n_single else []))
+            on = bool(n_on)
         min_mm = min((a.get("fwd_mm", 0) + a.get("rev_mm", 0)) for a in g)
-        parts = (([f"{n_on} on-target"] if n_on else []) + ([f"{n_off} off-target"] if n_off else [])
-                 + ([f"{n_single} single-primer"] if n_single else []))
         src = esc(g[0].get("source", ""))
         bands.append({"size": size, "color": color, "opacity": _band_opacity(min_mm),
-                      "on": bool(n_on), "single": bool(n_single), "count": len(g),   # dash iff a non-on single-primer product is present
+                      "on": on, "single": bool(n_single), "count": len(g),
                       "t": ", ".join(parts) + (f" · {src}" if src else "")})
     return bands
 
@@ -328,14 +344,20 @@ def gel_regions(data: dict):
                 yy = y(size, r)
                 # representative for the right-click menu: the intended (on-target) product if any, else the strongest
                 rep = min(g, key=lambda a: (not a.get("on_target"), a.get("fwd_mm", 0) + a.get("rev_mm", 0)))
-                n_on = sum(1 for a in g if a.get("on_target"))
-                n_single = sum(1 for a in g if a.get("single_primer") and not a.get("on_target"))
-                n_off = len(g) - n_on - n_single
-                call = ", ".join(([f"{n_on} on-target"] if n_on else []) + ([f"{n_off} off-target"] if n_off else [])
-                                 + ([f"{n_single} single-primer"] if n_single else []))
+                n_single = sum(1 for a in g if a.get("single_primer"))
+                if l.get("has_locus", True):              # with a design locus -> on/off-target; else neutral priming sites
+                    n_on = sum(1 for a in g if a.get("on_target"))
+                    n_off = len(g) - n_on - n_single
+                    call = ", ".join(([f"{n_on} on-target"] if n_on else []) + ([f"{n_off} off-target"] if n_off else [])
+                                     + ([f"{n_single} single-primer"] if n_single else []))
+                else:
+                    n_site = len(g) - n_single
+                    call = ", ".join(([f"{n_site} priming site" + ("s" if n_site != 1 else "")] if n_site else [])
+                                     + ([f"{n_single} single-primer"] if n_single else []))
                 tip = f'{size} bp · {call}' + (f' · {rep.get("source","")}' if rep.get("source") else "")
                 regions.append({"x0": lx + 3, "y0": yy - 4, "x1": lx + laneW - 3, "y1": yy + 4,
-                                "tip": tip, "amplicon": rep, "pair": l.get("label", "")})
+                                "tip": tip, "amplicon": rep, "pair": l.get("label", ""),
+                                "has_locus": l.get("has_locus", True)})
     return regions
 
 
@@ -388,15 +410,22 @@ def svg_gel(data: dict, bg: str) -> str:
         draw_lane(0, r, "L", [{"size": m, "color": P["ladder"]} for m in LADDER], True)
         for j, li in enumerate(idxs):
             l = lanes[li]
-            draw_lane(j + 1, r, l["label"], _lane_bands(l.get("amplicons") or [], P), False, l.get("advisory", False))
+            draw_lane(j + 1, r, l["label"], _lane_bands(l.get("amplicons") or [], P, l.get("has_locus", True)),
+                      False, l.get("advisory", False))
 
     any_single = any(a.get("single_primer") for l in lanes for a in (l.get("amplicons") or []))
+    all_neutral = bool(lanes) and all(not l.get("has_locus", True) for l in lanes)   # every lane a no-locus scan
     ly = H - 8
-    s += (f'<circle cx="{x0}" cy="{ly}" r="3" fill="{P["on"]}"/>'
-          f'<text x="{x0+7}" y="{ly+3}" fill="{P["ink"]}" font-size="8">on-target</text>'
-          f'<circle cx="{x0+64}" cy="{ly}" r="3" fill="{P["off"]}"/>'
-          f'<text x="{x0+71}" y="{ly+3}" fill="{P["ink"]}" font-size="8">off-target</text>')
-    xnext = x0 + 132
+    if all_neutral:                          # neutral 'priming site' bands -> a matching swatch, not on/off (which match nothing)
+        s += (f'<circle cx="{x0}" cy="{ly}" r="3" fill="{P["site"]}"/>'
+              f'<text x="{x0+7}" y="{ly+3}" fill="{P["ink"]}" font-size="8">priming site</text>')
+        xnext = x0 + 78
+    else:                                    # any locus (incl. local PCR, which shares this gel) -> on/off swatches
+        s += (f'<circle cx="{x0}" cy="{ly}" r="3" fill="{P["on"]}"/>'
+              f'<text x="{x0+7}" y="{ly+3}" fill="{P["ink"]}" font-size="8">on-target</text>'
+              f'<circle cx="{x0+64}" cy="{ly}" r="3" fill="{P["off"]}"/>'
+              f'<text x="{x0+71}" y="{ly+3}" fill="{P["ink"]}" font-size="8">off-target</text>')
+        xnext = x0 + 132
     if any_single:
         s += (f'<circle cx="{xnext}" cy="{ly}" r="3" fill="{P["single"]}"/>'
               f'<text x="{xnext+7}" y="{ly+3}" fill="{P["ink"]}" font-size="8">single-primer</text>')

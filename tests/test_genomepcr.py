@@ -92,3 +92,18 @@ def test_summarize_empty_scan_is_clean_not_error():
     s = genomepcr.summarize([])
     assert s["n_total"] == 0 and s["n_pair"] == 0 and s["per_source"] == []
     assert s["tier"] == "none" and s["size_mode"] is None
+
+
+def test_summarize_has_locus_splits_on_and_off_target():
+    # with a design locus, the product marked on_target is the on-target; the rest are off-target paralogs
+    amps = _amps(">NC_1:100+300 pair 201bp AAA CCC", ">NC_2:10+210 pair 201bp AAA CCC")
+    amps[0]["on_target"] = True
+    s = genomepcr.summarize(amps, has_locus=True)
+    assert s["has_locus"] and s["n_on"] == 1 and s["n_off"] == 1
+    assert "on-target" in s["verdict"] and "off-target" in s["verdict"]
+
+
+def test_summarize_no_locus_is_neutral_priming_sites():
+    # no design locus -> no single intended target, so products are neutral genomic priming sites (no on/off)
+    s = genomepcr.summarize(_amps(">NC_1:100+300 pair 201bp AAA CCC"), has_locus=False)
+    assert s["has_locus"] is False and s["n_on"] == 0 and "priming site" in s["verdict"]

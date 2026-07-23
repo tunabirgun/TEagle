@@ -63,7 +63,34 @@ REFS = {
         "name": "NCBI RefSeq genome assemblies (retrieved via NCBI Datasets)",
         "citation": "O'Leary NA, Wright MW, Brister JR, et al. (2016) Reference sequence (RefSeq) database at NCBI: current status, taxonomic expansion, and functional annotation. Nucleic Acids Res 44(D1):D733-D745.",
         "doi": "10.1093/nar/gkv1189", "license": "Public Domain", "url": "https://www.ncbi.nlm.nih.gov/refseq/"},
+    # Primer secondary-structure QC (oligoqc). Every DOI below was independently confirmed against CrossRef +
+    # PubMed by a 3-verifier pass. These are ADVISORY-method citations (attached to the result, never sealed —
+    # the QC does not change the Primer3-designed primers, so it must not change the primer design seal).
+    "SantaLucia1998": {
+        "name": "Nearest-neighbor DNA thermodynamics (Tm / ΔG basis)",
+        "citation": "SantaLucia J Jr (1998) A unified view of polymer, dumbbell, and oligonucleotide DNA nearest-neighbor thermodynamics. Proc Natl Acad Sci USA 95(4):1460-1465.",
+        "doi": "10.1073/pnas.95.4.1460", "license": "", "url": "https://doi.org/10.1073/pnas.95.4.1460"},
+    "SantaLucia2004": {
+        "name": "DNA structural-motif thermodynamic parameters",
+        "citation": "SantaLucia J Jr, Hicks D (2004) The thermodynamics of DNA structural motifs. Annu Rev Biophys Biomol Struct 33:415-440.",
+        "doi": "10.1146/annurev.biophys.32.110601.141800", "license": "", "url": "https://doi.org/10.1146/annurev.biophys.32.110601.141800"},
+    "Owczarzy2008": {
+        "name": "IDT OligoAnalyzer / SciTools methodology",
+        "citation": "Owczarzy R, Tataurov AV, Wu Y, et al. (2008) IDT SciTools: a suite for analysis and design of nucleic acid oligomers. Nucleic Acids Res 36(Web Server issue):W163-W169.",
+        "doi": "10.1093/nar/gkn198", "license": "", "url": "https://doi.org/10.1093/nar/gkn198"},
+    "ViennaRNA": {
+        "name": "ViennaRNA (independent secondary-structure cross-check; DNA params)",
+        "citation": "Lorenz R, Bernhart SH, Höner zu Siederdissen C, et al. (2011) ViennaRNA Package 2.0. Algorithms Mol Biol 6:26.",
+        "doi": "10.1186/1748-7188-6-26", "license": "custom (free for academic use)", "url": "https://www.tbi.univie.ac.at/RNA/"},
 }
+
+
+def oligoqc_refs():
+    """References for the primer secondary-structure QC (hairpin/dimer/3'-end ΔG). Attached to a primer
+    result as advisory-method provenance; NEVER folded into the sealed primer-design references, since the
+    QC does not alter the Primer3-designed primers."""
+    keys = ["SantaLucia1998", "SantaLucia2004", "Owczarzy2008", "ViennaRNA"]
+    return [{"key": k, **REFS[k]} for k in keys]
 
 
 def for_run(run_type: str, domains=None, fetched: bool = False):
