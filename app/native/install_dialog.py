@@ -156,7 +156,15 @@ class InstallDialog(QDialog):
         elif not res.get("wsl2"):
             self.statusLine.setText("WSL2 not installed — click Install WSL on the first row")
         elif res.get("ready"):
-            self.statusLine.setText("● ready — family naming & splice detection available")
+            # ready == family naming (RepeatMasker + both Dfam partitions); only claim splice / genome scan
+            # when their own components are actually installed, so the line never over-promises a missing tool
+            ok = {c.get("key"): c.get("ok") for c in res.get("components", [])}
+            feats = ["family naming"]
+            if ok.get("minimap2"):
+                feats.append("splice detection")
+            if ok.get("genomescan"):
+                feats.append("whole-genome scan")
+            self.statusLine.setText("● ready — " + " & ".join(feats) + " available")
         elif installing:
             self.statusLine.setText("installing…")
         else:

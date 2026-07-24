@@ -100,11 +100,16 @@ def test_primer_seal_stable_across_qc_engines(monkeypatch):
     assert [x["key"] for x in r["oligoqc_references"]][0] == "SantaLucia1998"  # QC refs reported separately
 
 
+def test_qc_pair_guards_empty_primer():
+    assert oligoqc.qc_pair("", "GCCGCCTACGCCACCAAGAC")["ok"] is False       # empty primer -> guarded, no calc_* on ""
+    assert oligoqc.qc_pair("ATCTGGCGGCGGAGTGGGCG", "")["ok"] is False
+
+
 def test_graceful_without_viennarna(monkeypatch):
     # ViennaRNA absent -> cross-check returns None, primer3 primary still works, flags still computed
     monkeypatch.setattr(oligoqc, "RNA", None)
     o = oligoqc.qc_oligo("GCGCGCGCATATATGCGCGCGC")
     assert o["ok"] and o["hairpin"]["p3"] is not None and o["hairpin"]["vrna"] is None
-    assert o["hairpin"]["agree"] == "single"
+    assert o["hairpin"]["agree"] == "n/a"                     # ViennaRNA not installed -> cross-check couldn't run (not 'single')
     r = oligoqc.qc_pair("ATCTGGCGGCGGAGTGGGCG", "GCCGCCTACGCCACCAAGAC")
     assert r["ok"] and r["hetero_dimer"]["vrna"] is None

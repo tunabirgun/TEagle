@@ -59,6 +59,70 @@ def test_integrity_probe_verifies_genome_scan_tools():
     assert "=SCAN=" in p and "isPcr" in p and "datasets" in p
 
 
+def test_integrity_check_rejects_missing_dfam_file(monkeypatch):
+    # the deep integrity check must NOT certify a missing Dfam partition as present (the per-file probe emits
+    # 'MISSING <name>'; the guard requires every line to start with 'present')
+    probe = ("=RM=\nRepeatMasker version 4.2.4\n=MM=\n2.28-r1209\n=FAMDB=\ndfam, version 4.0\n"
+             "=FILES=\npresent dfam40.0.h5 6900000000\nMISSING dfam40.curated.consensus.0.h5\n"
+             "=SCAN=\nisPcr present\ndatasets present\n")
+    monkeypatch.setattr(wsl, "available", lambda: {"wsl2": True})
+    monkeypatch.setattr(wsl, "_wsl_script", lambda s, timeout=180: (0, probe, ""))
+    res = wsl.integrity_check()
+    dfam = next(c for c in res["checks"] if "Dfam library" in c["name"])
+    assert dfam["ok"] is False and res["ok"] is False
+
+
+def test_env_status_requires_both_dfam_partitions(monkeypatch):
+    # the annotation gate must require BOTH pinned Dfam partitions — a root-only library is incomplete and
+    # would make RepeatMasker annotate against a partial pinned library. The probe is delivered via _wsl_script.
+    monkeypatch.setattr(wsl, "available", lambda: {"wsl2": True})
+    root_only = "RepeatMasker version 4.2.4\ndfam_root=1\ndfam_curated=0\n"
+    monkeypatch.setattr(wsl, "_wsl_script", lambda s, timeout=60: (0, root_only, ""))
+    st = wsl.env_status()
+    assert st["dfam"] is False and st["ready"] is False
+    both = "RepeatMasker version 4.2.4\ndfam_root=1\ndfam_curated=1\n2.28-r1209\n"
+    monkeypatch.setattr(wsl, "_wsl_script", lambda s, timeout=60: (0, both, ""))
+    st2 = wsl.env_status()
+    assert st2["dfam"] is True and st2["ready"] is True
+
+
+def test_env_status_probe_delivered_via_stdin_not_inline():
+    # the dfam probe uses $() with nested quotes, which wsl.exe mangles on an inline `bash -lc <arg>` command
+    # line (collapsing every [ -f ] to 0). It MUST go through _wsl_script (STDIN), like the other $() probes.
+    import inspect
+    src = inspect.getsource(wsl.env_status)
+    assert "_wsl_script(" in src
+    assert "dfam_root=$(" in src and "= _wsl(" not in src            # no bare inline _wsl carrying the probe
+
+
+def test_annotate_species_run_delivered_via_stdin_not_inline():
+    # a multi-word -species value ("Homo sapiens") interpolated into an inline `bash -lc <arg>` is re-split by
+    # wsl.exe into `-species Homo` + stray `sapiens`; the RepeatMasker run MUST be delivered via _wsl_script.
+    import inspect
+    src = inspect.getsource(wsl.annotate)
+    assert "_wsl_script(script" in src
+
+
+def test_annotate_fails_on_nonzero_repeatmasker_exit(monkeypatch):
+    # a RepeatMasker crash (nonzero EXIT) must fail loudly, not be sealed as a clean 0-family result
+    monkeypatch.setattr(wsl, "available", lambda: {"wsl2": True})
+    monkeypatch.setattr(wsl, "env_status", lambda: {"ready": True, "repeatmasker": "4.2.4", "dfam": True})
+    monkeypatch.setattr(wsl, "_wsl", lambda *a, **k: (0, "", ""))                 # fasta stage + rm
+    monkeypatch.setattr(wsl, "_wsl_script", lambda s, timeout=600: (0, "EXIT 1\nFATAL: unknown lineage\n", ""))
+    r = wsl.annotate(">x\nACGT", species="drosophila melanogaster")
+    assert r["ok"] is False and "exited 1" in r["error"]
+
+
+def test_annotate_ok_on_zero_exit_empty_result(monkeypatch):
+    # a genuine empty result (EXIT 0, no q.fa.out hits) must stay ok:True — not every empty is a failure
+    monkeypatch.setattr(wsl, "available", lambda: {"wsl2": True})
+    monkeypatch.setattr(wsl, "env_status", lambda: {"ready": True, "repeatmasker": "4.2.4", "dfam": True})
+    monkeypatch.setattr(wsl, "_wsl", lambda *a, **k: (0, "", ""))
+    monkeypatch.setattr(wsl, "_wsl_script", lambda s, timeout=600: (0, "EXIT 0\n", ""))
+    r = wsl.annotate(">x\nACGT")
+    assert r["ok"] is True and r["n_hits"] == 0
+
+
 def test_genome_list_delivered_via_stdin_not_inline():
     # inline `bash -lc` mangles the loop variable $d (wsl.exe command-line rebuild), so an inline for-loop
     # reports EVERY cached genome as missing; genome_list MUST deliver its loop via STDIN (_wsl_script)

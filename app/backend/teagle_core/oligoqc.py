@@ -15,11 +15,11 @@ no network) so it is unit-testable and always available.
 
 Thresholds follow IDT's published rule of thumb: a structure with ΔG ≤ -9 kcal/mol on ANY axis is flagged
 warn (SantaLucia 1998; Owczarzy 2008). The caution boundary varies by structure type — hairpin ≤ -2,
-dimers ≤ -5, and 3'-end ≤ -6. The 3'-end is scored on its own axis not because its numeric cutoff is
-stricter (it is deliberately set BELOW a normal GC clamp, ~-6, so it flags only an abnormally stable 3'
-anneal), but because a base-paired 3' end is the one geometry a polymerase can extend, so it is the single
-most decisive dimer-failure signal and is worth showing separately. The tiering is a TEagle design choice
-anchored on those sources, not a verbatim IDT table.
+dimers ≤ -5, and 3'-end ≤ -6. The 3'-end axis measures the ΔG of one primer's 3' end annealing to the
+OTHER primer (a 3'-end cross-dimer), NOT the primer's stability against its intended template; its ~-6
+cutoff flags only an abnormally stable 3'-end cross-dimer. It is shown separately because a base-paired
+3' end is the one geometry a polymerase can extend, so it is the single most decisive dimer-failure
+signal. The tiering is a TEagle design choice anchored on those sources, not a verbatim IDT table.
 """
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ CONDITIONS = {"mv_conc": 50.0, "dv_conc": 0.0, "dntp_conc": 0.0, "dna_conc": 250
 # ΔG (kcal/mol) tiers — TEagle heuristic anchored on IDT's -9 kcal/mol figure + the 3'-end/internal asymmetry.
 _HAIRPIN_WARN, _HAIRPIN_CAUTION = -9.0, -2.0
 _DIMER_WARN, _DIMER_CAUTION = -9.0, -5.0
-_END_WARN, _END_CAUTION = -9.0, -6.0            # 3'-end anneal ΔG (last bases) — its own axis; a normal GC clamp is ~-6
+_END_WARN, _END_CAUTION = -9.0, -6.0            # 3'-end cross-dimer ΔG (last bases annealing to the other primer) — its own axis
 _AGREE_BAND = 2.0                                # two independent NN engines within ~1-2 kcal/mol => concordant
 
 
@@ -85,9 +85,9 @@ def _p3_heterodimer(a, b):
 
 
 def _p3_end_stability(a, b):
-    # calc_end_stability has no output_structure kwarg and always reports the 3'-end anneal ΔG
+    # gate on structure_found (like _p3_kcal): no favorable 3'-end cross-dimer -> None -> renders "—", not 0.0
     tr = primer3.calc_end_stability(a, b, **_p3_args())
-    return (tr.dg / 1000.0 if tr is not None else None)
+    return (tr.dg / 1000.0 if (tr is not None and getattr(tr, "structure_found", False)) else None)
 
 
 def _p3_args():
@@ -157,11 +157,13 @@ def _tier(dg, warn, caution):
 
 
 def _agree(p3, vrna):
-    """Concordance label between the two engines. Both None -> 'none'. One missing -> 'single'."""
+    """Concordance label between the two engines. Both None -> 'none'. One value missing: 'n/a' when the
+    ViennaRNA cross-check engine is not installed (couldn't run), else 'single' (a genuine one-engine result,
+    e.g. ViennaRNA predicted no structure). Both present -> agree/disagree on the ±band."""
     if vrna is None and p3 is None:
         return "none"
     if p3 is None or vrna is None:
-        return "single"
+        return "n/a" if RNA is None else "single"
     return "agree" if abs(p3 - vrna) <= _AGREE_BAND else "disagree"
 
 
@@ -224,6 +226,8 @@ def qc_pair(left: str, right: str) -> dict:
     left, right = (left or "").upper(), (right or "").upper()
     if primer3 is None:
         return {"ok": False, "error": _P3_ERR or "primer3 unavailable"}
+    if not left or not right:                            # guard empty primers (mirrors qc_oligo), never call calc_* on ""
+        return {"ok": False, "error": "empty primer sequence"}
     het_p3, _ = _p3_heterodimer(left, right)
     het = _metric(het_p3, _vrna_binding(left, right), _DIMER_WARN, _DIMER_CAUTION)
     # 3'-end stability is a primer3-only metric (last-bases anneal ΔG); worst of F-on-R / R-on-F

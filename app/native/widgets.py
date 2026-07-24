@@ -486,7 +486,11 @@ def _xlsx_val(v):
     t = s.strip()
     if t:
         try:
-            return int(t) if t.lstrip("-").isdigit() else float(t)
+            if t.lstrip("-").isdigit():
+                return int(t)
+            f = float(t)
+            if math.isfinite(f):                     # never write nan/inf (Excel renders them as an error cell)
+                return f
         except ValueError:
             pass
     if s[:1] in ("=", "@") or (s[:1] in ("+", "-") and len(s) > 1):    # bare +/- (strand) stays literal

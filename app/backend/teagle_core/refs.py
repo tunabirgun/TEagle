@@ -47,6 +47,14 @@ REFS = {
         "name": "TE classification framework",
         "citation": "Wicker T, Sabot F, Hua-Van A, et al. (2007) A unified classification system for eukaryotic transposable elements. Nat Rev Genet 8(12):973-982.",
         "doi": "10.1038/nrg2165", "license": "", "url": "https://doi.org/10.1038/nrg2165"},
+    "TEsorter": {
+        "name": "Domain-architecture completeness (structural-completeness tier basis)",
+        "citation": "Zhang RG, Li GY, Wang XL, et al. (2022) TEsorter: an accurate and fast method to classify LTR-retrotransposons in plant genomes. Horticulture Research 9:uhac017.",
+        "doi": "10.1093/hr/uhac017", "license": "", "url": "https://doi.org/10.1093/hr/uhac017"},
+    "LTRretriever": {
+        "name": "Intact LTR-retrotransposon criteria (completeness tier basis)",
+        "citation": "Ou S, Jiang N (2018) LTR_retriever: a highly accurate and sensitive program for identification of long terminal repeat retrotransposons. Plant Physiology 176(2):1410-1422.",
+        "doi": "10.1104/pp.17.01310", "license": "", "url": "https://doi.org/10.1104/pp.17.01310"},
     "minimap2": {
         "name": "minimap2 (splice-aware alignment)",
         "citation": "Li H (2018) Minimap2: pairwise alignment for nucleotide sequences. Bioinformatics 34(18):3094-3100.",
@@ -97,7 +105,7 @@ def for_run(run_type: str, domains=None, fetched: bool = False):
     """Return the references actually used to produce this result."""
     keys = []
     if run_type == "analysis":
-        keys += ["Wicker2007"]                 # classification + structural-hallmark framework
+        keys += ["Wicker2007", "TEsorter", "LTRretriever"]    # classification framework + structural-completeness-tier basis
         if domains:
             keys += ["HMMER", "Pfam"]          # domain evidence only when domains were found
     if run_type == "primer":                   # Primer3 designs primers; in-silico PCR is TEagle's own pure-Python scanner,

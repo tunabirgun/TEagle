@@ -20,6 +20,7 @@ def test_broken_wsl_stack(monkeypatch):
     def fake_wsl(script, stdin=None, timeout=600):
         return (0, "ok\n", "") if "echo ok" in script else (0, "", "")
     monkeypatch.setattr(wsl, "_wsl", fake_wsl)
+    monkeypatch.setattr(wsl, "_wsl_script", lambda s, timeout=90: (0, "", ""))   # env_status probe: nothing installed
     st = wsl.env_status()
     assert st["wsl2"] is True and st["ready"] is False
     r = wsl.annotate(">x\nACGT")

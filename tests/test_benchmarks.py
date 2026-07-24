@@ -115,3 +115,37 @@ def test_denovo_splice_benchmark():
         fetch._get(fetch.EUTILS + "efetch.fcgi?db=nuccore&id=J00265&rettype=ft&retmode=text&tool=TEagle", 60)))
     cc = fetch.cross_check_models(ann["introns"], r.get("introns", []))
     assert cc["matched"] >= 1                                     # alignment confirms at least one annotated intron
+
+
+# ---------------- HERV GAG-POL-ENV domain benchmark (v2.9.0; @network — fetch + offline pyhmmer) ----------------
+# Verified full/partial HERV proviruses across families (efetch-fetched). A sound tool must (a) recover the full
+# GAG-POL-ENV of an intact HML-2 provirus, and (b) NOT invent domains that are genuinely absent (HERV-L is env-less).
+HERV_BENCH = [
+    ("AY037928", "HERV-K113", {"GAG", "PR", "RT", "RNaseH", "INT", "ENV"}, True, None),   # full HML-2 -> intact ERV
+    ("AF164615", "HERV-K109", {"GAG", "PR", "RT", "RNaseH", "INT", "ENV"}, True, None),   # full HML-2
+    ("AJ289709", "HERV-H",    {"RT", "INT", "ENV"},                        True, None),   # env present, gag degraded
+    ("X89211",   "HERV-L",    {"RT", "INT"},                               False, "ENV"), # env-less lineage: env must NOT appear
+]
+
+
+@pytest.mark.network
+@pytest.mark.parametrize("acc,name,need,erv,forbid", HERV_BENCH)
+def test_herv_domain_architecture_benchmark(acc, name, need, erv, forbid):
+    """Each HERV specimen must show at least its expected domain modules; an intact HML-2 provirus is called an ERV;
+    and a genuinely env-less lineage (HERV-L) must not be given a spurious env domain."""
+    import sys as _s
+    _n = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app", "backend")
+    if _n not in _s.path:
+        _s.path.insert(0, _n)
+    from teagle_core import structural, domains, classify
+    seq = fetch.retrieve(acc)["fasta"]
+    from teagle_core.sequtil import parse_fasta
+    s = parse_fasta(seq)[0][1]
+    dm = domains.scan_domains(s)
+    codes = {d["domain"] for d in dm}
+    assert need <= codes, f"{acc} {name}: expected {need}, got {codes}"
+    if forbid:
+        assert forbid not in codes, f"{acc} {name}: {forbid} should NOT be detected (genuinely absent)"
+    cl = classify.classify(structural.detect_all(s), dm)
+    assert cl.get("is_erv") is erv, f"{acc} {name}: is_erv expected {erv}"
+    assert all("confidence" in d for d in dm)                # per-domain reliability (Axis 1) attached

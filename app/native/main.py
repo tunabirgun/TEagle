@@ -79,7 +79,7 @@ def _app_icon() -> QIcon:                                 # OS window/taskbar ic
 
 STRUCT_COLS = ["Feature", "Coords (0-based)", "Len", "Metric", "Method"]
 ORF_COLS = ["Strand", "Frame", "Start", "End", "aa"]
-DOMAIN_COLS = ["Domain", "Label", "Pfam", "aa", "nt", "Score", "E-value"]
+DOMAIN_COLS = ["Domain", "Label", "Pfam", "aa", "nt", "Score", "E-value", "Conf"]
 # plain-language glossary for every table header (hover to learn the abbreviation) — mirrors web GLOSSARY
 GLOSS = {
     "Feature": "Structural hallmark found in the sequence — e.g. LTR, TIR, target-site duplication, poly-A tail.",
@@ -99,6 +99,7 @@ GLOSS = {
     "nt": "Nucleotide span of the domain in the sequence, 0-based.",
     "Score": "HMMER bit score — how strongly this region matches the domain profile; higher is stronger.",
     "E-value": "Expected number of matches this good by chance — lower is more significant (e.g. 1e-30 is highly significant).",
+    "Conf": "Per-domain call confidence from the HMMER i-Evalue (Eddy 2011): high (≤ 1e-10) or moderate. This is the per-tool reliability of THIS domain call — separate from the element-level structural-completeness tier.",
     "ID": "Identifier of this designed primer pair.",
     "Forward (5'→3')": "Forward primer sequence, written 5′→3′.",
     "Reverse (5'→3')": "Reverse primer sequence, written 5′→3′.",
@@ -263,7 +264,19 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("TEagle")
         self.setWindowIcon(_app_icon())                   # also set on the top-level window (some Qt/Windows paths key the taskbar HICON off WM_SETICON)
-        self.resize(round(1240 * theme_mod.UI_SCALE), round(860 * theme_mod.UI_SCALE))
+        # open at the design size but never larger than the screen — a 1366x768 laptop must not get an
+        # 860px-tall window taller than its display; keep a usable floor so the split layout stays coherent.
+        # Clamp the MINIMUM to the screen too: setMinimumSize is logical px, so an 820x560 floor becomes
+        # 840px physical at 1.5x UI scale and would overhang a 768px screen if the min itself is not clamped.
+        w, h = round(1240 * theme_mod.UI_SCALE), round(860 * theme_mod.UI_SCALE)
+        minw, minh = 820, 560
+        scr = self.screen().availableGeometry() if self.screen() else None
+        if scr is not None:
+            aw, ah = scr.width() - 40, scr.height() - 60
+            w, h = min(w, aw), min(h, ah)
+            minw, minh = min(minw, aw), min(minh, ah)
+        self.setMinimumSize(minw, minh)
+        self.resize(max(w, minw), max(h, minh))
         self.theme = "dark"
         self.state = {"seq": "", "source": None, "last_rec": None}
         self._loading = False                                 # True while a programmatic load writes the specimen box
@@ -302,6 +315,14 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(0, self._startup)
 
     # ---------- header ----------
+    def resizeEvent(self, e):
+        # hide the decorative tagline on a narrow window so it never contributes to an overhang; the Ignored
+        # size policy already lets the window shrink, this just keeps the header clean at small widths.
+        super().resizeEvent(e)
+        tag = getattr(self, "_tagline", None)
+        if tag is not None:
+            tag.setVisible(self.width() >= round(1080 * theme_mod.UI_SCALE))
+
     def _build_header(self):
         wrap = QWidget()
         col = QVBoxLayout(wrap); col.setContentsMargins(6, 0, 2, 0); col.setSpacing(0)
@@ -321,6 +342,10 @@ class MainWindow(QMainWindow):
         h.addWidget(self.ver)
         tag = QLabel("TRANSPOSABLE ELEMENTS ASSAY TERMINAL"); tag.setObjectName("tagline")
         tf = tag.font(); tf.setLetterSpacing(QFont.AbsoluteSpacing, 1.5); tag.setFont(tf)
+        # Ignored horizontal policy so the decorative tagline never imposes its full text width as the window's
+        # hard minimum — otherwise a small screen at ≥125% UI scale cannot shrink the window inside the display.
+        tag.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self._tagline = tag                                   # hidden on a narrow window (resizeEvent) so it never overhangs
         h.addWidget(tag)
         h.addStretch(1)
         chip = QFrame(); chip.setObjectName("statuschip")
@@ -379,9 +404,24 @@ class MainWindow(QMainWindow):
         QSettings("TEagle", "TEagle").setValue("ui_scale", float(factor))
         box = QMessageBox(self)
         box.setWindowTitle("UI scale")
-        box.setText(f"UI scale set to {int(factor * 100)}%.\n\nRestart TEagle to apply the new scale.")
-        box.setStandardButtons(QMessageBox.Ok)
+        box.setText(f"UI scale set to {int(factor * 100)}%.\n\nThe new scale applies on the next launch — restart now, or later.")
+        restart = box.addButton("Restart now", QMessageBox.AcceptRole)
+        box.addButton("Later", QMessageBox.RejectRole)
         box.exec()
+        if box.clickedButton() is restart:
+            self._restart_app()
+
+    def _restart_app(self):
+        """Relaunch TEagle so a new UI scale takes effect (QT_SCALE_FACTOR is read before the QApplication)."""
+        try:
+            import subprocess
+            if getattr(sys, "frozen", False):                 # packaged build: the exe is sys.executable
+                subprocess.Popen([sys.executable])
+            else:
+                subprocess.Popen([sys.executable, os.path.abspath(sys.argv[0])] + sys.argv[1:])
+            QApplication.instance().quit()
+        except Exception as e:
+            QMessageBox.information(self, "Restart", f"Please restart TEagle manually to apply the scale.\n({type(e).__name__}: {e})")
 
     # ---------- rail ----------
     def _build_rail(self):
@@ -492,6 +532,7 @@ class MainWindow(QMainWindow):
     # ---------- results column ----------
     def _build_results(self):
         wrap = QScrollArea(); wrap.setWidgetResizable(True)
+        wrap.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)   # narrow window: scroll, never hard-clip content
         self.resultsScroll = wrap                          # so send-to-splice etc. can scroll a card into view
         inner = QWidget(); inner.setObjectName("central")
         self.results = QVBoxLayout(inner); self.results.setContentsMargins(4, 0, 8, 0); self.results.setSpacing(9)
@@ -864,8 +905,12 @@ class MainWindow(QMainWindow):
             self.designBtn.setEnabled(True); self.designBtn.setText("⋯ Design primers")
         elif key == "annotate":
             self.annotateBtn.setEnabled(True); self.annotateBtn.setText("▶ Run family annotation")
+            # _reset_buttons is error-only (success re-enables in _on_annotate), so clear the stuck busy body here —
+            # a BadRequest/fault never reaches _on_annotate, which would otherwise leave "Running RepeatMasker…" spinning
+            self._set_body(self.wslBody, _empty("Run RepeatMasker against Dfam to name the TE family. Family naming is the Linux (WSL) backend."))
         elif key == "splice":
             self.spliceBtn.setEnabled(True); self.spliceBtn.setText("▶ Detect exons / introns")
+            self._set_body(self.spliceBody, _empty("Align a transcript to the loaded sequence to resolve exon–intron structure de novo."))
         elif key == "fetch":
             self._set_fetch_enabled(True)                     # fetch failed — re-enable so the user can retry
             for lbl in (self.accMeta, self.coordMeta):        # clear only the in-flight indicator, keep a prior result
@@ -1039,6 +1084,21 @@ class MainWindow(QMainWindow):
         if cl.get("explanation"):
             ex = QLabel(cl["explanation"]); ex.setObjectName("classexp"); ex.setWordWrap(True)
             bl.addWidget(ex)
+        comp = cl.get("completeness")                         # scoped structural-completeness (Axis 2 of reliability)
+        if comp:
+            arch = cl.get("order") or " – ".join(comp.get("present", []))
+            miss = comp.get("missing") or []
+            line = (f"<b>Structural completeness:</b> {comp['tier']}  ·  {comp.get('kind','')}"
+                    + (f"<br><b>Domain architecture:</b> {arch}" if arch else "")
+                    + (f"  ·  not detected: {', '.join(miss)}" if miss else ""))
+            cw = QLabel(line); cw.setObjectName("classexp"); cw.setTextFormat(Qt.RichText); cw.setWordWrap(True)
+            bl.addWidget(cw)
+            scope = QLabel(f"Domains tested: {comp.get('scope','')}. “Not detected” is relative to this profile "
+                           "panel — a divergent or unmodelled domain reads as not-detected, not as element decay "
+                           "(completeness after Wicker 2007 / TEsorter / LTR_retriever). The tier reports how much of "
+                           "the expected architecture is present at the domain level; it is not a claim that the ORFs "
+                           "are intact or that the element is transposition- or infection-competent.")
+            scope.setObjectName("cardmeta"); scope.setWordWrap(True); bl.addWidget(scope)
         card.bodylay.addWidget(banner)
 
         # genome viewer
@@ -1081,12 +1141,17 @@ class MainWindow(QMainWindow):
             t = DataTable(DOMAIN_COLS, GLOSS)
             t.set_rows([[d["domain"], d.get("label", ""), d.get("pfam", ""),
                          f"{d['aa'][0]}–{d['aa'][1]}", f"{d['nt'][0]}–{d['nt'][1]}",
-                         d.get("score"), f"{d.get('evalue'):.1e}" if d.get("evalue") is not None else ""]
+                         d.get("score"), f"{d.get('evalue'):.1e}" if d.get("evalue") is not None else "",
+                         d.get("confidence", "")]
                         for d in doms])
             t.set_row_menu(lambda r: self._feat_menu(doms[r]["nt"][0], doms[r]["nt"][1], doms[r].get("strand", "+"),
                                                      doms[r]["domain"], protein=doms[r].get("protein")))
             t.setMaximumHeight(180)
             card.bodylay.addWidget(t)
+            dhint = QLabel("The last column is <b>Conf</b> (per-domain confidence). On a narrow window, scroll the table "
+                           "sideways — or collapse the specimen panel (Ctrl+B / ◧) — to reach every column.")
+            dhint.setObjectName("orient"); dhint.setTextFormat(Qt.RichText); dhint.setWordWrap(True)
+            card.bodylay.addWidget(dhint)
             drow = QHBoxLayout(); drow.addStretch(1); drow.addWidget(_export_table_btn(t, "TEagle_domains", self))
             card.bodylay.addLayout(drow)
 
@@ -1100,6 +1165,12 @@ class MainWindow(QMainWindow):
             derived = any(e.get("derived") for e in gm.get("exons", []))
             title = "Gene model (NCBI feature table" + (" + CDS-inferred exons)" if derived else ")")
             card.bodylay.addWidget(_sl(title))
+            _tc = (cl.get("te_class") or "")           # a TE is not a host gene — its coding organisation is the domain architecture
+            if cl.get("is_erv") or _tc.startswith(("LTR", "LINE", "retro", "DNA")):
+                cav = QLabel("This is a transposable element, not a host gene: its coding organisation is the domain "
+                             "architecture above (for an ERV, gag–pol–env, with a gag–pol frameshift and a spliced env), "
+                             "not a host exon–intron structure. The blocks below are the record's own CDS annotation.")
+                cav.setObjectName("orient"); cav.setWordWrap(True); card.bodylay.addWidget(cav)
             legend = ("<span style='color:#009E73'>■</span> exon · "
                       "<span style='color:#8792a0'>■</span> intron · "
                       "<span style='color:#D55E00'>■</span> CDS · "
@@ -1137,17 +1208,24 @@ class MainWindow(QMainWindow):
         p, h, w, dfam = (self._src_html(k) for k in ("Pfam", "HMMER", "Wicker2007", "Dfam"))
         return (
             "<b>Protein domains</b> — profile-HMM search (HMMER" + h + ", run in-process via pyhmmer) of the "
-            "6-frame ORFs (≥ 40 aa) against a bundled Pfam-A" + p + " TE-domain profile set (14 models): "
-            "RT PF00078/PF07727/PF13456, integrase PF00665, RNase&nbsp;H PF00075, protease PF00077, GAG PF03732, "
-            "chromodomain PF00385, and transposases PF01498/PF03184/PF13358/PF01359/PF05699/PF14372. A hit is kept "
-            "at per-domain E-value ≤ 1e-3.<br>"
+            "6-frame ORFs (≥ 40 aa) against a bundled Pfam-A" + p + " TE-domain profile set (21 models, all CC0): "
+            "<b>POL</b> — RT PF00078/PF07727/PF13456, integrase PF00665, RNase&nbsp;H PF00075, protease PF00077; "
+            "<b>GAG</b> — matrix PF02337, capsid PF00607/PF19317, nucleocapsid PF14787, retrotransposon-gag PF03732; "
+            "<b>ENV</b> — envelope glycoprotein PF13804, transmembrane PF00517, surface PF00429; chromodomain PF00385; "
+            "and transposases PF01498/PF03184/PF13358/PF01359/PF05699/PF14372. A hit is kept at per-domain "
+            "E-value ≤ 1e-3; the gag + env models let TEagle recover the full GAG–POL–ENV architecture of ERVs (HERV-K, "
+            "-W, -L …), not just the pol enzymes.<br>"
             "<b>Structural evidence</b> — heuristic terminal-repeat detectors (no external database): LTR by k-mer "
             "seed + diagonal cluster (k=13, ≥ 80 bp, ≥ 80% identity, ≥ 4 anchors); TIR by a terminal inverted-repeat "
             "scan plus a k-mer-vs-reverse-complement search; poly-A/poly-T tail ≥ 8 bp; TSD as a 4–12 bp exact "
             "flanking direct repeat. Coordinates are 0-based half-open, and each row lists its own detection method.<br>"
             "<b>Superfamily / class</b> — the Wicker&nbsp;2007" + w + " scheme, derived from the domain architecture and "
             "structural context; Copia vs Gypsy is called from the strand-aware integrase-vs-RT translation order, not "
-            "ORF length.<br>"
+            "ORF length; an env domain with paired LTRs flags an endogenous retrovirus (ERV).<br>"
+            "<b>Reliability</b> — reported on two independent, citable axes rather than one fabricated number: (1) a "
+            "per-domain call confidence from the HMMER i-Evalue (Eddy 2011); (2) a categorical structural-completeness "
+            "tier — intact / near-complete / partial / structural-only — mapped to the autonomous/intact criteria of "
+            "Wicker 2007, TEsorter and LTR_retriever, and always scoped to the domain models actually tested.<br>"
             "<b>Family naming</b> (optional, WSL backend) — RepeatMasker (RMBLAST) against the curated Dfam&nbsp;4.0" + dfam +
             " library; this is the only step that makes a database family call, and it is absent from the offline path.")
 
@@ -1246,7 +1324,7 @@ class MainWindow(QMainWindow):
         send only that subset to primer design or splice detection. Offset-based, so it is strand- and
         coordinate-space-safe: `dna` is already the feature's sequence in biological orientation."""
         n = len(dna)
-        dlg = QDialog(self); dlg.setWindowTitle("Select a sub-region")
+        dlg = QDialog(self); dlg.setWindowTitle("Select a sub-region"); dlg.resize(460, 200)
         lay = QVBoxLayout(dlg)
         lay.addWidget(QLabel(f"<b>{fid}</b> is {n} bp. Choose the sub-interval (1-based, inclusive) to use:"))
         row = QHBoxLayout()
@@ -1476,19 +1554,26 @@ class MainWindow(QMainWindow):
                                       f">{cands[rr]['id']}_F\n{cands[rr]['left_seq']}\n>{cands[rr]['id']}_R\n{cands[rr]['right_seq']}"))])
         t.setMaximumHeight(220)
         self.primBody.addWidget(t)
+        # visible key for the ΔG colour flags + the ‡ marker + the F/R fold (colour is never the only signal)
+        legend = QLabel(f'<span style="color:{fc["caution"]}">■</span>&nbsp;caution (moderately stable; threshold varies by structure) &nbsp;&nbsp;'
+                        f'<span style="color:{fc["warn"]}">■</span>&nbsp;warn (ΔG ≤ −9) &nbsp;&nbsp;'
+                        f'‡&nbsp;the two engines disagree &nbsp;·&nbsp; Hairpin / Self-dim show the worst of the forward and reverse primer')
+        legend.setObjectName("orient"); legend.setTextFormat(Qt.RichText); legend.setWordWrap(True)
+        self.primBody.addWidget(legend)
         eng = d.get("oligoqc_engines", {})
         cross = (f"cross-checked with ViennaRNA {eng.get('viennarna_version')}"
                  if eng.get("viennarna") else "ViennaRNA cross-check unavailable — showing Primer3 only")
         note = QLabel("Structure columns are ΔG (kcal/mol) of the most stable hairpin / self-dimer / cross-dimer and 3′-end "
                       "anneal — more negative = worse. Red (warn) is ΔG ≤ −9 on any column (the IDT rule of thumb); amber "
-                      "(caution) thresholds vary by structure type (hairpin ≤ −2, dimers ≤ −5, 3′-end ≤ −6, the last set below "
-                      "a normal GC clamp). The Struct column states the worst flag as text. 3′-end is its own axis because it "
+                      "(caution) thresholds vary by structure type (hairpin ≤ −2, dimers ≤ −5, 3′-end ≤ −6, the last flagging "
+                      "an abnormally stable 3′-end cross-dimer). The Struct column states the worst flag as text. 3′-end is its own axis because it "
                       f"isolates the interaction that blocks polymerase extension. Primer3 (SantaLucia 1998) is cross-checked "
-                      f"against an independent engine ({cross}); ‡ marks a disagreement. Right-click a pair → "
-                      "“Secondary-structure detail” for both engines. Advisory — not a wet-lab guarantee.")
+                      f"against an independent engine ({cross}). Right-click a pair → “Secondary-structure detail” for both "
+                      "engines side by side. Advisory — not a wet-lab guarantee.")
         note.setObjectName("orient"); note.setWordWrap(True); self.primBody.addWidget(note)
-        hint = QLabel("Right-click a pair → “send to in-silico PCR”, or stage all in panel 05.")
-        hint.setObjectName("orient"); self.primBody.addWidget(hint)
+        hint = QLabel("Right-click a pair → “send to in-silico PCR”, or stage all in panel 05. "
+                      "Scroll the table sideways — or collapse the specimen panel (Ctrl+B / ◧) — to see every column.")
+        hint.setObjectName("orient"); hint.setWordWrap(True); self.primBody.addWidget(hint)
 
     def _structure_detail(self, c):
         """IDT OligoAnalyzer-style detail: both engines' ΔG for every structure of one primer pair, side by side."""
@@ -2302,6 +2387,17 @@ def selftest():
         problems.append("pyhmmer failed to load")
     if not domains.HMM_SHA256:
         problems.append("bundled Pfam HMM profiles not found")
+    else:                                                 # the profile set must LOAD and cover the full GAG-POL-ENV panel
+        try:
+            n_hmm = len(domains._hmms())
+            codes = {v[0] for v in domains.DOMAIN_INFO.values()}
+            miss = {"GAG", "PR", "RT", "RNaseH", "INT", "ENV", "CHR", "TPase"} - codes
+            if miss:
+                problems.append(f"domain profile set missing expected codes: {sorted(miss)}")
+            if n_hmm < 21:
+                problems.append(f"domain profile set loaded {n_hmm} profiles, expected >= 21 (gag/env models may be missing)")
+        except Exception as e:
+            problems.append(f"domain profile set failed to load: {type(e).__name__}: {e}")
     # end-to-end science through the shared engine (also exercises the fixture-free sample)
     try:
         r = engine.run_analyze({"sequence": make_sample()})
@@ -2340,7 +2436,8 @@ def selftest():
         sys.stderr.write("TEAGLE SELFTEST FAILED:\n  - " + "\n  - ".join(problems) + "\n")
         return 1
     print(f"TEAGLE SELFTEST OK · primer3 {primers.PRIMER3_VERSION} · ViennaRNA {oligoqc.VIENNARNA_VERSION} "
-          f"· pyhmmer {domains.PYHMMER_VERSION} · HMM {domains.HMM_SHA256[:12]} · QtSvg ok · install dialog ok")
+          f"· pyhmmer {domains.PYHMMER_VERSION} · HMM {domains.HMM_SHA256[:12]} ({len(domains._hmms())} profiles) "
+          f"· QtSvg ok · install dialog ok")
     return 0
 
 

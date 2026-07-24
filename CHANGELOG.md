@@ -9,6 +9,25 @@ and propagates to the backend health endpoint, the UI header badge, every run
 provenance manifest, the packaged executable's Windows file-version metadata, and
 the LaTeX report title page.
 
+## [2.9.0] — 2026-07-24
+
+Full retroviral GAG–POL–ENV domain coverage so endogenous retroviruses are read as complete elements, a two-axis reliability report (per-domain confidence + a scoped structural-completeness tier), a nine-specimen HERV benchmark across seven families, and the v2.8.x primer-QC polish.
+
+### Added
+- **Retroviral GAG and ENV domains.** The bundled Pfam profile set grows from 14 to 21 models (all CC0): gag matrix (PF02337), capsid (PF00607, PF19317) and nucleocapsid (PF14787), and env glycoprotein (PF13804), transmembrane (PF00517) and surface (PF00429). An endogenous retrovirus such as HERV-K now reports the full **GAG–PR–RT–RNaseH–INT–ENV** architecture in genomic order, not just the *pol* enzymes; the previous set had no env model and only a retrotransposon-gag profile that HERV-K capsid diverges from. An env domain flanked by paired LTRs flags the element as an **ERV**.
+- **Reliability on two independent axes (no fabricated score).** A **per-domain call confidence** from the HMMER i-Evalue (high ≤ 1e-10 / moderate), shown in a new column; and a categorical **structural-completeness** tier — *intact / autonomous-consistent*, *near-complete*, *partial*, *structural-only* — mapped to the Wicker 2007, TEsorter and LTR_retriever criteria and always scoped to the models actually queried, so a missing-model result is never mistaken for element decay.
+- **HERV benchmark.** Nine verified HERV proviruses across seven families (HERV-K/H/L/T/E/I/W) run through the tool: intact HML-2 proviruses recover the full architecture, while env-less HERV-L, gag-degraded HERV-H, and pseudogenised members are correctly reported partial with no spurious domains. Included as a report table and a reproducible test.
+
+### Changed
+- The classification card states the completeness tier, the domain architecture, and a plain note that a transposable element's coding organisation is its domain architecture (for an ERV, gag–pol–env), not a host exon–intron structure.
+- The "Methods & databases" panel and the self-test now describe and verify the 21-model profile set; the self-test fails the build if a gag/env model is missing.
+- Primer-QC polish (from v2.8.1): a visible legend for the ΔG colour flags and the ‡ engine-disagreement marker, per-theme flag colours that re-style on a theme toggle, a UI-scale "Restart now" option, and a sub-region picker that echoes the 0-based span.
+
+### Fixed
+- **Backend readiness verifies every pinned component.** The deep integrity check and the annotation gate could report an incomplete Dfam library as ready when only one of the two pinned partitions was present; both now require each pinned file individually. The installer status line claims splice detection or the whole-genome scan only when their tools (minimap2, isPcr + NCBI Datasets) are actually installed.
+- **Honest completeness wording.** The structural-completeness tier is an architecture-level call, not a claim of functional or transposition/infection competence; *gag* counts toward an *intact* call only with a capsid or matrix domain, not the promiscuous nucleocapsid zinc-finger alone; a detected *env* (or other domain) is never reported as "no coding domain detected"; and the tier can no longer contradict the adjacent architecture / not-detected lines.
+- **Fits small and high-DPI screens.** The window opens no larger than the display and keeps a usable minimum even at 125–150% interface scale, so it never overflows a 1366×768 laptop.
+
 ## [2.8.0] — 2026-07-23
 
 Dual-engine, cross-checked primer secondary-structure analysis (hairpin / self-dimer / cross-dimer / 3′-end ΔG), a feature sub-region picker that routes only a chosen interval to primer design or splice, a global UI-scale setting with a collapsible specimen panel for small screens, and an explicit statement of every detection method — plus a whole-genome scan that reads a real on-target from the design locus.
@@ -271,6 +290,7 @@ primer design, usable without a command line.
   the WebView2 runtime is absent. A kill-on-close Job Object ties the whole process tree to the
   launcher, so an in-place upgrade never orphans a window.
 
+[2.9.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.9.0
 [2.8.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.8.0
 [2.6.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.6.0
 [2.5.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.5.0

@@ -113,14 +113,19 @@ def env_status() -> dict:
     if not av["wsl2"]:
         return st
     try:
-        rc, out, err = _wsl(
-            f'{_MM} run -n te RepeatMasker -v 2>/dev/null | head -1; '
-            f'ls {_ENV}/share/RepeatMasker/Libraries/famdb/*.h5 2>/dev/null | head -1; '
-            f'[ -x "{_ENV}/bin/minimap2" ] && {_ENV}/bin/minimap2 --version 2>/dev/null',
+        _famdb = f"{_ENV}/share/RepeatMasker/Libraries/famdb"
+        # delivered via STDIN (_wsl_script), NOT inline _wsl: the $()/nested-quote probe below is exactly the
+        # class wsl.exe mangles on a `bash -lc <arg>` command line (it would collapse every [ -f ] to 0).
+        rc, out, err = _wsl_script(
+            f'{_MM} run -n te RepeatMasker -v 2>/dev/null | head -1\n'
+            f'echo "dfam_root=$([ -f "{_famdb}/dfam40.0.h5" ] && echo 1 || echo 0)"\n'
+            f'echo "dfam_curated=$([ -f "{_famdb}/dfam40.curated.consensus.0.h5" ] && echo 1 || echo 0)"\n'
+            f'[ -x "{_ENV}/bin/minimap2" ] && {_ENV}/bin/minimap2 --version 2>/dev/null\n',
             timeout=60)
         m = re.search(r"RepeatMasker version ([\w.]+)", out)
         st["repeatmasker"] = m.group(1) if m else None
-        st["dfam"] = ".h5" in out
+        # require BOTH pinned Dfam partitions — a root-only library is incomplete and must not gate annotation
+        st["dfam"] = ("dfam_root=1" in out) and ("dfam_curated=1" in out)
         mm = re.search(r"^(\d+\.\d+[\w.-]*)$", out.strip().splitlines()[-1]) if out.strip() else None
         st["minimap2"] = mm.group(1) if mm else None
         st["ready"] = bool(st["repeatmasker"] and st["dfam"])
@@ -484,7 +489,7 @@ MM="$HOME/bin/micromamba"; ENV="$HOME/micromamba/envs/te"; FAMDIR="$ENV/share/Re
 echo "=RM="; "$MM" run -n te RepeatMasker -v 2>&1 | head -1
 echo "=MM="; "$ENV/bin/minimap2" --version 2>&1 | head -1
 echo "=FAMDB="; "$MM" run -n te famdb.py info 2>&1 | grep -iE "version|families|consensus" | head -3
-echo "=FILES="; ls -l "$FAMDIR"/dfam40.0.h5 "$FAMDIR"/dfam40.curated.consensus.0.h5 2>&1 | awk '{print $5, $NF}'
+echo "=FILES="; for f in dfam40.0.h5 dfam40.curated.consensus.0.h5; do if [ -f "$FAMDIR/$f" ]; then echo "present $f $(stat -c %s "$FAMDIR/$f" 2>/dev/null)"; else echo "MISSING $f"; fi; done
 echo "=SCAN="; { [ -x "$ENV/bin/isPcr" ] && echo "isPcr present"; } || echo "isPcr MISSING"; { [ -x "$ENV/bin/datasets" ] && echo "datasets present"; } || echo "datasets MISSING"
 '''
 
@@ -516,7 +521,7 @@ def integrity_check() -> dict:
         {"name": "RepeatMasker runs", "ok": "RepeatMasker version" in rm_txt, "detail": rm_txt.strip()[:80] or "no version reported"},
         {"name": "minimap2 runs", "ok": bool(re.match(r"^\d+\.\d+", mm_txt)), "detail": mm_txt[:60] or "no version reported"},
         {"name": "FamDB loads", "ok": bool(re.search(r"(?i)version|families|consensus", fam_txt)), "detail": fam_txt.strip()[:90] or "famdb.py info returned nothing"},
-        {"name": "Dfam library files present", "ok": len(files) >= 2 and all("No such" not in f for f in files), "detail": "; ".join(files)[:90] or "missing"},
+        {"name": "Dfam library files present", "ok": len(files) >= 2 and all(f.startswith("present") for f in files), "detail": "; ".join(files)[:90] or "missing"},
         # the whole-genome off-target scan needs isPcr + NCBI datasets; verify them here so a "healthy" deep-check
         # never precedes a scan that fails at first use (same binding-truthfulness class as the fixed unzip gap)
         {"name": "isPcr + NCBI datasets (whole-genome scan)", "ok": "isPcr present" in scan_txt and "datasets present" in scan_txt,
@@ -634,13 +639,20 @@ def annotate(fasta_text: str, species: str | None = None, threads: int = 4, time
                             stdin=fasta_text.encode(), timeout=60)
         if rc != 0:
             return {"ok": False, "error": "failed to stage sequence: " + err.strip()[:200]}
+        # delivered via STDIN (_wsl_script): a multi-word -species value ("Homo sapiens") interpolated into an
+        # inline `bash -lc <arg>` is re-split by wsl.exe into `-species Homo` + a stray `sapiens`; STDIN delivery
+        # preserves the quotes. The species token is already validated (_SPECIES_RE), so no injection risk.
+        # capture RepeatMasker's own exit code (not the trailing cat's) inside the SAME STDIN script — a nonzero
+        # exit (unknown lineage, corrupt Dfam shard, OOM) must fail loudly, not be sealed as a clean "0 families".
         script = (f'cd /tmp/{rid} && {_MM} run -n te RepeatMasker -pa {int(threads)} {sp} -qq q.fa '
-                  f'>rm.log 2>&1; echo "EXIT $?"; cat q.fa.out 2>/dev/null')
-        rc, out, err = _wsl(script, timeout=timeout)
-        hits = parse_out(out)
-        # fetch tool versions for provenance
-        rcv, ver, _ = _wsl(f'{_MM} run -n te RepeatMasker -v 2>/dev/null | head -1', timeout=30)
+                  f'>rm.log 2>&1; ec=$?; echo "EXIT $ec"; [ "$ec" = "0" ] && cat q.fa.out 2>/dev/null || tail -8 rm.log')
+        rc, out, err = _wsl_script(script, timeout=timeout)
         _wsl(f'rm -rf /tmp/{rid}', timeout=30)
+        m = re.search(r"^EXIT (\d+)", out, re.M)
+        if m and m.group(1) != "0":
+            tail = out.split(f"EXIT {m.group(1)}", 1)[-1].strip()[:250]
+            return {"ok": False, "error": f"RepeatMasker exited {m.group(1)}: {tail or 'see backend log'}", "status": st}
+        hits = parse_out(out)                                 # repeatmasker version already resolved by env_status() above
         return {"ok": True, "hits": hits, "n_hits": len(hits),
                 "repeatmasker_version": st["repeatmasker"], "raw_out": out[-4000:],
                 "species": species or "(all installed families)"}
@@ -706,6 +718,8 @@ def splice_align(genomic_fasta: str, transcript_fasta: str, timeout: int = 180) 
         rc, sam, err = _wsl(script, stdin=transcript_fasta.encode(), timeout=timeout)
         _rcv, ver, _ = _wsl(f'{_ENV}/bin/minimap2 --version 2>/dev/null', timeout=30)
         _wsl(f'rm -rf /tmp/{rid}', timeout=30)
+        if rc != 0:                                           # a minimap2 tool failure is not a genuine no-alignment result
+            return {"ok": False, "error": f"minimap2 alignment failed (exit {rc}) — not a no-alignment result"}
         res = _parse_sam_splice(sam)
         if not res:
             return {"ok": False, "error": "transcript did not align to the genomic sequence (check they correspond)"}

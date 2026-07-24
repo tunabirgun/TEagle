@@ -38,7 +38,16 @@ DOMAIN_INFO = {
     "rve": ("INT", "integrase", "retro", "PF00665"),
     "RNase_H": ("RNaseH", "RNase H", "retro", "PF00075"),
     "RVP": ("PR", "aspartic protease", "retro", "PF00077"),
-    "PEG10_N-capsid": ("GAG", "gag / capsid", "retro", "PF03732"),
+    "PEG10_N-capsid": ("GAG", "gag capsid (retrotransposon/PEG10-type)", "retro", "PF03732"),
+    # retroviral / ERV gag (matrix, capsid, nucleocapsid) and env (glycoprotein, TM, surface) — the models that
+    # annotate the HERV-K(HML-2) Gag/Env polyproteins (UniProt P62684, HERV-K env entries). All Pfam-A (CC0).
+    "Gag_p24": ("GAG", "gag capsid (CA)", "retro", "PF00607"),
+    "Gag_p24_C": ("GAG", "gag capsid, C-terminal (CA)", "retro", "PF19317"),
+    "Gag_p10": ("GAG", "gag matrix (MA)", "retro", "PF02337"),
+    "zf-CCHC_5": ("GAG", "gag nucleocapsid zinc-finger (NC)", "retro", "PF14787"),
+    "HERV-K_env_2": ("ENV", "envelope glycoprotein", "retro", "PF13804"),
+    "GP41": ("ENV", "envelope, transmembrane (TM)", "retro", "PF00517"),
+    "TLV_coat": ("ENV", "envelope, surface (SU)", "retro", "PF00429"),
     "Chromo": ("CHR", "chromodomain", "retro", "PF00385"),
     "HTH_Tnp_Tc3_2": ("TPase", "Tc1/mariner transposase", "dna:Tc1-Mariner", "PF01498"),
     "DDE_1": ("TPase", "DDE transposase", "dna:DDE", "PF03184"),
@@ -100,9 +109,12 @@ def scan_domains(seq: str, max_orfs: int = 12, evalue: float = 1e-3):
                 else:
                     nt = [o["end"] - aa1 * 3, o["end"] - aa0 * 3]
                     coding = reverse_complement(seq[nt[0]:nt[1]])
+                iev = float(d.i_evalue)
                 hits.append({
                     "domain": code, "label": label, "class": dclass, "hmm": hmm_name, "pfam": pfam,
-                    "score": round(d.score, 1), "evalue": float(d.i_evalue),
+                    "score": round(d.score, 1), "evalue": iev,
+                    # per-domain call confidence = the HMMER i-Evalue (Eddy 2011); high when strongly significant
+                    "confidence": "high" if iev <= 1e-10 else "moderate",
                     "orf": n, "strand": o["strand"], "aa": [d.env_from, d.env_to], "nt": nt,
                     "dna": coding, "protein": translate(coding).rstrip("*"),
                 })
