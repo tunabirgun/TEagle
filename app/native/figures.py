@@ -17,6 +17,12 @@ OK = {"RT": "#0072B2", "INT": "#E69F00", "RNaseH": "#009E73", "PR": "#CC79A7", "
 # gap kept distinct (light) from the darker slate flank so filler regions aren't a single ambiguous colour.
 GENECOL = {"exon": "#009E73", "exon_derived": "#7fd3b8", "intron": "#8792a0",
            "cds": "#D55E00", "flank": "#5b6b7a", "gap": "#c3ccd6"}
+# retroviral transcript architecture (ERV): env exons green, the removed gag-pro-pol span amber-brown so the
+# "single large intron = frameshift-fused polyprotein" reads distinctly from a grey host intron.
+ARCHCOL = {"exon": "#009E73", "intron": "#B0752E"}
+# LTR cis-elements: PBS (leader, purple) and PPT (before 3' LTR, blue) — each distinct from the LTR blocks,
+# the env-exon green and the intron amber.
+CISCOL = {"PBS": "#8459C4", "PPT": "#2C7FB8"}
 
 
 def esc(s) -> str:
@@ -50,8 +56,8 @@ def gv_nice_step(span: float, ticks: int) -> float:
 
 
 def gv_tracks_from_rec(rec: dict) -> dict:
-    """Build a genome-viewer model from an analysis record (structural + domains + ORFs)."""
-    tracks, reps = [], []
+    """Build a genome-viewer model from an analysis record (structural + domains + ORFs + ERV architecture)."""
+    tracks, reps, cis = [], [], []
     for e in rec.get("structural", []):
         t = e["type"]
         if t.startswith("LTR") or t.startswith("TIR"):
@@ -60,18 +66,40 @@ def gv_tracks_from_rec(rec: dict) -> dict:
                 if p:
                     reps.append({"start": p[0], "end": p[1], "color": col, "label": t.split(" ")[0],
                                  "tip": f"{t} {p[0]}–{p[1]}"})
+        elif t.startswith("PBS") or t.startswith("PPT"):
+            p = e["pos"]; key = t[:3]
+            if key == "PBS":                              # name the tRNA only when confident, else "PBS·?"
+                lab = "PBS·" + ((e.get("priming_trna") or "").replace("tRNA-", "") if e.get("confident") else "?")
+                tip = (f"{t} {p[0]}–{p[1]} · " + (f"{e.get('priming_trna')} {e.get('identity')}%"
+                       if e.get("confident") else
+                       f"priming tRNA undetermined (closest {e.get('best_match','?')} {e.get('identity')}%)"))
+            else:
+                lab = "PPT"
+                tip = f"{t} {p[0]}–{p[1]} · {int(round(e.get('purine_frac', 0) * 100))}% purine"
+            cis.append({"start": p[0], "end": p[1], "color": CISCOL[key], "label": lab, "tip": tip})
         elif e.get("pos"):
             p = e["pos"]
             reps.append({"start": p[0], "end": p[1], "color": OK["tail"], "label": t.split(" ")[0],
                          "tip": f"{t} {p[0]}–{p[1]}"})
     if reps:
         tracks.append({"name": "terminal repeats", "height": 20, "features": reps})
+    if cis:
+        tracks.append({"name": "cis-elements", "height": 18, "features": cis})
     doms = [{"start": d["nt"][0], "end": d["nt"][1], "color": OK.get(d["domain"], "#888"),
              "label": d["domain"],
              "tip": f"{d['domain']} · {d.get('label','')} · nt {d['nt'][0]}–{d['nt'][1]} · score {d.get('score')}"}
             for d in rec.get("domains", [])]
     if doms:
         tracks.append({"name": "protein domains", "height": 22, "features": doms})
+    arch = rec.get("retroviral")
+    if arch:                                                  # ERV: env expressed from a spliced subgenomic mRNA
+        feat = [{"start": arch["leader_exon"][0], "end": arch["leader_exon"][1], "color": ARCHCOL["exon"],
+                 "label": "leader", "tip": f"5′ leader exon {arch['leader_exon'][0]}–{arch['leader_exon'][1]}"},
+                {"start": arch["intron"][0], "end": arch["intron"][1], "color": ARCHCOL["intron"], "intron": True,
+                 "label": "gag–pol", "tip": f"gag–pro–pol intron (fused polyprotein, removed) {arch['intron'][0]}–{arch['intron'][1]}"},
+                {"start": arch["env_exon"][0], "end": arch["env_exon"][1], "color": ARCHCOL["exon"],
+                 "label": "env", "tip": f"env exon {arch['env_exon'][0]}–{arch['env_exon'][1]}"}]
+        tracks.append({"name": "env mRNA (predicted)", "height": 20, "features": feat})
     orfs = [{"start": o["start"], "end": o["end"], "color": OK["ORF"], "strand": o["strand"],
              "tip": f"ORF {o['strand']}{o['frame']} · {o['length_aa']} aa"} for o in rec.get("orfs", [])]
     if orfs:

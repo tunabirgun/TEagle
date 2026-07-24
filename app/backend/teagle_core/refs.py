@@ -83,7 +83,10 @@ REFS = {
         "citation": "SantaLucia J Jr, Hicks D (2004) The thermodynamics of DNA structural motifs. Annu Rev Biophys Biomol Struct 33:415-440.",
         "doi": "10.1146/annurev.biophys.32.110601.141800", "license": "", "url": "https://doi.org/10.1146/annurev.biophys.32.110601.141800"},
     "Owczarzy2008": {
-        "name": "IDT OligoAnalyzer / SciTools methodology",
+        # COMPARABILITY reference only — TEagle does NOT run IDT SciTools/OligoAnalyzer (it computes ΔG with
+        # Primer3 + ViennaRNA). Cited because TEagle reports ΔG in OligoAnalyzer's convention and adopts its
+        # -9 kcal/mol rule-of-thumb + default reaction conditions so a user can cross-compare.
+        "name": "IDT OligoAnalyzer — ΔG-reporting convention and −9 kcal/mol threshold TEagle matches (not run by TEagle)",
         "citation": "Owczarzy R, Tataurov AV, Wu Y, et al. (2008) IDT SciTools: a suite for analysis and design of nucleic acid oligomers. Nucleic Acids Res 36(Web Server issue):W163-W169.",
         "doi": "10.1093/nar/gkn198", "license": "", "url": "https://doi.org/10.1093/nar/gkn198"},
     "ViennaRNA": {

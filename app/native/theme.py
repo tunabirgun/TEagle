@@ -16,7 +16,7 @@ UI_SCALE = float(os.environ.get("TEAGLE_UI_SCALE", "1.0"))
 
 _COMMON = """
 * {{ font-family: {sans}; font-size: 13px; color: {text}; }}
-QMainWindow, QWidget#central {{ background: {bg}; }}
+QMainWindow, QWidget#central, QDialog, QMessageBox {{ background: {bg}; }}
 QScrollArea {{ border: none; background: {bg}; }}
 QScrollArea > QWidget > QWidget {{ background: transparent; }}
 QLabel {{ background: transparent; }}

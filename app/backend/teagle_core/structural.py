@@ -165,6 +165,69 @@ def find_tsd(seq: str, elem_start: int, elem_end: int, min_tsd: int = 4, max_tsd
     return None
 
 
+# Primer-binding-site reference: PBS (viral +strand, 5'->3') = reverse complement of the 3'-terminal 18 nt
+# of the priming tRNA. Endogenised proviruses carry a DIVERGED PBS, so a match is often partial — the tRNA
+# identity is reported hedged, never as a hard call. Panel is Lys-anchored (HML-2 primes tRNA-Lys); the Lys3
+# entry equals the canonical HIV-1 tRNA-Lys3 PBS (independently verifiable) and anchors the panel's accuracy.
+_PRIMER_TRNA = {
+    "tRNA-Lys3": "TGGCGCCCGAACAGGGAC",     # Lys-primed lentiviruses / HML-2-class ERVs
+}
+
+
+def find_pbs(seq: str, ltr_five_prime_end: int, search: int = 44, min_ident: float = 0.55):
+    """Primer-binding site: the ~18 nt just 3' of the 5' LTR that the priming tRNA anneals to. Detected
+    by best reverse-complement match to a bundled primer-tRNA panel, at the canonical leader position.
+    tRNA identity is hedged when the match is weak (expected for endogenised, diverged proviruses)."""
+    leader = seq[ltr_five_prime_end:ltr_five_prime_end + search]
+    best = None
+    for name, pbs in _PRIMER_TRNA.items():
+        L = len(pbs)
+        for i in range(len(leader) - L + 1):
+            w = leader[i:i + L]
+            ident = sum(1 for a, b in zip(w, pbs) if a == b and a not in "Nn") / L
+            if best is None or ident > best["_id"]:
+                best = {"_id": ident, "trna": name, "pos": [ltr_five_prime_end + i, ltr_five_prime_end + i + L], "motif": w}
+    if not best or best["_id"] < min_ident:            # no credible PBS in the leader window
+        return None
+    # the panel is Lys-anchored, so only NAME the priming tRNA on a strong match; a weak (diverged) match
+    # is reported as undetermined with the closest panel match, never a hard call for a non-Lys genus.
+    strong = best["_id"] >= 0.72
+    return {"type": "PBS (primer-binding site)", "pos": best["pos"],
+            "priming_trna": best["trna"] if strong else "undetermined",
+            "best_match": best["trna"], "identity": round(100 * best["_id"], 1),
+            "confident": strong, "motif": best["motif"],
+            "note": "" if strong else (f"priming tRNA undetermined — closest panel match {best['trna']} "
+                                       f"({round(100 * best['_id'], 1)}%), below the confident threshold; "
+                                       "endogenised PBS is often diverged")}
+
+
+def find_ppt(seq: str, ltr_three_prime_start: int, window: int = 30, min_len: int = 9,
+             min_purine: float = 0.82, max_defects: int = 2):
+    """Polypurine tract: the run of purines (A/G) abutting the 3' LTR that primes plus-strand synthesis.
+    Extended backward from the LTR boundary while it stays a dense purine run (bounded pyrimidine defects,
+    no N) and TRIMMED so the reported tract starts on a purine — never a window with leading pyrimidines."""
+    reg_s = max(0, ltr_three_prime_start - window)
+    region = seq[reg_s:ltr_three_prime_start]
+    best_start, defects = None, 0
+    for i in range(len(region) - 1, -1, -1):           # extend 5' from the 3'-LTR boundary
+        c = region[i]
+        if c in "Nn":
+            break
+        if c not in "AG":
+            defects += 1
+            if defects > max_defects:
+                break
+        sub = region[i:]                               # candidate tract must START on two purines and stay dense
+        starts_clean = c in "AG" and (i + 1 >= len(region) or region[i + 1] in "AG")
+        if starts_clean and len(sub) >= min_len and sum(1 for x in sub if x in "AG") / len(sub) >= min_purine:
+            best_start = i
+    if best_start is None:
+        return None
+    sub = region[best_start:]
+    return {"type": "PPT (polypurine tract)", "pos": [reg_s + best_start, ltr_three_prime_start],
+            "length": len(sub), "purine_frac": round(sum(1 for x in sub if x in "AG") / len(sub), 2), "motif": sub}
+
+
 def detect_all(seq: str):
     """Run all structural detectors. Returns list of evidence dicts (empty if none)."""
     ev = []
@@ -174,6 +237,12 @@ def detect_all(seq: str):
         tsd = find_tsd(seq, ltr["element_span"][0], ltr["element_span"][1])
         if tsd:
             ev.append(tsd)
+        pbs = find_pbs(seq, ltr["five_prime"][1])       # LTR-class cis-elements: PBS (leader) + PPT (before 3' LTR)
+        if pbs:
+            ev.append(pbs)
+        ppt = find_ppt(seq, ltr["three_prime"][0])
+        if ppt:
+            ev.append(ppt)
     # LTR (direct) and TIR (inverted) terminal architectures are mutually exclusive:
     # only look for a TIR when no LTR was found, so an LTR element never reports a spurious TIR.
     tir = find_tir(seq) if not ltr else None

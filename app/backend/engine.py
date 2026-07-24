@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib, re, time
 
 from teagle_core import (sequtil, structural, primers, provenance, fetch,
-                         domains, classify, refs, wsl, timing, genomepcr, oligoqc)
+                         domains, classify, refs, wsl, timing, genomepcr, oligoqc, retroviral)
 import envcheck
 
 
@@ -160,6 +160,14 @@ def analyze(seq_text: str, source: dict | None = None):
                 rec["notes"].append(f"domain scan unavailable: {type(e).__name__}")
             rec["classification"] = classify.classify(rec["structural"], rec["domains"])
             rec["orfs"] = sequtil.find_orfs(seq)
+            # retroviral transcript architecture (ERV only) — the correct coding-organisation model in place
+            # of a host exon-intron gene model; None for non-ERVs, so it never overrides a normal record.
+            rec["retroviral"] = None
+            try:
+                rec["retroviral"] = retroviral.transcript_architecture(
+                    rec["structural"], rec["domains"], rec["classification"], len(seq))
+            except Exception as e:                          # a retroviral-model fault must not fail the analysis
+                rec["notes"].append(f"retroviral architecture unavailable: {type(e).__name__}")
             if rna:
                 rec["notes"].append("RNA input — U was read as T (DNA equivalent) for all steps")
             if any(o.get("open_end") for o in rec["orfs"]):

@@ -4,7 +4,7 @@
   <img alt="TEagle" src="docs/img/teagle-banner-light.png" width="460">
 </picture>
 
-![Version](https://img.shields.io/badge/version-2.9.0-0E9E86) ![Platform](https://img.shields.io/badge/platform-Windows%20x64-1FB89C) ![License](https://img.shields.io/badge/license-Proprietary-C6432E) ![Built with](https://img.shields.io/badge/built%20with-PySide6%20%C2%B7%20Primer3%20%C2%B7%20HMMER%20%C2%B7%20ViennaRNA-2B3740)
+![Version](https://img.shields.io/badge/version-2.10.0-0E9E86) ![Platform](https://img.shields.io/badge/platform-Windows%20x64-1FB89C) ![License](https://img.shields.io/badge/license-Proprietary-C6432E) ![Built with](https://img.shields.io/badge/built%20with-PySide6%20%C2%B7%20Primer3%20%C2%B7%20HMMER%20%C2%B7%20ViennaRNA-2B3740)
 </div>
 
 **TEagle** is a native Windows desktop tool that annotates transposable elements, reads their gene structure, and designs TE-aware PCR primers — all in one window, no command line, with every result reproducible from the exact database and software versions that produced it. The scientific core (structural detection, HMMER protein-domain scanning, superfamily classification, Primer3 design, dual-engine primer QC, in-silico PCR, provenance) runs in-process; two optional features (Dfam family naming, de-novo splice) use a managed WSL backend the app installs for you.
@@ -26,6 +26,7 @@ Everything the core needs — Python, PySide6, Primer3, HMMER (pyhmmer), ViennaR
 - **Classify** an element from its structure (LTR/TIR/TSD/poly-A, ORFs) and its protein-domain architecture, into a superfamily under the Wicker 2007 scheme — Copia vs Gypsy by strand-aware integrase-vs-RT order, LINE, DNA transposons.
 - **Full retroviral GAG–POL–ENV coverage** — the 21-model Pfam panel spans gag (matrix/capsid/nucleocapsid), pol (PR/RT/RNaseH/INT), and env, so an endogenous retrovirus (HERV-K, -W, -L, …) is read as a complete element and flagged as an ERV.
 - **Reliability, honestly** — a per-domain confidence (from the HMMER E-value) plus a categorical structural-completeness tier (*intact / near-complete / partial / structural-only*, after Wicker 2007 / TEsorter / LTR_retriever), always scoped to the models tested.
+- **Retroviral transcript architecture, not a host gene model** — an endogenous retrovirus is read the way a retrovirus is expressed: env from a spliced subgenomic mRNA, the gag–pro–pol span drawn as the single frameshift-fused intron (junctions labelled approximate, never guessed from motifs), alongside the LTR **cis-elements** (primer-binding site, polypurine tract). The misleading host exon–intron view is de-emphasised for an ERV.
 - **Name the family** (optional, WSL) against the curated Dfam 4.0 library, and **resolve exon–intron structure** from a transcript with minimap2.
 - **Design and screen primers** — Primer3 with presets and full parameters; every pair carries a **dual-engine secondary-structure check** (hairpin / self-dimer / cross-dimer / 3′-end ΔG, Primer3 cross-checked against ViennaRNA); pair-aware **in-silico PCR** as a to-scale gel; and a local **whole-genome off-target scan** against a downloaded RefSeq genome, with on-target/off-target framing.
 - **Reproducible by construction** — every result carries a provenance manifest sealing the exact tool/database versions, parameters, and input checksums; fetched sequences and genomes are content-addressed.

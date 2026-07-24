@@ -172,7 +172,7 @@ REFLINKS = {
     "Primer3":      {"url": "https://doi.org/10.1093/nar/gks596", "cite": "Untergasser A, et al. (2012) Primer3 — new capabilities and interfaces. Nucleic Acids Res 40:e115."},
     "minimap2":     {"url": "https://doi.org/10.1093/bioinformatics/bty191", "cite": "Li H (2018) Minimap2: pairwise alignment for nucleotide sequences. Bioinformatics 34:3094-3100."},
     "SantaLucia1998": {"url": "https://doi.org/10.1073/pnas.95.4.1460", "cite": "SantaLucia J Jr (1998) A unified view of … DNA nearest-neighbor thermodynamics. PNAS 95(4):1460-1465."},
-    "Owczarzy2008": {"url": "https://doi.org/10.1093/nar/gkn198", "cite": "Owczarzy R, et al. (2008) IDT SciTools. Nucleic Acids Res 36(Web Server):W163-W169."},
+    "Owczarzy2008": {"url": "https://doi.org/10.1093/nar/gkn198", "cite": "Owczarzy R, et al. (2008) IDT SciTools. Nucleic Acids Res 36(Web Server):W163-W169. — comparability only: TEagle matches OligoAnalyzer's ΔG convention + −9 kcal/mol threshold, it does not run IDT SciTools (ΔG computed with Primer3 + ViennaRNA)."},
     "ViennaRNA":    {"url": "https://doi.org/10.1186/1748-7188-6-26", "cite": "Lorenz R, et al. (2011) ViennaRNA Package 2.0. Algorithms Mol Biol 6:26."},
 }
 
@@ -1111,6 +1111,22 @@ class MainWindow(QMainWindow):
             gv.setMinimumHeight(260)
             card.bodylay.addWidget(gv)
 
+        # retroviral transcript architecture (ERV) — the correct coding-organisation model + cis-element legend
+        arch = rec.get("retroviral")
+        if arch:
+            has_cis = any(e["type"].startswith(("PBS", "PPT")) for e in rec.get("structural", []))
+            leg = ("<span style='color:#009E73'>■</span> env exon &nbsp; "
+                   "<span style='color:#B0752E'>■</span> gag–pro–pol intron (fused polyprotein)"
+                   + (" &nbsp; <span style='color:#8459C4'>■</span> PBS &nbsp; "
+                      "<span style='color:#2C7FB8'>■</span> PPT" if has_cis else ""))
+            legw = QLabel(leg); legw.setObjectName("orient"); legw.setTextFormat(Qt.RichText); legw.setWordWrap(True)
+            card.bodylay.addWidget(legw)
+            note = QLabel("<b>Endogenous retrovirus — transcript architecture.</b> " + arch["note"] +
+                          " For the exact splice bases, send a real env transcript to the splice-detection card. " +
+                          arch.get("subsplice_note", ""))
+            note.setObjectName("orient"); note.setWordWrap(True); note.setTextFormat(Qt.RichText)
+            card.bodylay.addWidget(note)
+
         # structural table (right-click a row → copy FASTA/DNA/coords, design primer here)
         struct = rec.get("structural", [])
         if struct:
@@ -1155,22 +1171,23 @@ class MainWindow(QMainWindow):
             drow = QHBoxLayout(); drow.addStretch(1); drow.addWidget(_export_table_btn(t, "TEagle_domains", self))
             card.bodylay.addLayout(drow)
 
-        # gene model (exon/intron/CDS) — only when a fetched accession carries feature annotation
+        # gene model (exon/intron/CDS) — only when a fetched accession carries feature annotation.
+        # For an ERV the host-style CDS/exon view is the misleading one (it shows the env CDS as a single
+        # "exon"); the retroviral transcript architecture above is the correct model, so the raw gene model is
+        # DE-EMPHASISED behind a collapsed toggle. For non-ERV TEs (a real TE-in-host-gene) it stays visible.
         gm = self.state.get("features")
         if isinstance(gm, dict) and (gm.get("exons") or gm.get("cds")):
             gm = complete_gene_model(gm)                       # fill CDS-implied exons (idempotent; covers old caches)
-            # gate the title suffix + the exon* legend on the SAME condition the figure uses to draw an exon*
-            # glyph (a per-exon derived flag), so they can never claim inferred exons the figure doesn't show —
-            # NOT on the model-level derived_introns flag, which is True for any ordinary multi-exon record.
             derived = any(e.get("derived") for e in gm.get("exons", []))
+            _tc = (cl.get("te_class") or "")
+            demote = bool(cl.get("is_erv") and rec.get("retroviral"))   # ERV with a transcript-architecture model
+            gmbox = QWidget(); gmlay = QVBoxLayout(gmbox); gmlay.setContentsMargins(0, 0, 0, 0); gmlay.setSpacing(6)
             title = "Gene model (NCBI feature table" + (" + CDS-inferred exons)" if derived else ")")
-            card.bodylay.addWidget(_sl(title))
-            _tc = (cl.get("te_class") or "")           # a TE is not a host gene — its coding organisation is the domain architecture
-            if cl.get("is_erv") or _tc.startswith(("LTR", "LINE", "retro", "DNA")):
+            gmlay.addWidget(_sl(title))
+            if not demote and (cl.get("is_erv") or _tc.startswith(("LTR", "LINE", "retro", "DNA"))):
                 cav = QLabel("This is a transposable element, not a host gene: its coding organisation is the domain "
-                             "architecture above (for an ERV, gag–pol–env, with a gag–pol frameshift and a spliced env), "
-                             "not a host exon–intron structure. The blocks below are the record's own CDS annotation.")
-                cav.setObjectName("orient"); cav.setWordWrap(True); card.bodylay.addWidget(cav)
+                             "architecture above, not a host exon–intron structure. The blocks below are the record's own CDS annotation.")
+                cav.setObjectName("orient"); cav.setWordWrap(True); gmlay.addWidget(cav)
             legend = ("<span style='color:#009E73'>■</span> exon · "
                       "<span style='color:#8792a0'>■</span> intron · "
                       "<span style='color:#D55E00'>■</span> CDS · "
@@ -1180,13 +1197,23 @@ class MainWindow(QMainWindow):
                 legend += (" · <span style='color:#7fd3b8'>■</span> <b>exon*</b> = derived from the record's "
                            "CDS/mRNA, not a separate exon annotation")
             leg = QLabel(legend); leg.setTextFormat(Qt.RichText); leg.setWordWrap(True); leg.setObjectName("orient")
-            card.bodylay.addWidget(leg)
+            gmlay.addWidget(leg)
             length = rec.get("composition", {}).get("length") or 1
             gmodel = figures.gv_tracks_from_gene(gm, length, include_flanks=True)   # flanks + gaps clickable too
             if gmodel["tracks"]:
                 gvg = GenomePanel(svg_genome, "TEagle_genemodel"); gvg.apply_app_theme(self.theme); gvg.set_model(gmodel)
                 gvg.set_feature_menu(self._region_menu); gvg.setMinimumHeight(200)
-                card.bodylay.addWidget(gvg)
+                gmlay.addWidget(gvg)
+            if demote:                                         # collapse the host-style view for an ERV
+                gmbox.setVisible(False)
+                gmtog = QPushButton("▸ Record's raw CDS annotation (host-style — the transcript architecture above is the correct model)")
+                gmtog.setProperty("link", True)
+                def _tgm(_=False, b=gmbox, t=gmtog):
+                    v = not b.isVisible(); b.setVisible(v)
+                    t.setText(("▾" if v else "▸") + t.text()[1:])
+                gmtog.clicked.connect(_tgm)
+                card.bodylay.addWidget(gmtog)
+            card.bodylay.addWidget(gmbox)
 
         for note in rec.get("notes", []):
             n = QLabel("• " + note); n.setObjectName("orient"); n.setWordWrap(True)
@@ -1230,10 +1257,14 @@ class MainWindow(QMainWindow):
             " library; this is the only step that makes a database family call, and it is absent from the offline path.")
 
     def _struct_row(self, e):
-        sp = e.get("element_span") or e.get("five_prime") or e.get("pos") or e.get("upstream") or [None, None]
+        fp, tp = e.get("five_prime"), e.get("three_prime")
+        if fp and tp:                                     # a terminal-repeat PAIR (LTR/TIR): show BOTH copies,
+            coords = f"{fp[0]}–{fp[1]}  ·  {tp[0]}–{tp[1]}"   # matching the two blocks drawn in the genome viewer
+        else:
+            sp = e.get("pos") or e.get("upstream") or e.get("element_span") or [None, None]
+            coords = f"{sp[0]}–{sp[1]}" if sp[0] is not None else ""
         arm = e.get("ltr_len") or e.get("tir_len") or e.get("length") or ""
         metric = (f"{e['identity']}%" if e.get("identity") is not None else e.get("motif", ""))
-        coords = f"{sp[0]}–{sp[1]}" if sp[0] is not None else ""
         return [e["type"], coords, arm, metric, e.get("method", "")]
 
 

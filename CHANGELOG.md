@@ -9,6 +9,22 @@ and propagates to the backend health endpoint, the UI header badge, every run
 provenance manifest, the packaged executable's Windows file-version metadata, and
 the LaTeX report title page.
 
+## [2.10.0] — 2026-07-24
+
+Endogenous retroviruses are now read as retroviruses, not host genes: an explicit spliced-env transcript architecture plus the LTR cis-elements — the answer to "why does my HERV-K show one exon and no introns."
+
+### Added
+- **Retroviral transcript architecture (ERV).** A HERV-K (or any ERV) no longer shows a single host-style "exon = CDS". The analysis card draws the retroviral transcript model: **env is expressed from a spliced subgenomic mRNA** (a short 5′ leader exon joined to the env exon), with the whole **gag–pro–pol span removed as one intron** and labelled a **frameshift-fused polyprotein** — not a set of host exons. Junctions are anchored on the LTR and protein-domain positions and are **explicitly approximate**; TEagle never fabricates a single-base donor/acceptor from motif guessing (the exact env intron cannot be recovered from proviral DNA alone). HML-2 *rec/np9* sub-splicing is noted. Model after Löwer 1995 / Magin 1999 / Schmitt 2015.
+- **LTR cis-elements.** The structural layer now detects the **primer-binding site (PBS)** in the leader just 3′ of the 5′ LTR — matched to a primer-tRNA panel and reported with the priming tRNA (tRNA-Lys for HERV-K), **hedged when the match is diverged** as endogenised proviruses are — and the **polypurine tract (PPT)** abutting the 3′ LTR. Both render as their own genome-viewer track and rows in the structural table.
+
+### Changed
+- For an endogenous retrovirus the host-style **gene-model view is de-emphasised** (collapsed behind a toggle) so the retroviral transcript architecture is the primary picture; for a non-ERV TE embedded in a host gene, the gene model stays visible.
+
+### Fixed
+- **Sub-panels follow the theme.** Every dialog — the secondary-structure detail, the sub-region picker, manage-genomes, the gel/PCR views, and the backend installer — now renders in the current dark/light theme instead of falling back to the operating-system default background.
+- **The structural-evidence table shows both LTR copies.** An LTR (or TIR) pair now lists its 5′ and 3′ copy coordinates, matching the two blocks drawn in the genome viewer, rather than a single element-span row that read as one oversized repeat.
+- **IDT reference reframed.** The Owczarzy 2008 (IDT SciTools) citation is labelled a comparability reference: TEagle matches OligoAnalyzer's ΔG convention and −9 kcal/mol threshold but computes every value independently with Primer3 + ViennaRNA and does not run IDT SciTools.
+
 ## [2.9.0] — 2026-07-24
 
 Full retroviral GAG–POL–ENV domain coverage so endogenous retroviruses are read as complete elements, a two-axis reliability report (per-domain confidence + a scoped structural-completeness tier), a nine-specimen HERV benchmark across seven families, and the v2.8.x primer-QC polish.
@@ -290,6 +306,7 @@ primer design, usable without a command line.
   the WebView2 runtime is absent. A kill-on-close Job Object ties the whole process tree to the
   launcher, so an in-place upgrade never orphans a window.
 
+[2.10.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.10.0
 [2.9.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.9.0
 [2.8.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.8.0
 [2.6.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.6.0
