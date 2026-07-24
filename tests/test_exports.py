@@ -148,16 +148,17 @@ def test_export_table_fmt_appends_missing_extension(tmp_path, monkeypatch):
     assert os.path.isfile(noext + ".tsv")
 
 
-def test_export_submenu_actions_route_to_each_format(monkeypatch):
-    from PySide6.QtWidgets import QMenu, QWidget
+def test_export_flat_action_routes_chosen_format(monkeypatch):
+    # the DataTable Export is now a single FLAT action (no submenu -> no native ▶ arrow to overlap the label);
+    # it pops the flat format picker then routes the chosen format to export_table
+    from PySide6.QtCore import QPoint
     calls = []
     monkeypatch.setattr(widgets, "export_table", lambda h, r, b, p, fmt=None: calls.append(fmt))
-    host = QWidget(); m = QMenu(host)
-    sub = widgets.add_export_submenu(m, ["c"], lambda: [["v"]], "base", host)
-    import gc; gc.collect()                                    # the parented submenu must outlive a GC pass
-    for a in list(sub.actions()):
-        a.trigger()
-    assert calls == [f for _, f in widgets._available_formats()]
+    monkeypatch.setattr(widgets, "pick_table_format", lambda parent, pos: "csv")
+    t = widgets.DataTable(["c"], {}); t.set_rows([["v"]])
+    t._do_export(QPoint(0, 0))
+    assert calls == ["csv"]
+    assert not hasattr(widgets, "add_export_submenu")         # the arrow-prone submenu helper is gone
 
 
 @pytest.mark.parametrize("theme", ["dark", "white"])

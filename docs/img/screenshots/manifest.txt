@@ -1,0 +1,20 @@
+OK   classify_copia                    M11240 -> LTR/Copia / High (1110x1332)
+OK   classify_gypsy                    M12927 -> LTR/Gypsy / High (1110x1332)
+OK   classify_line                     M80343 -> LINE / Moderate (1110x1348)
+OK   classify_dna_tc1                  X01005 -> DNA/Tc1 / Moderate (1110x1348)
+OK   classify_dna_2                    X05424 -> DNA/hAT / Moderate (1110x1348)
+OK   primers_success                   5 pairs (1110x712)
+OK   pcr_on_target                     1 band(s) (1110x1086)
+OK   pcr_off_target                    3 product(s) across LTR copies (1110x1086)
+OK   banner_success                    success (1110x36)
+OK   banner_info                       info (1110x36)
+OK   banner_error                      error (1110x36)
+OK   export_FASTA                      file written
+OK   export_CSV                        file written
+OK   export_TSV                        file written
+OK   export_XLSX                       file written
+OK   export_SVG                        file written
+OK   export_PNG                        file written
+OK   manage_genomes_panel              tabular control panel (760x520)
+OK   genome_scan_result                locus-specific in this assembly (1 genom (1110x1086)
+OK   family_annotation                 2 Dfam hit(s) (1110x237)

@@ -96,31 +96,32 @@ def win():
 def test_rail_toggle_collapses_and_restores(win):
     # the specimen panel collapses to free width and reopens, restoring the split (state tracked explicitly,
     # since isVisible() is unreliable before the window is shown)
-    assert win._rail_collapsed is False and win.railToggle.text() == "◧"
+    assert win._rail_collapsed is False and win.railToggle.text().upper() == "HIDE"
     win._rail_sizes = [340, 900]
     win._toggle_rail()
-    assert win._rail_collapsed is True and win.rail.isHidden() is True and win.railToggle.text() == "▣"
+    assert win._rail_collapsed is True and win.rail.isHidden() is True and win.railToggle.text().upper() == "SHOW"
     win._toggle_rail()
     assert win._rail_collapsed is False and win.rail.isHidden() is False and win.split.sizes()[0] > 0
 
 
 def test_ui_scale_applied_from_settings(monkeypatch):
-    import main
-    monkeypatch.delenv("QT_SCALE_FACTOR", raising=False)
+    import main, theme as theme_mod
     monkeypatch.delenv("TEAGLE_UI_SCALE", raising=False)
     class _FakeSettings:
         def __init__(self, *a): pass
         def value(self, k, d=None): return 1.25
     monkeypatch.setattr(main, "QSettings", _FakeSettings)
+    orig = theme_mod.UI_SCALE
     try:
         main._apply_saved_ui_scale()
-        assert os.environ.get("QT_SCALE_FACTOR") == "1.25"       # persisted scale -> QT_SCALE_FACTOR before QApplication
-        # an explicit env override must win (function returns without changing it)
-        os.environ["QT_SCALE_FACTOR"] = "2.0"
+        assert abs(theme_mod.UI_SCALE - 1.25) < 1e-6             # persisted scale drives theme_mod.UI_SCALE live (no QT_SCALE_FACTOR)
+        # an explicit TEAGLE_UI_SCALE env override must win (function returns without changing UI_SCALE)
+        theme_mod.UI_SCALE = 2.0
+        monkeypatch.setenv("TEAGLE_UI_SCALE", "2.0")
         main._apply_saved_ui_scale()
-        assert os.environ["QT_SCALE_FACTOR"] == "2.0"
+        assert theme_mod.UI_SCALE == 2.0
     finally:
-        os.environ.pop("QT_SCALE_FACTOR", None)
+        theme_mod.UI_SCALE = orig
 
 
 def test_methods_html_states_databases_and_params(win):
@@ -325,12 +326,12 @@ def test_genome_prepare_resumes_pending_scan(win):
 
 
 def test_banner_level_distinguishes_success_from_error(win):
-    # a success/advisory message must not render in the red error style with a warning triangle
+    # the banner level drives the colour style (theme.py #errbanner[level]); the message is shown verbatim (no glyph)
     win._banner("Genome ready", level="success")
     assert win.errbanner.property("level") == "success" and not win.errbanner.isHidden()
-    assert win.errbanner.text().startswith("✓")
+    assert win.errbanner.text() == "Genome ready"
     win._banner("bad input")                                   # default level = error
-    assert win.errbanner.property("level") == "error" and win.errbanner.text().startswith("⚠")
+    assert win.errbanner.property("level") == "error" and win.errbanner.text() == "bad input"
 
 
 def test_busybar_is_indeterminate_and_updatable():
@@ -410,11 +411,14 @@ def test_genome_need_prepare_uses_captured_org(win, monkeypatch):
 
 
 def test_flank_region_clickable_and_slices_analyzed_seq(win):
-    # a 5' flank region from the gene-model viewer must offer copy/design and slice the analyzed snapshot
-    win.state["analyzed_seq"] = ">x\n" + "ACGTACGTAC" + "N" * 190       # first 10 bases are ACGTACGTAC
-    items = win._region_menu({"start": 0, "end": 10, "label": "5prime_flank", "strand": "+"})
-    labels = [lbl for lbl, _ in items]
-    assert any("Copy FASTA" in l for l in labels) and any("primer" in l.lower() for l in labels)
+    # a flank region from the gene-model viewer offers copy + slices the analyzed snapshot; contextual actions
+    # (primer/splice) appear only when the region is long enough to design in (item 14 — no primer on a 10 bp motif)
+    win.state["analyzed_seq"] = ">x\n" + "ACGTACGTAC" + "G" * 90          # first 10 bases ACGTACGTAC, 100 total
+    short = [lbl for lbl, _ in win._region_menu({"start": 0, "end": 10, "label": "5prime_flank", "strand": "+"})]
+    assert any("Copy FASTA" in l for l in short)
+    assert not any("primer" in l.lower() for l in short)                 # 10 bp is too short to design a primer in
+    long = [lbl for lbl, _ in win._region_menu({"start": 0, "end": 80, "label": "flank", "strand": "+"})]
+    assert any("primer" in l.lower() for l in long)                      # an 80 bp region can
     assert win._slice(0, 10) == "ACGTACGTAC"                             # flank coords index analyzed_seq
 
 
@@ -423,14 +427,16 @@ def test_app_theme_propagates_to_genome_viewers(win):
     win._load_sample(); win._run_analysis()
     assert _spin(lambda: win.state.get("analyzed_clean"))
     gvs = win.findChildren(widgets.GenomePanel)
-    assert gvs and gvs[0].theme == "dark" and win.theme == "dark"
+    assert gvs and win.theme in ("dark", "light")
+    start_theme, start_vtheme = win.theme, gvs[0].theme
     gvs[0].view = {"start": 100.0, "end": 500.0}; saved = dict(gvs[0].view)
-    win._toggle_theme()                                        # app -> light
-    assert win.theme == "light" and gvs[0].theme == "white"    # viewer follows
+    win._toggle_theme()                                        # toggle the app theme
+    assert win.theme != start_theme and gvs[0].theme != start_vtheme   # viewer follows the app theme
     assert gvs[0].view == saved                                # pan/zoom preserved (in-place re-render)
+    after_one = win.theme
     gvs[0]._set_theme("dark", user=True)                       # per-viewer MANUAL override (button click)
-    win._toggle_theme(); win._toggle_theme()                   # two app toggles must NOT stomp a manual pick (H1)
-    assert win.theme == "light" and gvs[0].theme == "dark"     # user's choice is kept across app-theme changes
+    win._toggle_theme(); win._toggle_theme()                   # two app toggles = identity; must NOT stomp a manual pick (H1)
+    assert win.theme == after_one and gvs[0].theme == "dark"   # user's viewer choice is kept across app-theme changes
 
 
 def test_feature_slice_uses_analyzed_snapshot_not_live_box(win):

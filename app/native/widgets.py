@@ -173,7 +173,7 @@ class FigurePanel(QWidget):
             self._mode_btns[m] = b
         bar.addStretch(1)
         for txt, fn in (("−", self._zoom_out), ("FIT", self._fit), ("+", self._zoom_in),
-                        ("⭳ SVG", self._export_svg), ("⭳ PNG", self._export_png)):
+                        ("SVG", self._export_svg), ("PNG", self._export_png)):
             b = QPushButton(txt)
             b.setProperty("sm", True)
             b.clicked.connect(fn)
@@ -257,7 +257,7 @@ class GenomePanel(QWidget):
         bar.addWidget(self.pos)
         bar.addStretch(1)
         for txt, fn in (("−", lambda: self._zoom(1.6)), ("FIT", self._fit), ("+", lambda: self._zoom(0.625)),
-                        ("⭳ SVG", self._export_svg), ("⭳ PNG", self._export_png)):
+                        ("SVG", self._export_svg), ("PNG", self._export_png)):
             b = QPushButton(txt); b.setProperty("sm", True); b.clicked.connect(fn); bar.addWidget(b)
         lay.addLayout(bar)
         self.canvas = _GenomeCanvas(self)
@@ -528,17 +528,6 @@ def pick_table_format(parent, global_pos):
     return amap.get(m.exec(global_pos))
 
 
-def add_export_submenu(menu, headers, rows_fn, base, parent):
-    """Attach a '⭳ Export table ▸ Excel/CSV/TSV' submenu; rows_fn is called at click time (current order).
-    The submenu is parented to `menu` so C++ keeps it alive after this returns (a bare addMenu(str) can
-    be GC'd out from under the menu)."""
-    sub = QMenu("⭳ Export table", menu)
-    for label, fmt in _available_formats():
-        sub.addAction(label, lambda _=False, f=fmt: export_table(headers, rows_fn(), base, parent, fmt=f))
-    menu.addMenu(sub)
-    return sub
-
-
 def export_table(headers, rows, base, parent=None, fmt=None):
     """Write a table to a user-chosen file. `fmt` in {'xlsx','csv','tsv'} pre-selects the format so the
     save dialog offers exactly that type; fmt=None falls back to a multi-filter dialog."""
@@ -697,8 +686,15 @@ class DataTable(QTableWidget):
                 m.addAction(label, fn)
             m.addSeparator()
         m.addAction("Copy row", lambda: self._copy_row(row))
-        add_export_submenu(m, self._headers, self.rows_data, "TEagle_table", self)
-        m.exec(self.viewport().mapToGlobal(pos))
+        gpos = self.viewport().mapToGlobal(pos)                   # flat action (no submenu -> no native ▶ arrow to collide with)
+        m.addAction("Export table…", lambda: self._do_export(gpos))
+        m.exec(gpos)
+
+    def _do_export(self, gpos):
+        """Flat table export: pop the arrow-free format picker at gpos, then route the chosen format to export_table."""
+        fmt = pick_table_format(self, gpos)
+        if fmt:
+            export_table(self._headers, self.rows_data(), "TEagle_table", self, fmt=fmt)
 
     def _copy_row(self, row):
         if row < 0:

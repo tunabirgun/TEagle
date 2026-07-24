@@ -192,10 +192,26 @@ def build_gene_model(feats: list) -> dict:
                 introns.append({"start": a["end"], "end": b["start"], "strand": a.get("strand", "+"), "note": ""})
         derived_introns = bool(introns)
     exons, introns, cds = _dedup(exons), _dedup(introns), _dedup(cds)
+    # the record's OWN annotated transcripts (mRNA /transcript_id = NM_/XM_) — a splice picker offers these so a
+    # user does not have to hunt for the matching transcript. Aligning one back to its own record is a CONSISTENCY
+    # check (same annotation source), NOT independent confirmation — the UI relabels accordingly.
+    transcripts, seen_tx = [], set()
+    for f in feats:
+        raw = f.get("qualifiers", {}).get("transcript_id")
+        if not raw:
+            continue
+        m = re.search(r"[A-Z]{2}_\d+(?:\.\d+)?", raw) or re.search(r"[A-Z]{1,2}\d+(?:\.\d+)?", raw)
+        acc = m.group(0) if m else raw
+        if acc in seen_tx:
+            continue
+        seen_tx.add(acc)
+        q = f["qualifiers"]
+        transcripts.append({"accession": acc, "product": q.get("product", ""), "gene": q.get("gene", "")})
     return complete_gene_model({
         "exons": exons, "introns": introns, "cds": cds,
         "counts": {"exons": len(exons), "introns": len(introns), "cds": len(cds)},
         "derived_exons": derived_exons, "derived_introns": derived_introns,
+        "transcripts": transcripts,
         "source": "NCBI feature table (efetch rettype=ft)",
     })
 
@@ -448,6 +464,49 @@ def resolve_assembly(query: str) -> dict:
     return {"organism": r.get("organism", {}).get("organism_name", query),
             "taxid": str(r.get("organism", {}).get("tax_id", "")),
             "assemblyName": ai.get("assembly_name", ""), "assemblyAccession": r.get("accession", "")}
+
+
+# ---- user-added assemblies (organism -> pinned assembly), resolved ONCE at add-time -------------------
+# A lookup store ONLY. It lives OUTSIDE every content-addressed seal key, so a user-pinned assembly seals
+# byte-identically to a curated COORD_ASSEMBLIES entry — the versioned accession is the sole reproducibility
+# anchor (a bare organism NAME can be promoted to a new RefSeq build over time, so it is frozen here).
+_CUSTOM_ASM_PATH = os.path.join(appdirs.user_data_dir(), "custom_assemblies.json")
+
+def load_custom_assemblies() -> dict:
+    try:
+        with open(_CUSTOM_ASM_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        return {k: v for k, v in data.items() if isinstance(v, dict) and v.get("assemblyAccession")}
+    except Exception:
+        return {}
+
+def all_assemblies() -> dict:
+    """COORD_ASSEMBLIES unioned with the user's custom store. A curated name always wins a collision, so a user
+    cannot shadow a pinned reference assembly. Every downstream lookup reads THIS, so custom + curated genomes
+    share one identical code path (and therefore seal identically)."""
+    merged = dict(COORD_ASSEMBLIES)
+    for org, e in load_custom_assemblies().items():
+        merged.setdefault(org, {"assemblyName": e.get("assemblyName", ""),
+                                "assemblyAccession": e["assemblyAccession"],
+                                "taxid": str(e.get("taxid", "")), "custom": True})
+    return merged
+
+def add_custom_assembly(query: str) -> dict:
+    """Resolve `query` (organism name OR GCF/GCA accession) ONCE, pin the versioned accession, and persist.
+    Returns {organism, assemblyName, assemblyAccession, taxid}. Raises CoordError on a bad name/accession."""
+    a = resolve_assembly(query)
+    org = a["organism"]
+    entry = {"assemblyName": a["assemblyName"], "assemblyAccession": a["assemblyAccession"],
+             "taxid": str(a.get("taxid", "")),
+             "resolvedUtc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+    store = load_custom_assemblies()
+    store[org] = entry
+    os.makedirs(os.path.dirname(_CUSTOM_ASM_PATH), exist_ok=True)
+    tmp = _CUSTOM_ASM_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(store, f, indent=1)
+    os.replace(tmp, _CUSTOM_ASM_PATH)
+    return {"organism": org, **entry}
 
 
 def fetch_fasta_range(acc_version: str, start: int, end: int, strand: str = "+") -> str:

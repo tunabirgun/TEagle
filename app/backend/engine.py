@@ -216,8 +216,9 @@ def run_fetch_coords(body):
     if not isinstance(org, str) or not isinstance(custom, str):
         raise BadRequest("organism / customQuery must be strings")
     try:
-        if org in fetch.COORD_ASSEMBLIES:
-            a = fetch.COORD_ASSEMBLIES[org]
+        asm = fetch.all_assemblies()                          # curated + user-added, so a custom organism resolves here too
+        if org in asm:
+            a = asm[org]
             meta = fetch.retrieve_coords(regions, a["assemblyAccession"], a["assemblyName"], org,
                                          taxid=a.get("taxid", ""), strand=strand, refresh=bool(body.get("refresh")))
         elif custom.strip():
@@ -437,10 +438,10 @@ def _resolve_assembly(body):
     org = body.get("organism", "")
     if not isinstance(org, str):
         raise BadRequest("organism must be a string")
-    acc = str(body.get("assemblyAccession", "") or (fetch.COORD_ASSEMBLIES.get(org, {}) or {}).get("assemblyAccession", "")).strip()
+    info = fetch.all_assemblies().get(org, {}) or {}          # curated + user-added, so a custom genome resolves here too
+    acc = str(body.get("assemblyAccession", "") or info.get("assemblyAccession", "")).strip()
     if not re.match(r"^GC[AF]_\d+\.\d+$", acc):
         raise BadRequest("select an organism (or provide a RefSeq assembly accession GCF_…) for the whole-genome scan")
-    info = fetch.COORD_ASSEMBLIES.get(org, {}) or {}
     name = str(body.get("assemblyName", "") or info.get("assemblyName", "")).strip()
     taxid = str(body.get("taxid", "") or info.get("taxid", "")).strip()
     return org, acc, name, taxid

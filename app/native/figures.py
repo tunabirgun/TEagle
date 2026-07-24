@@ -65,7 +65,7 @@ def gv_tracks_from_rec(rec: dict) -> dict:
             for p in (e.get("five_prime"), e.get("three_prime")):
                 if p:
                     reps.append({"start": p[0], "end": p[1], "color": col, "label": t.split(" ")[0],
-                                 "tip": f"{t} {p[0]}–{p[1]}"})
+                                 "kind": t.split(" ")[0], "tip": f"{t} {p[0]}–{p[1]}"})
         elif t.startswith("PBS") or t.startswith("PPT"):
             p = e["pos"]; key = t[:3]
             if key == "PBS":                              # name the tRNA only when confident, else "PBS·?"
@@ -76,11 +76,11 @@ def gv_tracks_from_rec(rec: dict) -> dict:
             else:
                 lab = "PPT"
                 tip = f"{t} {p[0]}–{p[1]} · {int(round(e.get('purine_frac', 0) * 100))}% purine"
-            cis.append({"start": p[0], "end": p[1], "color": CISCOL[key], "label": lab, "tip": tip})
+            cis.append({"start": p[0], "end": p[1], "color": CISCOL[key], "label": lab, "kind": key, "tip": tip})
         elif e.get("pos"):
             p = e["pos"]
             reps.append({"start": p[0], "end": p[1], "color": OK["tail"], "label": t.split(" ")[0],
-                         "tip": f"{t} {p[0]}–{p[1]}"})
+                         "kind": t.split(" ")[0], "tip": f"{t} {p[0]}–{p[1]}"})
     if reps:
         tracks.append({"name": "terminal repeats", "height": 20, "features": reps})
     if cis:

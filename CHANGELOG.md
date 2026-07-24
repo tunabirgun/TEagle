@@ -9,6 +9,29 @@ and propagates to the backend health endpoint, the UI header badge, every run
 provenance manifest, the packaged executable's Windows file-version metadata, and
 the LaTeX report title page.
 
+## [2.11.0] — 2026-07-24
+
+A UI/UX overhaul that keeps the assay-terminal identity but strips the noise: a legible body font, a calmer light default, honest and traceable readouts, and a whole-genome scan you can actually find — driven by a multi-persona design swarm and a five-round verification loop.
+### Added
+- **In-card whole-genome off-target scan.** Card 06 now carries an organism picker, a designed-pair picker, and a primary **Scan whole genome** button, so the scan is reachable without a right-click (the right-click stays as a power shortcut). Every route calls one sealed handler, so the isPcr job is byte-identical.
+- **Add an organism to the genome manager** by name *or* assembly accession. The tool resolves it once, pins the versioned RefSeq accession, and unions it into every organism dropdown — a user-added genome seals byte-identically to a curated one.
+- **Record's-own transcript picker for splice detection.** A fetched, annotated record lists its own mRNAs; one click loads a transcript. Aligning a record's own transcript back to its locus is labelled a **consistency check (same annotation source)**, never independent confirmation.
+- **Traceable specimen readouts.** RECORDS links to the source accession; STRUCTURAL EVIDENCE and ORFS are in-app links to their tables, captioned "detected de novo — not database-retrieved" (a heuristic call is never dressed up as a database record).
+- **Export-table buttons** on the primer, in-silico PCR, and off-target-scan tables, alongside the existing figure/FASTA exports.
+### Changed
+- **Roboto** is the body/UI font for legibility; sequences, accessions, coordinates and numeric tables stay in Cascadia Mono.
+- **Light mode is the first-run default**, and the theme choice is remembered.
+- **UI scale applies live** — no restart. The old "Restart now" (which only closed the app) is removed.
+- **Calmer panels.** The classification banner is a three-tier CALL / WHY / SCOPE read with the reliability caveat kept visible; card titles are sentence-case; spacing, text tiers and padding are unified.
+- **Gene model vs splice** are labelled by provenance — "NCBI annotation" vs "de novo alignment" — with a reciprocal cross-link, so an annotation is never conflated with an independent measurement.
+- **Manage Genomes** is a designed panel (coloured status, aligned columns, an add-organism row) instead of a bare table.
+- **Right-click menus are contextual** — a structural motif (LTR/TIR/TSD/PBS/PPT) offers only copy actions, not primer design or splice routing.
+### Fixed
+- Decorative glyphs and emoji are swept from the UI to plain text, while scientific notation (5′→3′, ΔG, ≤/≥), the ■ colour-keys, the ‡ engine-disagreement marker and the 01–07 card badges are kept.
+- The light-mode accent is darkened to meet WCAG AA contrast for button and link text; the "source" citation link no longer renders a missing-glyph box.
+- Content clipping / horizontal overflow at high UI scale and narrow windows is fixed — the page body never scrolls sideways and wide tables scroll inside their own viewport.
+- The export right-click no longer overlaps a submenu arrow (flattened to a single action).
+
 ## [2.10.0] — 2026-07-24
 
 Endogenous retroviruses are now read as retroviruses, not host genes: an explicit spliced-env transcript architecture plus the LTR cis-elements — the answer to "why does my HERV-K show one exon and no introns."
@@ -306,6 +329,7 @@ primer design, usable without a command line.
   the WebView2 runtime is absent. A kill-on-close Job Object ties the whole process tree to the
   launcher, so an in-place upgrade never orphans a window.
 
+[2.11.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.11.0
 [2.10.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.10.0
 [2.9.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.9.0
 [2.8.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.8.0
