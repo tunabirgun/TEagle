@@ -26,7 +26,13 @@ class InstallDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("TEagle — backend installer")
         self.setObjectName("central")
-        self.resize(700, 660)
+        import theme as _t
+        z = _t.UI_SCALE                                       # open larger, capped to the screen, so every component row is comfortably readable
+        try:
+            _g = self.screen().availableGeometry(); _sw, _sh = _g.width(), _g.height()
+        except Exception:
+            _sw, _sh = 1440, 900
+        self.resize(min(round(900 * z), _sw - 60), min(round(820 * z), _sh - 60))
         self.engine = Engine(self)
         self.engine.done.connect(self._on_done)
         self.engine.user_error.connect(self._on_user_error)
@@ -54,7 +60,8 @@ class InstallDialog(QDialog):
         self.grid.setContentsMargins(2, 2, 2, 2); self.grid.setHorizontalSpacing(10); self.grid.setVerticalSpacing(4)
         self.grid.setColumnStretch(1, 1)
         scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setWidget(holder)
-        scroll.setMinimumHeight(220); root.addWidget(scroll)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)   # rows wrap their text; never scroll sideways
+        scroll.setMinimumHeight(round(360 * _t.UI_SCALE)); root.addWidget(scroll, 1)   # tall enough to show the whole component stack
 
         # action bar
         bar = QHBoxLayout()

@@ -929,15 +929,18 @@ avail=$(df -BG --output=avail . 2>/dev/null | tail -1 | tr -dc '0-9'); avail=${a
 # before the conversion to keep the peak below this.
 [ "$avail" -ge 8 ] || { echo "FAIL insufficient disk (${avail}G free, need >=8G for a genome)"; exit 1; }
 plog "downloading $ACC (NCBI Datasets) — can take several minutes for a large genome"
-# a ~1 GB mammalian download can drop mid-transfer; datasets writes a fresh zip each time, so retry a few
-# times (the partial is discarded) rather than failing the whole prepare on one transient network blip.
-ok=0
-for attempt in 1 2 3; do
+# NCBI Datasets transfers of large genomes routinely drop mid-stream, and the API rate-limits (harder when the app
+# has also been fetching sequences from NCBI). datasets can't resume — it writes a fresh zip each time — so a blip
+# discards the partial and the attempt is retried. Retry 5x with EXPONENTIAL backoff (5,10,20,40s) so a transient
+# rate-limit window has time to clear, instead of hammering NCBI on a fixed short interval and exhausting the retries.
+ok=0; delay=5
+for attempt in 1 2 3 4 5; do
   if "$ENV/bin/datasets" download genome accession "$ACC" --include genome --filename dl.zip >/dev/null 2>dl.err; then ok=1; break; fi
-  plog "download attempt $attempt failed — retrying"; rm -f dl.zip; sleep 5
+  [ "$attempt" = 5 ] && break
+  plog "download attempt $attempt did not complete (transient NCBI/network) — retrying in ${delay}s"; rm -f dl.zip; sleep "$delay"; delay=$((delay*2))
 done
 # surface the last attempt's stderr (invalid/withdrawn accession, DNS/API/rate-limit) instead of an opaque failure
-[ "$ok" = 1 ] || { echo "FAIL download (after 3 attempts): $(tail -c 200 dl.err 2>/dev/null | tr '\n' ' ')"; exit 1; }
+[ "$ok" = 1 ] || { echo "FAIL download (after 5 attempts): $(tail -c 200 dl.err 2>/dev/null | tr '\n' ' ')"; exit 1; }
 plog "extracting genome FASTA"
 rm -rf ex; mkdir -p ex
 # a fresh minimal Ubuntu WSL ships python3 (zipfile is built into CPython) but NOT unzip — extract with the

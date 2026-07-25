@@ -414,6 +414,8 @@ class MainWindow(QMainWindow):
         inner = self.rail.widget() if hasattr(self.rail, "widget") else None
         if inner is not None:
             inner.setMinimumWidth(round(300 * z)); inner.setMaximumWidth(round(430 * z))
+        if getattr(self, "_genome_mgr", None) is not None:    # an open manager was built at the old scale — rebuild it live
+            self.engine.submit("genome_list", {}, key="genome_list")
         self._banner(f"UI scale set to {int(factor * 100)}% — applied live (font + spacing); pixel-exact on the next launch.", "info")
 
     # ---------- rail ----------
@@ -537,8 +539,6 @@ class MainWindow(QMainWindow):
         self.resultsScroll = wrap                          # inside their own viewport (per the crowding invariant)
         inner = QWidget(); inner.setObjectName("central")
         self.results = QVBoxLayout(inner); self.results.setContentsMargins(4, 0, 8, 0); self.results.setSpacing(9)
-        self.errbanner = QLabel(""); self.errbanner.setObjectName("errbanner"); self.errbanner.setWordWrap(True)
-        self.errbanner.setVisible(False); self.results.addWidget(self.errbanner)
 
         self.card_struct = CollapsibleCard("02", "Classification & structure",
                                            "LTR/TIR repeats, ORFs, protein domains")
@@ -924,7 +924,9 @@ class MainWindow(QMainWindow):
             self.runBtn.setEnabled(True); self.runBtn.setText("Run analysis")
         elif key == "primers":
             self._design_inflight = False
+            self._pending_domain = None                       # a failed routed design must not leave a stale re-anchor or busy body
             self.designBtn.setEnabled(True); self.designBtn.setText("Design primers")
+            self._set_body(self.primBody, _empty("Primer design failed — adjust the parameters or region, then try again."))
         elif key == "annotate":
             self.annotateBtn.setEnabled(True); self.annotateBtn.setText("Run family annotation")
             # _reset_buttons is error-only (success re-enables in _on_annotate), so clear the stuck busy body here —
@@ -945,10 +947,12 @@ class MainWindow(QMainWindow):
         elif key == "genome_pcr":
             self._genome_inflight = False; self._render_genome_status("Genome scan failed — " + msg)
             self._refresh_genome_manager()                    # scan settled (failed) — re-enable a manager opened mid-scan
+            self._banner("Genome scan failed — " + msg, "warn"); return
         elif key == "genome_prepare":
             self._genome_prep_inflight = False; self._pending_scan = None
             self._render_genome_status("Genome download failed — " + msg)
             self._refresh_genome_manager()                    # download settled (failed) — re-enable a manager opened during it
+            self._banner("Genome download failed — " + msg, "warn"); return
         elif key == "genome_prepare_log":
             return                                            # a background poll blip: never banner
         else:
@@ -956,32 +960,73 @@ class MainWindow(QMainWindow):
         self._banner(msg)
 
     def _on_failed(self, key, msg, trace):
+        if key == "genome_prepare_log":
+            return                                            # a background poll blip: never banner, never spam a traceback
+        sys.stderr.write(trace + "\n")                        # log the trace for diagnosis (all real faults)
         if key.startswith("pcr#"):
             self._pcr_slot(key, {"error": msg, "amplicons": []})
-        elif key == "genome_pcr":                             # clear the in-flight guard + stuck status on a hard fault
+        elif key == "genome_pcr":                             # a genome scan fault is a handled outcome, not an "unexpected error"
             self._genome_inflight = False; self._render_genome_status("Genome scan failed — " + msg)
             self._refresh_genome_manager()                    # scan settled (failed) — re-enable a manager opened mid-scan
-        elif key == "genome_prepare":
+            self._banner("Genome scan failed — " + msg, "warn"); return
+        elif key == "genome_prepare":                         # likewise a download fault: one clear warning, not a red crash dialog
             self._genome_prep_inflight = False; self._pending_scan = None
             self._render_genome_status("Genome download failed — " + msg)
             self._refresh_genome_manager()                    # download settled (failed) — re-enable a manager opened during it
-        elif key == "genome_prepare_log":
-            return                                            # a background poll blip: never banner
+            self._banner("Genome download failed — " + msg, "warn"); return
         else:
             self._reset_buttons(key)
-        sys.stderr.write(trace + "\n")
         self._banner(f"unexpected error: {msg}")
 
     def _banner(self, msg, level="error"):
-        # level drives colour + glyph so a success/advisory message is not painted as a red error (theme.py
-        # styles #errbanner[level=...]). Default stays 'error' so every existing call keeps its red styling.
-        self.errbanner.setText(msg)                       # level is carried by the banner colour (theme.py #errbanner[level])
-        self.errbanner.setProperty("level", level)
-        self._repolish(self.errbanner)                    # re-evaluate the level-aware QSS
-        self.errbanner.setVisible(True)
+        # transient messages surface as a small, closable notification dialog centred over the window — never a
+        # banner wedged above the panels. Non-modal (trailing callback logic must keep running); single active
+        # instance (replace, never stack); warn/error persist until dismissed, info/success auto-close.
+        old = getattr(self, "_notif", None)
+        if old is not None:
+            try:
+                old.close()
+            except Exception:
+                pass
+        dlg = QDialog(self); dlg.setObjectName("notif"); dlg.setProperty("level", level); dlg.setModal(False)
+        dlg.setAttribute(Qt.WA_DeleteOnClose, True)        # a dismissed dialog is freed, not left parented+alive for the session
+        dlg.setWindowTitle({"error": "Error", "warn": "Warning", "success": "Done", "info": "Notice"}.get(level, "Notice"))
+        self._notif = dlg
+        dlg.finished.connect(lambda *_, d=dlg: (setattr(self, "_notif", None) if getattr(self, "_notif", None) is d else None))
+        lay = QVBoxLayout(dlg)
+        lay.setContentsMargins(theme_mod.sp(16), theme_mod.sp(16), theme_mod.sp(16), theme_mod.sp(14)); lay.setSpacing(theme_mod.sp(12))
+        lab = QLabel(msg); lab.setObjectName("notifmsg"); lab.setProperty("level", level); lab.setWordWrap(True)
+        lab.setTextInteractionFlags(Qt.TextSelectableByMouse)   # accessions/seals/hashes in a message can be selected + copied
+        lab.setMinimumWidth(round(300 * theme_mod.UI_SCALE)); lab.setMaximumWidth(round(460 * theme_mod.UI_SCALE))
+        lay.addWidget(lab)
+        brow = QHBoxLayout(); brow.addStretch(1)
+        ok = QPushButton("Close"); ok.setProperty("sm", True); ok.clicked.connect(dlg.close)
+        brow.addWidget(ok); lay.addLayout(brow)
+        self._repolish(dlg); self._repolish(lab)
+        dlg.adjustSize()
+        try:                                              # centre over the window, then clamp ALL four edges onto the screen
+            g = self.frameGeometry(); dr = dlg.frameGeometry()
+            av = self.screen().availableGeometry()
+            x = min(max(g.center().x() - dr.width() // 2, av.left()), max(av.left(), av.right() - dr.width()))
+            y = min(max(g.center().y() - dr.height() // 2, av.top()), max(av.top(), av.bottom() - dr.height()))
+            dlg.move(x, y)
+        except Exception:
+            pass
+        if level in ("info", "success"):                  # confirmations float in without stealing focus, then auto-dismiss
+            dlg.setAttribute(Qt.WA_ShowWithoutActivating, True)
+            t = QTimer(dlg); t.setSingleShot(True); t.timeout.connect(dlg.close); t.start(4500)   # parented to dlg -> dies with it, never fires on a freed object
+            dlg.show()
+        else:
+            dlg.show(); dlg.raise_(); ok.setFocus()
 
     def _clear_banner(self):
-        self.errbanner.setVisible(False)
+        old = getattr(self, "_notif", None)
+        if old is not None:
+            try:
+                old.close()
+            except Exception:
+                pass
+            self._notif = None
 
     def _render_env(self, e):
         if e.get("error"):
@@ -1092,6 +1137,20 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+    def _disclosure(self, layout, summary, body, expanded=False):
+        """Progressive disclosure: a one-line clickable summary that expands/collapses a deep-detail widget, so the
+        card shows only the essential readout by default and the full methodology stays one click away (less crowding)."""
+        body.setVisible(expanded)
+        tog = QPushButton(("▾ " if expanded else "▸ ") + summary)
+        tog.setProperty("link", True); tog.setObjectName("disclose"); tog.setCursor(Qt.PointingHandCursor)
+        def _toggle():
+            vis = not body.isVisible()
+            body.setVisible(vis)
+            tog.setText(("▾ " if vis else "▸ ") + summary)
+        tog.clicked.connect(_toggle)
+        layout.addWidget(tog); layout.addWidget(body)
+        return tog
+
     def _set_trace_counts(self, recs, rec):
         """Make the rail readouts traceable, split by provenance class. RECORDS -> the fetched source accession as
         an external DB link (or 'user-supplied' for pasted input, never a fabricated link). STRUCTURAL EVIDENCE and
@@ -1149,19 +1208,26 @@ class MainWindow(QMainWindow):
                     + (f"  ·  not detected: {', '.join(miss)}" if miss else ""))
             cw = QLabel(f"<div style='line-height:150%'>{line}</div>"); cw.setObjectName("classexp"); cw.setTextFormat(Qt.RichText); cw.setWordWrap(True)
             bl.addWidget(cw)
+            # the essential caveat stays visible; the full methodology collapses behind a disclosure (less crowding)
+            caveat = QLabel("Scoped to the tested Pfam domain panel — a completeness tier, not a transposition-competence claim.")
+            caveat.setObjectName("cardmeta"); caveat.setWordWrap(True); bl.addWidget(caveat)
             scope = QLabel(f"Domains tested: {comp.get('scope','')}. “Not detected” is relative to this profile "
                            "panel — a divergent or unmodelled domain reads as not-detected, not as element decay "
                            "(completeness after Wicker 2007 / TEsorter / LTR_retriever). The tier reports how much of "
                            "the expected architecture is present at the domain level; it is not a claim that the ORFs "
                            "are intact or that the element is transposition- or infection-competent.")
-            scope.setObjectName("cardmeta"); scope.setWordWrap(True); bl.addWidget(scope)
+            scope.setObjectName("cardmeta"); scope.setWordWrap(True)
+            self._disclosure(bl, "Scope and methods", scope, expanded=False)
         else:
-            # a no-evidence / structural-only call still needs its SCOPE stated — the honest limitation stays default-visible
+            # a no-evidence / structural-only call still needs its SCOPE stated — the essential caveat stays visible
             rl = QLabel("RELIABILITY & COMPLETENESS"); rl.setObjectName("sectionlabel"); bl.addWidget(rl)
+            caveat = QLabel("No panel domain was detected — scoped to the tested Pfam panel, not proof the sequence is not a TE.")
+            caveat.setObjectName("cardmeta"); caveat.setWordWrap(True); bl.addWidget(caveat)
             scope = QLabel(f"Domains tested: {classify.DOMAINS_TESTED}. None were detected — this is relative to this "
                            "bundled Pfam profile panel; a divergent or unmodelled domain reads as not-detected, not as "
                            "proof the sequence is not a transposable element.")
-            scope.setObjectName("cardmeta"); scope.setWordWrap(True); bl.addWidget(scope)
+            scope.setObjectName("cardmeta"); scope.setWordWrap(True)
+            self._disclosure(bl, "Scope and methods", scope, expanded=False)
         card.bodylay.addWidget(banner)
 
         # genome viewer
@@ -1431,7 +1497,8 @@ class MainWindow(QMainWindow):
         send only that subset to primer design or splice detection. Offset-based, so it is strand- and
         coordinate-space-safe: `dna` is already the feature's sequence in biological orientation."""
         n = len(dna)
-        dlg = QDialog(self); dlg.setWindowTitle("Select a sub-region"); dlg.resize(460, 200)
+        dlg = QDialog(self); dlg.setWindowTitle("Select a sub-region")
+        dlg.resize(round(460 * theme_mod.UI_SCALE), round(200 * theme_mod.UI_SCALE))
         lay = QVBoxLayout(dlg)
         lay.addWidget(QLabel(f"<b>{fid}</b> is {n} bp. Choose the sub-interval (1-based, inclusive) to use:"))
         row = QHBoxLayout()
@@ -1471,6 +1538,7 @@ class MainWindow(QMainWindow):
         """Load a right-clicked subsequence as the transcript in the splice card and reveal it —
         mirrors 'send to in-silico PCR'. It is aligned to the loaded genomic reference."""
         self.spliceTx.setPlainText(fasta)
+        self._pending_domain = None                       # a newer explicit navigation cancels any pending routed re-anchor
         self.card_splice.expand()
         try:
             self.resultsScroll.ensureWidgetVisible(self.card_splice)
@@ -1646,7 +1714,9 @@ class MainWindow(QMainWindow):
         if not self._clean_seq(tmpl):
             return self._banner("No sequence to design a primer on.")
         inc = [start, max(60, end - start)]
-        self.card_primer.expand()
+        self._scroll_to(self.card_primer)                 # bring the primer designer up so the user lands on the next phase
+        self.designBtn.setEnabled(False); self.designBtn.setText("◴ designing…")   # same busy cue as the toolbar design path
+        self._set_body(self.primBody, _empty(f"Designing primers for {label}…"))   # never show the previous domain's stale table
         self._pending_domain = label
         self._design_inflight = True
         self._design_tmpl = tmpl                          # candidates' left/right_pos index THIS template, not always panel-01
@@ -1661,6 +1731,9 @@ class MainWindow(QMainWindow):
         self._uppercase_buttons()
         if d.get("provenance"):
             self._render_provenance(d["provenance"])
+        if getattr(self, "_pending_domain", None):        # a routed 'design here' — re-anchor now the card has its results
+            self._scroll_to(self.card_primer)
+            self._pending_domain = None
 
     def _render_primers(self, d):
         _clear_layout(self.primBody)                          # recursive: also removes the addLayout'd "Primer pairs" header row
@@ -1734,7 +1807,7 @@ class MainWindow(QMainWindow):
         """IDT OligoAnalyzer-style detail: both engines' ΔG for every structure of one primer pair, side by side."""
         qc = c.get("qc") or {}
         dlg = QDialog(self); dlg.setWindowTitle(f"Secondary structure — {c.get('id','pair')}")
-        dlg.resize(640, 460)
+        dlg.resize(round(640 * theme_mod.UI_SCALE), round(460 * theme_mod.UI_SCALE))
         lay = QVBoxLayout(dlg)
         head = QLabel(f"<b>{c.get('id','pair')}</b>  ·  F 5′-{c['left_seq']}-3′  ·  R 5′-{c['right_seq']}-3′")
         head.setWordWrap(True); lay.addWidget(head)
@@ -1800,7 +1873,8 @@ class MainWindow(QMainWindow):
         if not any(self._pcr_key(p) == self._pcr_key(c) for p in pairs):
             pairs.append(c)
         self._render_pcr_queue()
-        self.card_pcr.expand()
+        self._pending_domain = None                       # a newer explicit navigation cancels any pending routed re-anchor
+        self._scroll_to(self.card_pcr)                    # send-to-PCR lands the user on the in-silico PCR panel
 
     def _pcr_stage_all(self):
         for c in self.state.get("candidates", []):
@@ -2086,17 +2160,17 @@ class MainWindow(QMainWindow):
             self._genome_mgr = dlg
         from PySide6.QtGui import QColor
         dlg.setWindowTitle("Manage genomes")
-        dlg.setMinimumWidth(round(760 * theme_mod.UI_SCALE))
-        try:                                                  # clamp height so the panel never overhangs a small screen
-            scrh = self.screen().availableGeometry().height()
+        z = theme_mod.UI_SCALE
+        try:                                                  # the dialog is sized to fit the screen + fixed (non-resizable) at the end
+            scrg = self.screen().availableGeometry(); scrw, scrh = scrg.width(), scrg.height()
         except Exception:
-            scrh = 900
-        dlg.setMaximumHeight(min(round(640 * theme_mod.UI_SCALE), scrh - 80))
+            scrw, scrh = 1440, 900
         old = dlg.layout()
         if old is not None:                                   # rebuild the body in place on refresh
-            QWidget().setLayout(old)
+            dlg.hide()                                        # hide while swapping the layout, else the re-added widgets measure as hidden and sizeHint()
+            QWidget().setLayout(old)                          # collapses to ~20px -> setFixedSize would pin the whole dialog to a sliver (the final dlg.show() re-shows it)
         lay = QVBoxLayout(dlg)
-        lay.setContentsMargins(theme_mod.sp(16), theme_mod.sp(14), theme_mod.sp(16), theme_mod.sp(14)); lay.setSpacing(theme_mod.sp(10))
+        lay.setContentsMargins(theme_mod.sp(12), theme_mod.sp(10), theme_mod.sp(12), theme_mod.sp(10)); lay.setSpacing(theme_mod.sp(7))
         title = QLabel("Manage genomes"); tf = title.font(); tf.setBold(True); tf.setPointSizeF(tf.pointSizeF() + 2)
         title.setFont(tf); lay.addWidget(title)
         if not d.get("ok"):                                   # WSL-down error card (styled, not a bare label)
@@ -2104,8 +2178,8 @@ class MainWindow(QMainWindow):
             err.setObjectName("errbanner"); err.setWordWrap(True); lay.addWidget(err)
             close = QPushButton("Close"); close.clicked.connect(dlg.accept); lay.addWidget(close)
             dlg.show(); dlg.raise_(); return
-        intro = QLabel("Download a genome once to enable its whole-genome off-target scan. It is kept locally and "
-                       "then appears in the organism dropdowns. Mammalian genomes are large (~1 GB, a few minutes).")
+        intro = QLabel("Download a genome once to enable its whole-genome off-target scan; it is kept locally and then "
+                       "appears in the organism menus. Mammalian genomes are large (~1 GB).")
         intro.setObjectName("orient"); intro.setWordWrap(True); lay.addWidget(intro)
         busy = self._genome_prep_inflight or self._genome_inflight   # lock every action while any download/scan runs
         # ADD-ORGANISM row — one input, auto-detects an organism name vs a GCF/GCA accession; resolved + pinned once.
@@ -2118,6 +2192,17 @@ class MainWindow(QMainWindow):
         prepared = {g["accession"]: g for g in d.get("genomes", [])}
         asm = all_assemblies(); orgs = sorted(asm)            # curated + user-added
         pal = theme_mod._DARK if self.theme == "dark" else theme_mod._LIGHT
+        rows = len(orgs)
+        # size every row so the WHOLE table (all rows + columns + buttons) shows with NO scrolling in a fixed dialog.
+        # rows stay comfortable on a normal screen and shrink (with the font) only if a small screen forces it. The final
+        # row height is computed in the tail after the real chrome (title+intro+add-row+close) is measured at the true width.
+        avail_h = scrh - round(56); avail_w = scrw - round(56)
+        # ONE fixed, comfortable row height, chosen so the natural-height 'sm' button + a small margin always fit (the
+        # button is NEVER forced short or shrunk -> never squeezed/clipped). Set BEFORE the cells are built so each cell
+        # widget is laid out at the right height. A screen too small to show every row scrolls vertically (button stays
+        # comfortable) rather than squeezing the button — a readable button matters more than avoiding a scroll.
+        rowH = round(34 * z)
+        target_w = min(round(1180 * z), avail_w)              # bigger, so full organism + assembly names show without eliding
         headers = ["Organism", "Assembly", "Accession", "Status", "Size (MB)", "Contigs", "Action"]
         tbl = QTableWidget(len(orgs), len(headers))
         tbl.setHorizontalHeaderLabels(headers)
@@ -2126,7 +2211,16 @@ class MainWindow(QMainWindow):
         tbl.setSelectionMode(QAbstractItemView.NoSelection)
         tbl.setSortingEnabled(False)                          # static catalog; sorting conflicts with setCellWidget buttons
         tbl.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        tbl.horizontalHeader().setStretchLastSection(True)
+        # Organism AND Assembly (the two widest text columns) stretch, so on a narrow dialog THEY shrink+elide while the
+        # short fixed columns — including Action — keep their content width. The Download button can never be the column
+        # that overflows off the right edge into a horizontal scrollbar (the small-screen clip a single stretch column left).
+        tbl.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        tbl.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        tbl.setTextElideMode(Qt.ElideRight)                   # a shrunk Organism/Assembly elides ("Drosophila melan…"), never clips Action
+        tbl.setWordWrap(False)                                # (h-scrollbar stays as-needed — a pathological tiny screen keeps Action reachable by scroll rather than silently clipped)
+        tbl.horizontalHeader().setStretchLastSection(False)
+        tbl.horizontalHeader().setMinimumSectionSize(round(56 * z))
+        tbl.verticalHeader().setDefaultSectionSize(rowH)      # provisional row height; the real value is set in the tail
         aligns = [Qt.AlignLeft, Qt.AlignLeft, Qt.AlignLeft, Qt.AlignLeft, Qt.AlignRight, Qt.AlignRight]
         for r, org in enumerate(orgs):
             meta = asm[org]; acc = meta["assemblyAccession"]; g = prepared.get(acc); downloaded = bool(g)
@@ -2135,21 +2229,46 @@ class MainWindow(QMainWindow):
                      (str(g.get("n_seqs", "?")) if downloaded else "—")]
             for c, txt in enumerate(cells):
                 it = QTableWidgetItem(txt); it.setTextAlignment(aligns[c] | Qt.AlignVCenter)
+                if c in (0, 1):                               # Organism/Assembly may elide on a narrow dialog — tooltip recovers the full text
+                    it.setToolTip(txt)
                 if c == 3:                                    # status carried by colour + word (green = downloaded)
                     it.setForeground(QColor(pal["good"] if downloaded else pal["faint"]))
                 tbl.setItem(r, c, it)
             btn = QPushButton("Delete" if downloaded else "Download"); btn.setProperty("sm", True)
+            btn.setMinimumWidth(round(92 * z))                # a full, clickable button at its natural 'sm' height (never forced short / squeezed)
             btn.clicked.connect((lambda _=False, a=acc: self._remove_genome(a)) if downloaded
                                 else (lambda _=False, o=org: self._on_manager_download(o)))
             btn.setEnabled(not busy)
-            tbl.setCellWidget(r, 6, btn)
+            holder = QWidget()                                # centre the natural-height button in the row (row height >= button + margin, set in the tail)
+            hl = QHBoxLayout(holder); hl.setContentsMargins(theme_mod.sp(6), round(2 * z), theme_mod.sp(6), round(2 * z)); hl.setSpacing(0)
+            hl.addWidget(btn, 0, Qt.AlignVCenter)
+            tbl.setCellWidget(r, 6, holder)
         tbl.resizeColumnsToContents()
-        lay.addWidget(tbl, 1)                                 # table takes the stretch; scrolls inside the height clamp
+        for r in range(rows):                                 # pin each row + force its holder to the row height, so the button
+            tbl.setRowHeight(r, rowH)                          # is centred in a full-height cell (offscreen/late layout can otherwise
+            hw = tbl.cellWidget(r, 6)                          # collapse the cell widget to its minimum, shearing the label)
+            if hw is not None:
+                hw.setFixedHeight(rowH)
+        lay.addWidget(tbl)
         self._genome_mgr_table = tbl
         if busy:
             b = QLabel("A download or scan is running — actions are disabled until it finishes.")
             b.setObjectName("orient"); b.setWordWrap(True); lay.addWidget(b)
-        close = QPushButton("Close"); close.clicked.connect(dlg.accept); lay.addWidget(close)
+        close = QPushButton("Close"); close.setProperty("sm", True); close.clicked.connect(dlg.accept)
+        crow = QHBoxLayout(); crow.addStretch(1); crow.addWidget(close); crow.addStretch(1); lay.addLayout(crow)
+        # ---- fit: full table if it fits the screen, else cap to whole rows + a vertical scroll (button never squeezed) ----
+        dlg.setFixedWidth(target_w)                           # set the real width first so the intro wraps as it truly will
+        hdr_h = tbl.horizontalHeader().sizeHint().height() or round(34 * z)
+        tbl.setFixedHeight(hdr_h + rows * rowH + round(4 * z))
+        tbl.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        dlg.adjustSize()
+        if dlg.sizeHint().height() > avail_h:                 # too tall for this screen -> show as many WHOLE rows as fit + scroll
+            over = dlg.sizeHint().height() - avail_h
+            vis = max(1, (rows * rowH - over) // rowH)
+            tbl.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+            tbl.setFixedHeight(hdr_h + vis * rowH + round(4 * z))
+            dlg.adjustSize()
+        dlg.setFixedSize(target_w, min(dlg.sizeHint().height(), avail_h))
         dlg.show(); dlg.raise_()
 
     def _add_custom_assembly(self):

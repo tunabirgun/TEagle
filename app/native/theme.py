@@ -118,6 +118,13 @@ QLabel#errbanner {{ font-family: {sans}; background: {badsoft}; color: {bad}; bo
 QLabel#errbanner[level="success"] {{ background: {goodsoft}; color: {good}; border: 1px solid {good}; }}
 QLabel#errbanner[level="warn"] {{ background: {warnsoft}; color: {warn}; border: 1px solid {warn}; }}
 QLabel#errbanner[level="info"] {{ background: {accentsoft}; color: {accent}; border: 1px solid {accent}; }}
+/* notification dialog — the old top-of-panel banner relocated into a small, closable dialog */
+QDialog#notif {{ background: {panel}; }}
+QLabel#notifmsg {{ font-family: {sans}; font-size: 12.5px; border-radius: 2px; padding: 12px 14px;
+    background: {badsoft}; color: {bad}; border: 1px solid {bad}; }}
+QLabel#notifmsg[level="success"] {{ background: {goodsoft}; color: {good}; border: 1px solid {good}; }}
+QLabel#notifmsg[level="warn"] {{ background: {warnsoft}; color: {warn}; border: 1px solid {warn}; }}
+QLabel#notifmsg[level="info"] {{ background: {accentsoft}; color: {accent}; border: 1px solid {accent}; }}
 QLabel#queuerow {{ font-family: {sans}; color: {dim}; font-size: 11px; }}
 QProgressBar {{ background: {panel2}; border: 1px solid {line2}; border-radius: 2px; }}
 QProgressBar::chunk {{ background: {accent}; border-radius: 2px; }}
@@ -146,8 +153,8 @@ _DARK = dict(bg="#0A0D10", panel="#0F1317", panel2="#131A1F", panel3="#19222A", 
 _LIGHT = dict(bg="#EDF1F3", panel="#FFFFFF", panel2="#F2F5F7", panel3="#E7ECEF", line="#DCE3E7",
               line2="#C6D0D6", text="#141B21", text2="#3A454D", dim="#57636B", faint="#5E6A72",
               accent="#0A7259", accent2="#086048", accentink="#FFFFFF", accentsoft="rgba(10,114,89,0.12)",
-              good="#178A5C", goodsoft="rgba(23,138,92,0.14)", warn="#8A6D22", warnsoft="rgba(138,109,34,0.16)",
-              bad="#C6432E", badsoft="rgba(198,67,46,0.12)", mono=MONO, sans=SANS)
+              good="#14774F", goodsoft="rgba(23,138,92,0.14)", warn="#7C621F", warnsoft="rgba(138,109,34,0.16)",
+              bad="#BA3F2B", badsoft="rgba(198,67,46,0.12)", mono=MONO, sans=SANS)
 
 # header accent underline (teal fading to transparent), like the web header::after
 HEADRULE = {"dark": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #33D6B8, stop:0.42 transparent)",

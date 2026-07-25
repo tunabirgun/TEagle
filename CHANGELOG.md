@@ -9,6 +9,23 @@ and propagates to the backend health endpoint, the UI header badge, every run
 provenance manifest, the packaged executable's Windows file-version metadata, and
 the LaTeX report title page.
 
+## [2.12.0] — 2026-07-25
+
+Post-overhaul refinements from direct use: the tool now carries you to the next step, warnings are proper dialogs you can dismiss, the genome manager shows everything at a fixed comfortable size, and download failures read plainly instead of as a crash. Driven by a user-directed fix loop with per-round triple-reviewer verification.
+### Added
+- **The tool moves you to the next phase.** "Design primer here" now brings the primer panel up (with a busy cue) and lands you on it; "send to in-silico PCR" and "send to splice" scroll their panel into view. A routed design no longer leaves you looking at the previous region's stale table.
+- **Progressive disclosure in the classification banner.** The full domain-panel methodology folds behind a **Scope and methods** toggle; the one-line completeness caveat stays visible, so the card is less crowded without hiding the honest limitation.
+### Changed
+- **Warnings and confirmations are dismissable dialogs**, centred over the window, instead of a banner wedged above the panels. Errors and warnings persist until closed; confirmations auto-dismiss without stealing focus; the message text is selectable so an accession or seal can be copied.
+- **Manage genomes is a fixed-size panel** sized to show every organism, column and Download button with no sideways scroll — wide enough that names never truncate, at a comfortable row height that keeps every button fully legible.
+- **The backend installer opens larger** so each component row is comfortably readable.
+- **Genome downloads retry with exponential backoff** (five attempts, 5→10→20→40 s) so a transient NCBI rate-limit or dropped transfer recovers instead of exhausting a short fixed retry.
+### Fixed
+- A genome download or scan that fails now shows one clear **warning** with the real reason, not a red "unexpected error" crash dialog stacked on top of the status line.
+- The light-theme dialog and confidence-chip text is darkened to meet **WCAG AA** (≥ 4.5:1) against its tinted background.
+- The **Manage genomes Download/Delete button no longer renders clipped or squeezed** — the label is centred at a comfortable height in every row, at every UI scale.
+- The genome-manager dialog no longer collapses to a sliver when it rebuilds while open (rescale, add-organism, or a download completing).
+
 ## [2.11.0] — 2026-07-24
 
 A UI/UX overhaul that keeps the assay-terminal identity but strips the noise: a legible body font, a calmer light default, honest and traceable readouts, and a whole-genome scan you can actually find — driven by a multi-persona design swarm and a five-round verification loop.
@@ -329,6 +346,7 @@ primer design, usable without a command line.
   the WebView2 runtime is absent. A kill-on-close Job Object ties the whole process tree to the
   launcher, so an in-place upgrade never orphans a window.
 
+[2.12.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.12.0
 [2.11.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.11.0
 [2.10.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.10.0
 [2.9.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.9.0

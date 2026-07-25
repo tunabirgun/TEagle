@@ -326,12 +326,19 @@ def test_genome_prepare_resumes_pending_scan(win):
 
 
 def test_banner_level_distinguishes_success_from_error(win):
-    # the banner level drives the colour style (theme.py #errbanner[level]); the message is shown verbatim (no glyph)
+    # messages surface as a single, closable notification dialog (not a top-of-panel banner); level drives the
+    # colour style (theme.py #notifmsg[level]) and a new message replaces the previous one (never stacks).
+    from PySide6.QtWidgets import QLabel
     win._banner("Genome ready", level="success")
-    assert win.errbanner.property("level") == "success" and not win.errbanner.isHidden()
-    assert win.errbanner.text() == "Genome ready"
-    win._banner("bad input")                                   # default level = error
-    assert win.errbanner.property("level") == "error" and win.errbanner.text() == "bad input"
+    dlg = win._notif
+    assert dlg is not None and dlg.property("level") == "success"
+    msg = dlg.findChild(QLabel, "notifmsg")
+    assert msg is not None and msg.text() == "Genome ready"     # message shown verbatim (no glyph)
+    win._banner("bad input")                                   # default level = error — replaces the success dialog
+    assert win._notif is not None and win._notif.property("level") == "error"
+    assert win._notif is not dlg                               # single active instance: replaced, not stacked
+    win._clear_banner()
+    assert win._notif is None
 
 
 def test_busybar_is_indeterminate_and_updatable():
@@ -349,6 +356,34 @@ def test_genome_dropdown_lists_only_prepared(win):
     win._on_genome_list({"ok": True, "genomes": [{"accession": "GCF_000146045.2", "n_seqs": 17, "bytes": 12_000_000}]})
     orgs = [win.genomeOrg.itemData(i) for i in range(win.genomeOrg.count())]
     assert orgs == [None, "Saccharomyces cerevisiae"]        # placeholder + the one downloaded organism
+
+
+def test_manager_survives_rebuild_while_open(win):
+    # a rebuild while the manager is open (rescale, add-organism, download/delete completing, any genome_list refresh)
+    # must NOT collapse the fixed-size dialog to a sliver: the in-place layout swap once left re-added widgets measured
+    # as hidden so sizeHint()->~20px and setFixedSize pinned it there unrecoverably.
+    win._genome_mgr_open = True
+    gen = {"ok": True, "genomes": [{"accession": "GCF_000146045.2", "n_seqs": 17, "bytes": 12_000_000}]}
+    win._on_genome_list(gen)                                  # build 1
+    h1 = win._genome_mgr.height()
+    win._on_genome_list(gen)                                  # build 2 — the rebuild-while-open path
+    win._on_genome_list(gen)                                  # build 3 — a second refresh
+    h3 = win._genome_mgr.height()
+    assert h1 > 300 and h3 > 300 and abs(h3 - h1) <= 8        # stays full height, never collapses to a ~20px sliver
+
+
+def test_manager_download_button_not_clipped(win):
+    # the Action button must render at its natural comfortable height in the cell, never collapsed to its ~15-19px
+    # minimum (which sheared the top of the "Download" label). Regression guard for the cell-widget-collapse / forced-
+    # short-button clipping the user reported repeatedly.
+    from PySide6.QtWidgets import QPushButton
+    win._genome_mgr_open = True
+    win._on_genome_list({"ok": True, "genomes": []})
+    tbl = win._genome_mgr_table
+    holder = tbl.cellWidget(0, 6)
+    btn = holder.findChild(QPushButton)
+    assert btn is not None
+    assert holder.height() >= 30 and btn.height() >= 23      # row holds a full-height button; button is comfortable, not sheared
 
 
 def test_on_genome_list_refreshes_dropdown_even_when_manager_closed(win):
