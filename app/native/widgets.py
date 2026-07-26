@@ -5,14 +5,33 @@ matches the exported SVG/PNG (the gel's Gaussian-blur glow is the one SVG-Tiny c
 from __future__ import annotations
 import math, re
 
-from PySide6.QtCore import Qt, QByteArray, QPointF, QRectF, Signal
+from PySide6.QtCore import Qt, QByteArray, QPointF, QRectF, QSize, Signal
 from PySide6.QtGui import QImage, QPainter, QColor
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QSizePolicy,
                                QTableWidget, QTableWidgetItem, QMenu, QFileDialog, QApplication,
                                QAbstractItemView, QHeaderView, QToolTip, QProgressBar)
 
+import theme                       # UI_SCALE: figures are authored in logical units and stretched by it
+from figures import gv_gutter, GV_MR   # label gutter is model-dependent; the hit-test must use the same value
+
 MODE_LABEL = {"dark": "dark", "white": "light", "uv": "UV", "mono": "mono", "transparent": "transparent"}
+
+# per-cell export/copy value, when the displayed text carries a UI-only mark (see DataTable.set_rows)
+EXPORT_ROLE = Qt.UserRole + 1
+
+
+def uppercase_buttons(root):
+    """Uppercase every action button under `root` (the web '.btn' look). Skips link buttons and card
+    headers — their titles stay sentence-case — and leaves glyphs untouched. Idempotent. Lives here so a
+    dialog built outside MainWindow (installer, notification, genome manager) can call it as it is built,
+    instead of waiting for the next theme/scale/result refresh to reach it."""
+    for b in root.findChildren(QPushButton):
+        if b.property("link") or b.objectName() == "cardhdr":
+            continue
+        t = b.text()
+        if t and t != t.upper():
+            b.setText(t.upper())
 
 
 def _svg_size(svg: str):
@@ -50,6 +69,7 @@ class SvgCanvas(QWidget):
         self.tx = 0.0
         self.ty = 0.0
         self._drag = None
+        self._user_view = False       # user zoomed/panned -> stop auto-refitting on resize
         self.regions = []             # [{x0,y0,x1,y1 (svg coords), tip, ...}] for hover / right-click
         self._on_menu = None          # callable(region) -> list[(label, fn)]
         self.setMinimumHeight(300)
@@ -85,9 +105,18 @@ class SvgCanvas(QWidget):
         self.scale = min(vw / self._sw, vh / self._sh) * 0.94
         self.tx = (vw - self._sw * self.scale) / 2
         self.ty = (vh - self._sh * self.scale) / 2
+        self._user_view = False       # back to auto-fit until the user zooms/pans again
         self.update()
 
+    def resizeEvent(self, e):
+        """Refit to the new viewport, like GenomePanel's canvas re-renders on resize; a user's own
+        zoom/pan is left alone. fit() only repaints, so this cannot loop."""
+        super().resizeEvent(e)
+        if not self._user_view:
+            self.fit()
+
     def _zoom_at(self, cx, cy, factor):
+        self._user_view = True
         ns = min(16.0, max(0.08, self.scale * factor))
         self.tx = cx - (cx - self.tx) * (ns / self.scale)
         self.ty = cy - (cy - self.ty) * (ns / self.scale)
@@ -109,6 +138,7 @@ class SvgCanvas(QWidget):
             x0, y0, tx0, ty0 = self._drag
             self.tx = tx0 + (e.position().x() - x0)
             self.ty = ty0 + (e.position().y() - y0)
+            self._user_view = True
             self.update()
             return
         r = self._region_at(e.position().x(), e.position().y())    # hover: show the feature detail
@@ -261,7 +291,7 @@ class GenomePanel(QWidget):
             b = QPushButton(txt); b.setProperty("sm", True); b.clicked.connect(fn); bar.addWidget(b)
         lay.addLayout(bar)
         self.canvas = _GenomeCanvas(self)
-        self.canvas.setMinimumWidth(320)                  # match the SVG authoring floor so it never CSS-stretches
+        self.canvas.setMinimumWidth(round(320 * max(theme.UI_SCALE, 0.1)))   # 320 LOGICAL units — the SVG authoring floor
         lay.addWidget(self.canvas)                         # (below 320 the bp<->pixel map would drift; obs: genome hit-test)
 
     def set_model(self, model: dict):
@@ -296,7 +326,10 @@ class GenomePanel(QWidget):
         for th, b in self._th_btns.items():
             b.setProperty("primary", th == self.theme)
             b.style().unpolish(b); b.style().polish(b)
-        w = max(self.canvas.width() or 620, 320)
+        # author the SVG in LOGICAL units (device pixels / UI scale); the canvas CSS-stretches it back by the
+        # same factor, so the viewer's own text and glyphs grow with the global UI scale like the rest of the chrome
+        z = max(theme.UI_SCALE, 0.1)
+        w = max((self.canvas.width() or round(620 * z)) / z, 320)
         svg, regions = self._svg_genome(self.model, {"start": self.view["start"], "end": self.view["end"]},
                                         w, self.theme, False, True)
         self.canvas.set_svg(svg)
@@ -345,7 +378,13 @@ class GenomePanel(QWidget):
 
 
 class _GenomeCanvas(QWidget):
-    ML, MR = 96, 16
+    MR = GV_MR
+
+    @property
+    def ML(self):
+        """Left gutter of the SVG being painted — svg_genome sizes it to the widest track name, so the
+        bp<->pixel map has to read the same number or wheel-zoom/pan would anchor off by the difference."""
+        return gv_gutter(getattr(self.panel, "model", None), self._w or 620.0)
 
     def __init__(self, panel: GenomePanel):
         super().__init__(panel)
@@ -360,8 +399,13 @@ class _GenomeCanvas(QWidget):
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMouseTracking(True)
 
+    def _sc(self):
+        """CSS-stretch factor: the SVG is authored in logical units and painted across the widget width,
+        so pixel coords divide by this to reach SVG coords (and the figure scales with the UI scale)."""
+        return ((self.width() or self._w) / self._w) if self._w else 1.0
+
     def _region_at(self, wx, wy):
-        sc = ((self.width() or self._w) / self._w) if self._w else 1.0
+        sc = self._sc()
         if sc <= 0:
             return None
         sx, sy = wx / sc, wy / sc
@@ -374,14 +418,14 @@ class _GenomeCanvas(QWidget):
         self._svg = svg
         self._renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
         self._w, self._h = _svg_size(svg)
-        self.setMinimumHeight(int(self._h))
+        self.setMinimumHeight(int(self._h * self._sc()))      # painted height = SVG height x the CSS stretch
         self.update()
 
     def _plot_w(self):
-        return max(120.0, (self.width() or 620) - self.ML - self.MR)
+        return max(120.0, (self._w or 620) - self.ML - self.MR)     # logical (SVG) units
 
     def _x_to_bp(self, px):
-        frac = max(0.0, min(1.0, (px - self.ML) / self._plot_w()))
+        frac = max(0.0, min(1.0, (px / self._sc() - self.ML) / self._plot_w()))
         v = self.panel.view
         return v["start"] + frac * (v["end"] - v["start"])
 
@@ -455,7 +499,7 @@ class _GenomeCanvas(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         if self._renderer:
             # SVG is authored at self._w; CSS-stretch to widget width (height scales to keep aspect)
-            sc = (self.width() or self._w) / self._w
+            sc = self._sc()
             self._renderer.render(p, QRectF(0, 0, self._w * sc, self._h * sc))
         p.end()
 
@@ -641,6 +685,18 @@ class DataTable(QTableWidget):
         self.setSortingEnabled(True)                                  # click a header to sort (numeric-aware via _Cell)
         self.doubleClicked.connect(lambda idx: self.row_activated.emit(self._orig(idx.row())))
         self._row_menu = None            # callable(orig_row_index)->list[(label, fn)]
+        self.export_base = "TEagle_table"   # proposed export filename; the visible Export button sets the specific one
+
+    def sizeHint(self):
+        """Height the CURRENT rows need — QAbstractScrollArea's stock 192px hint reserved 80–135px of empty
+        grid under a short result. Callers still cap tall tables with setMaximumHeight()."""
+        s = super().sizeHint()
+        hh = max(self.horizontalHeader().height(), self.horizontalHeader().sizeHint().height())
+        h = 2 * self.frameWidth() + hh + sum(self.rowHeight(i) for i in range(self.rowCount()))
+        hb = self.horizontalScrollBar()
+        if hb.isVisible() or hb.maximum() > 0:            # a sideways-scrolling table must keep room for its bar
+            h += hb.sizeHint().height()
+        return QSize(s.width(), max(h, self.minimumSizeHint().height()))
 
     def _orig(self, visual_row):
         """Map a visual row (post-sort) back to the index it had in set_rows, so row menus /
@@ -651,10 +707,11 @@ class DataTable(QTableWidget):
         d = it.data(Qt.UserRole) if it else None
         return d if d is not None else visual_row
 
-    def set_rows(self, rows, styles=None, tips=None):
+    def set_rows(self, rows, styles=None, tips=None, exports=None):
         """rows: list of row value-lists. Optional styles[i][j] = foreground colour (hex/QColor or None)
         and tips[i][j] = tooltip override — both additive and sort-safe (the item carries its own colour
-        and tooltip when a sort moves it)."""
+        and tooltip when a sort moves it). exports[i][j] overrides what export/copy writes for a cell whose
+        DISPLAYED text carries a UI-only mark (the ΔG severity ! / ‡), so the exported column stays numeric."""
         self.setSortingEnabled(False)                # never sort mid-insert (it scrambles rows)
         self.setRowCount(0)
         for i, r in enumerate(rows):
@@ -668,6 +725,9 @@ class DataTable(QTableWidget):
                 col = styles[i][j] if (styles and styles[i] and j < len(styles[i])) else None
                 if col:
                     item.setForeground(QColor(col) if isinstance(col, str) else col)
+                xv = exports[i][j] if (exports and exports[i] and j < len(exports[i]) and exports[i][j] is not None) else None
+                if xv is not None:
+                    item.setData(EXPORT_ROLE, str(xv))
                 if j == 0:
                     item.setData(Qt.UserRole, i)         # remember the original row index for menus
                 self.setItem(i, j, item)
@@ -694,14 +754,22 @@ class DataTable(QTableWidget):
         """Flat table export: pop the arrow-free format picker at gpos, then route the chosen format to export_table."""
         fmt = pick_table_format(self, gpos)
         if fmt:
-            export_table(self._headers, self.rows_data(), "TEagle_table", self, fmt=fmt)
+            export_table(self._headers, self.rows_data(), getattr(self, "export_base", "TEagle_table"),
+                         self, fmt=fmt)   # same base as the visible Export button -> identical proposed filename
+
+    def _value(self, i, j):
+        """The cell's machine value: the export override when one was set, else the displayed text."""
+        it = self.item(i, j)
+        if it is None:
+            return ""
+        v = it.data(EXPORT_ROLE)
+        return it.text() if v is None else str(v)
 
     def _copy_row(self, row):
         if row < 0:
             return
-        vals = [self.item(row, j).text() if self.item(row, j) else "" for j in range(self.columnCount())]
-        QApplication.clipboard().setText("\t".join(vals))
+        QApplication.clipboard().setText("\t".join(self._value(row, j) for j in range(self.columnCount())))
 
     def rows_data(self):
-        return [[self.item(i, j).text() if self.item(i, j) else "" for j in range(self.columnCount())]
+        return [[self._value(i, j) for j in range(self.columnCount())]
                 for i in range(self.rowCount())]

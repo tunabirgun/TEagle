@@ -104,6 +104,8 @@ def in_silico_pcr(fwd: str, rev: str, seq: str, seq_id: str = "template",
     (zero mismatches in the terminal `tp` bases), builds amplicons from inward-facing
     sites within [prod_min, prod_max] — both two-primer (F+R) products and single-primer
     (F+F / R+R) self-priming products across inverted repeats (marked single_primer).
+    on_target and single_primer are mutually exclusive, so on/off/single counts are disjoint
+    and exhaustive downstream (off = total - on - single can never go negative).
     Returns real amplicon list."""
     fwd, rev, seq = fwd.upper(), rev.upper(), seq.upper()     # case-insensitive: a lowercase primer must still bind
     max_mm, tp = max(0, int(max_mm)), max(0, int(tp))         # non-negative ints; tp<0 must not silently disable the 3' rule
@@ -144,7 +146,9 @@ def in_silico_pcr(fwd: str, rev: str, seq: str, seq_id: str = "template",
             plen = right - left
             if left < right and prod_min <= plen <= prod_max:
                 single = fo == ro                     # same primer at both ends: self-priming across a TIR/LTR
-                on = bool(target_span and left >= target_span[0] - 5 and right <= target_span[1] + 5)
+                # a self-priming product is an artefact, never the intended amplicon (that is always F+R), so it
+                # stays in the single-primer bucket even inside the target window -> on/off/single stay disjoint
+                on = (not single) and bool(target_span and left >= target_span[0] - 5 and right <= target_span[1] + 5)
                 amps.append({
                     "source": seq_id, "start": left, "end": right, "length": plen,
                     "fwd_primer": fo, "rev_primer": ro, "single_primer": single,

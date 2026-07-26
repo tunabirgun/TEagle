@@ -17,6 +17,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "backend"))
 from engine_worker import Engine
+from widgets import uppercase_buttons          # one casing rule for every window (see widgets.uppercase_buttons)
 
 _ICON = {"ok": ("✓", "#33D6B8"), "bad": ("✕", "#E06A5A"), "work": ("●", "#E6A23C"), "unknown": ("—", "#8A959D")}
 
@@ -33,6 +34,7 @@ class InstallDialog(QDialog):
         except Exception:
             _sw, _sh = 1440, 900
         self.resize(min(round(900 * z), _sw - 60), min(round(820 * z), _sh - 60))
+        self._fitted = False             # the grow-to-content pass runs once, after the rows exist
         self.engine = Engine(self)
         self.engine.done.connect(self._on_done)
         self.engine.user_error.connect(self._on_user_error)
@@ -59,9 +61,12 @@ class InstallDialog(QDialog):
         holder = QWidget(); self.grid = QGridLayout(holder)
         self.grid.setContentsMargins(2, 2, 2, 2); self.grid.setHorizontalSpacing(10); self.grid.setVerticalSpacing(4)
         self.grid.setColumnStretch(1, 1)
-        scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setWidget(holder)
+        self.scroll = scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setWidget(holder)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)   # rows wrap their text; never scroll sideways
-        scroll.setMinimumHeight(round(360 * _t.UI_SCALE)); root.addWidget(scroll, 1)   # tall enough to show the whole component stack
+        # the list takes every spare pixel (stretch 1) and _fit_to_content grows the window to the whole
+        # stack where the screen allows; the minimum stays low so a 720p screen can still fit the window
+        # (a taller floor pushed the action bar and Close off the bottom of the display)
+        scroll.setMinimumHeight(round(150 * _t.UI_SCALE)); root.addWidget(scroll, 1)
 
         # action bar
         bar = QHBoxLayout()
@@ -77,17 +82,46 @@ class InstallDialog(QDialog):
 
         loglbl = QLabel("INSTALL LOG"); loglbl.setObjectName("kdim"); root.addWidget(loglbl)
         self.log = QPlainTextEdit(); self.log.setReadOnly(True)
-        self.log.setMinimumHeight(150)
+        self.log.setMinimumHeight(round(96 * z))     # floor only: it keeps its taller sizeHint wherever there is room
         lf = QFont("Cascadia Code"); lf.setStyleHint(QFont.Monospace); lf.setPointSize(9); self.log.setFont(lf)
         root.addWidget(self.log)
 
         close = QPushButton("Close"); close.setProperty("sm", True); close.clicked.connect(self.accept)
         crow = QHBoxLayout(); crow.addStretch(1); crow.addWidget(close); root.addLayout(crow)
+        uppercase_buttons(self)
 
         self._poll = QTimer(self); self._poll.setInterval(2500); self._poll.timeout.connect(self._tick)
         # accept()/reject()/X all emit finished (closeEvent fires only for the X) — stop polling on every path
         self.finished.connect(lambda *_: self._poll.stop())
         QTimer.singleShot(0, self._refresh)
+
+    # ---------- sizing ----------
+    def _fit_to_content(self):
+        """Grow the window once, after the component rows exist, so the whole stack is visible where the
+        screen allows — the last row (the ~6.9 GB Dfam root download) used to sit clipped against the
+        action bar. Where the stack still does not fit, the list scrolls to it."""
+        if self._fitted or not self._rows:
+            return
+        self._fitted = True
+        vp = self.scroll.viewport()
+        # ask the grid what the rows need at the width they already have — the scroll area has not resized
+        # its holder yet at this point, so the holder's own height still reads as the viewport height
+        need = self.grid.heightForWidth(vp.width()) if self.grid.hasHeightForWidth() else self.grid.sizeHint().height()
+        extra = need - vp.height()
+        if extra <= 0:
+            return
+        try:
+            g = self.screen().availableGeometry()
+        except Exception:
+            return
+        import theme as _t                              # UI_SCALE is live, so read it at call time
+        frame = max(self.frameGeometry().height() - self.height(), round(32 * _t.UI_SCALE))   # title bar
+        h = min(self.height() + extra, g.height() - frame)
+        if h > self.height():
+            self.resize(self.width(), h)
+        fg = self.frameGeometry()                       # keep the grown window on the screen it grew on
+        if fg.bottom() > g.bottom():
+            self.move(fg.x(), max(g.top(), fg.y() - (fg.bottom() - g.bottom())))
 
     # ---------- rows ----------
     def _ensure_row(self, key, name, desc):
@@ -97,6 +131,7 @@ class InstallDialog(QDialog):
         icon = QLabel("—"); icon.setFont(QFont("", 12)); icon.setFixedWidth(18); icon.setAlignment(Qt.AlignCenter)
         nm = QLabel(name); nf = nm.font(); nf.setBold(True); nm.setFont(nf)
         detail = QLabel("…"); detail.setObjectName("cardmeta")
+        detail.setWordWrap(True)     # a long guide line used to widen the grid past the viewport and push every button out of reach
         btn = QPushButton("Repair"); btn.setProperty("sm", True)
         btn.clicked.connect(lambda _=False, k=key: self._repair(k))
         self.grid.addWidget(icon, r, 0)
@@ -176,6 +211,9 @@ class InstallDialog(QDialog):
             self.statusLine.setText("installing…")
         else:
             self.statusLine.setText(f"not ready · {res.get('disk_free_gb','?')} GB free")
+        uppercase_buttons(self)                         # rows are created here and their labels re-set per state
+        if not self._fitted:
+            QTimer.singleShot(0, self._fit_to_content)  # after the new rows have been laid out
 
     # ---------- operations ----------
     def _set_busy(self, busy, note=""):

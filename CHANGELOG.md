@@ -9,6 +9,31 @@ and propagates to the backend health endpoint, the UI header badge, every run
 provenance manifest, the packaged executable's Windows file-version metadata, and
 the LaTeX report title page.
 
+## [3.0.0] — 2026-07-26
+
+The installer drops by four fifths, the interface is rebuilt on a single source of colour truth, and every place where colour alone, a silent omission, or an unconfirmed click was carrying scientific meaning now says what it means in words. No detection method, threshold, database, panel or hedge changed.
+### Added
+- **A build guard on the bundle contents.** The PyInstaller spec now walks the resolved module graph and fails the build if any top-level package outside the pinned dependency set (and its real transitive dependencies, and TEagle's own modules) has entered it. A single stray import edge is what put half a gigabyte in the last installer; it cannot pass silently again.
+- **Keyboard focus is visible on every control.** The native port had lost the coverage the web UI got from `:focus-visible`; buttons, links, card headers and the primary action each carry a focus ring tuned so the box never shifts and the ring never lands on the glyphs. Tables show a current-cell cue, citation links are Tab-reachable (and only when they actually contain a link, so no dead tab stops), and the disclosure toggles, close buttons and unlabelled icon controls carry accessible names and descriptions.
+- **A confirmation before a destructive genome delete**, naming the organism and the cost of getting it back (~1 GB re-download, several minutes), defaulting to No.
+### Changed
+- **The installer is 147.6 MiB, down from 776.8 MiB (−81%); `TEagle.exe` is 4.4 MB, down from 71.2 MB.** One `collect_submodules("openpyxl")` call was pulling in openpyxl's pandas-interop shim, and through it pandas, scipy, scikit-learn, torch, transformers, PIL, lxml and numpy — roughly 528 MB of packages the code never imports. The shim is excluded at the source and the optional accelerators with it. Nothing the science uses was removed: Primer3, pyhmmer, ViennaRNA, the Pfam TE-domain profiles, openpyxl's XLSX export, certifi and PySide6 all ship as before.
+- **One source of colour truth.** Every chrome token and every figure hue is defined once in `theme.py`; `figures.py` derives its palettes from it instead of restating hexes, so a colour used in both the interface and a figure exists in exactly one place.
+- **A type scale in whole pixels.** Qt rounds a fractional QSS size up to the next pixel, so the old 10.5 / 11.5 / 12.5 px steps rendered as 11 / 12 / 13 px — the same pixels described by two different numbers. The scale is now written as the integers it actually produces.
+- **Spacing snapped onto its scale.** The spacing helper rounds its argument onto the declared 6 / 10 / 16 px ladder rather than passing arbitrary values through, so the rhythm is enforced instead of merely documented (no call site moves more than 2 px).
+- **Loading, error and empty states read differently.** An in-flight operation, a failure, a no-result and a genuinely empty panel each have their own treatment, so "still working" is never mistaken for "nothing found".
+- **The disk requirement is stated before the download starts.** Manage genomes and the download action both state up front that a mammalian genome needs ≥ 8 GB free disk in WSL, with extraction peaking near 4 GB (FASTA ~3 GB plus the 2bit) before the temporary files are cleared — instead of the shortfall surfacing as a failure part-way through.
+- **A backend failure is announced in words**, not by colour alone.
+- **Both export entry points propose the same filename** for a given table, so the button and the right-click no longer disagree about what the file is called.
+### Fixed
+- **The frozen-bundle self-test gate never actually ran.** `build_installer.ps1` invoked the packaged executable with the call operator, but the exe is GUI-subsystem, so the call returned immediately and `$LASTEXITCODE` was never set — the gate could not fail. It now waits on the process and reads its real exit code, so a broken bundle stops the build.
+- **ENV domains are no longer drawn in the "unknown domain" grey.** The env glycoprotein bands had no palette entry and fell through to the grey fallback, next to GAG's grey — the two most distinguishable retroviral domains rendered nearly alike. ENV now has its own hue, picked by measured contrast on both the dark and light tracks and checked for separation under deuteranomaly and protanomaly.
+- **The gel distinguishes on- from off-target by shape as well as hue.** Each band carries a redundant non-colour mark (on-target, off-target, single-primer artefact, neutral priming site), so the specificity call survives greyscale printing and colour-blind reading.
+- **Feature labels too narrow to letter in place are surfaced, not dropped.** A feature only a few pixels wide previously lost its label silently — which is exactly what was hiding the PBS tRNA-identity hedge, the one label that must never disappear. Narrow features now get a leader line and a caption line beneath the track; if more captions exist than fit, the overflow is counted rather than discarded.
+- **A poly-A/T tail is no longer drawn as a terminal repeat.** It gets its own genome-viewer track, so a LINE's tail is not read as an LTR/TIR-style repeat.
+- **A self-priming product is its own call.** An F+F or R+R product falling inside the target window was being labelled on-target; it is an artefact, never the intended amplicon. On-target, off-target and single-primer are now disjoint and exhaustive, so a derived off-target count (total − on − single) can no longer go negative.
+- **Card 06 states isPcr's real coordinate convention.** Product coordinates are reported exactly as isPcr gives them — 1-based inclusive — and the column header says so, so length reads as end − start + 1.
+
 ## [2.12.0] — 2026-07-25
 
 Post-overhaul refinements from direct use: the tool now carries you to the next step, warnings are proper dialogs you can dismiss, the genome manager shows everything at a fixed comfortable size, and download failures read plainly instead of as a crash. Driven by a user-directed fix loop with per-round triple-reviewer verification.
@@ -346,6 +371,7 @@ primer design, usable without a command line.
   the WebView2 runtime is absent. A kill-on-close Job Object ties the whole process tree to the
   launcher, so an in-place upgrade never orphans a window.
 
+[3.0.0]: https://github.com/tunabirgun/TEagle/releases/tag/v3.0.0
 [2.12.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.12.0
 [2.11.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.11.0
 [2.10.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.10.0

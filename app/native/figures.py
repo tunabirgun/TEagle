@@ -7,22 +7,11 @@ multi-lane agarose gel (log MW axis, 5 palettes). Geometry mirrors svgGenome / s
 from __future__ import annotations
 import math
 
-FIGFONT = "Cascadia Mono, Consolas, monospace"   # bundled UI font; mono digits align on the gel ladder / ruler
+# every colour used here is defined once, in theme.py (single source of truth); re-exported so
+# `figures.OK` / `figures.GELPAL` stay valid for existing callers and tests.
+from theme import OKABE_ITO, OK, GENECOL, ARCHCOL, CISCOL, GV_THEME, GELPAL   # noqa: F401
 
-# Okabe-Ito data palette (domain / feature hues) — must match the web figure bands
-OK = {"RT": "#0072B2", "INT": "#E69F00", "RNaseH": "#009E73", "PR": "#CC79A7", "GAG": "#7A7A7A",
-      "CHR": "#D55E00", "TPase": "#D55E00", "LTR": "#56B4E9", "TIR": "#E69F00", "tail": "#CC79A7",
-      "ORF": "#4C6C97", "on": "#009E73", "off": "#D55E00", "ladder": "#999999"}
-# exon_derived = a lighter tint of the annotated-exon green: same family, reads "inferred, not annotated";
-# gap kept distinct (light) from the darker slate flank so filler regions aren't a single ambiguous colour.
-GENECOL = {"exon": "#009E73", "exon_derived": "#7fd3b8", "intron": "#8792a0",
-           "cds": "#D55E00", "flank": "#5b6b7a", "gap": "#c3ccd6"}
-# retroviral transcript architecture (ERV): env exons green, the removed gag-pro-pol span amber-brown so the
-# "single large intron = frameshift-fused polyprotein" reads distinctly from a grey host intron.
-ARCHCOL = {"exon": "#009E73", "intron": "#B0752E"}
-# LTR cis-elements: PBS (leader, purple) and PPT (before 3' LTR, blue) — each distinct from the LTR blocks,
-# the env-exon green and the intron amber.
-CISCOL = {"PBS": "#8459C4", "PPT": "#2C7FB8"}
+FIGFONT = "Cascadia Mono, Consolas, monospace"   # bundled UI font; mono digits align on the gel ladder / ruler
 
 
 def esc(s) -> str:
@@ -47,7 +36,37 @@ def _fmt_int(n) -> str:
     return f"{int(round(n)):,}"
 
 
+def _fit_caption(items: list, plotW: float) -> str:
+    """One caption line that fits the plot width (mono ≈4.5 px/char at 7.5 px); overflow is counted, not dropped."""
+    maxc = max(24, int(plotW / 4.5))
+    out, n = [], 0
+    for it in items:
+        if out and n + len(it) + 3 > maxc:
+            return " · ".join(out) + f" · +{len(items)-len(out)} more"
+        out.append(it); n += len(it) + 3
+    return " · ".join(out)
+
+
 # ================= genome viewer =================
+GV_NAME_PX = 9.5      # track-name font size in the viewer
+GV_CHAR_EM = 0.6      # Cascadia Mono advance width (measured 0.600 em; the SVG renderer draws no wider)
+GV_NAME_GAP = 10      # gap between the end of a track name and the plot area
+GV_NAME_PAD = 4       # breathing room at the figure's left edge
+GV_ML_MIN = 96        # gutter floor, so short-named models keep the historical layout
+GV_MR = 16            # right margin
+
+
+def gv_gutter(model: dict, W: float = None) -> float:
+    """Width of the left track-label gutter: sized to the longest track name in this model, so a
+    name like 'env mRNA (predicted)' is never clipped by the figure's left edge. Mono metric, so the
+    result is an upper bound on the rendered text width. With W, the gutter is capped so the plot
+    area keeps its 120 px floor on a very narrow figure. One definition — svg_genome draws it and the
+    interactive canvas maps pixels to bp with it, so the two can never disagree."""
+    n = max((len(t.get("name", "")) for t in (model or {}).get("tracks", []) if t.get("name")), default=0)
+    g = float(max(GV_ML_MIN, math.ceil(n * GV_NAME_PX * GV_CHAR_EM) + GV_NAME_GAP + GV_NAME_PAD))
+    return g if W is None else min(g, max(float(GV_ML_MIN), W - GV_MR - 120))
+
+
 def gv_nice_step(span: float, ticks: int) -> float:
     raw = max(1.0, span / ticks)
     mag = 10 ** math.floor(math.log10(raw))
@@ -57,7 +76,7 @@ def gv_nice_step(span: float, ticks: int) -> float:
 
 def gv_tracks_from_rec(rec: dict) -> dict:
     """Build a genome-viewer model from an analysis record (structural + domains + ORFs + ERV architecture)."""
-    tracks, reps, cis = [], [], []
+    tracks, reps, cis, tails = [], [], [], []
     for e in rec.get("structural", []):
         t = e["type"]
         if t.startswith("LTR") or t.startswith("TIR"):
@@ -79,10 +98,13 @@ def gv_tracks_from_rec(rec: dict) -> dict:
             cis.append({"start": p[0], "end": p[1], "color": CISCOL[key], "label": lab, "kind": key, "tip": tip})
         elif e.get("pos"):
             p = e["pos"]
-            reps.append({"start": p[0], "end": p[1], "color": OK["tail"], "label": t.split(" ")[0],
-                         "kind": t.split(" ")[0], "tip": f"{t} {p[0]}–{p[1]}"})
+            f = {"start": p[0], "end": p[1], "color": OK["tail"], "label": t.split(" ")[0],
+                 "kind": t.split(" ")[0], "tip": f"{t} {p[0]}–{p[1]}"}
+            (tails if t.startswith("poly") else reps).append(f)   # a poly-A/T tail is not a terminal repeat
     if reps:
         tracks.append({"name": "terminal repeats", "height": 20, "features": reps})
+    if tails:
+        tracks.append({"name": "poly-A/T tail", "height": 18, "features": tails})
     if cis:
         tracks.append({"name": "cis-elements", "height": 18, "features": cis})
     doms = [{"start": d["nt"][0], "end": d["nt"][1], "color": OK.get(d["domain"], "#888"),
@@ -160,14 +182,9 @@ def gv_tracks_from_gene(gm: dict, length: int, include_flanks: bool = False) -> 
 
 
 def _gv_theme(theme: str, for_export: bool) -> dict:
-    if for_export:
-        return {"paper": "none", "ink": "#222", "faint": "#555", "grid": "#dcdfe3",
-                "track": "#00000000", "lane": "#0000000d", "frame": "#c7ccd2", "win": "#1f6feb"}
-    if theme == "white":
-        return {"paper": "#ffffff", "ink": "#141b21", "faint": "#5a6570", "grid": "#eceef1",
-                "track": "#f6f8fa", "lane": "#eef1f4", "frame": "#dde1e6", "win": "#1f6feb"}
-    return {"paper": "#0b1016", "ink": "#e6edf1", "faint": "#8a959d", "grid": "#182029",
-            "track": "#10171e", "lane": "#121b23", "frame": "#243039", "win": "#4aa8ff"}
+    """Genome-viewer chrome for a render target; the palettes live in theme.GV_THEME (copy, so a
+    caller mutating the returned dict cannot corrupt the shared one)."""
+    return dict(GV_THEME["export" if for_export else ("white" if theme == "white" else "dark")])
 
 
 def svg_genome(model: dict, view: dict, W: float, theme: str, for_export: bool = False, return_regions: bool = False):
@@ -175,7 +192,8 @@ def svg_genome(model: dict, view: dict, W: float, theme: str, for_export: bool =
     feature hit-boxes (SVG coords + feature identity) so the interactive canvas can hover/right-click."""
     L = model["length"]
     regions = []
-    ML, MR, ovH, rulerH, MT = 96, 16, 13, 24, 34
+    MR, ovH, rulerH, MT = GV_MR, 13, 24, 34
+    ML = gv_gutter(model, W)                        # gutter fits the widest track name (no clipped label)
     plotW = max(120, W - ML - MR)
     s0, s1 = view["start"], view["end"]
     span = max(1, s1 - s0)
@@ -219,11 +237,13 @@ def svg_genome(model: dict, view: dict, W: float, theme: str, for_export: bool =
         bp += step
     for ti, t in enumerate(model["tracks"]):
         ty = track_ys[ti]; th = t.get("height", 20)
-        s += f'<text x="{ML-10}" y="{ty+th/2+3:.1f}" fill="{T["faint"]}" font-size="9.5" text-anchor="end">{esc(t["name"])}</text>'
+        s += (f'<text x="{ML-GV_NAME_GAP}" y="{ty+th/2+3:.1f}" fill="{T["faint"]}" font-size="{GV_NAME_PX}" '
+              f'text-anchor="end">{esc(t["name"])}</text>')
         s += f'<rect x="{ML}" y="{ty}" width="{plotW}" height="{th}" rx="3" fill="{T["track"]}"/>'
         stranded = t.get("stranded")
         if stranded:
             s += f'<line x1="{ML}" y1="{ty+th/2:.1f}" x2="{ML+plotW}" y2="{ty+th/2:.1f}" stroke="{T["grid"]}"/>'
+        tiny = []                                              # labels of features too narrow to letter in place
         for f in t["features"]:
             a = max(bx(f["start"]), ML); b = min(bx(f["end"]), ML + plotW)
             if b < ML - 0.5 or a > ML + plotW + 0.5:
@@ -242,34 +262,52 @@ def svg_genome(model: dict, view: dict, W: float, theme: str, for_export: bool =
                   f'rx="2.5" fill="{f["color"]}"><title>{esc(f.get("tip",""))}</title></rect>')
             regions.append({"x0": a, "y0": yy, "x1": a + w, "y1": yy + max(hh, 3), "start": f["start"], "end": f["end"],
                             "strand": f.get("strand", "+"), "label": f.get("label", ""), "tip": f.get("tip", "")})
-            if f.get("label") and w > 26:
-                s += (f'<text x="{a+4:.1f}" y="{yy+max(hh,3)-3:.1f}" fill="{_label_ink(f["color"])}" '
-                      f'font-size="9" font-weight="700" pointer-events="none">{esc(f["label"])}</text>')
+            if f.get("label"):
+                if w > 26:
+                    s += (f'<text x="{a+4:.1f}" y="{yy+max(hh,3)-3:.1f}" fill="{_label_ink(f["color"])}" '
+                          f'font-size="9" font-weight="700" pointer-events="none">{esc(f["label"])}</text>')
+                else:                                          # too narrow to letter: leader line + caption below
+                    cx = a + w / 2
+                    s += (f'<line x1="{cx:.1f}" y1="{yy+max(hh,3):.1f}" x2="{cx:.1f}" y2="{ty+th+2:.1f}" '
+                          f'stroke="{f["color"]}" stroke-width="0.6"/>')
+                    tiny.append(f'{f["label"]} {_fmt_int(f["start"])}–{_fmt_int(f["end"])}')
+        if tiny:                                               # never drop a label (PBS·? hedge is often ~2 px wide)
+            s += (f'<text x="{ML}" y="{ty+th+10:.1f}" fill="{T["faint"]}" font-size="7.5">'
+                  f'{esc(_fit_caption(tiny, plotW))}</text>')
     svg = s + "</svg>"
     return (svg, regions) if return_regions else svg
 
 
 # ================= agarose gel =================
-# "site" = a NEUTRAL colour for a whole-genome scan with no design locus: the products are neither on- nor
-# off-target, just genomic priming sites, so they must not read as the off-target warning colour.
-GELPAL = {
-    "transparent": {"paper": "none", "gel": "#0f1316", "well": "#04060a", "stroke": "#2a3138", "ink": "#5a656f",
-                    "on": OK["on"], "off": OK["off"], "single": "#0072B2", "site": "#56B4E9", "ladder": OK["ladder"], "glow": 1.4, "band": 2.6},
-    "dark":        {"paper": "#0b0e11", "gel": "#0f1316", "well": "#04060a", "stroke": "#232a30", "ink": "#8792a0",
-                    "on": OK["on"], "off": OK["off"], "single": "#0072B2", "site": "#56B4E9", "ladder": OK["ladder"], "glow": 1.4, "band": 2.6},
-    "white":       {"paper": "#ffffff", "gel": "#ededed", "well": "#c4c4c4", "stroke": "#cccccc", "ink": "#555555",
-                    "on": "#151515", "off": "#992222", "single": "#1f5fa8", "site": "#2a6f97", "ladder": "#9a9a9a", "glow": 0.3, "band": 2.6},
-    "uv":          {"paper": "#050310", "gel": "#0a0714", "well": "#000000", "stroke": "#1c1236", "ink": "#9fb4d8",
-                    "on": "#5bff6b", "off": "#ffcf47", "single": "#6fb2ff", "site": "#79d0ff", "ladder": "#79d0ff", "glow": 3.2, "band": 3.1},
-    "mono":        {"paper": "#0d0d0d", "gel": "#181818", "well": "#000000", "stroke": "#2b2b2b", "ink": "#b2b2b2",
-                    "on": "#f2f2f2", "off": "#9a9a9a", "single": "#6f6f6f", "site": "#c0c0c0", "ladder": "#cfcfcf", "glow": 2.0, "band": 2.9},
-}
+# palettes: theme.GELPAL (imported above)
+
+
+def _call_mark(cx: float, cy: float, call: str, color: str, r: float = 2.4) -> str:
+    """Redundant NON-COLOUR cue for a band's call, so on- vs off-target survives greyscale/colour-blind reading:
+    on-target = solid triangle, off-target = cross, single-primer = open ring, priming site = filled square."""
+    if call == "on":
+        return f'<path d="M {cx-r:.1f} {cy-r:.1f} L {cx+r:.1f} {cy:.1f} L {cx-r:.1f} {cy+r:.1f} Z" fill="{color}"/>'
+    if call == "off":
+        return (f'<path d="M {cx-r:.1f} {cy-r:.1f} L {cx+r:.1f} {cy+r:.1f} M {cx-r:.1f} {cy+r:.1f} '
+                f'L {cx+r:.1f} {cy-r:.1f}" stroke="{color}" stroke-width="1.1" stroke-linecap="round" fill="none"/>')
+    if call == "single":
+        return f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{max(r-0.6,1.0):.1f}" fill="none" stroke="{color}" stroke-width="1"/>'
+    return f'<rect x="{cx-r+0.5:.1f}" y="{cy-r+0.5:.1f}" width="{2*r-1:.1f}" height="{2*r-1:.1f}" fill="{color}"/>'
 
 
 def _band_opacity(total_mm: int) -> float:
     """Priming-efficiency proxy: a perfect match reads bright; each mismatch dims the band.
     All reported mismatches are 5'-proximal (the strict-3' rule forbids 3'-end mismatches)."""
     return round(max(0.4, 1.0 - 0.22 * max(0, total_mm)), 3)
+
+
+def _call_counts(g):
+    """Disjoint, exhaustive split of one band's products -> (n_on, n_off, n_single), n_on+n_off+n_single == len(g).
+    A self-priming product is an artefact, never the intended amplicon, so it is counted as single-primer even if
+    it falls inside the target window; off-target is the remainder, so no derived count can go negative."""
+    n_single = sum(1 for a in g if a.get("single_primer"))
+    n_on = sum(1 for a in g if a.get("on_target") and not a.get("single_primer"))
+    return n_on, len(g) - n_on - n_single, n_single
 
 
 def _lane_bands(amplicons, P, has_locus=True):
@@ -287,30 +325,29 @@ def _lane_bands(amplicons, P, has_locus=True):
     bands = []
     for size in sorted(groups):
         g = groups[size]
-        n_single = sum(1 for a in g if a.get("single_primer"))
+        n_on, n_off, n_single = _call_counts(g)           # disjoint buckets: no count can go negative
         if not has_locus:                                 # neutral priming sites (single-primer artefacts still distinct)
             n_site = len(g) - n_single
-            color = P["single"] if (n_single and not n_site) else P["site"]
+            call = "single" if (n_single and not n_site) else "site"
             parts = (([f"{n_site} priming site" + ("s" if n_site != 1 else "")] if n_site else [])
                      + ([f"{n_single} single-primer"] if n_single else []))
             on = False
         else:
-            n_on = sum(1 for a in g if a.get("on_target"))
-            n_off = len(g) - n_on - n_single
-            if n_off:                                     # any off-target co-migrating here -> flag the whole band off-target
-                color = P["off"]
+            if n_off:                                   # any off-target co-migrating here -> flag the whole band off-target
+                call = "off"
             elif n_single:
-                color = P["single"]
+                call = "single"
             elif n_on:                                    # purely on-target at this size
-                color = P["on"]
+                call = "on"
             else:
-                color = P["off"]
+                call = "off"
             parts = (([f"{n_on} on-target"] if n_on else []) + ([f"{n_off} off-target"] if n_off else [])
                      + ([f"{n_single} single-primer"] if n_single else []))
             on = bool(n_on)
         min_mm = min((a.get("fwd_mm", 0) + a.get("rev_mm", 0)) for a in g)
         src = esc(g[0].get("source", ""))
-        bands.append({"size": size, "color": color, "opacity": _band_opacity(min_mm),
+        color = P[call]                                   # colour derives from the call, so the shape cue can never disagree
+        bands.append({"size": size, "color": color, "call": call, "opacity": _band_opacity(min_mm),
                       "on": on, "single": bool(n_single), "count": len(g),
                       "t": ", ".join(parts) + (f" · {src}" if src else "")})
     return bands
@@ -372,10 +409,8 @@ def gel_regions(data: dict):
                 yy = y(size, r)
                 # representative for the right-click menu: the intended (on-target) product if any, else the strongest
                 rep = min(g, key=lambda a: (not a.get("on_target"), a.get("fwd_mm", 0) + a.get("rev_mm", 0)))
-                n_single = sum(1 for a in g if a.get("single_primer"))
+                n_on, n_off, n_single = _call_counts(g)   # same disjoint split as the band tooltip
                 if l.get("has_locus", True):              # with a design locus -> on/off-target; else neutral priming sites
-                    n_on = sum(1 for a in g if a.get("on_target"))
-                    n_off = len(g) - n_on - n_single
                     call = ", ".join(([f"{n_on} on-target"] if n_on else []) + ([f"{n_off} off-target"] if n_off else [])
                                      + ([f"{n_single} single-primer"] if n_single else []))
                 else:
@@ -420,6 +455,8 @@ def svg_gel(data: dict, bg: str) -> str:
             title = f'{bd["size"]} bp' + (f' · {bd["t"]}' if bd.get("t") else "") + (f' (×{n})' if n > 1 else "")
             s += (f'<rect x="{lx+3:.1f}" y="{yy-h/2:.1f}" width="{laneW-6}" height="{h}" rx="1" '
                   f'fill="{bd["color"]}"{op}{dash}{filt}><title>{title}</title></rect>')
+            if not is_ladder and bd.get("call"):          # shape marker: the call read without colour
+                s += _call_mark(lx - 1.0, yy, bd["call"], bd["color"])
         if not is_ladder:
             if not (bands or []):
                 s += f'<text x="{lx+laneW/2:.1f}" y="{rbot+13}" fill="{P["ink"]}" font-size="7" text-anchor="middle">—</text>'
@@ -445,18 +482,18 @@ def svg_gel(data: dict, bg: str) -> str:
     all_neutral = bool(lanes) and all(not l.get("has_locus", True) for l in lanes)   # every lane a no-locus scan
     ly = H - 8
     if all_neutral:                          # neutral 'priming site' bands -> a matching swatch, not on/off (which match nothing)
-        s += (f'<circle cx="{x0}" cy="{ly}" r="3" fill="{P["site"]}"/>'
-              f'<text x="{x0+7}" y="{ly+3}" fill="{P["ink"]}" font-size="8">priming site</text>')
+        s += (_call_mark(x0, ly, "site", P["site"], 3)
+              + f'<text x="{x0+7}" y="{ly+3}" fill="{P["ink"]}" font-size="8">priming site</text>')
         xnext = x0 + 78
     else:                                    # any locus (incl. local PCR, which shares this gel) -> on/off swatches
-        s += (f'<circle cx="{x0}" cy="{ly}" r="3" fill="{P["on"]}"/>'
-              f'<text x="{x0+7}" y="{ly+3}" fill="{P["ink"]}" font-size="8">on-target</text>'
-              f'<circle cx="{x0+64}" cy="{ly}" r="3" fill="{P["off"]}"/>'
-              f'<text x="{x0+71}" y="{ly+3}" fill="{P["ink"]}" font-size="8">off-target</text>')
+        s += (_call_mark(x0, ly, "on", P["on"], 3)            # swatch shapes = the in-lane band markers
+              + f'<text x="{x0+7}" y="{ly+3}" fill="{P["ink"]}" font-size="8">on-target</text>'
+              + _call_mark(x0 + 64, ly, "off", P["off"], 3)
+              + f'<text x="{x0+71}" y="{ly+3}" fill="{P["ink"]}" font-size="8">off-target</text>')
         xnext = x0 + 132
     if any_single:
-        s += (f'<circle cx="{xnext}" cy="{ly}" r="3" fill="{P["single"]}"/>'
-              f'<text x="{xnext+7}" y="{ly+3}" fill="{P["ink"]}" font-size="8">single-primer</text>')
+        s += (_call_mark(xnext, ly, "single", P["single"], 3)
+              + f'<text x="{xnext+7}" y="{ly+3}" fill="{P["ink"]}" font-size="8">single-primer</text>')
         xnext += 82
     s += f'<text x="{xnext}" y="{ly+3}" fill="{P["ink"]}" font-size="8">L = MW ladder (bp)</text>'
     return s + "</svg>"

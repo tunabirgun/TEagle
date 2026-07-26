@@ -2,7 +2,7 @@
 # Build:  pyinstaller installer/teagle_native.spec --noconfirm
 # Everything the science needs (primer3, pyhmmer, the CC0 Pfam HMM profiles) is bundled;
 # a non-coder installs one thing and runs it. The optional Dfam/splice features install from inside the app.
-import os, re
+import os, re, sys
 from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metadata
 
 ROOT = os.path.abspath(os.path.join(SPECPATH, ".."))         # project root (SPECPATH = installer/)
@@ -61,15 +61,24 @@ hiddenimports = [
     "PySide6.QtCore", "PySide6.QtGui", "PySide6.QtWidgets", "PySide6.QtSvg",
 ]
 
+# openpyxl.utils.dataframe is a pandas-interop shim TEagle never imports; collecting it manufactured the
+# edge openpyxl -> pandas -> scipy -> torch -> transformers (~528 MB of dead weight). Drop it at the source.
+_SHIM = "openpyxl.utils.dataframe"
+
 # C-extension packages + openpyxl (XLSX table export): pull binaries, data and dynamic submodules
 for pkg in ("primer3", "pyhmmer", "openpyxl", "certifi", "RNA"):
     d, b, h = collect_all(pkg)
     datas += d; binaries += b; hiddenimports += h
     hiddenimports += collect_submodules(pkg)
+hiddenimports = [m for m in hiddenimports if m != _SHIM]
 hiddenimports += ["pyhmmer.platform", "pyhmmer.platform.win32", "openpyxl", "et_xmlfile", "certifi", "RNA"]
 
 # trim the bundle: exclude heavy Qt modules the app never imports (keeps the installer small)
 excludes = [
+    _SHIM,                                                   # pandas-interop shim -> pandas/scipy/torch/transformers
+    # openpyxl's three try/except optional accelerators. TEagle's XLSX export writes str/int/float cells and a
+    # bold header only: no ws.add_image (PIL), no numpy scalars, and the stdlib ElementTree writer is equivalent.
+    "numpy", "PIL", "lxml",
     "tkinter", "test", "pytest", "playwright", "webview", "pywebview",
     "PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets", "PySide6.QtWebEngineQuick",
     "PySide6.QtQml", "PySide6.QtQuick", "PySide6.QtQuick3D", "PySide6.QtQuickWidgets",
@@ -94,6 +103,30 @@ a = Analysis(
     excludes=excludes,
     noarchive=False,
 )
+
+# build guard: only the pinned deps (requirements.txt) + their real transitive deps + TEagle's own modules
+# may enter the module graph. One stray import edge once dragged in ~528 MB; fail the build, don't ship it.
+_ALLOWED_TOP = {
+    "PySide6", "shiboken6",                                  # PySide6==6.11.1 (+ its shiboken6 runtime)
+    "primer3", "pyhmmer", "psutil", "typing_extensions", "RNA",   # primer3-py, pyhmmer (+psutil, typing_extensions), ViennaRNA
+    "openpyxl", "et_xmlfile",                                # openpyxl (+ its only dependency)
+    "certifi",
+    "teagle_core", "teagle_native", "main", "engine", "engine_worker", "envcheck", "server",
+    "figures", "widgets", "sample", "theme", "fonts", "install_dialog",   # app/backend + app/native
+    "_pyi_rth_utils",                                        # PyInstaller runtime shim
+}
+_counts = {}
+for _m in a.pure:
+    _t = _m[0].split(".")[0]
+    if _t not in _ALLOWED_TOP and _t not in sys.stdlib_module_names:
+        _counts[_t] = _counts.get(_t, 0) + 1
+if _counts:
+    raise SystemExit(
+        "teagle_native.spec BUILD GUARD: unlisted top-level packages entered the bundle:\n  "
+        + "\n  ".join(f"{t} ({n} modules)" for t, n in sorted(_counts.items(), key=lambda kv: -kv[1]))
+        + "\nEither exclude the import edge that pulled it in, or add it to _ALLOWED_TOP if it is a real dependency."
+    )
+
 pyz = PYZ(a.pure)
 exe = EXE(
     pyz, a.scripts, [], exclude_binaries=True,

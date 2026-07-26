@@ -373,17 +373,28 @@ def test_manager_survives_rebuild_while_open(win):
 
 
 def test_manager_download_button_not_clipped(win):
-    # the Action button must render at its natural comfortable height in the cell, never collapsed to its ~15-19px
-    # minimum (which sheared the top of the "Download" label). Regression guard for the cell-widget-collapse / forced-
-    # short-button clipping the user reported repeatedly.
+    # Every Action button must sit FULLY INSIDE its cell and CENTRED in it. Asserted in viewport coordinates against
+    # visualRect, because the failures were positional: QTableWidget::item padding is applied to cell widgets too, so
+    # an unbudgeted row/column offset the button by the padding (+9/+6 at scale 1.0) and sheared its bottom edge.
+    # Checking the holder's SIZE alone missed this for two releases — check where the button actually lands.
     from PySide6.QtWidgets import QPushButton
+    from PySide6.QtCore import QRect
     win._genome_mgr_open = True
     win._on_genome_list({"ok": True, "genomes": []})
     tbl = win._genome_mgr_table
-    holder = tbl.cellWidget(0, 6)
-    btn = holder.findChild(QPushButton)
-    assert btn is not None
-    assert holder.height() >= 30 and btn.height() >= 23      # row holds a full-height button; button is comfortable, not sheared
+    act = tbl.columnCount() - 1
+    widths = set()
+    for r in range(tbl.rowCount()):
+        btn = tbl.cellWidget(r, act).findChild(QPushButton)
+        assert btn is not None
+        cell = tbl.visualRect(tbl.model().index(r, act))
+        brect = QRect(btn.mapTo(tbl.viewport(), btn.rect().topLeft()), btn.size())
+        assert cell.contains(brect), f"row {r}: button {brect} not contained by cell {cell}"
+        assert abs(brect.center().x() - cell.center().x()) <= 2, f"row {r}: off-centre horizontally"
+        assert abs(brect.center().y() - cell.center().y()) <= 2, f"row {r}: off-centre vertically"
+        assert btn.height() >= 18                            # still a comfortable, clickable target
+        widths.add(btn.width())
+    assert len(widths) == 1, f"buttons must share ONE width so they align down the column, got {sorted(widths)}"
 
 
 def test_on_genome_list_refreshes_dropdown_even_when_manager_closed(win):
@@ -582,6 +593,94 @@ def test_wsl_absent_keeps_optional_disabled(win):
     assert not win.wslInstallBtn.isHidden()                    # installer stays reachable — it guides WSL setup
 
 
+def test_genome_scan_table_declares_ispcr_1based(win):
+    """The genome-scan table shows isPcr coordinates verbatim (1-based INCLUSIVE), so it must not reuse the
+    0-based half-open gloss — under that convention its own Len contradicts its Coords (end-start+1 == Len).
+    Its 'Source' cell is an assembly sequence name, not a specimen, and needs its own gloss too."""
+    import main
+    from teagle_core import genomepcr
+    a = genomepcr.parse_ispcr(">chr7:5530601+5530800 pair 200bp ACGTACGTACGTACGTAC TTTTGGGGCCCCAAAATT\nACGT\n")[0]
+    assert a["end"] - a["start"] + 1 == a["length"]                  # 1-based inclusive, as genomepcr documents
+    from widgets import DataTable
+    win._render_genome_scan([{"label": "P1", "amplicons": [a]}], [a], {"verdict": "v", "n_pair": 1})
+    tbl = [t for i in range(win.genomeBody.count())
+           for t in ([win.genomeBody.itemAt(i).widget()] if isinstance(win.genomeBody.itemAt(i).widget(), DataTable) else [])][0]
+    heads = [tbl.horizontalHeaderItem(c).text() for c in range(tbl.columnCount())]
+    assert "Coords (1-based)" in heads and "Coords" not in heads     # not the 0-based half-open key
+    assert "Source" not in heads and "Assembly seq" in heads
+    g = main.GLOSS
+    assert "1-based INCLUSIVE" in g["Coords (1-based)"] and "0-based" not in g["Coords (1-based)"]
+    assert "contig accession" in g["Assembly seq"] and "specimen" not in g["Assembly seq"]
+    assert "0-based half-open" in g["Coords"]                        # panel 05 (simulated PCR) is unchanged
+
+
+def test_struct_menu_copies_the_span_the_row_shows(win):
+    """An LTR/TIR row lists its two arms (Len = one arm), so the row menu must copy an ARM — not silently
+    substitute element_span (the whole element; for a TIR, the entire input). Whole element stays available."""
+    from teagle_core import structural
+    import random
+    random.seed(7)
+    core = "".join(random.choice("ACGT") for _ in range(2000))
+    ltr = "".join(random.choice("ACGT") for _ in range(300))
+    seq = "AAAA" + ltr + core + ltr + "AAAA"
+    e = [x for x in structural.detect_all(seq) if x["type"].startswith("LTR")][0]
+    win.state["analyzed_seq"] = seq
+    row = win._struct_row(e)
+    labels = [l for l, _ in win._struct_menu(e)]
+    assert "Copy whole element FASTA" in labels                      # capability kept, clearly labelled
+    m = dict(win._struct_menu(e))
+    from PySide6.QtWidgets import QApplication
+    m["Copy 5′ arm FASTA"]()
+    txt = QApplication.clipboard().text()
+    body = "".join(txt.splitlines()[1:])
+    assert len(body) == row[2] and str(e["five_prime"][0]) in txt.splitlines()[0]   # copied bp == the row's Len
+    m["Copy whole element FASTA"]()
+    assert len("".join(QApplication.clipboard().text().splitlines()[1:])) == e["element_span"][1] - e["element_span"][0]
+
+
+def test_struct_row_fills_method_and_len_and_hedges_pbs(win):
+    """Method is glossed 'How TEagle detected this feature' — it must not be empty for PBS/PPT/TSD/poly-A,
+    a PBS must show a Len, and a PBS below the confident threshold must read as tentative in the TABLE."""
+    from teagle_core import structural
+    import random
+    random.seed(11)
+    div = list(structural._PRIMER_TRNA["tRNA-Lys3"])
+    for i in (2, 5, 8, 11, 14, 17):
+        div[i] = {"A": "C", "C": "A", "G": "T", "T": "G"}[div[i]]
+    leader = "".join(random.choice("ACGT") for _ in range(6)) + "".join(div) + "".join(random.choice("ACGT") for _ in range(20))
+    seq = leader + "".join(random.choice("ACGT") for _ in range(600)) + "AGGGAGGGAGGGAAGGGA"
+    pbs = structural.find_pbs(seq, 0)
+    assert pbs and pbs["confident"] is False
+    row, tips = win._struct_row(pbs), win._struct_tips(pbs)
+    assert row[2] == pbs["pos"][1] - pbs["pos"][0]                   # Len no longer blank
+    assert "tentative" in row[3] and row[4]                          # hedge visible + Method non-empty
+    assert "undetermined" in (tips[3] or "")                         # full hedge on hover, not only in the viewer
+    for e in [structural.find_ppt(seq, len(seq)),
+              structural.find_tsd("AAAA" + "ACGT" * 30 + "AAAA", 4, 124)] + structural.find_polya("ACGT" * 20 + "A" * 12):
+        assert e and win._struct_row(e)[4], e["type"]
+
+
+def test_methods_panel_documents_pbs_and_ppt(win):
+    # the panel claims the annotation is never a black box; PBS/PPT are shown as rows + viewer tracks
+    html = win._methods_html()
+    assert "PBS" in html and "PPT" in html
+    assert "72%" in html and "82% purine" in html and "tentative" in html
+
+
+def test_genome_manager_error_sizes_to_its_own_content(win):
+    """The error rebuild returns before the table fit-tail; the dialog is reused, so it must release the
+    previous successful build's fixed size instead of stranding one line of red text in a screenful."""
+    win._genome_mgr_open = True
+    win._on_genome_list({"ok": True, "genomes": []})
+    big = win._genome_mgr.size()
+    win._on_genome_list({"ok": False, "error": "WSL backend unavailable"})
+    err = win._genome_mgr
+    assert err.size().height() < big.height() and err.size().width() <= big.width()
+    assert err.size().height() <= err.sizeHint().height() + 4        # no dead space below the content
+    win._on_genome_list({"ok": True, "genomes": []})                 # and the table build recovers its own size
+    assert win._genome_mgr.size().height() == big.height()
+
+
 def test_wsl_broken_shows_error_not_crash(win):
     win._on_wsl_status({"error": "wsl.exe returned 0xffffffff"})
     assert "error" in win.wslStatus.text().lower()
@@ -623,3 +722,37 @@ def test_annotate_without_stack_returns_soft_error():
         assert res.get("ok") is True                            # stack present -> clean success
     else:
         assert res.get("ok") in (False, None) or "error" in res  # stack absent -> soft error, no crash
+
+
+def test_amplicon_call_and_fasta_kind_are_one_disjoint_label():
+    """A self-priming product is its OWN call everywhere — table, gel FASTA header, caption counts.
+    It used to read 'off-target · single-primer' in the table while the caption counted it only as
+    single-primer, so counting off-target rows disagreed with the caption."""
+    import main
+    off = {"on_target": False, "single_primer": False}
+    single = {"on_target": False, "single_primer": True, "start": 100, "end": 400, "length": 300, "seq": "AC"}
+    assert main._amp_call(off) == "off-target" and main._amp_call(single) == "single-primer"
+    assert main._amp_call(off, has_locus=False) == "priming site"
+    assert main._amp_kind(single) == "singleprimer" and main._amp_kind(off) == "offtarget"
+    assert main._amp_kind(single, has_locus=False) == "singleprimer"     # never '_offtarget'/'_primingsite'
+
+
+def test_delta_g_cell_exports_bare_number():
+    """The ! / !! severity marks are on-screen cues; an exported ΔG column must stay numeric."""
+    import main, widgets
+    txt, flag, tip, export = main._metric_cell([("F", {"p3": -5.2, "vrna": -5.4, "flag": "caution"})])
+    assert txt == "-5.4!" and float(export) == -5.4
+    t = widgets.DataTable(["ΔG"])
+    t.set_rows([[txt]], exports=[[export]])
+    assert t.item(0, 0).text() == txt and t.rows_data() == [[export]]    # display marked, export numeric
+
+
+def test_pcr_queue_buttons_are_uppercased_on_every_mutation(win):
+    """The queue is rebuilt on add/move/remove/clear; its row buttons must not sit in sentence case
+    until the next theme/scale refresh."""
+    c = {"id": "P1", "left_seq": "ACGTACGTACGTACGTACGT", "right_seq": "TGCATGCATGCATGCATGCA",
+         "product_size": 200, "left_pos": [0, 20], "right_pos": [180, 200]}
+    from PySide6.QtWidgets import QPushButton
+    win._add_pcr_pair(c)
+    labels = [b.text() for b in win.pcrQueueBox.parentWidget().findChildren(QPushButton)]
+    assert labels and all(l == l.upper() for l in labels), labels

@@ -74,7 +74,7 @@ def test_dialog_wsl2_button_and_install_all_routing():
         {"key": "wsl2", "name": "WSL2", "desc": "x", "ok": False, "detail": "not installed",
          "installable": True, "guide": "Click Install WSL..."}]})
     b = dlg._rows["wsl2"]["btn"]
-    assert b.isEnabled() and b.text() == "Install WSL"          # live even though WSL is absent
+    assert b.isEnabled() and b.text().upper() == "INSTALL WSL"  # live even though WSL is absent (labels are uppercased)
     ops = []
     dlg.engine.submit = lambda op, body=None, key=None: ops.append(op)
     dlg._wsl2_ok = False; dlg._install_all()

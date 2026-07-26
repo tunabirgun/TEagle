@@ -19,8 +19,9 @@ if (($args -notcontains "-SkipFreeze") -or (-not (Test-Path $dist))) {
   if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed with exit code $LASTEXITCODE" }
   # sanity: the frozen bundle must import the scientific stack + render QtSvg before we ship it
   $env:TEAGLE_SELFTEST = "1"; $env:QT_QPA_PLATFORM = "offscreen"
-  & $dist
-  $st = $LASTEXITCODE
+  # Start-Process -Wait, NOT '& $dist': the exe is GUI-subsystem (console=False), so the call operator returns
+  # immediately and leaves $LASTEXITCODE stale — the gate below silently never fired.
+  $st = (Start-Process -FilePath $dist -Wait -PassThru -NoNewWindow).ExitCode
   Remove-Item Env:\TEAGLE_SELFTEST; Remove-Item Env:\QT_QPA_PLATFORM
   if ($st -ne 0) { throw "frozen-bundle self-test failed (exit $st) - not shipping a broken build" }
   Write-Output "Frozen-bundle self-test passed."

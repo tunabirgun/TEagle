@@ -148,3 +148,32 @@ def test_gel_regions_group_by_size_prefer_on_target(figures):
     regs = figures.gel_regions({"lanes": lanes})
     assert len(regs) == 1                                   # one hit-box per migrated band
     assert regs[0]["amplicon"]["on_target"] is True          # right-click targets the intended product
+
+
+def test_self_priming_product_in_target_window_is_not_counted_on_target():
+    # a self-priming (F+F) product that lands inside the target window used to be counted as BOTH on-target and
+    # single-primer, so the derived off-target count (total - on - single) went NEGATIVE on the gel caption/tooltip
+    F, R = "GGATCCAAGCTTGAATTCCG", "TGACTGACTTGCATGCATGC"
+    tmpl = ("T" * 60) + F + ("A" * 160) + reverse_complement(F) + ("C" * 100) + reverse_complement(R) + ("G" * 60)
+    amps = in_silico_pcr(F, R, tmpl, "t", max_mm=0, tp=5, prod_min=70, prod_max=1000,
+                         target_span=[60, len(tmpl) - 60])
+    sp = [a for a in amps if a["single_primer"]]
+    assert sp and all(a["on_target"] is False for a in sp)   # artefact, never the intended amplicon
+    n_on = sum(1 for a in amps if a["on_target"])
+    n_single = len(sp)
+    n_off = len(amps) - n_on - n_single
+    assert n_on >= 0 and n_off >= 0 and n_single >= 0
+    assert n_on + n_off + n_single == len(amps)              # buckets are disjoint and exhaustive
+    assert n_on == 1 and n_single == 1 and n_off == 0        # the F+R product is the only on-target
+
+
+def test_band_counts_are_non_negative_and_sum_to_products(figures):
+    # defence in depth: even if a caller hands in a product flagged both ways, the split stays sane
+    g = [{"length": 200, "on_target": True, "single_primer": True, "fwd_mm": 0, "rev_mm": 0},
+         {"length": 200, "on_target": True, "single_primer": False, "fwd_mm": 0, "rev_mm": 0},
+         {"length": 200, "on_target": False, "single_primer": False, "fwd_mm": 1, "rev_mm": 0}]
+    n_on, n_off, n_single = figures._call_counts(g)
+    assert min(n_on, n_off, n_single) >= 0 and n_on + n_off + n_single == len(g)
+    bands = figures._lane_bands(g, figures.GELPAL["dark"])
+    regs = figures.gel_regions({"lanes": [{"label": "P1", "amplicons": g}]})
+    assert bands[0]["count"] == len(g) and "-1" not in bands[0]["t"] and "-1" not in regs[0]["tip"]

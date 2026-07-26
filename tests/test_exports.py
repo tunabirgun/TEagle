@@ -171,3 +171,57 @@ def test_genome_export(theme, tmp_path):
     model = figures.gv_tracks_from_rec(rec)
     svg = figures.svg_genome(model, {"start": 0.0, "end": float(model["length"])}, 920, theme, False)
     _check_export(svg, str(tmp_path), f"genome_{theme}", transparent=False)
+
+
+def _erv_model():
+    """Model carrying the longest track name in the app: the ERV 'env mRNA (predicted)' architecture track."""
+    rec = {"composition": {"length": 9472},
+           "structural": [{"type": "LTR (terminal direct repeat)", "five_prime": [0, 968],
+                           "three_prime": [8504, 9472]},
+                          {"type": "PPT (polypurine tract)", "pos": [8486, 8504], "purine_frac": 0.9},
+                          {"type": "poly-A tail", "pos": [9400, 9430]}],
+           "domains": [{"domain": "ENV", "label": "envelope", "nt": [6500, 7800], "score": 90.0}],
+           "retroviral": {"leader_exon": [968, 1141], "intron": [1141, 6400], "env_exon": [6400, 8000]},
+           "orfs": [{"start": 1111, "end": 3112, "strand": "+", "frame": 2, "length_aa": 666}]}
+    return figures.gv_tracks_from_rec(rec)
+
+
+def test_track_label_gutter_fits_longest_name():
+    """The label gutter must hold the widest track name — 'env mRNA (predicted)' was clipped to
+    'nv mRNA (predicted)' at the fixed 96 px gutter. Mono metric = upper bound on the drawn width."""
+    model = _erv_model()
+    names = [t["name"] for t in model["tracks"]]
+    assert "env mRNA (predicted)" in names
+    ML = figures.gv_gutter(model)
+    for n in names:
+        start_x = ML - figures.GV_NAME_GAP - len(n) * figures.GV_NAME_PX * figures.GV_CHAR_EM
+        assert start_x >= 0, f"{n!r} starts at x={start_x:.1f}, clipped by the figure's left edge"
+    assert figures.gv_gutter({"tracks": [{"name": "CDS"}]}) == figures.GV_ML_MIN   # short names keep the old layout
+
+
+@pytest.mark.parametrize("W", [320, 620, 920])
+def test_genome_labels_clear_left_edge_when_rasterised(W):
+    """Rasterise and require ink-free columns at the figure's left edge, so no name is cut off."""
+    model = _erv_model()
+    svg = figures.svg_genome(model, {"start": 0.0, "end": float(model["length"])}, W, "white")
+    w, h = widgets._svg_size(svg)
+    sc = 3
+    img = QImage(int(w * sc), int(h * sc), QImage.Format_ARGB32)
+    img.fill(0xFFFFFFFF)
+    from PySide6.QtGui import QPainter
+    p = QPainter(img); QSvgRenderer(QByteArray(svg.encode())).render(p); p.end()
+    for x in range(0, sc):                                    # first logical pixel column must be blank
+        assert all(img.pixelColor(x, y).lightness() > 230 for y in range(img.height())), \
+            f"ink at the left edge (W={W}) — a track name is clipped"
+
+
+def test_canvas_gutter_matches_the_svg():
+    """The canvas' bp<->pixel map reads the same gutter the SVG drew, or zoom/pan anchors drift."""
+    model = _erv_model()
+    panel = widgets.GenomePanel(figures.svg_genome, "t")
+    panel.set_model(model)
+    c = panel.canvas
+    svg = figures.svg_genome(model, {"start": 0.0, "end": float(model["length"])}, c._w, "white")
+    ml = float(re.search(r'<rect x="([\d.]+)" y="[\d.]+" width="[\d.]+" height="13"', svg).group(1))
+    assert abs(c.ML - ml) < 0.01                              # overview rect starts at the gutter
+    panel.deleteLater()
