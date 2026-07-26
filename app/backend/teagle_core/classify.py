@@ -18,6 +18,17 @@ def _rep(domains, code):
     return max(ds, key=lambda d: d.get("score", 0.0)) if ds else None
 
 
+def _brackets(term, d):
+    # do a terminal-repeat pair's two arms enclose this domain hit? an autonomous TIR transposon's
+    # transposase lies BETWEEN the ends its own product binds. None when either side is unavailable.
+    if not term or not d:
+        return None
+    s = (term.get("five_prime") or [0, 0])[0]
+    e = (term.get("three_prime") or [0, 0])[1]
+    nt = d.get("nt") or [0, 0]
+    return s <= nt[0] and nt[1] <= e
+
+
 # structural core of gag = capsid or matrix (incl. PEG10-type capsid); the CCHC nucleocapsid zinc-knuckle
 # (zf-CCHC_5) is promiscuous (shared with host nucleic-acid-binding proteins) and is NOT core gag evidence on its own.
 _GAG_CORE = {"Gag_p24", "Gag_p24_C", "Gag_p10", "PEG10_N-capsid"}
@@ -32,13 +43,20 @@ def _ordered(cset):
 
 def classify(structural, domains):
     has_ltr = any(e["type"].startswith("LTR") for e in structural)
-    has_tir = any(e["type"].startswith("TIR") for e in structural)
+    tir_ev = next((e for e in structural if e["type"].startswith("TIR")), None)
+    has_tir = tir_ev is not None
+    has_tsd = any(e["type"].startswith("TSD") for e in structural)
     has_polya = any(e["type"].startswith("poly") for e in structural)
     codes = [d["domain"] for d in domains]
     cset = set(codes)
-    rt_d, int_d = _rep(domains, "RT"), _rep(domains, "INT")
+    rt_d, int_d, tp_d = _rep(domains, "RT"), _rep(domains, "INT"), _rep(domains, "TPase")
     rt, intg = rt_d is not None, int_d is not None
     tpase = "TPase" in cset
+    # the element's own ends: a TIR pair that actually encloses the transposase. The scan resolves the two
+    # arms together, so they stand or fall as a pair; an inverted repeat elsewhere in the record is not
+    # evidence that THIS coding module has its termini.
+    tir_encloses_tpase = _brackets(tir_ev, tp_d)
+    tir_ok = has_tir and tir_encloses_tpase is not False
     ev, superfamily, te_class, order = [], None, None, None
     order_resolvable = False
     tpase_conflict = False
@@ -98,6 +116,18 @@ def classify(structural, domains):
             ev.append("multiple transposase classes detected — superfamily assigned from the strongest-scoring hit (ambiguous)")
         if has_tir:
             ev.append("terminal inverted repeats consistent with a cut-and-paste transposon")
+        # the ends are half of what makes a DNA transposon autonomous, so state what was actually recovered
+        if tir_ok and has_tsd:
+            ev.append("a target-site duplication flanks the inverted repeats — the insertion site itself is "
+                      "captured, so both element termini are present in the record")
+        elif has_tir and tir_encloses_tpase is False:
+            ev.append("the detected inverted-repeat pair does not enclose the transposase — the termini and the "
+                      "coding module may not belong to the same element, so the ends are not credited")
+        elif not has_tir:
+            ev.append("no terminal inverted-repeat pair recovered — neither element end is confirmed, which is "
+                      "consistent with a 5′- or 3′-truncated (or internally deleted) copy, with a superfamily "
+                      "that does not carry TIRs, or with termini too diverged for the scan")
+        order = "–".join(_ordered(cset))     # coding architecture only — the TIR ends are structural, not domains
     else:
         klass = "unclassified"
         if cset:                                          # coding domain(s) recovered but no RT and no transposase
@@ -160,7 +190,8 @@ def classify(structural, domains):
     if composite and confidence == "High":         # a co-occurring transposase makes a confident single-element call unsafe
         confidence = "Moderate"
 
-    completeness = _completeness(cset, rt, intg, tpase, has_ltr, has_tir, has_polya, is_erv, order_resolvable, gag_core)
+    completeness = _completeness(cset, rt, intg, tpase, has_ltr, has_tir, has_polya, is_erv, order_resolvable,
+                                 gag_core, tir_ok)
 
     dom_str = " · ".join(codes) or "none"
     struct_str = ", ".join(e["type"].split(" (")[0] for e in structural) or "none"
@@ -176,12 +207,16 @@ def classify(structural, domains):
 DOMAINS_TESTED = "gag (matrix/capsid/nucleocapsid), protease, RT, RNase H, integrase, envelope, chromodomain, transposases"
 
 
-def _completeness(cset, rt, intg, tpase, has_ltr, has_tir, has_polya, is_erv, order_resolvable, gag_core=False):
+def _completeness(cset, rt, intg, tpase, has_ltr, has_tir, has_polya, is_erv, order_resolvable, gag_core=False,
+                  tir_ok=False):
     """A CATEGORICAL structural-completeness call (never a fabricated numeric score), scoped to the models tested.
     Tiers map to established terms: an element with its expected coding architecture + intact structural context is
     'intact / autonomous-consistent' (Wicker 2007 autonomous; TEsorter Complete; LTR_retriever intact); a core
-    module missing is 'partial'; terminal repeats with no coding is 'structural-only'. The tier describes how much of
-    the expected ARCHITECTURE is present at the domain level — it is not a claim that the ORFs are functional."""
+    module missing is 'partial'; terminal repeats with no coding is 'structural-only'. Every branch derives its tier
+    from an explicit expected/present/missing ledger, so the tier can be contradicted by its own bookkeeping — for a
+    DNA transposon the ledger holds the transposase AND both terminal inverted repeats, not the transposase alone.
+    The tier describes how much of the expected ARCHITECTURE is present at the domain level — it is not a claim that
+    the ORFs are functional."""
     if rt and (has_ltr or intg):                          # LTR retroelement / ERV
         expected = ["GAG", "PR", "RT", "RNaseH", "INT"] + (["ENV"] if "ENV" in cset else [])
         present = [m for m in expected if m in cset]
@@ -213,10 +248,18 @@ def _completeness(cset, rt, intg, tpase, has_ltr, has_tir, has_polya, is_erv, or
         missing = []
         tier = "coding present (RT); non-LTR element" if has_polya else "coding present (RT)"
         kind = "non-LTR retroelement (LINE-like)"
-    elif tpase:                                           # DNA transposon
-        expected = ["TPase"]; present = ["TPase"]; missing = []
-        tier = "intact / autonomous-consistent" if has_tir else "transposase present"
-        kind = "DNA transposon"
+    elif tpase:                                           # DNA transposon (TIR-type, cut-and-paste)
+        # an AUTONOMOUS cut-and-paste transposon needs its transposase ORF *and* both terminal inverted repeats —
+        # the cis ends its own product binds and excises (Wicker 2007). Both arms are resolved together by the TIR
+        # scan and are credited only when they enclose the transposase, so a locus whose ends were never recovered
+        # (5'/3'-truncated, internally deleted, or too diverged to detect) now fails the ledger instead of being
+        # asserted intact from the transposase alone.
+        expected = ["TPase", "TIR (5′)", "TIR (3′)"]
+        present = ["TPase"] + (["TIR (5′)", "TIR (3′)"] if tir_ok else [])
+        missing = [m for m in expected if m not in present]
+        # keep the tier a short label — the results banner renders the 'not detected' list itself
+        tier = "intact / autonomous-consistent" if not missing else "partial (transposase present)"
+        kind = "DNA transposon" if tir_ok else "DNA transposon (terminal repeats not confirmed)"
     elif has_ltr or has_tir:
         kind = "LTR retroelement" if has_ltr else "DNA transposon"
         if cset:                                          # coding domain(s) recovered but no RT/transposase — name them

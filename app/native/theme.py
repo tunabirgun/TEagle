@@ -237,7 +237,13 @@ _OI = OKABE_ITO
 # measured pick — 3.72:1 dark / 4.56:1 light, and the only candidate that holds up under CVD (worst separation
 # 9.5 CAM02-UCS vs 1.9–2.8 for the alternatives). Re-measure both tracks AND deuteranomaly/protanomaly before
 # changing it.
-OK = {"RT": _OI["blue"], "INT": _OI["orange"], "RNaseH": _OI["green"], "PR": _OI["purple"], "GAG": "#7A7A7A",
+# GAG likewise had to leave grey: #7A7A7A sat only 5.63 CAM02-UCS from the #888 no-entry fallback, and both being
+# achromatic, CVD moved that by 0.00 — a named domain read as an unnamed one. #6438FC is the measured replacement:
+# 3.02:1 on the dark track / 5.61:1 on the light track, worst-case separation 18.4 CAM02-UCS from any required hue
+# (#888, RT, INT/TIR, RNaseH, PR, CHR/TPase, LTR, ENV) and 13.8 once PBS/PPT/ORF and the gene-model bands are
+# included, under normal, deuteranomalous and protanomalous vision alike. Magenta (#C71585 10.6, #B03A8E 10.1) and
+# brown (#8C564B 13.0, but nearest neighbour is ENV) were measurably worse. Re-measure before changing it.
+OK = {"RT": _OI["blue"], "INT": _OI["orange"], "RNaseH": _OI["green"], "PR": _OI["purple"], "GAG": "#6438FC",
       "ENV": "#B15928", "CHR": _OI["vermillion"], "TPase": _OI["vermillion"], "LTR": _OI["skyblue"],
       "TIR": _OI["orange"], "tail": _OI["purple"], "ORF": "#4C6C97",
       "on": _OI["green"], "off": _OI["vermillion"], "ladder": "#999999"}

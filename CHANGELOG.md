@@ -9,6 +9,13 @@ and propagates to the backend health endpoint, the UI header badge, every run
 provenance manifest, the packaged executable's Windows file-version metadata, and
 the LaTeX report title page.
 
+## [3.1.0] — 2026-07-26
+
+**Displayed structural-completeness tiers move for DNA transposons.** A Class II element no longer earns the *intact / autonomous-consistent* tier from a transposase hit alone. Re-run any DNA-transposon record whose tier you have recorded from an earlier release: the value may differ, and the new value is the one backed by the evidence ledger shown beside it.
+### Changed
+- **DNA transposons are now scored against a real completeness ledger.** Until now the Class II branch declared the strongest phrase in the application — *intact / autonomous-consistent* — whenever a transposase co-occurred with an inverted-repeat pair, while its own bookkeeping was hardcoded to *expected = present = transposase, nothing missing*: the tier could not be contradicted by the evidence it claimed to rest on. The branch now reasons the way the retroelement branch already did. An autonomous cut-and-paste transposon requires its transposase **and** both terminal inverted repeats — the cis ends its own product binds and excises (Wicker 2007) — so the ledger carries all three, the two arms are credited only when they actually enclose the transposase, and the tier follows the ledger instead of preceding it. A record whose ends were never recovered (5′- or 3′-truncated, internally deleted, or with termini too diverged for the scan) now reads **partial (transposase present)** with both arms listed as not detected, where it previously read a bare *transposase present*. An inverted repeat sitting elsewhere in the record no longer counts as that element's ends. The tier stays a categorical architecture call scoped to the tested Pfam panel — not a claim of transposition competence — and the classification card states in words which of the three components was recovered and why.
+- **A named GAG domain no longer renders as an unnamed one.** The gag capsid/matrix bands were drawn in `#7A7A7A`, only 5.63 CAM02-UCS from the `#888` fallback used for domains with no palette entry — and, both being achromatic, colour-vision deficiency moved that separation by 0.00. GAG now has its own hue, measured at 3.02:1 on the dark track and 5.61:1 on the light track, with a worst-case separation of 18.4 CAM02-UCS from every other domain hue (13.8 once the cis-element, ORF and gene-model bands that can share a render are included), under normal, deuteranomalous and protanomalous vision alike.
+
 ## [3.0.0] — 2026-07-26
 
 The installer drops by four fifths, the interface is rebuilt on a single source of colour truth, and every place where colour alone, a silent omission, or an unconfirmed click was carrying scientific meaning now says what it means in words. No detection method, threshold, database, panel or hedge changed.
@@ -371,6 +378,7 @@ primer design, usable without a command line.
   the WebView2 runtime is absent. A kill-on-close Job Object ties the whole process tree to the
   launcher, so an in-place upgrade never orphans a window.
 
+[3.1.0]: https://github.com/tunabirgun/TEagle/releases/tag/v3.1.0
 [3.0.0]: https://github.com/tunabirgun/TEagle/releases/tag/v3.0.0
 [2.12.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.12.0
 [2.11.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.11.0

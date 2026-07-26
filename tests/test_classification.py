@@ -174,3 +174,47 @@ def test_missing_gag_is_partial_not_intact():
     cl = classify.classify(_mock_ltr(), doms)
     assert cl["completeness"]["tier"].startswith("partial")
     assert "GAG" in cl["completeness"]["missing"]
+
+
+# ---------------- DNA-transposon completeness accounting (v3.1.0) ----------------
+def _mock_tir(five=(0, 28), three=(900, 928)):
+    return [{"type": "TIR (terminal inverted repeat)", "five_prime": list(five), "three_prime": list(three),
+             "element_span": [five[0], three[1]], "tir_len": five[1] - five[0], "identity": 96.0}]
+
+
+def _tp(s=200, e=800, cls="hAT"):
+    return [{"domain": "TPase", "label": "transposase", "class": cls, "score": 90.0, "strand": "+",
+             "nt": [s, e], "hmm": "hATC"}]
+
+
+def test_dna_transposase_plus_bracketing_tirs_is_intact():
+    # transposase enclosed by both terminal inverted repeats -> the ledger is complete, tier is intact
+    comp = classify.classify(_mock_tir(), _tp())["completeness"]
+    assert comp["tier"] == "intact / autonomous-consistent"
+    assert comp["expected"] == ["TPase", "TIR (5′)", "TIR (3′)"]      # real ledger, not a hardcoded ["TPase"]
+    assert not comp["missing"]
+
+
+def test_dna_transposase_without_tirs_is_partial_not_intact():
+    # ends never recovered (5'/3'-truncated or too diverged): the tier must follow the ledger, not the transposase
+    cl = classify.classify([], _tp())
+    comp = cl["completeness"]
+    assert comp["tier"] == "partial (transposase present)"
+    assert comp["missing"] == ["TIR (5′)", "TIR (3′)"]
+    assert "terminal repeats not confirmed" in comp["kind"]
+    assert any("truncated" in e for e in cl["evidence"])
+    assert "not detected" not in comp["tier"]                         # the banner renders the missing list itself
+
+
+def test_dna_tir_pair_that_does_not_enclose_the_transposase_is_not_credited():
+    # an inverted repeat elsewhere in the record is not this element's ends
+    cl = classify.classify(_mock_tir(), _tp(s=2000, e=2600))
+    assert cl["completeness"]["tier"] == "partial (transposase present)"
+    assert any("does not enclose the transposase" in e for e in cl["evidence"])
+
+
+def test_dna_domain_architecture_line_stays_domain_only():
+    # the terminal repeats live in the completeness ledger; the architecture string must stay coding-only
+    cl = classify.classify(_mock_tir(), _tp())
+    assert cl["order"] == "TPase"
+    assert "TIR" not in cl["order"]
