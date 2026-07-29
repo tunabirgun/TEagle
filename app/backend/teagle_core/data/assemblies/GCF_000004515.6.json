@@ -1,0 +1,140 @@
+{
+ "organism": "Glycine max",
+ "assemblyName": "Glycine_max_v4.0",
+ "assemblyAccession": "GCF_000004515.6",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "1",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_016088.4",
+   "length": 57932355
+  },
+  {
+   "chrName": "2",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_016089.4",
+   "length": 50400358
+  },
+  {
+   "chrName": "3",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_016090.4",
+   "length": 46951866
+  },
+  {
+   "chrName": "4",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_016091.4",
+   "length": 51203389
+  },
+  {
+   "chrName": "5",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_038241.2",
+   "length": 42274530
+  },
+  {
+   "chrName": "6",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_038242.2",
+   "length": 50945864
+  },
+  {
+   "chrName": "7",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_038243.2",
+   "length": 44949256
+  },
+  {
+   "chrName": "8",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_038244.2",
+   "length": 47227184
+  },
+  {
+   "chrName": "9",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_038245.2",
+   "length": 50572668
+  },
+  {
+   "chrName": "10",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_038246.2",
+   "length": 51638687
+  },
+  {
+   "chrName": "11",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_038247.2",
+   "length": 39643745
+  },
+  {
+   "chrName": "12",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_038248.2",
+   "length": 41531199
+  },
+  {
+   "chrName": "13",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_038249.2",
+   "length": 45225048
+  },
+  {
+   "chrName": "14",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_038250.2",
+   "length": 49893278
+  },
+  {
+   "chrName": "15",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_038251.2",
+   "length": 53754295
+  },
+  {
+   "chrName": "16",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_038252.2",
+   "length": 38112070
+  },
+  {
+   "chrName": "17",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_038253.2",
+   "length": 41740656
+  },
+  {
+   "chrName": "18",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_038254.2",
+   "length": 58286270
+  },
+  {
+   "chrName": "19",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_038255.2",
+   "length": 51272880
+  },
+  {
+   "chrName": "20",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_038256.2",
+   "length": 47846026
+  },
+  {
+   "chrName": "MT",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_020455.1",
+   "length": 402558
+  },
+  {
+   "chrName": "Pltd",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_007942.1",
+   "length": 152218
+  }
+ ]
+}

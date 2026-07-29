@@ -1,8 +1,10 @@
 """Capability benchmarks.
 - Splicing / exon-intron detection: annotation-based (offline, @network) against genes with a published
   exon/intron count, plus de-novo minimap2 splice alignment (@wsl).
-- Family-level naming: 10 canonical TE specimens run through the Dfam/RepeatMasker pipeline (@wsl), each
-  checked for a named family that is consistent with the element's structural class.
+- Family-level naming: canonical TE specimens run through the Dfam/RepeatMasker pipeline (@wsl), each
+  checked for a named family consistent with the element's structural class. Naming needs BOTH a lineage
+  and the optional uncurated Dfam partitions. Three canonical elements that Dfam 4.0 simply does not
+  contain are held separately, as an executable record of that coverage boundary.
 The @wsl / @network benchmarks are skipped in the fast offline suite and run with the backend available."""
 import os, sys
 import pytest
@@ -36,15 +38,29 @@ def test_splice_annotation_benchmark(acc, exons, introns):
 # (accession, description, expected structural class) — canonical, well-characterised TEs across both classes.
 FAMILY_BENCH = [                                                # accessions verified live against NCBI titles
     ("M11240", "Drosophila copia (LTR/Copia)",        "I"),
-    ("X13777", "Tobacco Tnt1 (LTR/Copia)",            "I"),
-    ("M23367", "Yeast Ty3 (LTR/Gypsy)",               "I"),
     ("M12927", "Drosophila gypsy (LTR/Gypsy)",        "I"),
     ("X59545", "Drosophila mdg1 (LTR)",               "I"),
     ("M80343", "Human LINE-1 L1.2 (non-LTR)",         "I"),
     ("M17551", "Mouse IAP (LTR/ERV)",                 "I"),
     ("X01005", "C. elegans Tc1 (DNA/TcMar)",          "II"),
-    ("X05424", "Maize Activator Ac (DNA/hAT)",        "II"),
     ("M69216", "Drosophila hobo (DNA/hAT)",           "II"),
+]
+
+# Canonical elements that Dfam 4.0 CANNOT name, measured 2026-07-28 with the curated AND both uncurated
+# consensus partitions installed and the organism supplied. Not a TEagle defect and not an installation
+# gap — every consensus partition these taxa need was present; the families are simply absent from the
+# database. Kept as an executable record of the coverage boundary rather than deleted, because a user
+# who runs one of these needs to know the blank result is Dfam's limit and not their mistake.
+#   maize Ac      -> 4 hits, all Low_complexity/Simple_repeat, no TE family
+#   tobacco Tnt1  -> 0 hits
+#   yeast Ty3     -> 0 hits  (S. cerevisiae has 32 families in the whole of Dfam)
+# Dfam's coverage is strongest for metazoa and vertebrates; plant and fungal repeats are largely held in
+# other resources. The structural and protein-domain layers, which do not consult Dfam, classify all
+# three correctly.
+DFAM_UNNAMEABLE = [
+    ("X13777", "Tobacco Tnt1 (LTR/Copia)",            "I"),
+    ("M23367", "Yeast Ty3 (LTR/Gypsy)",               "I"),
+    ("X05424", "Maize Activator Ac (DNA/hAT)",        "II"),
 ]
 
 
@@ -52,14 +68,34 @@ FAMILY_BENCH = [                                                # accessions ver
 @pytest.mark.parametrize("acc,desc,klass", FAMILY_BENCH)
 def test_family_naming_benchmark(acc, desc, klass):
     """Each specimen must receive a NAMED Dfam family from the WSL backend (RepeatMasker + Dfam), and the
-    call must not contradict the element's structural class. Runs only when the WSL backend is installed."""
+    call must not contradict the element's structural class.
+
+    The organism comes from the fetched RECORD, not from a table written here: NCBI already states it
+    authoritatively, and a hand-copied species is one more thing that can silently drift. It has to be
+    supplied at all because RepeatMasker searches only a limited default set without a lineage —
+    measured on Drosophila copia, which returns nothing but low-complexity with no species and resolves
+    to Copia_LTR + Copia_I at 100% consensus coverage with one. Naming a family therefore needs BOTH a
+    lineage and the uncurated Dfam partitions, which are an optional backend component.
+
+    Requires the uncurated partitions; skipped rather than failed when only the curated set is present,
+    since that is a legitimate installation and not a regression."""
     from teagle_core import wsl
+    lib = (wsl.env_status().get("dfam_library") or {})
+    if not any("uncurated" in str(p).lower() for p in lib.get("partitions") or []):
+        pytest.skip("uncurated Dfam partitions not installed — most clade families cannot be named")
     meta = fetch.retrieve(acc)
-    r = wsl.annotate(meta["fasta"], species=None, timeout=600)
-    assert r.get("ok"), f"{acc} {desc}: {r.get('error')}"
+    organism = meta.get("organism") or None
+    r = wsl.annotate(meta["fasta"], species=organism, timeout=900)
+    assert r.get("ok"), f"{acc} {desc} [{organism}]: {r.get('error')}"
     named = [h for h in r.get("hits", []) if h.get("family") and h["class_family"] not in
              {"Low_complexity", "Simple_repeat", "Satellite", "Unknown", "Unspecified"}]
-    assert named, f"{acc} {desc}: no TE family named"
+    assert named, f"{acc} {desc} [{organism}]: no TE family named"
+    # the call must not contradict the element's published class
+    fams = " ".join(h["class_family"] for h in named)
+    if klass == "I":
+        assert "LTR" in fams or "LINE" in fams or "SINE" in fams or "Retro" in fams, (acc, desc, fams)
+    else:
+        assert "DNA" in fams or "RC" in fams, (acc, desc, fams)
 
 
 # ---------------- primer secondary-structure QC benchmark (published primers, offline) ----------------
@@ -149,3 +185,28 @@ def test_herv_domain_architecture_benchmark(acc, name, need, erv, forbid):
     cl = classify.classify(structural.detect_all(s), dm)
     assert cl.get("is_erv") is erv, f"{acc} {name}: is_erv expected {erv}"
     assert all("confidence" in d for d in dm)                # per-domain reliability (Axis 1) attached
+
+
+@pytest.mark.wsl
+@pytest.mark.parametrize("acc,desc,klass", DFAM_UNNAMEABLE)
+def test_dfam_coverage_boundary_is_still_where_it_was(acc, desc, klass):
+    """These canonical elements are NOT in Dfam 4.0. The test asserts the boundary, so that if a future
+    Dfam release adds them the failure tells us to promote them into FAMILY_BENCH — and so that nobody
+    re-investigates a blank result that has already been traced to the database rather than the tool.
+
+    The structural and protein-domain layers do not consult Dfam and must classify them regardless."""
+    from teagle_core import wsl, structural, domains, classify
+    lib = (wsl.env_status().get("dfam_library") or {})
+    if not any("uncurated" in str(p).lower() for p in lib.get("partitions") or []):
+        pytest.skip("uncurated Dfam partitions not installed")
+    meta = fetch.retrieve(acc)
+    r = wsl.annotate(meta["fasta"], species=meta.get("organism"), timeout=900)
+    assert r.get("ok"), f"{acc}: {r.get('error')}"
+    named = [h for h in r.get("hits", []) if h.get("family") and h["class_family"] not in
+             {"Low_complexity", "Simple_repeat", "Satellite", "Unknown", "Unspecified"}]
+    assert not named, (f"{acc} {desc} is now nameable in Dfam ({[h['family'] for h in named]}) — move it "
+                       f"into FAMILY_BENCH and update the coverage note")
+    # the layers that do not depend on Dfam must still work
+    seq = "".join(l for l in meta["fasta"].splitlines() if not l.startswith(">"))
+    cl = classify.classify(structural.detect_all(seq), domains.scan_domains(seq))
+    assert cl["te_class"] not in (None, "none"), f"{acc}: structural/domain classification also failed"

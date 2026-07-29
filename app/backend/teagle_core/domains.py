@@ -55,6 +55,22 @@ DOMAIN_INFO = {
     "Transposase_1": ("TPase", "mariner-type transposase", "dna:Tc1-Mariner", "PF01359"),
     "Dimer_Tnp_hAT": ("TPase", "hAT transposase", "dna:hAT", "PF05699"),
     "hAT-like_RNase-H": ("TPase", "hAT-like transposase", "dna:hAT", "PF14372"),
+    # --- LINE / non-LTR coding modules. Until these, the panel modelled a LINE by its RT alone, so a
+    # full-length L1 and a dead 5'-truncated fragment scored identically. Validated on M80343 (L1.2):
+    # ORF1p E=1.6e-68 / 2.1e-35 / 1.5e-51, endonuclease E=1.0e-23, with no hit on copia, gypsy, Tc1 or Ac.
+    "Transposase_22": ("ORF1", "LINE ORF1p, RNA-binding domain", "retro:LINE", "PF02994"),
+    "Tnp_22_trimer": ("ORF1", "LINE ORF1p, trimerisation domain", "retro:LINE", "PF17489"),
+    "Tnp_22_dsRBD": ("ORF1", "LINE ORF1p, dsRBD-like domain", "retro:LINE", "PF17490"),
+    # BROAD family: Pfam's Exo_endo_phos also covers host DNase I and AP endonucleases, so an EN hit is
+    # only element evidence when it sits N-terminal to an RT in the same ORF (classify enforces this).
+    "Exo_endo_phos": ("EN", "apurinic-like endonuclease (ORF2p)", "retro:LINE?", "PF03372"),
+    # BROAD family: tyrosine recombinases are widespread in hosts and phage. Reported as a YR signal that
+    # makes a DIRS-group element plausible; never asserted as one on its own. Validated on M11340 (DIRS-1).
+    "Phage_integrase": ("YR", "tyrosine recombinase (DIRS/Crypton-type)", "retro:YR?", "PF00589"),
+    "Helitron_like_N": ("HEL", "Helitron helicase-like domain", "dna:Helitron", "PF14214"),
+    "Transposase_24": ("TPase", "CACTA/En-Spm transposase", "dna:CACTA", "PF03004"),
+    "MULE": ("TPase", "MULE/Mutator transposase", "dna:MULE", "PF10551"),
+    "DDE_Tnp_1_7": ("TPase", "IS4-like DDE transposase (piggyBac-like)", "dna:IS4", "PF13843"),
 }
 
 _ABC = None

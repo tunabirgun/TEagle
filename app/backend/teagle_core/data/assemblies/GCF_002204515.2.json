@@ -1,0 +1,26 @@
+{
+ "organism": "Aedes aegypti",
+ "assemblyName": "AaegL5.0",
+ "assemblyAccession": "GCF_002204515.2",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "1",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_035107.1",
+   "length": 310827022
+  },
+  {
+   "chrName": "2",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_035108.1",
+   "length": 474425716
+  },
+  {
+   "chrName": "3",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_035109.1",
+   "length": 409777670
+  }
+ ]
+}

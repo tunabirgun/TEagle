@@ -1,0 +1,32 @@
+{
+ "organism": "Anopheles gambiae",
+ "assemblyName": "idAnoGambNW_F1_1",
+ "assemblyAccession": "GCF_943734735.2",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "X",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_064600.1",
+   "length": 28097889
+  },
+  {
+   "chrName": "2",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_064601.1",
+   "length": 118196952
+  },
+  {
+   "chrName": "3",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_064602.1",
+   "length": 99149756
+  },
+  {
+   "chrName": "MT",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_083487.1",
+   "length": 15363
+  }
+ ]
+}

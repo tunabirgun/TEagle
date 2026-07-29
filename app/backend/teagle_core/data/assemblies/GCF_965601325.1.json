@@ -1,0 +1,188 @@
+{
+ "organism": "Salmo salar",
+ "assemblyName": "fSalSal1",
+ "assemblyAccession": "GCF_965601325.1",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "ssa01",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138291.1",
+   "length": 184984809
+  },
+  {
+   "chrName": "ssa02",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138292.1",
+   "length": 99671062
+  },
+  {
+   "chrName": "ssa03",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138293.1",
+   "length": 105439051
+  },
+  {
+   "chrName": "ssa04",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138294.1",
+   "length": 96639220
+  },
+  {
+   "chrName": "ssa05",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138295.1",
+   "length": 96163248
+  },
+  {
+   "chrName": "ssa06",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138296.1",
+   "length": 99640797
+  },
+  {
+   "chrName": "ssa07",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138297.1",
+   "length": 77551607
+  },
+  {
+   "chrName": "ssa08",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138298.1",
+   "length": 44169453
+  },
+  {
+   "chrName": "ssa09",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138299.1",
+   "length": 165027472
+  },
+  {
+   "chrName": "ssa10",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138300.1",
+   "length": 127484125
+  },
+  {
+   "chrName": "ssa11",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138301.1",
+   "length": 126030238
+  },
+  {
+   "chrName": "ssa12",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138302.1",
+   "length": 107231725
+  },
+  {
+   "chrName": "ssa13",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138303.1",
+   "length": 116391231
+  },
+  {
+   "chrName": "ssa14",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138304.1",
+   "length": 109818153
+  },
+  {
+   "chrName": "ssa15",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138305.1",
+   "length": 115425272
+  },
+  {
+   "chrName": "ssa16",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138306.1",
+   "length": 98266679
+  },
+  {
+   "chrName": "ssa17",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138307.1",
+   "length": 88242613
+  },
+  {
+   "chrName": "ssa18",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138308.1",
+   "length": 102469525
+  },
+  {
+   "chrName": "ssa19",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138309.1",
+   "length": 91404383
+  },
+  {
+   "chrName": "ssa20",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138310.1",
+   "length": 96498405
+  },
+  {
+   "chrName": "ssa21",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138311.1",
+   "length": 60521866
+  },
+  {
+   "chrName": "ssa22",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138312.1",
+   "length": 65776717
+  },
+  {
+   "chrName": "ssa23",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138313.1",
+   "length": 54357775
+  },
+  {
+   "chrName": "ssa24",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138314.1",
+   "length": 51199987
+  },
+  {
+   "chrName": "ssa25",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138315.1",
+   "length": 55279870
+  },
+  {
+   "chrName": "ssa26",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138316.1",
+   "length": 57103148
+  },
+  {
+   "chrName": "ssa27",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138317.1",
+   "length": 48497955
+  },
+  {
+   "chrName": "ssa28",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138318.1",
+   "length": 44674250
+  },
+  {
+   "chrName": "ssa29",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_138319.1",
+   "length": 45312122
+  },
+  {
+   "chrName": "MT",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_001960.1",
+   "length": 16665
+  }
+ ]
+}

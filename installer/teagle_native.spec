@@ -22,7 +22,7 @@ open(_verinfo, "w", encoding="utf-8").write(f"""VSVersionInfo(
       StringStruct('FileDescription', 'TEagle - Transposable Elements Assay Terminal'),
       StringStruct('FileVersion', '{VERSION}'),
       StringStruct('InternalName', 'TEagle'),
-      StringStruct('LegalCopyright', 'MIT License'),
+      StringStruct('LegalCopyright', 'Copyright (C) 2026 Tuna Birgun. Licensed under AGPL-3.0-or-later.'),
       StringStruct('OriginalFilename', 'TEagle.exe'),
       StringStruct('ProductName', 'TEagle'),
       StringStruct('ProductVersion', '{VERSION}')])]),
@@ -39,11 +39,14 @@ datas = [
 # bundled per-assembly chromosome maps for coordinate fetch -> teagle_core/data/assemblies/*.json
 _asmdir = os.path.join(ROOT, "app", "backend", "teagle_core", "data", "assemblies")
 datas += [(os.path.join(_asmdir, f), "teagle_core/data/assemblies") for f in os.listdir(_asmdir) if f.endswith(".json")]
+# bundled example elements (real published specimens; ~40 KB) -> teagle_core/data/examples
+_exdir = os.path.join(ROOT, "app", "backend", "teagle_core", "data", "examples")
+datas += [(os.path.join(_exdir, f), "teagle_core/data/examples") for f in os.listdir(_exdir) if f.endswith(".fasta")]
 # bundle the Cascadia fonts (SIL OFL) so the UI renders identically without them installed -> native/assets/fonts
 _fontdir = os.path.join(ROOT, "app", "native", "assets", "fonts")
 datas += [(os.path.join(_fontdir, fn), "native/assets/fonts") for fn in os.listdir(_fontdir)]
 # metadata so envcheck's importlib.metadata.version(...) resolves for the bundled deps (env panel stays green)
-for dist in ("PySide6", "shiboken6", "primer3-py", "pyhmmer", "ViennaRNA"):
+for dist in ("PySide6", "shiboken6", "primer3-py", "pyhmmer"):
     try:
         datas += copy_metadata(dist)
     except Exception:
@@ -57,6 +60,7 @@ hiddenimports = [
     "teagle_core", "teagle_core.appdirs", "teagle_core.sequtil", "teagle_core.structural",
     "teagle_core.classify", "teagle_core.domains", "teagle_core.primers", "teagle_core.oligoqc",
     "teagle_core.fetch", "teagle_core.refs", "teagle_core.provenance", "teagle_core.timing", "teagle_core.wsl",
+    "teagle_core.examples", "teagle_core.oligoqc_wsl", "teagle_core.retroviral", "teagle_core.genomepcr",
     # Qt modules actually used (PySide6's hook collects the matching libs + plugins, incl. QtSvg)
     "PySide6.QtCore", "PySide6.QtGui", "PySide6.QtWidgets", "PySide6.QtSvg",
 ]
@@ -66,12 +70,12 @@ hiddenimports = [
 _SHIM = "openpyxl.utils.dataframe"
 
 # C-extension packages + openpyxl (XLSX table export): pull binaries, data and dynamic submodules
-for pkg in ("primer3", "pyhmmer", "openpyxl", "certifi", "RNA"):
+for pkg in ("primer3", "pyhmmer", "openpyxl", "certifi"):
     d, b, h = collect_all(pkg)
     datas += d; binaries += b; hiddenimports += h
     hiddenimports += collect_submodules(pkg)
 hiddenimports = [m for m in hiddenimports if m != _SHIM]
-hiddenimports += ["pyhmmer.platform", "pyhmmer.platform.win32", "openpyxl", "et_xmlfile", "certifi", "RNA"]
+hiddenimports += ["pyhmmer.platform", "pyhmmer.platform.win32", "openpyxl", "et_xmlfile", "certifi"]
 
 # trim the bundle: exclude heavy Qt modules the app never imports (keeps the installer small)
 excludes = [
@@ -79,6 +83,11 @@ excludes = [
     # openpyxl's three try/except optional accelerators. TEagle's XLSX export writes str/int/float cells and a
     # bold header only: no ws.add_image (PIL), no numpy scalars, and the stdlib ElementTree writer is equivalent.
     "numpy", "PIL", "lxml",
+    # ViennaRNA is NOT redistributable under AGPL-3.0: its licence forbids redistribution for a fee and
+    # asks that commercial inclusion be cleared with the authors, which GPL forbids adding. oligoqc
+    # already guards `import RNA`, so an absent ViennaRNA degrades to primer3-only with the cross-check
+    # reported as unavailable. Users who install it themselves still get the dual-engine check.
+    "RNA",
     "tkinter", "test", "pytest", "playwright", "webview", "pywebview",
     "PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets", "PySide6.QtWebEngineQuick",
     "PySide6.QtQml", "PySide6.QtQuick", "PySide6.QtQuick3D", "PySide6.QtQuickWidgets",
@@ -108,7 +117,7 @@ a = Analysis(
 # may enter the module graph. One stray import edge once dragged in ~528 MB; fail the build, don't ship it.
 _ALLOWED_TOP = {
     "PySide6", "shiboken6",                                  # PySide6==6.11.1 (+ its shiboken6 runtime)
-    "primer3", "pyhmmer", "psutil", "typing_extensions", "RNA",   # primer3-py, pyhmmer (+psutil, typing_extensions), ViennaRNA
+    "primer3", "pyhmmer", "psutil", "typing_extensions",     # primer3-py, pyhmmer (+psutil, typing_extensions)
     "openpyxl", "et_xmlfile",                                # openpyxl (+ its only dependency)
     "certifi",
     "teagle_core", "teagle_native", "main", "engine", "engine_worker", "envcheck", "server",

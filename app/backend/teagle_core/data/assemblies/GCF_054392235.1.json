@@ -1,0 +1,128 @@
+{
+ "organism": "Sus scrofa",
+ "assemblyName": "Sscrofa_HxYL_maternal_Yorkshire_Landrace_v2.0",
+ "assemblyAccession": "GCF_054392235.1",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "1",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_139383.1",
+   "length": 289879209
+  },
+  {
+   "chrName": "2",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_139384.1",
+   "length": 162355525
+  },
+  {
+   "chrName": "3",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_139385.1",
+   "length": 145095113
+  },
+  {
+   "chrName": "4",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_139386.1",
+   "length": 136489335
+  },
+  {
+   "chrName": "5",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_139387.1",
+   "length": 111826633
+  },
+  {
+   "chrName": "6",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_139388.1",
+   "length": 175215143
+  },
+  {
+   "chrName": "7",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_139389.1",
+   "length": 137247806
+  },
+  {
+   "chrName": "8",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_139390.1",
+   "length": 145416974
+  },
+  {
+   "chrName": "9",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_139391.1",
+   "length": 144319977
+  },
+  {
+   "chrName": "10",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_139392.1",
+   "length": 96129373
+  },
+  {
+   "chrName": "11",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_139393.1",
+   "length": 86420215
+  },
+  {
+   "chrName": "12",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_139394.1",
+   "length": 67319144
+  },
+  {
+   "chrName": "13",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_139395.1",
+   "length": 224422908
+  },
+  {
+   "chrName": "14",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_139396.1",
+   "length": 164639055
+  },
+  {
+   "chrName": "15",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_139397.1",
+   "length": 154751373
+  },
+  {
+   "chrName": "16",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_139398.1",
+   "length": 92108326
+  },
+  {
+   "chrName": "17",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_139399.1",
+   "length": 70904781
+  },
+  {
+   "chrName": "18",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_139400.1",
+   "length": 64967720
+  },
+  {
+   "chrName": "X",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_139401.1",
+   "length": 136181886
+  },
+  {
+   "chrName": "Y",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_139402.1",
+   "length": 48696281
+  }
+ ]
+}

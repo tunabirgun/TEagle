@@ -319,7 +319,10 @@ COORD_ASSEMBLIES = {
     "Mus musculus":              {"assemblyName": "GRCm39",     "assemblyAccession": "GCF_000001635.27", "taxid": "10090"},
     "Rattus norvegicus":         {"assemblyName": "GRCr8",      "assemblyAccession": "GCF_036323735.1", "taxid": "10116"},
     "Bos taurus":                {"assemblyName": "ARS-UCD2.0", "assemblyAccession": "GCF_002263795.3", "taxid": "9913"},
-    "Sus scrofa":                {"assemblyName": "Sscrofa11.1","assemblyAccession": "GCF_000003025.6", "taxid": "9823"},
+    # GCF_000003025.6 (Sscrofa11.1) was pinned here but no longer resolves at NCBI Datasets — it returned
+    # zero reports on 2026-07-28, so selecting pig failed only once the user had waited for a download.
+    "Sus scrofa":                {"assemblyName": "Sscrofa_HxYL_maternal_Yorkshire_Landrace_v2.0",
+                                  "assemblyAccession": "GCF_054392235.1", "taxid": "9823"},
     "Canis lupus familiaris":    {"assemblyName": "UU_Cfam_GSD_1.0", "assemblyAccession": "GCF_011100685.1", "taxid": "9615"},
     "Macaca mulatta":            {"assemblyName": "Mmul_10",    "assemblyAccession": "GCF_003339765.1", "taxid": "9544"},
     "Gallus gallus":             {"assemblyName": "GRCg7b",     "assemblyAccession": "GCF_016699485.2", "taxid": "9031"},
@@ -332,6 +335,21 @@ COORD_ASSEMBLIES = {
     "Arabidopsis thaliana":      {"assemblyName": "TAIR10.1",   "assemblyAccession": "GCF_000001735.4", "taxid": "3702"},
     "Oryza sativa":              {"assemblyName": "IRGSP-1.0",  "assemblyAccession": "GCF_001433935.1", "taxid": "39947"},
     "Zea mays":                  {"assemblyName": "Zm-B73-REFERENCE-NAM-5.0", "assemblyAccession": "GCF_902167145.1", "taxid": "4577"},
+    # Insect and vector genomics — the community that built the piggyBac, Minos and Hermes transgenesis
+    # systems — previously had a single entry, and it was a model organism rather than a vector. Every
+    # accession below was resolved through NCBI Datasets (fetch.resolve_assembly) on 2026-07-28, not
+    # transcribed from memory.
+    "Aedes aegypti":             {"assemblyName": "AaegL5.0",   "assemblyAccession": "GCF_002204515.2", "taxid": "7159"},
+    "Anopheles gambiae":         {"assemblyName": "idAnoGambNW_F1_1", "assemblyAccession": "GCF_943734735.2", "taxid": "7165"},
+    "Bombyx mori":               {"assemblyName": "ASM3026992v2", "assemblyAccession": "GCF_030269925.1", "taxid": "7091"},
+    "Tribolium castaneum":       {"assemblyName": "icTriCast1.1", "assemblyAccession": "GCF_031307605.1", "taxid": "7070"},
+    # aquaculture / fish models
+    "Salmo salar":               {"assemblyName": "fSalSal1",   "assemblyAccession": "GCF_965601325.1", "taxid": "8030"},
+    "Oryzias latipes":           {"assemblyName": "Olatipes_Hd-rR_3.1", "assemblyAccession": "GCF_053564925.1", "taxid": "8090"},
+    # crop plants, where most TE families are uncurated in Dfam (see the family-naming coverage note)
+    "Glycine max":               {"assemblyName": "Glycine_max_v4.0", "assemblyAccession": "GCF_000004515.6", "taxid": "3847"},
+    "Solanum lycopersicum":      {"assemblyName": "SLM_r2.1",   "assemblyAccession": "GCF_036512215.1", "taxid": "4081"},
+    "Triticum aestivum":         {"assemblyName": "IWGSC CS RefSeq v2.1", "assemblyAccession": "GCF_018294505.1", "taxid": "4565"},
 }
 _DATASETS = "https://api.ncbi.nlm.nih.gov/datasets/v2/"
 _REGION_RE = re.compile(r"^(.+?)\s*:\s*([\d,\s]+)\s*-\s*([\d,\s]+)$")

@@ -148,7 +148,10 @@ def analyze(seq_text: str, source: dict | None = None):
                "invalid": [{"pos": p, "char": c} for p, c in bad],
                "composition": sequtil.composition(seq),
                "structural": [], "domains": [], "classification": None, "orfs": [],
-               "seq_preview": seq[:120], "notes": []}
+               # each record carries its OWN full sequence (the exact coordinate system its structural /
+               # domain / ORF calls index), so a per-record export or dot plot never has to re-derive it
+               # from the whole-input textbox — which concatenated every record for a multi-FASTA paste.
+               "seq": seq, "seq_preview": seq[:120], "notes": []}
         if ok:
             try:
                 rec["structural"] = structural.detect_all(seq)      # isolate: a detector fault must not 500 the whole analyze
@@ -187,7 +190,9 @@ def analyze(seq_text: str, source: dict | None = None):
     if not recs:
         result["warning"] = "No sequence provided — paste, upload, or fetch a sequence first."
     elif len(recs) > 1:
-        result["warning"] = f"{len(recs)} records found; downstream primer / family steps use the first record only."
+        result["warning"] = (f"{len(recs)} records found and all {len(recs)} were analysed. The detail view and "
+                             f"every downstream step (primers, in-silico PCR, family naming, splice) act on the "
+                             f"ONE record selected in the summary table — the first by default.")
     return result
 
 
@@ -257,12 +262,29 @@ def run_annotate(body):
         r["elapsed_s"] = round(el, 1)
         references = refs.for_run("annotate", fetched=bool(body.get("source")))
         r["references"] = references
+        # The Dfam entry is whatever famdb reported for the library actually installed — never a literal.
+        # A library that cannot be identified seals an explicit marker instead of a version, because a run
+        # whose database is unknown must not carry a version claim. The installed PARTITIONS are sealed with
+        # it: the same Dfam version with a different partition set searches a different family universe.
+        lib = r.get("dfam_library") or {}
+        # the name asserts no partition qualifier — the exact installed partition set is sealed below in
+        # `partitions`, and a hardcoded "curated consensus" would contradict a library with uncurated
+        # partitions installed (the same Dfam version searches a different family universe).
+        dfam_db = {"name": "Dfam (via famdb)",
+                   "version": lib.get("version") or "unresolved — famdb reported no library version"}
+        for src_k, dst_k in (("date", "releaseDate"), ("famdbFormat", "famdbFormat"),
+                             ("partitions", "partitions"), ("consensusSequences", "consensusSequences")):
+            if lib.get(src_k) is not None:
+                dfam_db[dst_k] = lib[src_k]
+        if not lib.get("version"):
+            r["warning"] = ("The Dfam library version could not be read from famdb, so this run's record "
+                            "identifies the database as unresolved rather than asserting a version. The "
+                            "family calls are unaffected; the provenance record is weaker.")
         r["provenance"] = provenance.build_manifest(
             "annotate", seq, recs[0][0],
             {"engine": "RMBLAST", "mode": "-qq", "species": r.get("species")},
             not_run=["External NCBI Primer-BLAST", "De novo family discovery"],
-            databases=[{"name": "Dfam (curated)", "version": r.get("dfam_version") or "4.0"},
-                       {"name": "RepeatMasker", "version": r.get("repeatmasker_version")}],
+            databases=[dfam_db, {"name": "RepeatMasker", "version": r.get("repeatmasker_version")}],
             source=body.get("source"), references=references)
     return r
 
@@ -355,7 +377,8 @@ def run_primers(body):
         if "PRIMER_PRODUCT_SIZE_RANGE" in msg or "SEQUENCE_INCLUDED_REGION" in msg:
             raise BadRequest("requested product size is larger than the sequence — lower the product-size range")
         raise BadRequest(f"primer parameters rejected: {type(e).__name__}: {e}")
-    for c in res.get("candidates", []):               # secondary-structure QC (hairpin/dimer/3'-end, dual-engine) per pair
+    _prime_vienna(res.get("candidates", []))          # optional out-of-process cross-check, one round trip
+    for c in res.get("candidates", []):               # secondary-structure QC (hairpin/dimer/3'-end) per pair
         try:
             c["qc"] = oligoqc.qc_pair(c["left_seq"], c["right_seq"])
         except Exception as e:                        # a QC fault must never drop the designed pair
@@ -427,6 +450,34 @@ def run_pcr(body):
         "references": refs.for_run("in-silico-pcr"),
         "provenance": provenance.build_manifest("in-silico-pcr", seq, recs[0][0], seal_p,
                       references=refs.for_run("in-silico-pcr"))}
+
+
+def _prime_vienna(candidates):
+    """Fetch every ViennaRNA fold a primer batch needs in ONE WSL round trip, when the in-process
+    module is absent but the optional backend component is installed. Per-metric remote calls would be
+    roughly nine round trips per pair, which is unusable for a full design. An installed in-process
+    ViennaRNA always wins, and any failure here degrades to primer3-only — the cross-check is
+    advisory and must never break a design."""
+    if not candidates or oligoqc.RNA is not None:
+        return
+    try:
+        from teagle_core import oligoqc_wsl
+        if not oligoqc_wsl.available():
+            return oligoqc.prime_remote({})
+        seqs, pairs = set(), set()
+        for c in candidates:
+            left, right = c.get("left_seq", ""), c.get("right_seq", "")
+            seqs.update(s for s in (left, right) if s)
+            if left:
+                pairs.add((left, left))               # self-dimer
+            if right:
+                pairs.add((right, right))
+            if left and right:
+                pairs.add((left, right))              # cross-dimer
+        oligoqc.prime_remote(oligoqc_wsl.compute(seqs, pairs, oligoqc.CONDITIONS),
+                             version=oligoqc_wsl.version())
+    except Exception:
+        oligoqc.prime_remote({})
 
 
 _PRIMER_RE = re.compile(r"^[ACGTRYSWKMBDHVN]+$")

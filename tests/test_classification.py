@@ -61,6 +61,60 @@ def test_ac_is_hat():
     assert "TPase" in dcodes
 
 
+def test_cacta_te_class_is_a_clean_token():
+    # "CACTA (En/Spm)" carries a slash INSIDE its parenthetical; te_class must be a clean "DNA/CACTA",
+    # not truncated to "DNA/CACTA (En" — the string is the headline label and the GFF3 wicker_code.
+    cl = classify.classify([], [{"domain": "TPase", "class": "dna:CACTA",
+                                 "nt": [100, 900], "strand": "+", "score": 200.0}])
+    assert cl["te_class"] == "DNA/CACTA"
+    assert "(" not in cl["te_class"] and ")" not in cl["te_class"]
+    assert cl["superfamily"] == "CACTA (En/Spm)"          # the full name still shows in the superfamily field
+
+
+def test_dirs_completeness_uses_its_own_ledger():
+    # RT + tyrosine recombinase (YR) and no DDE integrase -> DIRS. Its completeness ledger must not be the
+    # LTR one (which would permanently flag the DDE integrase DIRS never has as missing) nor the LINE-like
+    # one (the exact mislabel the DIRS branch exists to prevent).
+    st = [{"type": "LTR (terminal direct repeat)", "five_prime": [0, 200], "three_prime": [1000, 1200]}]
+    dm = [{"domain": "RT", "class": "", "nt": [300, 600], "strand": "+", "score": 200.0},
+          {"domain": "YR", "class": "", "nt": [650, 800], "strand": "+", "score": 150.0}]
+    cl = classify.classify(st, dm)
+    assert cl["te_class"] == "DIRS"
+    comp = cl["completeness"]
+    assert "DIRS" in comp["kind"] and "LINE" not in comp["kind"]
+    assert "YR" in comp["expected"]                        # the defining domain is in the ledger
+    assert not any("INT" in m for m in comp["missing"])    # never flag the integrase DIRS structurally lacks
+    assert cl["is_erv"] is False                           # a DIRS call is never an ERV (no retroviral architecture)
+
+
+def test_dirs_is_not_an_erv_even_with_a_spurious_env_hit():
+    st = [{"type": "LTR (terminal direct repeat)", "five_prime": [0, 200], "three_prime": [2000, 2200]}]
+    dm = [{"domain": "RT", "class": "", "nt": [300, 600], "strand": "+", "score": 200.0},
+          {"domain": "YR", "class": "", "nt": [650, 900], "strand": "+", "score": 150.0},
+          {"domain": "ENV", "class": "", "nt": [1000, 1300], "strand": "+", "score": 100.0}]
+    cl = classify.classify(st, dm)
+    assert cl["te_class"] == "DIRS"
+    assert cl["is_erv"] is False                           # ENV present, but a DIRS is not an env-bearing ERV
+
+
+def test_dirs_intact_tier_requires_a_capsid_gag_not_a_promiscuous_zf_cchc():
+    st = [{"type": "LTR (terminal direct repeat)", "five_prime": [0, 200], "three_prime": [2000, 2200]}]
+    dm = [{"domain": "RT", "class": "", "nt": [300, 600], "strand": "+", "score": 200.0},
+          {"domain": "YR", "class": "", "nt": [650, 900], "strand": "+", "score": 150.0},
+          {"domain": "RNaseH", "class": "", "nt": [610, 640], "strand": "+", "score": 50.0},
+          {"domain": "GAG", "hmm": "zf-CCHC_5", "class": "", "nt": [20, 80], "strand": "+", "score": 40.0}]
+    cl = classify.classify(st, dm)
+    # a nucleocapsid zf-CCHC hit is not capsid/matrix evidence, so it must not earn the top tier
+    assert cl["completeness"]["tier"].startswith("partial")
+    assert "intact" not in cl["completeness"]["tier"]
+
+
+def test_generic_dna_transposon_te_class_is_not_the_redundant_dna_dna():
+    cl = classify.classify([], [{"domain": "TPase", "class": "dna:novel-family",
+                                 "nt": [100, 900], "strand": "+", "score": 200.0}])
+    assert cl["te_class"] == "DNA/unclassified"            # not the redundant "DNA/DNA"
+
+
 def test_domain_fields_present():
     dm = domains.scan_domains(fixture_seq("M11240"))
     assert dm, "copia should have detectable domains"

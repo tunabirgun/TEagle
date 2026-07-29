@@ -1,0 +1,92 @@
+{
+ "organism": "Solanum lycopersicum",
+ "assemblyName": "SLM_r2.1",
+ "assemblyAccession": "GCF_036512215.1",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "1",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_090800.1",
+   "length": 94708454
+  },
+  {
+   "chrName": "2",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_090801.1",
+   "length": 71710245
+  },
+  {
+   "chrName": "3",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_090802.1",
+   "length": 68736248
+  },
+  {
+   "chrName": "4",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_090803.1",
+   "length": 68494551
+  },
+  {
+   "chrName": "5",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_090804.1",
+   "length": 69564429
+  },
+  {
+   "chrName": "6",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_090805.1",
+   "length": 52172941
+  },
+  {
+   "chrName": "7",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_090806.1",
+   "length": 71053079
+  },
+  {
+   "chrName": "8",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_090807.1",
+   "length": 68473177
+  },
+  {
+   "chrName": "9",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_090808.1",
+   "length": 70139957
+  },
+  {
+   "chrName": "10",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_090809.1",
+   "length": 65184273
+  },
+  {
+   "chrName": "11",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_090810.1",
+   "length": 62371966
+  },
+  {
+   "chrName": "12",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_090811.1",
+   "length": 70164003
+  },
+  {
+   "chrName": "MT",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_035963.1",
+   "length": 446257
+  },
+  {
+   "chrName": "Pltd",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_007898.3",
+   "length": 155461
+  }
+ ]
+}

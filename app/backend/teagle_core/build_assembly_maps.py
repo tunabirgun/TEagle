@@ -10,7 +10,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "data", "assemblies")
 API = "https://api.ncbi.nlm.nih.gov/datasets/v2/genome/accession/"
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))   # .../app/backend
+sys.path.insert(0, os.path.dirname(HERE))                    # .../app/backend (teagle_core's parent)
 from teagle_core.fetch import COORD_ASSEMBLIES               # single source of truth
 
 

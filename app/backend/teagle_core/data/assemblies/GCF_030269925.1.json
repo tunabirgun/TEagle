@@ -1,0 +1,188 @@
+{
+ "organism": "Bombyx mori",
+ "assemblyName": "ASM3026992v2",
+ "assemblyAccession": "GCF_030269925.1",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "1",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085107.1",
+   "length": 20733010
+  },
+  {
+   "chrName": "2",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085108.1",
+   "length": 8414026
+  },
+  {
+   "chrName": "3",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085109.1",
+   "length": 15277987
+  },
+  {
+   "chrName": "4",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085110.1",
+   "length": 18979991
+  },
+  {
+   "chrName": "5",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085111.1",
+   "length": 19040149
+  },
+  {
+   "chrName": "6",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085112.1",
+   "length": 16776040
+  },
+  {
+   "chrName": "7",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085113.1",
+   "length": 13996402
+  },
+  {
+   "chrName": "8",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085114.1",
+   "length": 16310765
+  },
+  {
+   "chrName": "9",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085115.1",
+   "length": 16919606
+  },
+  {
+   "chrName": "10",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085116.1",
+   "length": 17797768
+  },
+  {
+   "chrName": "11",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085117.1",
+   "length": 20805025
+  },
+  {
+   "chrName": "12",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085118.1",
+   "length": 17838790
+  },
+  {
+   "chrName": "13",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085119.1",
+   "length": 17885526
+  },
+  {
+   "chrName": "14",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085120.1",
+   "length": 13341864
+  },
+  {
+   "chrName": "15",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085121.1",
+   "length": 18559688
+  },
+  {
+   "chrName": "16",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085122.1",
+   "length": 14454745
+  },
+  {
+   "chrName": "17",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085123.1",
+   "length": 16894347
+  },
+  {
+   "chrName": "18",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085124.1",
+   "length": 15957419
+  },
+  {
+   "chrName": "19",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085125.1",
+   "length": 15031942
+  },
+  {
+   "chrName": "20",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085126.1",
+   "length": 12711775
+  },
+  {
+   "chrName": "21",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085127.1",
+   "length": 15385712
+  },
+  {
+   "chrName": "22",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085128.1",
+   "length": 18552276
+  },
+  {
+   "chrName": "23",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085129.1",
+   "length": 21557352
+  },
+  {
+   "chrName": "24",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085130.1",
+   "length": 19285218
+  },
+  {
+   "chrName": "25",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085131.1",
+   "length": 14584101
+  },
+  {
+   "chrName": "26",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085132.1",
+   "length": 11612109
+  },
+  {
+   "chrName": "27",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085133.1",
+   "length": 11089506
+  },
+  {
+   "chrName": "28",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085134.1",
+   "length": 10674691
+  },
+  {
+   "chrName": "W",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_085135.1",
+   "length": 11221128
+  },
+  {
+   "chrName": "MT",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_002355.1",
+   "length": 15643
+  }
+ ]
+}

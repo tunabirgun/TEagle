@@ -1,0 +1,134 @@
+{
+ "organism": "Triticum aestivum",
+ "assemblyName": "IWGSC CS RefSeq v2.1",
+ "assemblyAccession": "GCF_018294505.1",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "1A",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_057794.1",
+   "length": 598660471
+  },
+  {
+   "chrName": "1B",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_057795.1",
+   "length": 700547350
+  },
+  {
+   "chrName": "1D",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_057796.1",
+   "length": 498638509
+  },
+  {
+   "chrName": "2A",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_057797.1",
+   "length": 787782082
+  },
+  {
+   "chrName": "2B",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_057798.1",
+   "length": 812755788
+  },
+  {
+   "chrName": "2D",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_057799.1",
+   "length": 656544405
+  },
+  {
+   "chrName": "3A",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_057800.1",
+   "length": 754128162
+  },
+  {
+   "chrName": "3B",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_057801.1",
+   "length": 851934019
+  },
+  {
+   "chrName": "3D",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_057802.1",
+   "length": 619618552
+  },
+  {
+   "chrName": "4A",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_057803.1",
+   "length": 754227511
+  },
+  {
+   "chrName": "4B",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_057804.1",
+   "length": 673810255
+  },
+  {
+   "chrName": "4D",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_057805.1",
+   "length": 518332611
+  },
+  {
+   "chrName": "5A",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_057806.1",
+   "length": 713360525
+  },
+  {
+   "chrName": "5B",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_057807.1",
+   "length": 714697677
+  },
+  {
+   "chrName": "5D",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_057808.1",
+   "length": 569951140
+  },
+  {
+   "chrName": "6A",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_057809.1",
+   "length": 622669697
+  },
+  {
+   "chrName": "6B",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_057810.1",
+   "length": 731188232
+  },
+  {
+   "chrName": "6D",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_057811.1",
+   "length": 495380293
+  },
+  {
+   "chrName": "7A",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_057812.1",
+   "length": 744491536
+  },
+  {
+   "chrName": "7B",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_057813.1",
+   "length": 764072961
+  },
+  {
+   "chrName": "7D",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_057814.1",
+   "length": 642921167
+  }
+ ]
+}

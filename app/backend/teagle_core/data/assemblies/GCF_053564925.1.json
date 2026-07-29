@@ -1,0 +1,152 @@
+{
+ "organism": "Oryzias latipes",
+ "assemblyName": "Olatipes_Hd-rR_3.1",
+ "assemblyAccession": "GCF_053564925.1",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "1",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136237.1",
+   "length": 44091850
+  },
+  {
+   "chrName": "2",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136238.1",
+   "length": 52009884
+  },
+  {
+   "chrName": "3",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136239.1",
+   "length": 43239212
+  },
+  {
+   "chrName": "4",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136240.1",
+   "length": 37774557
+  },
+  {
+   "chrName": "5",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136241.1",
+   "length": 36781189
+  },
+  {
+   "chrName": "6",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136242.1",
+   "length": 35610385
+  },
+  {
+   "chrName": "7",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136243.1",
+   "length": 37466715
+  },
+  {
+   "chrName": "8",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136244.1",
+   "length": 28765803
+  },
+  {
+   "chrName": "9",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136245.1",
+   "length": 36065826
+  },
+  {
+   "chrName": "10",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136246.1",
+   "length": 35322326
+  },
+  {
+   "chrName": "11",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136247.1",
+   "length": 30753326
+  },
+  {
+   "chrName": "12",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136248.1",
+   "length": 35121269
+  },
+  {
+   "chrName": "13",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136249.1",
+   "length": 37297654
+  },
+  {
+   "chrName": "14",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136250.1",
+   "length": 32223741
+  },
+  {
+   "chrName": "15",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136251.1",
+   "length": 33053314
+  },
+  {
+   "chrName": "16",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136252.1",
+   "length": 36669180
+  },
+  {
+   "chrName": "17",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136253.1",
+   "length": 37137566
+  },
+  {
+   "chrName": "18",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136254.1",
+   "length": 38704731
+  },
+  {
+   "chrName": "19",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136255.1",
+   "length": 30484263
+  },
+  {
+   "chrName": "20",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136256.1",
+   "length": 30680329
+  },
+  {
+   "chrName": "21",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136257.1",
+   "length": 36041365
+  },
+  {
+   "chrName": "22",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136258.1",
+   "length": 31768016
+  },
+  {
+   "chrName": "23",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136259.1",
+   "length": 28752734
+  },
+  {
+   "chrName": "24",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_136260.1",
+   "length": 25265049
+  }
+ ]
+}

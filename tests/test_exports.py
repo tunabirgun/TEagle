@@ -59,9 +59,25 @@ def test_xlsx_val_typing_and_injection_guard():
 
 def test_csv_escape_keeps_bare_sign():
     assert widgets._csv_escape("-", ",") == "-" and widgets._csv_escape("+", ",") == "+"
-    assert widgets._csv_escape("-5", ",") == "'-5"            # multi-char leading sign guarded
     assert widgets._csv_escape("=cmd", ",") == "'=cmd"
     assert widgets._csv_escape("a,b", ",") == '"a,b"'
+
+
+def test_csv_and_xlsx_agree_on_negative_numbers():
+    """The same value must not export as a number in one format and text in another.
+
+    _xlsx_val has always kept "-5" numeric (see the test above), while _csv_escape quoted it to
+    "'-5" — so every negative delta-G in the primer-QC tables reached a CSV as text, and the same
+    table exported to XLSX and CSV disagreed about its own type. A CSV read into R or pandas came
+    back with a character column for every thermodynamic field. Numbers are now exempt from the
+    formula guard in both paths; a non-numeric signed cell is still neutralised."""
+    for v in ("-5", "-9.4", "-26.61", "+1.5e-3", "0.0"):
+        assert widgets._csv_escape(v, ",") == v, v
+        assert widgets._xlsx_val(v) == float(v), v
+    # the injection guard still bites where it should
+    assert widgets._csv_escape("-1+cmd", ",") == "'-1+cmd"
+    assert widgets._csv_escape("+cmd", ",") == "'+cmd"
+    assert widgets._csv_escape("@ref", ",") == "'@ref"
 
 
 def test_export_xlsx_strand_column_not_corrupted(tmp_path):
@@ -225,3 +241,47 @@ def test_canvas_gutter_matches_the_svg():
     ml = float(re.search(r'<rect x="([\d.]+)" y="[\d.]+" width="[\d.]+" height="13"', svg).group(1))
     assert abs(c.ML - ml) < 0.01                              # overview rect starts at the gutter
     panel.deleteLater()
+
+
+# ---------------- self-similarity plot: custom colours + PDF export ----------------
+def _dot_matrix():
+    sys.path.insert(0, os.path.join(os.path.dirname(_NATIVE), "backend"))
+    from teagle_core import dotplot, examples
+    return dotplot.self_matrix(examples.load("M11240"), k=dotplot.suggest_k([]))
+
+
+def test_dot_plot_export_honours_custom_mark_colours():
+    """The colour the user picks must reach the exported figure (screen and export share one path); the
+    Okabe–Ito defaults must not leak in once overridden. The dot plot draws both layers as flat fills."""
+    m = _dot_matrix()
+    svg = figures.svg_dotplot(m, W=900, theme="white", fwd="#7B1FA2", rev="#00897B")
+    assert "#7B1FA2" in svg and "#00897B" in svg
+    assert figures._DOT_FWD not in svg and figures._DOT_REV not in svg
+
+
+def test_heat_map_export_honours_the_custom_layer_colour():
+    """The heat map ramps the active layer's base colour toward white, so the base appears at peak
+    intensity and the default base must be gone. Only the shown layer's colour is threaded."""
+    m = _dot_matrix()
+    svg = figures.svg_dotheat(m, W=900, theme="white", which="forward", fwd="#7B1FA2", rev="#00897B")
+    assert figures._heat_ramp(1.0, "#7B1FA2") == "#7B1FA2"    # the ramp's ceiling is the base itself
+    assert "#7B1FA2" in svg                                    # a peak-intensity cell renders at the base
+    assert figures._DOT_FWD not in svg                        # the default blue must not survive the override
+
+
+def test_dot_export_carries_its_own_caveat_only_on_export():
+    """The honesty caveat is a separate on-screen widget, so the exported figure must embed its own one-line
+    limit — but only on export, never in the interactive SVG (which shows the widget beneath it)."""
+    m = _dot_matrix()
+    assert "not local alignment" in figures.svg_dotplot(m, W=900, for_export=True)
+    assert "not local alignment" not in figures.svg_dotplot(m, W=900, for_export=False)
+
+
+def test_dot_pdf_export_is_a_valid_vector_pdf(tmp_path):
+    m = _dot_matrix()
+    svg = figures.svg_dotplot(m, W=920, for_export=True, fwd="#7B1FA2", rev="#00897B")
+    p = str(tmp_path / "selfsim.pdf")
+    widgets.render_pdf(svg, p)
+    assert os.path.getsize(p) > 1000
+    with open(p, "rb") as fh:
+        assert fh.read(5) == b"%PDF-"

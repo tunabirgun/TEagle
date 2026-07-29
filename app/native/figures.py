@@ -497,3 +497,174 @@ def svg_gel(data: dict, bg: str) -> str:
         xnext += 82
     s += f'<text x="{xnext}" y="{ly+3}" fill="{P["ink"]}" font-size="8">L = MW ladder (bp)</text>'
     return s + "</svg>"
+
+
+# ============================ self-similarity: dot plot + heat map ============================
+# One locus compared with itself. Rendered through the same hand-written SVG path as the genome viewer
+# and the gel — no numpy/PIL/matplotlib, which the build guard excludes and which would undo the
+# v3.0.0 installer reduction. Forward matches mark direct repeats (LTRs); reverse-complement matches
+# mark inverted repeats (TIRs), so the two are drawn as distinguishable layers rather than merged.
+_DOT_THEME = {
+    "dark":   {"bg": "#0F1519", "grid": "#243038", "ink": "#E6EDF1", "faint": "#7C8B95"},
+    "white":  {"bg": "#FFFFFF", "grid": "#DDE4E9", "ink": "#141B21", "faint": "#5B6B76"},
+    "export": {"bg": "#FFFFFF", "grid": "#D4DBE0", "ink": "#222222", "faint": "#555555"},
+}
+# Forward (direct) and reverse (inverted) get different hues AND different marks, so the two signals
+# stay separable in greyscale and under colour-vision deficiency. Blue and vermillion are the pair the
+# Okabe-Ito set keeps furthest apart under deuteranopia and protanopia.
+_DOT_FWD, _DOT_REV = OKABE_ITO["blue"], OKABE_ITO["vermillion"]
+
+# The exported figure must carry its own limit — the on-screen caveat is a separate widget that does not
+# travel into an SVG/PNG/PDF a reader drops into a paper. One concise line, added only on export.
+_DOT_FOOTER = ("Exact k-mer matching, not local alignment — an absent or faint diagonal is not evidence a "
+               "repeat is absent; a visible block is.")
+
+
+def _dot_theme(theme: str, for_export: bool) -> dict:
+    return dict(_DOT_THEME["export" if for_export else ("white" if theme == "white" else "dark")])
+
+
+def _heat_ramp(t: float, base: str) -> str:
+    """Sequential ramp from a near-white floor to the signal hue, monotone in lightness so the scale
+    still reads in greyscale — which an unordered rainbow would not."""
+    t = 0.0 if t < 0 else (1.0 if t > 1 else t)
+    r0, g0, b0 = 245, 247, 249
+    r1, g1, b1 = int(base[1:3], 16), int(base[3:5], 16), int(base[5:7], 16)
+    return "#%02X%02X%02X" % (int(r0 + (r1 - r0) * t), int(g0 + (g1 - g0) * t), int(b0 + (b1 - b0) * t))
+
+
+def _dot_frame(m, W, T, title, sub):
+    """Shared chrome: a square plot box with a bp ruler on both axes, title and scope line."""
+    ML, MT, MR, MB = 58.0, 46.0, 16.0, 66.0
+    plot = max(W - ML - MR, 80.0)
+    H = MT + plot + MB
+    n = max(m["length"], 1)
+    s = ('<svg xmlns="http://www.w3.org/2000/svg" width="%.0f" height="%.0f" viewBox="0 0 %.0f %.0f" '
+         'font-family="%s">' % (W, H, W, H, FIGFONT))
+    s += '<rect width="%.0f" height="%.0f" fill="%s"/>' % (W, H, T["bg"])
+    s += ('<text x="%.1f" y="20" fill="%s" font-size="12" font-weight="700">%s</text>'
+          '<text x="%.1f" y="34" fill="%s" font-size="9">%s</text>'
+          % (ML, T["ink"], esc(title), ML, T["faint"], esc(sub)))
+    s += ('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="none" stroke="%s" stroke-width="1"/>'
+          % (ML, MT, plot, plot, T["grid"]))
+    step = gv_nice_step(n, 6)
+    t = 0
+    while t <= n:
+        x = ML + plot * (t / n)
+        y = MT + plot * (t / n)
+        s += ('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" stroke-width="0.5" opacity="0.55"/>'
+              '<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" stroke-width="0.5" opacity="0.55"/>'
+              '<text x="%.1f" y="%.1f" fill="%s" font-size="8" text-anchor="middle">%s</text>'
+              '<text x="%.1f" y="%.1f" fill="%s" font-size="8" text-anchor="end">%s</text>'
+              % (x, MT, x, MT + plot, T["grid"], ML, y, ML + plot, y, T["grid"],
+                 x, MT + plot + 13, T["faint"], _fmt_int(t),
+                 ML - 6, y + 3, T["faint"], _fmt_int(t)))
+        t += step
+    return s, ML, MT, plot, H
+
+
+def _dot_guides(m, ML, MT, plot, T, guides):
+    """Translucent bands marking TEagle's own detected features, so the picture is read against the
+    calls it exists to corroborate or contradict. Never obscures the data."""
+    if not guides:
+        return ""
+    n = max(m["length"], 1)
+    s = ""
+    for g in guides:
+        a, z = g.get("start", 0), g.get("end", 0)
+        if z <= a:
+            continue
+        x0, x1 = ML + plot * (a / n), ML + plot * (z / n)
+        col = g.get("color", T["faint"])
+        s += ('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="%s" opacity="0.10"/>'
+              '<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="%s" opacity="0.10"/>'
+              % (x0, MT, max(x1 - x0, 1), plot, col,
+                 ML, MT + plot * (a / n), plot, max(plot * ((z - a) / n), 1), col))
+    return s
+
+
+def _dot_legend(x, y, T, heat=None, fwd=_DOT_FWD, rev=_DOT_REV):
+    if heat is None:
+        return ('<circle cx="%.1f" cy="%.1f" r="3" fill="%s"/>'
+                '<text x="%.1f" y="%.1f" fill="%s" font-size="9">direct repeat (forward)</text>'
+                '<rect x="%.1f" y="%.1f" width="6" height="6" fill="%s"/>'
+                '<text x="%.1f" y="%.1f" fill="%s" font-size="9">inverted repeat (reverse complement)</text>'
+                % (x + 4, y - 3, fwd, x + 13, y, T["ink"],
+                   x + 176, y - 6, rev, x + 187, y, T["ink"]))
+    base, peak = heat
+    s = ""
+    for i in range(24):
+        s += '<rect x="%.1f" y="%.1f" width="7" height="8" fill="%s"/>' % (
+            x + i * 7, y - 8, _heat_ramp(i / 23.0, base))
+    s += ('<text x="%.1f" y="%.1f" fill="%s" font-size="8">0</text>'
+          '<text x="%.1f" y="%.1f" fill="%s" font-size="8">%d matches / bin</text>'
+          % (x, y + 10, T["faint"], x + 176, y - 1, T["faint"], peak))
+    return s
+
+
+def svg_dotplot(m: dict, W: float = 620, theme: str = "dark", for_export: bool = False,
+                guides: list = None, title: str = "Self-similarity dot plot",
+                read_threshold: int = 1, fwd: str = None, rev: str = None) -> str:
+    """Binary dot matrix: a mark wherever the locus matches itself."""
+    T = _dot_theme(theme, for_export)
+    fwd, rev = fwd or _DOT_FWD, rev or _DOT_REV       # caller may override the mark hues; bg stays white on export
+    sub = "exact %d-mer matches · %s bp" % (m["k"], _fmt_int(m["length"]))
+    if read_threshold and read_threshold > 1:
+        sub += " · cells below %d matches shown faint (chance level)" % read_threshold
+    s, ML, MT, plot, H = _dot_frame(m, W, T, title, sub)
+    b = m["bins"]
+    cell = plot / b
+    r = max(cell * 0.42, 0.5)
+    # Cells below the chance-derived read threshold are drawn FAINT, never removed: at a small word size
+    # most single-count cells are noise, but hiding them would leave a reader unable to judge how noisy
+    # the panel is. Emphasis, not filtering.
+    thr = read_threshold or 1
+    for name, mat, col in (("fwd", m["forward"], fwd), ("rev", m["reverse"], rev)):
+        for i, row in enumerate(mat):
+            y = MT + (i + 0.5) * cell
+            for j, c in enumerate(row):
+                if not c:
+                    continue
+                x = ML + (j + 0.5) * cell
+                op = "" if c >= thr else ' opacity="0.22"'
+                if name == "fwd":
+                    s += '<circle cx="%.2f" cy="%.2f" r="%.2f" fill="%s"%s/>' % (x, y, r, col, op)
+                else:                       # a different MARK, not merely a different hue
+                    s += '<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" fill="%s"%s/>' % (
+                        x - r, y - r, 2 * r, 2 * r, col, op)
+    s += _dot_guides(m, ML, MT, plot, T, guides)
+    s += _dot_legend(ML, MT + plot + 28, T, heat=None, fwd=fwd, rev=rev)
+    if for_export:
+        s += '<text x="%.1f" y="%.1f" fill="%s" font-size="7.5">%s</text>' % (
+            ML, MT + plot + 44, T["faint"], esc(_DOT_FOOTER))
+    return s + "</svg>"
+
+
+def svg_dotheat(m: dict, W: float = 620, theme: str = "dark", for_export: bool = False,
+                guides: list = None, which: str = "forward",
+                title: str = "Self-similarity heat map", fwd: str = None, rev: str = None) -> str:
+    """Binned match DENSITY. The dot plot answers "is there a repeat"; the heat map answers "how much of
+    the locus takes part", which a binary mark cannot show once bins saturate."""
+    T = _dot_theme(theme, for_export)
+    fwd, rev = fwd or _DOT_FWD, rev or _DOT_REV
+    peak = m.get("%s_max" % which) or 1
+    kind = "direct (forward)" if which == "forward" else "inverted (reverse-complement)"
+    sub = "%s match density · exact %d-mer · peak %d per bin · %s bp" % (
+        kind, m["k"], peak, _fmt_int(m["length"]))
+    s, ML, MT, plot, H = _dot_frame(m, W, T, title, sub)
+    base = fwd if which == "forward" else rev
+    mat = m[which]
+    cell = plot / m["bins"]
+    for i, row in enumerate(mat):
+        y = MT + i * cell
+        for j, c in enumerate(row):
+            if not c:
+                continue
+            s += '<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" fill="%s"/>' % (
+                ML + j * cell, y, cell + 0.4, cell + 0.4, _heat_ramp(c / peak, base))
+    s += _dot_guides(m, ML, MT, plot, T, guides)
+    s += _dot_legend(ML, MT + plot + 28, T, heat=(base, peak))
+    if for_export:
+        s += '<text x="%.1f" y="%.1f" fill="%s" font-size="7.5">%s</text>' % (
+            ML, MT + plot + 44, T["faint"], esc(_DOT_FOOTER))
+    return s + "</svg>"

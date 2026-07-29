@@ -1,0 +1,80 @@
+{
+ "organism": "Tribolium castaneum",
+ "assemblyName": "icTriCast1.1",
+ "assemblyAccession": "GCF_031307605.1",
+ "source": "NCBI Datasets v2 sequence_reports",
+ "molecules": [
+  {
+   "chrName": "1",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_087394.1",
+   "length": 37460696
+  },
+  {
+   "chrName": "2",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_087395.1",
+   "length": 26832998
+  },
+  {
+   "chrName": "3",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_087396.1",
+   "length": 25071153
+  },
+  {
+   "chrName": "4",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_087397.1",
+   "length": 23115473
+  },
+  {
+   "chrName": "5",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_087398.1",
+   "length": 20636470
+  },
+  {
+   "chrName": "6",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_087399.1",
+   "length": 19586254
+  },
+  {
+   "chrName": "7",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_087400.1",
+   "length": 18717241
+  },
+  {
+   "chrName": "8",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_087401.1",
+   "length": 17654693
+  },
+  {
+   "chrName": "9",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_087402.1",
+   "length": 16193484
+  },
+  {
+   "chrName": "10",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_087403.1",
+   "length": 12086266
+  },
+  {
+   "chrName": "11",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_087404.1",
+   "length": 4896840
+  },
+  {
+   "chrName": "MT",
+   "ucscStyleName": "",
+   "refseqAccession": "NC_003081.2",
+   "length": 15881
+  }
+ ]
+}

@@ -6,7 +6,6 @@ One loader, used by main(), selftest(), the screenshot capture, and the banner g
 single source so screenshots and releases reflect exactly what an end user gets."""
 import os
 from PySide6.QtGui import QFontDatabase
-from teagle_core import appdirs
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 # Roboto = body/UI text (Regular/Medium/Bold cover QSS weights 400/500/700).
@@ -20,6 +19,9 @@ UI_FAMILY = "Cascadia Mono"
 WORDMARK_FAMILY = "Cascadia Code"
 
 def font_path(name: str) -> str:
+    # Imported lazily: the family-name constants above are consumed by theme.py at import time, and a
+    # module-level teagle_core import would drag the backend package into the stylesheet's import graph.
+    from teagle_core import appdirs
     return appdirs.resource("native", "assets", "fonts", name) or \
         os.path.join(_HERE, "assets", "fonts", name)
 

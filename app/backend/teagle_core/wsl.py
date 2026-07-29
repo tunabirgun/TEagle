@@ -106,22 +106,63 @@ def available() -> dict:
         return {"wsl2": False, "distro": distro, "error": str(e)[:120]}
 
 
+_FAMDB_B, _FAMDB_E = "===TEAGLE_FAMDB_BEGIN===", "===TEAGLE_FAMDB_END==="
+_PARTITION_RE = re.compile(r"partition\s+(\d+)\s+\[([^\]]+)\]\s*:\s*(.*)")
+
+
+def parse_famdb_info(text: str):
+    """Parse `famdb.py info` into the identity of the library that is ACTUALLY installed.
+
+    The version alone does not identify the library: famdb ships Dfam in partitions (curated vs
+    uncurated, consensus vs HMM, root vs clade), and only the installed subset is searchable. Two
+    machines on the same Dfam version with different partitions present return different families
+    for the same query, so the partition list is part of the identity and belongs in the seal.
+    Returns None when the text carries no Database/Version header (famdb absent or failed to open)."""
+    if not text or not text.strip():
+        return None
+    name = re.search(r"^\s*Database\s*:\s*(.+?)\s*$", text, re.M)
+    ver = re.search(r"^\s*Version\s*:\s*(\S+)", text, re.M)      # 'FamDB Creation Format Version' starts with FamDB, so it cannot match
+    if not (name and ver):
+        return None
+    date = re.search(r"^\s*Date\s*:\s*(\S+)", text, re.M)        # likewise distinct from 'FamDB Creation Date'
+    fmt = re.search(r"^\s*FamDB Creation Format Version\s*:\s*(\S+)", text, re.M)
+    ncon = re.search(r"^\s*Total consensus sequences present\s*:\s*([\d,]+)", text, re.M)
+    parts = [m.group(2) for m in _PARTITION_RE.finditer(text) if "not present" not in m.group(3).lower()]
+    return {"name": name.group(1).strip(), "version": ver.group(1),
+            "date": date.group(1) if date else None,
+            "famdbFormat": fmt.group(1) if fmt else None,
+            "consensusSequences": int(ncon.group(1).replace(",", "")) if ncon else None,
+            "partitions": sorted(parts)}
+
+
 def env_status() -> dict:
     """Report the annotation stack state inside WSL (RepeatMasker version, Dfam library, minimap2)."""
     av = available()
-    st = {**av, "repeatmasker": None, "engine": None, "dfam": False, "minimap2": None, "ready": False}
+    st = {**av, "repeatmasker": None, "engine": None, "dfam": False, "minimap2": None,
+          "dfam_library": None, "dfam_version": None, "ready": False}
     if not av["wsl2"]:
         return st
     try:
         _famdb = f"{_ENV}/share/RepeatMasker/Libraries/famdb"
         # delivered via STDIN (_wsl_script), NOT inline _wsl: the $()/nested-quote probe below is exactly the
         # class wsl.exe mangles on a `bash -lc <arg>` command line (it would collapse every [ -f ] to 0).
+        # famdb.py info rides along in the SAME round trip (it is what resolves the sealed library identity)
+        # and is fenced by markers so its output cannot be mistaken for the minimap2 version line.
         rc, out, err = _wsl_script(
             f'{_MM} run -n te RepeatMasker -v 2>/dev/null | head -1\n'
             f'echo "dfam_root=$([ -f "{_famdb}/dfam40.0.h5" ] && echo 1 || echo 0)"\n'
             f'echo "dfam_curated=$([ -f "{_famdb}/dfam40.curated.consensus.0.h5" ] && echo 1 || echo 0)"\n'
+            f'echo "{_FAMDB_B}"\n'
+            f'{_MM} run -n te famdb.py info 2>/dev/null\n'
+            f'echo "{_FAMDB_E}"\n'
             f'[ -x "{_ENV}/bin/minimap2" ] && {_ENV}/bin/minimap2 --version 2>/dev/null\n',
-            timeout=60)
+            timeout=90)
+        if _FAMDB_B in out and _FAMDB_E in out:            # lift the famdb block out before the other probes parse
+            head, rest = out.split(_FAMDB_B, 1)
+            fam_txt, tail = rest.split(_FAMDB_E, 1)
+            out = head + tail
+            st["dfam_library"] = parse_famdb_info(fam_txt)
+            st["dfam_version"] = (st["dfam_library"] or {}).get("version")
         m = re.search(r"RepeatMasker version ([\w.]+)", out)
         st["repeatmasker"] = m.group(1) if m else None
         # require BOTH pinned Dfam partitions — a root-only library is incomplete and must not gate annotation
@@ -134,8 +175,25 @@ def env_status() -> dict:
     return st
 
 
+def _int_or_none(tok):
+    """RepeatMasker parenthesises the remaining-length column, e.g. '(1234)'."""
+    try:
+        return int(str(tok).strip().lstrip("(").rstrip(")"))
+    except (ValueError, AttributeError):
+        return None
+
+
 def parse_out(text: str):
-    """Parse a RepeatMasker .out table into structured hits."""
+    """Parse a RepeatMasker .out table into structured hits.
+
+    Columns 11-13 are the CONSENSUS-side coordinates, and RepeatMasker reverses their order by strand:
+    a '+' hit reads `begin end (left)` while a 'C' hit reads `(left) begin end`. Reading them positionally
+    without that switch yields negative consensus lengths on roughly half of all real hits, so the order
+    is resolved from the strand rather than assumed. Column 15 is the fragment ID: RepeatMasker assigns
+    one ID to the several lines of a single interrupted alignment, which is what lets a fragmented element
+    be reported as one hit instead of N unrelated ones.
+
+    `divergence` is RepeatMasker's RAW substitution percentage — NOT Kimura-corrected and not CpG-adjusted."""
     hits = []
     for line in text.splitlines():
         f = line.split()
@@ -147,12 +205,74 @@ def parse_out(text: str):
             score, divergence = int(f[0]), float(f[1])       # one malformed line drops its own hit, not the whole table
         except ValueError:
             continue
+        # %del and %ins sit beside %div and were previously discarded; together they separate a diverged
+        # copy from a deleted/inserted one, which raw divergence alone cannot.
+        pct_del = float(f[2]) if len(f) > 2 and _is_float(f[2]) else None
+        pct_ins = float(f[3]) if len(f) > 3 and _is_float(f[3]) else None
+        c1, c2, c3 = (f[11], f[12], f[13]) if len(f) > 13 else (None, None, None)
+        if strand == "-":                              # 'C' rows are (left) END begin — note the reversal
+            c_left, c_end, c_begin = _int_or_none(c1), _int_or_none(c2), _int_or_none(c3)
+        else:                                          # '+' rows are begin end (left)
+            c_begin, c_end, c_left = _int_or_none(c1), _int_or_none(c2), _int_or_none(c3)
+        cons_len = None
+        if c_end is not None and c_left is not None:
+            cons_len = c_end + c_left                  # consensus total = aligned end + remaining
+        coverage = None
+        if cons_len and c_begin is not None and c_end is not None and cons_len > 0:
+            coverage = round(100.0 * (c_end - c_begin + 1) / cons_len, 1)
         hits.append({
-            "score": score, "divergence": divergence,
+            "score": score, "divergence": divergence, "pct_del": pct_del, "pct_ins": pct_ins,
             "query": f[4], "q_start": q_start - 1, "q_end": q_end, "strand": strand,
             "family": f[9], "class_family": f[10],
+            "cons_start": c_begin, "cons_end": c_end, "cons_left": c_left,
+            "cons_length": cons_len, "cons_coverage_pct": coverage,
+            "fragment_id": f[14] if len(f) > 14 else None,
         })
-    return hits
+    return merge_fragments(hits)
+
+
+def _is_float(tok):
+    try:
+        float(tok)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def merge_fragments(hits):
+    """Collapse the lines RepeatMasker gave the same fragment ID into one hit.
+
+    An interrupted alignment — an element split by a younger insertion, or by an internal deletion — is
+    emitted as several lines sharing one ID. Reported separately they read as N independent copies of the
+    family, which is how a single fragmented L1 came to look like a pile of unrelated hits. The merged hit
+    spans the outermost query coordinates, keeps the best score, reports summed consensus coverage, and
+    records how many pieces it came from so the join is visible rather than silent."""
+    out, groups = [], {}
+    for h in hits:
+        key = (h.get("fragment_id"), h.get("family"), h.get("query"), h.get("strand"))
+        if h.get("fragment_id") is None:
+            out.append(h)
+            continue
+        groups.setdefault(key, []).append(h)
+    for key, g in groups.items():
+        if len(g) == 1:
+            out.append(g[0])
+            continue
+        best = max(g, key=lambda x: x["score"])
+        covs = [x["cons_coverage_pct"] for x in g if x["cons_coverage_pct"] is not None]
+        merged = dict(best)
+        merged.update({
+            "q_start": min(x["q_start"] for x in g),
+            "q_end": max(x["q_end"] for x in g),
+            "cons_start": min((x["cons_start"] for x in g if x["cons_start"] is not None), default=None),
+            "cons_end": max((x["cons_end"] for x in g if x["cons_end"] is not None), default=None),
+            "cons_coverage_pct": round(min(100.0, sum(covs)), 1) if covs else None,
+            "n_fragments": len(g),
+            "fragment_note": f"{len(g)} alignment blocks sharing RepeatMasker fragment ID {key[0]} — one "
+                             f"interrupted element, not {len(g)} separate copies",
+        })
+        out.append(merged)
+    return sorted(out, key=lambda x: (x["query"], x["q_start"]))
 
 
 # ============================ Managed install (component-wise) ============================
@@ -167,13 +287,27 @@ _DFAM_BASE = "https://www.dfam.org/releases/Dfam_4.0/families/FamDB"   # pinned 
 _DFAM_FILES = {
     "dfam_root":    ("dfam40.0.h5", "234d177775f1bf3445b1fe146bc6e65e"),
     "dfam_curated": ("dfam40.curated.consensus.0.h5", "7892e18016fc820264e625cbb9ec607b"),
+    # OPTIONAL uncurated consensus partitions. The curated library holds only ~9 families for
+    # D. melanogaster: copia, gypsy, hobo and mdg1 — and most plant and invertebrate TE families —
+    # are UNCURATED in Dfam 4.0, so a curated-only search returns nothing for them. Not installed by
+    # default: partition 1 alone is 3.85 GiB compressed. md5s from Dfam's own .md5 sidecars.
+    "dfam_unc_root": ("dfam40.uncurated.consensus.0.h5", "e7092e3ba01d887d4e7f84c86fa2d2ba"),
+    "dfam_unc_euk":  ("dfam40.uncurated.consensus.1.h5", "2803414c3420cd8b9ebbc077d78491c4"),
 }
+
+# free space each Dfam artefact needs (compressed download + the decompressed .h5 alongside it)
+_DFAM_NEED_GB = {"dfam_root": 2, "dfam_curated": 2, "dfam_unc_root": 2, "dfam_unc_euk": 14}
 
 _PRELUDE = r'''#!/usr/bin/env bash
 set -uo pipefail
 cd "$HOME" || { echo "[teagle] FAILED: cannot cd to HOME"; exit 1; }
 export MAMBA_ROOT_PREFIX="$HOME/micromamba"
 MM="$HOME/bin/micromamba"; ENV="$HOME/micromamba/envs/te"
+# ViennaRNA lives in its OWN env, never in 'te'. Solved against te (python 3.14) the resolver picks
+# viennarna 2.4.7 py36 — an old build whose Python bindings cannot load, and a DIFFERENT version from
+# the in-process package, which would make the same primer report a different dG depending on install
+# route. Letting it re-solve 'te' could also move hmmer/rmblast, which annotate runs SEAL.
+VRNAENV="$HOME/micromamba/envs/teagle-vrna"
 FAMDIR="$ENV/share/RepeatMasker/Libraries/famdb"
 LOG="$HOME/teagle_wsl_install.log"; : > "$LOG"; exec > >(tee -a "$LOG") 2>&1
 LOCK="$HOME/.teagle_install.lock"
@@ -211,13 +345,14 @@ echo "[teagle] START $(date -u +%FT%TZ)"
 
 def _dfam_step(key: str) -> str:
     fname, md5 = _DFAM_FILES[key]
+    need = _DFAM_NEED_GB.get(key, 2)
     return f'''
 echo "[teagle] STEP {key} START"
 mkdir -p "$FAMDIR" || fail "mkdir famdb"
 cd "$FAMDIR" || fail "cd famdb"
 if [ -f "{fname}" ]; then echo "[teagle] {fname} already present"; else
   avail_gb=$(df -BG --output=avail . 2>/dev/null | tail -1 | tr -dc '0-9'); avail_gb=${{avail_gb:-99}}
-  [ "$avail_gb" -ge 2 ] || fail "insufficient disk space (${{avail_gb}}G free, need ~2G)"
+  [ "$avail_gb" -ge {need} ] || fail "insufficient disk space (${{avail_gb}}G free, need ~{need}G)"
   echo "[teagle] downloading {fname}.gz (resumable)"
   # if the .gz is already complete, a resumed request returns HTTP 416 and --fail errors — don't abort;
   # fall through to the md5 gate, which validates a good file or removes a bad one for a clean retry.
@@ -324,7 +459,31 @@ fi
   || echo "[teagle] note: faToTwoBit unavailable (genomes cached as FASTA — larger, still functional)"
 echo "[teagle] STEP genomescan OK"
 ''',
+    # Pinned to the SAME major/minor as the optional in-process package so both routes compute the
+    # cross-check with one implementation and one parameter set. A version skew here would silently
+    # make the reported dG depend on how ViennaRNA was installed.
+    "viennarna": r'''
+echo "[teagle] STEP viennarna START"
+[ -x "$MM" ] || fail "micromamba required first (repair micromamba)"
+# ViennaRNA is an OPTIONAL cross-check engine in its own env. A failure here must NOT abort the run:
+# the core Dfam / RepeatMasker stack downloads in the steps that follow, and "Install all" promises each
+# component installs independently. So it logs a note and continues (the faToTwoBit policy above), and
+# the component reports "not installed (optional)" via its own live import probe rather than failing.
+if "$MM" run -n teagle-vrna python -c "import RNA" >/dev/null 2>&1; then
+  echo "[teagle] ViennaRNA already present"
+elif "$MM" create -y -n teagle-vrna -c conda-forge -c bioconda "viennarna>=2.7,<2.8" python=3.12 \
+     || { mm_reset_cache; "$MM" create -y -n teagle-vrna -c conda-forge -c bioconda "viennarna>=2.7,<2.8" python=3.12; }; then
+  "$MM" run -n teagle-vrna python -c "import RNA" >/dev/null 2>&1 \
+    || echo "[teagle] note: ViennaRNA not importable after install (optional primer-QC engine skipped — Primer3 still reports every structure)"
+else
+  echo "[teagle] note: could not create the teagle-vrna env (optional primer-QC engine skipped — Primer3 still reports every structure)"
+fi
+"$MM" run -n teagle-vrna python -c "import RNA; print('[teagle] ViennaRNA ' + RNA.__version__)" 2>/dev/null || true
+echo "[teagle] STEP viennarna OK"
+''',
     "dfam_root": _dfam_step("dfam_root"),
+    "dfam_unc_root": _dfam_step("dfam_unc_root"),
+    "dfam_unc_euk": _dfam_step("dfam_unc_euk"),
     "dfam_curated": _dfam_step("dfam_curated"),
     "famdb_conf": r'''
 echo "[teagle] STEP famdb_conf START"
@@ -344,7 +503,7 @@ echo "[teagle] STEP famdb_conf OK"
 
 # miniprot (homology tier) is intentionally NOT in the default install list while that tier is on hold;
 # its step + parser stay in the code, dormant, ready to re-enable when the homology UI ships.
-_ALL_STEPS = ["micromamba", "repeatmasker", "minimap2", "genomescan", "dfam_root", "dfam_curated", "famdb_conf"]
+_ALL_STEPS = ["micromamba", "repeatmasker", "minimap2", "genomescan", "viennarna", "dfam_root", "dfam_curated", "famdb_conf"]
 
 # component metadata surfaced to the install dialog (order = install order)
 _COMP_META = [
@@ -353,9 +512,17 @@ _COMP_META = [
     ("repeatmasker", "RepeatMasker",              True,  "Homology-based TE annotator that names Dfam families."),
     ("minimap2",     "minimap2",                  True,  "Splice-aware aligner for de-novo exon / intron detection."),
     ("genomescan",   "isPcr + NCBI Datasets",     True,  "Local whole-genome in-silico PCR engine + genome downloader."),
+    ("viennarna",    "ViennaRNA (primer QC)",     True,  "Second, independent primer secondary-structure engine. Optional: Primer3 alone still reports every structure, this adds the cross-check. Installed in its own environment; not bundled, because its licence forbids redistribution inside AGPL software."),
     ("dfam_root",    "Dfam 4.0 root library",     True,  "Dfam root partition (dfam40.0.h5)."),
     ("dfam_curated", "Dfam 4.0 curated library",  True,  "Dfam curated consensus partition."),
     ("famdb_conf",   "FamDB configuration",       True,  "Points RepeatMasker at the downloaded Dfam library."),
+    ("dfam_unc_root", "Dfam uncurated · root (optional)", True,
+     "Optional. Uncurated root partition (0.3 MiB). Curated-only search names very few families outside "
+     "the root set."),
+    ("dfam_unc_euk",  "Dfam uncurated · Eukaryota (optional)", True,
+     "Optional, 3.9 GiB download (~14 GB free needed while extracting). Adds the uncurated eukaryote "
+     "families — copia, gypsy, hobo, Ac, Tnt1, Tc1 and most plant/invertebrate TEs are uncurated in "
+     "Dfam 4.0 and cannot be named without it."),
 ]
 
 
@@ -424,8 +591,11 @@ echo "micromamba=$([ -x "$MM" ] && echo 1 || echo 0)"
 rmv=$("$MM" run -n te RepeatMasker -v 2>/dev/null | grep -oiE 'version [0-9][0-9.]*' | head -1 | awk '{print $2}'); echo "repeatmasker=${rmv:-0}"
 mmv=$([ -x "$ENV/bin/minimap2" ] && "$ENV/bin/minimap2" --version 2>/dev/null); echo "minimap2=${mmv:-0}"
 echo "genomescan=$([ -x "$ENV/bin/isPcr" ] && [ -x "$ENV/bin/datasets" ] && echo 1 || echo 0)"
+vrv=$("$MM" run -n teagle-vrna python -c "import RNA;print(RNA.__version__)" 2>/dev/null); echo "viennarna=${vrv:-0}"
 echo "dfam_root=$([ -f "$FAMDIR/dfam40.0.h5" ] && echo 1 || echo 0)"
 echo "dfam_curated=$([ -f "$FAMDIR/dfam40.curated.consensus.0.h5" ] && echo 1 || echo 0)"
+echo "dfam_unc_root=$([ -f "$FAMDIR/dfam40.uncurated.consensus.0.h5" ] && echo 1 || echo 0)"
+echo "dfam_unc_euk=$([ -f "$FAMDIR/dfam40.uncurated.consensus.1.h5" ] && echo 1 || echo 0)"
 echo "famdb_conf=$( { ls "$ENV"/share/famdb-*/famdb.conf >/dev/null 2>&1 || [ -f "$ENV/share/RepeatMasker/famdb.conf" ]; } && echo 1 || echo 0)"
 if [ -d "$HOME/.teagle_install.lock" ] && [ -f "$HOME/.teagle_install.lock/pid" ] && kill -0 "$(cat "$HOME/.teagle_install.lock/pid" 2>/dev/null)" 2>/dev/null; then echo "installing=1"; else echo "installing=0"; fi
 echo "disk_free_gb=$(df -BG --output=avail "$HOME" 2>/dev/null | tail -1 | tr -dc '0-9')"
@@ -475,8 +645,13 @@ def components_status() -> dict:
     mm = kv.get("minimap2", "0")
     present("minimap2", mm not in ("0", ""), (mm if mm not in ("0", "") else "missing"))
     present("genomescan", kv.get("genomescan") == "1", "installed" if kv.get("genomescan") == "1" else "missing")
+    vr = kv.get("viennarna", "0")
+    # optional: its absence never blocks anything, so it is reported as such rather than as "missing"
+    present("viennarna", vr not in ("0", ""), (f"v{vr}" if vr not in ("0", "") else "not installed (optional)"))
     present("dfam_root", kv.get("dfam_root") == "1", "present" if kv.get("dfam_root") == "1" else "missing")
     present("dfam_curated", kv.get("dfam_curated") == "1", "present" if kv.get("dfam_curated") == "1" else "missing")
+    for _k in ("dfam_unc_root", "dfam_unc_euk"):      # optional: absent is a normal state, not "missing"
+        present(_k, kv.get(_k) == "1", "present" if kv.get(_k) == "1" else "not installed (optional)")
     present("famdb_conf", kv.get("famdb_conf") == "1", "configured" if kv.get("famdb_conf") == "1" else "missing")
     ready = all(comp[k]["ok"] for k in ("repeatmasker", "dfam_root", "dfam_curated"))
     return {"wsl2": True, "installing": kv.get("installing") == "1", "ready": ready,
@@ -491,6 +666,7 @@ echo "=MM="; "$ENV/bin/minimap2" --version 2>&1 | head -1
 echo "=FAMDB="; "$MM" run -n te famdb.py info 2>&1 | grep -iE "version|families|consensus" | head -3
 echo "=FILES="; for f in dfam40.0.h5 dfam40.curated.consensus.0.h5; do if [ -f "$FAMDIR/$f" ]; then echo "present $f $(stat -c %s "$FAMDIR/$f" 2>/dev/null)"; else echo "MISSING $f"; fi; done
 echo "=SCAN="; { [ -x "$ENV/bin/isPcr" ] && echo "isPcr present"; } || echo "isPcr MISSING"; { [ -x "$ENV/bin/datasets" ] && echo "datasets present"; } || echo "datasets MISSING"
+echo "=VRNA="; "$MM" run -n teagle-vrna python -c "import RNA;print('ViennaRNA '+RNA.__version__)" 2>&1 | head -1
 '''
 
 
@@ -622,12 +798,44 @@ def install_wsl2() -> dict:
     return {"started": True, "windows_log": True}
 
 
+def resolve_species(species: str, timeout: int = 90) -> dict:
+    """Check a species name against famdb BEFORE handing it to RepeatMasker.
+
+    RepeatMasker delegates the lineage lookup to famdb, and famdb rejects an ambiguous name — 'drosophila'
+    matches 141 taxa — by printing its own usage text and exiting non-zero. RepeatMasker then exits 255,
+    so the user saw a wall of famdb help as the error for what is really 'that name is not specific
+    enough'. Resolving first costs one short probe and turns that into an answerable message.
+    Returns {ok: True} or {ok: False, error, suggestions}."""
+    if not _SPECIES_RE.match(species or ""):
+        return {"ok": False, "error": "invalid species token"}
+    try:
+        rc, out, _ = _wsl_script(f'{_MM} run -n te famdb.py lineage -ad "{species}" 2>&1 | head -20\n',
+                                 timeout=timeout)
+    except Exception as e:
+        return {"ok": True, "unchecked": f"{type(e).__name__}"}   # probe failed: let RepeatMasker try anyway
+    low = out.lower()
+    if "ambiguous search term" in low:
+        n = re.search(r"found (\d+) results", out)
+        return {"ok": False, "ambiguous": True,
+                "error": (f"“{species}” matches {n.group(1) if n else 'many'} taxa in the Dfam library, so "
+                          f"RepeatMasker cannot pick a lineage. Use the full scientific name — for example "
+                          f"“Drosophila melanogaster” rather than “drosophila”, or “Homo sapiens”. A common "
+                          f"name that maps to exactly one taxon (“human”) also works.")}
+    if "no species" in low or "not found" in low:
+        return {"ok": False, "error": f"“{species}” was not found in the installed Dfam library. Check the "
+                                      f"spelling, or leave the organism blank to search all installed families."}
+    return {"ok": True}
+
+
 def annotate(fasta_text: str, species: str | None = None, threads: int = 4, timeout: int = 600) -> dict:
     """Run RepeatMasker (WSL) on the sequence and return family-level hits (Layer A)."""
     sp = ""
     if species:
         if not _SPECIES_RE.match(species):           # validate untrusted input first (hermetic, fast)
             return {"ok": False, "error": "invalid species token"}
+        chk = resolve_species(species)
+        if not chk.get("ok"):
+            return {"ok": False, "error": chk["error"], "ambiguous_species": chk.get("ambiguous", False)}
         sp = f'-species "{species}"'
     st = env_status()
     if not st["ready"]:
@@ -647,19 +855,25 @@ def annotate(fasta_text: str, species: str | None = None, threads: int = 4, time
         script = (f'cd /tmp/{rid} && {_MM} run -n te RepeatMasker -pa {int(threads)} {sp} -qq q.fa '
                   f'>rm.log 2>&1; ec=$?; echo "EXIT $ec"; [ "$ec" = "0" ] && cat q.fa.out 2>/dev/null || tail -8 rm.log')
         rc, out, err = _wsl_script(script, timeout=timeout)
-        _wsl(f'rm -rf /tmp/{rid}', timeout=30)
         m = re.search(r"^EXIT (\d+)", out, re.M)
         if m and m.group(1) != "0":
             tail = out.split(f"EXIT {m.group(1)}", 1)[-1].strip()[:250]
             return {"ok": False, "error": f"RepeatMasker exited {m.group(1)}: {tail or 'see backend log'}", "status": st}
         hits = parse_out(out)                                 # repeatmasker version already resolved by env_status() above
+        lib = st.get("dfam_library")                          # resolved from famdb in the SAME env_status probe
         return {"ok": True, "hits": hits, "n_hits": len(hits),
                 "repeatmasker_version": st["repeatmasker"], "raw_out": out[-4000:],
+                "dfam_version": (lib or {}).get("version"), "dfam_library": lib,
                 "species": species or "(all installed families)"}
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": f"RepeatMasker timed out after {timeout}s"}
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    finally:
+        try:
+            _wsl(f'rm -rf /tmp/{rid}', timeout=30)             # always clear the staged query FASTA, even on timeout
+        except Exception:
+            pass
 
 
 _SPLICE_CANON = {("GT", "AG"), ("GC", "AG"), ("AT", "AC")}    # U2 / minor U12 canonical splice sites
@@ -717,7 +931,6 @@ def splice_align(genomic_fasta: str, transcript_fasta: str, timeout: int = 180) 
         script = f'cd /tmp/{rid} && {_MM} run -n te minimap2 -a -x splice --secondary=no ref.fa - 2>/dev/null'
         rc, sam, err = _wsl(script, stdin=transcript_fasta.encode(), timeout=timeout)
         _rcv, ver, _ = _wsl(f'{_ENV}/bin/minimap2 --version 2>/dev/null', timeout=30)
-        _wsl(f'rm -rf /tmp/{rid}', timeout=30)
         if rc != 0:                                           # a minimap2 tool failure is not a genuine no-alignment result
             return {"ok": False, "error": f"minimap2 alignment failed (exit {rc}) — not a no-alignment result"}
         res = _parse_sam_splice(sam)
@@ -740,6 +953,11 @@ def splice_align(genomic_fasta: str, transcript_fasta: str, timeout: int = 180) 
         return {"ok": False, "error": f"minimap2 timed out after {timeout}s"}
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    finally:
+        try:
+            _wsl(f'rm -rf /tmp/{rid}', timeout=30)             # always clear the staged genomic FASTA, even on timeout
+        except Exception:
+            pass
 
 
 # ---------- homology-based coding/intron recovery (WSL / miniprot) ----------
@@ -865,7 +1083,6 @@ def protein_align(genomic_fasta: str, protein_fasta: str, timeout: int = 180, ma
         script = f'cd /tmp/{rid} && {_MM} run -n te miniprot --gff ref.fa prot.faa 2>/dev/null'
         rc, gff, err = _wsl(script, timeout=timeout)
         _rcv, ver, _ = _wsl(f'{_ENV}/bin/miniprot --version 2>/dev/null', timeout=30)
-        _wsl(f'rm -rf /tmp/{rid}', timeout=30)
         g = "".join(l.strip() for l in genomic_fasta.splitlines() if not l.startswith(">")).upper()
         hits = _parse_miniprot_gff(gff, g, max_hits=max_hits)
         if not hits:
@@ -880,6 +1097,11 @@ def protein_align(genomic_fasta: str, protein_fasta: str, timeout: int = 180, ma
         return {"ok": False, "error": f"miniprot timed out after {timeout}s"}
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    finally:
+        try:
+            _wsl(f'rm -rf /tmp/{rid}', timeout=30)             # always clear the staged genomic + protein FASTA, even on timeout
+        except Exception:
+            pass
 
 
 # ---------- local whole-genome in-silico PCR (WSL / isPcr against a downloaded RefSeq assembly) ----------

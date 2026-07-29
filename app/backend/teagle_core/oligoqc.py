@@ -55,8 +55,16 @@ _AGREE_BAND = 2.0                                # two independent NN engines wi
 
 
 def available() -> dict:
+    """Which engines actually produced the numbers in THIS run. ViennaRNA may be in-process (the user
+    pip-installed it) or supplied by the optional WSL backend component; the two are pinned to the same
+    version and verified to agree exactly, but the report still names which one ran."""
+    remote = remote_active()
     return {"primer3": primer3 is not None, "primer3_version": PRIMER3_VERSION,
-            "viennarna": RNA is not None, "viennarna_version": VIENNARNA_VERSION,
+            "viennarna": (RNA is not None) or remote,
+            "viennarna_version": (VIENNARNA_VERSION if RNA is not None
+                                  else (_REMOTE_VERSION or "unavailable")),
+            "viennarna_source": ("in-process" if RNA is not None
+                                 else ("WSL backend component" if remote else None)),
             "primer3_error": _P3_ERR, "viennarna_error": _VRNA_ERR}
 
 
@@ -124,9 +132,29 @@ def _vrna_mfe(seq):
     return fc.mfe()[1]
 
 
+# Values computed by the optional out-of-process ViennaRNA backend (the WSL component), filled in one
+# batched round trip before a QC run. Consulted ONLY when the in-process module is absent, so an
+# installed ViennaRNA always wins and this module stays pure and unit-testable with no WSL dependency.
+_REMOTE_CACHE = {}
+_REMOTE_VERSION = None
+
+
+def prime_remote(cache, version=None):
+    """Install pre-computed ViennaRNA values (see oligoqc_wsl.compute). Replaces, never merges, so a
+    stale batch cannot leak a previous run's numbers into this one."""
+    global _REMOTE_CACHE, _REMOTE_VERSION
+    _REMOTE_CACHE = dict(cache or {})
+    _REMOTE_VERSION = version
+
+
+def remote_active() -> bool:
+    return RNA is None and bool(_REMOTE_CACHE)
+
+
 def _vrna_hairpin(seq):
     if RNA is None:
-        return None
+        dg = _REMOTE_CACHE.get(("mfe", seq))
+        return dg if dg is not None and dg < 0 else None
     dg = _vrna_mfe(seq)
     return dg if dg < 0 else None                    # >=0 -> no favourable fold
 
@@ -135,7 +163,8 @@ def _vrna_binding(a, b):
     """Intermolecular binding ΔG = MFE(A&B duplex) - MFE(A) - MFE(B). This is the quantity comparable to
     primer3's calc_homodimer/heterodimer (which report the duplex, not each strand's own hairpin)."""
     if RNA is None:
-        return None
+        dg = _REMOTE_CACHE.get(("bind", a, b))
+        return dg if dg is not None and dg < 0 else None
     md = _vrna_md()
     ab = RNA.fold_compound(a + "&" + b, md).mfe()[1]
     ga = RNA.fold_compound(a, md).mfe()[1]
@@ -239,7 +268,11 @@ def qc_pair(left: str, right: str) -> dict:
                          right_qc["hairpin"]["flag"], right_qc["self_dimer"]["flag"], het["flag"], end["flag"]])
     return {"ok": True, "left": left_qc, "right": right_qc, "hetero_dimer": het, "end_stability": end,
             "worst": worst, "conditions": dict(CONDITIONS),
-            "engines": {"primer3": PRIMER3_VERSION, "viennarna": VIENNARNA_VERSION}}
+            # report the engine that actually produced these numbers — VIENNARNA_VERSION is the
+            # in-process constant and reads "unavailable" even when the WSL component supplied them
+            "engines": {"primer3": PRIMER3_VERSION,
+                        "viennarna": available()["viennarna_version"],
+                        "viennarna_source": available()["viennarna_source"]}}
 
 
 def _worst_flag(flags):

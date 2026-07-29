@@ -10,10 +10,15 @@ CISCOL/GV_THEME/GELPAL, re-exported by figures.py) all live here — one definit
 
 import math, os, re
 
+import fonts as _fonts
+
 # Body/UI text is Roboto (bundled; see native/fonts.py); sequences, accessions and numeric data
 # stay in Cascadia Mono for column alignment. SANS = prose/chrome, MONO = data/brand.
-MONO = '"Cascadia Mono", "Cascadia Code", "Consolas", "Courier New", monospace'
-SANS = '"Roboto", "Segoe UI", "Helvetica Neue", Arial, sans-serif'
+# The bundled families are NAMED ONCE, in fonts.py beside the .ttf list that ships them, and these
+# stacks are built from those constants — so a change to what is bundled cannot leave the stylesheet
+# asking for a font that is no longer in the build. Only the non-bundled OS fallbacks are literals.
+MONO = f'"{_fonts.UI_FAMILY}", "{_fonts.WORDMARK_FAMILY}", "Consolas", "Courier New", monospace'
+SANS = f'"{_fonts.BODY_FAMILY}", "Segoe UI", "Helvetica Neue", Arial, sans-serif'
 
 # global UI zoom: scale fonts + padding uniformly (1px/2px borders & radii left untouched).
 # UI_SCALE is now driven live (set at runtime + re-apply qss); the env var is only a first-paint seed.
@@ -59,7 +64,6 @@ QLabel#sech {{ font-family: {sans}; font-weight: 650; font-size: 13px; }}
 /* rail + cards (sharp, panel-2 headers) */
 QFrame#rail {{ background: {panel}; border: none; border-right: 1px solid {line}; }}
 QFrame#card {{ background: {panel}; border: 1px solid {line}; border-radius: 2px; }}
-QFrame#hline {{ background: {line}; max-height: 1px; border: none; }}
 QPushButton#cardhdr {{ font-family: {sans}; background: {panel2}; border: none;
     border-bottom: 1px solid {line}; text-align: left; padding: 13px 16px; font-size: 12px; font-weight: 700; color: {text}; }}
 QPushButton#cardhdr:hover {{ color: {accent}; }}

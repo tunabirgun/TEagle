@@ -6,11 +6,12 @@ from __future__ import annotations
 import math, re
 
 from PySide6.QtCore import Qt, QByteArray, QPointF, QRectF, QSize, Signal
-from PySide6.QtGui import QImage, QPainter, QColor
+from PySide6.QtGui import QImage, QPainter, QColor, QPixmap, QIcon
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QSizePolicy,
                                QTableWidget, QTableWidgetItem, QMenu, QFileDialog, QApplication,
-                               QAbstractItemView, QHeaderView, QToolTip, QProgressBar)
+                               QAbstractItemView, QHeaderView, QToolTip, QProgressBar, QScrollArea,
+                               QColorDialog)
 
 import theme                       # UI_SCALE: figures are authored in logical units and stretched by it
 from figures import gv_gutter, GV_MR   # label gutter is model-dependent; the hit-test must use the same value
@@ -56,6 +57,23 @@ def render_png(svg: str, path: str, scale: int = 3):
     r.render(p)
     p.end()
     img.save(path, "PNG")
+
+
+def render_pdf(svg: str, path: str):
+    """Write an SVG string to a VECTOR PDF (a journal-ready figure): SVG -> QPainter -> QPdfWriter, never
+    via a raster QImage, so text stays text and the marks stay resolution-independent. The page is sized to
+    the figure's own aspect ratio (px -> mm at 96 dpi) with no margin, so the whole plot fills one page."""
+    from PySide6.QtGui import QPdfWriter, QPageSize, QPageLayout
+    from PySide6.QtCore import QSizeF, QMarginsF, QRectF
+    w, h = _svg_size(svg)
+    writer = QPdfWriter(path)
+    writer.setResolution(96)                                          # 1 SVG px == 1 device px at 96 dpi
+    writer.setPageSize(QPageSize(QSizeF(w * 25.4 / 96.0, h * 25.4 / 96.0), QPageSize.Unit.Millimeter))
+    writer.setPageMargins(QMarginsF(0, 0, 0, 0), QPageLayout.Unit.Millimeter)
+    r = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+    p = QPainter(writer)
+    r.render(p, QRectF(0, 0, writer.width(), writer.height()))       # fill the page in device pixels
+    p.end()
 
 
 class SvgCanvas(QWidget):
@@ -366,15 +384,24 @@ class GenomePanel(QWidget):
         self.view = {"start": 0.0, "end": float(L)}
         self._render()
 
+    def _export_target(self):
+        """Which palette a file export should use.
+
+        The figure leaves the app to become a journal figure, so the DEFAULT export is the publication
+        palette — dark ink, legible on white paper — regardless of the on-screen background, which exists
+        for reading the viewer rather than for print. An explicitly chosen background still wins: if the
+        user picked one from the bg buttons, that is a deliberate instruction and is honoured."""
+        return {"for_export": not self._theme_locked, "theme": self.theme}
+
     def _export_svg(self):
         path, _ = QFileDialog.getSaveFileName(self, "Export SVG", self.base_name + ".svg", "SVG (*.svg)")
         if path:
-            save_svg(self._cur_svg(920, for_export=False, theme=self.theme), path)   # honor the selected bg
+            save_svg(self._cur_svg(920, **self._export_target()), path)
 
     def _export_png(self):
         path, _ = QFileDialog.getSaveFileName(self, "Export PNG", self.base_name + ".png", "PNG (*.png)")
         if path:
-            render_png(self._cur_svg(920, for_export=False, theme=self.theme), path)  # honor the selected bg
+            render_png(self._cur_svg(920, **self._export_target()), path)
 
 
 class _GenomeCanvas(QWidget):
@@ -505,10 +532,21 @@ class _GenomeCanvas(QWidget):
 
 
 # ---------- data tables ----------
+def _is_number(s):
+    try:
+        float(s)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
 def _csv_escape(v, sep):
     v = "" if v is None else str(v)
-    # neutralise spreadsheet formula injection (CWE-1236) but keep a bare +/- (e.g. a strand cell) intact
-    if v[:1] in ("=", "@", "\t", "\r") or (v[:1] in ("+", "-") and len(v) > 1):
+    # Neutralise spreadsheet formula injection (CWE-1236). A NUMBER is exempt: "-9.4" is not a formula,
+    # and quoting it turned every negative delta-G in the primer-QC tables into a text cell, so a CSV
+    # loaded into R or pandas came back as a character column. Only a non-numeric +/- lead is escaped
+    # (e.g. "-1+cmd"), which still leaves a bare strand marker intact.
+    if v[:1] in ("=", "@", "\t", "\r") or (v[:1] in ("+", "-") and len(v) > 1 and not _is_number(v)):
         v = "'" + v
     if sep in v or '"' in v or "\n" in v:
         v = '"' + v.replace('"', '""') + '"'
@@ -589,15 +627,28 @@ def export_table(headers, rows, base, parent=None, fmt=None):
             path += ext                                       # honor the chosen format if the user omits the extension
     if not path:
         return
-    low = path.lower()
+    write_table(headers, rows, path)
+
+
+def serialize_table(headers, rows, sep=",") -> str:
+    """The exact text written for a CSV/TSV export. Separated from the file dialog so the contract —
+    every displayed row present, in order, escaped so the delimiter survives a round trip — is testable
+    without a GUI. An export that silently drops a column or mangles a value is a defect, and a defect
+    that only a human reading a spreadsheet can catch is one that ships."""
+    lines = [sep.join(_csv_escape(h, sep) for h in headers)]
+    lines += [sep.join(_csv_escape(c, sep) for c in r) for r in rows]
+    return "\r\n".join(lines)
+
+
+def write_table(headers, rows, path):
+    """Write a table to `path`, choosing the format from its extension."""
+    low = str(path).lower()
     if low.endswith(".xlsx") and _HAS_XLSX:
         _export_xlsx(headers, rows, path)
         return
     sep = "\t" if low.endswith(".tsv") else ","
-    lines = [sep.join(_csv_escape(h, sep) for h in headers)]
-    lines += [sep.join(_csv_escape(c, sep) for c in r) for r in rows]
     with open(path, "w", encoding="utf-8-sig", newline="") as f:      # BOM so Excel reads UTF-8
-        f.write("\r\n".join(lines))
+        f.write(serialize_table(headers, rows, sep))
 
 
 def save_fasta(fasta: str, base: str, parent=None):
@@ -773,3 +824,311 @@ class DataTable(QTableWidget):
     def rows_data(self):
         return [[self._value(i, j) for j in range(self.columnCount())]
                 for i in range(self.rowCount())]
+
+
+# ============================ self-similarity panel (dot plot + heat map) ============================
+class _DotCanvas(QWidget):
+    """Renders a self-similarity SVG and reports, on hover, exactly which comparison a cell represents.
+
+    A dot matrix is unreadable without a coordinate readout: every cell is a pair of positions, and a
+    user cannot be expected to measure one off two rulers. Hovering names both coordinates, the layer
+    (direct or inverted) and the match count, so the picture can be interrogated rather than admired."""
+
+    def __init__(self, panel):
+        super().__init__()
+        self.panel = panel
+        self._svg, self._renderer = "", None
+        self._w = self._h = 1
+        self.setMinimumHeight(300)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.setMouseTracking(True)
+
+    def _sc(self):
+        return ((self.width() or self._w) / self._w) if self._w else 1.0
+
+    def set_svg(self, svg):
+        self._svg = svg
+        self._renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+        self._w, self._h = _svg_size(svg)
+        self.update()
+
+    def paintEvent(self, e):
+        if self._renderer is not None:
+            p = QPainter(self)
+            self._renderer.render(p)                       # fills the widget rect -> scaled by the fixed size DotPanel sets
+            p.end()
+
+    def wheelEvent(self, e):
+        # Ctrl + wheel zooms; a plain wheel scrolls the enclosing scroll area (default handling)
+        if e.modifiers() & Qt.ControlModifier:
+            self.panel._zoom_by(1.15 if e.angleDelta().y() > 0 else 1.0 / 1.15)
+            e.accept()
+        else:
+            e.ignore()
+
+    def mouseMoveEvent(self, e):
+        m = self.panel.matrix
+        if not m:
+            return
+        sc = self._sc() or 1.0
+        # geometry mirrors figures._dot_frame; kept in one place there and read back here
+        ML, MT, MR, MB = 58.0, 46.0, 16.0, 66.0
+        plot = max(self._w - ML - MR, 80.0)
+        sx, sy = e.position().x() / sc, e.position().y() / sc
+        if not (ML <= sx <= ML + plot and MT <= sy <= MT + plot):
+            QToolTip.hideText()
+            return
+        b = m["bins"]
+        n = max(m["length"], 1)
+        j = min(b - 1, int((sx - ML) / plot * b))
+        i = min(b - 1, int((sy - MT) / plot * b))
+        bp_x = int((j + 0.5) / b * n)
+        bp_y = int((i + 0.5) / b * n)
+        fwd, rev = m["forward"][i][j], m["reverse"][i][j]
+        thr = self.panel.threshold
+        parts = [f"{bp_y:,} bp  vs  {bp_x:,} bp"]
+        if fwd:
+            parts.append(f"direct (forward): {fwd} match{'es' if fwd != 1 else ''}"
+                         + ("" if fwd >= thr else "  — at or below the chance level"))
+        if rev:
+            parts.append(f"inverted (reverse complement): {rev} match{'es' if rev != 1 else ''}"
+                         + ("" if rev >= thr else "  — at or below the chance level"))
+        if not fwd and not rev:
+            parts.append(f"no exact {m['k']}-mer match between these two regions")
+        if abs(i - j) <= 1 and fwd:
+            parts.append("on the identity diagonal — every sequence matches itself here")
+        QToolTip.showText(e.globalPosition().toPoint(), "\n".join(parts), self)
+
+
+class DotPanel(QWidget):
+    """Self-similarity of one locus, as a dot plot or a binned heat map.
+
+    Two views of one computation: the dot plot answers "is there a repeat, and where"; the heat map
+    answers "how much of the locus takes part", which a binary mark cannot show once bins saturate."""
+
+    HELP = ("Compares the sequence with itself and marks every position pair that shares an exact word.\n\n"
+            "• The solid line corner-to-corner is the identity diagonal — every sequence matches itself.\n"
+            "• A block OFF that diagonal is a DIRECT repeat: the two LTRs of a retroelement.\n"
+            "• A block on the ANTI-diagonal is an INVERTED repeat: the two TIRs of a DNA transposon.\n"
+            "• Shaded bands mark what TEagle itself detected, so the picture can confirm or contradict it.\n\n"
+            "This finds repeats the targeted detectors were not looking for — a strong block where nothing "
+            "was called is worth investigating. It cannot do the reverse: exact word matching is not an "
+            "alignment, so a diverged repeat fades out, and a faint or absent block is NOT evidence that "
+            "no repeat exists. A repeat shorter than the word size cannot appear at all.")
+
+    _BASE_W = 900                    # the SVG is authored once at this logical width; zoom scales the display
+
+    def __init__(self, base_name="TEagle_selfsim", parent=None):
+        super().__init__(parent)
+        import figures
+        self.base_name = base_name
+        self.matrix = None
+        self.guides = []
+        self.threshold = 1
+        self.mode = "dot"            # 'dot' | 'heat'
+        self.layer = "forward"       # heat map layer
+        self.show_guides = True
+        self.theme = "dark"
+        self._theme_locked = False
+        self.zoom = None             # None = fit the whole plot to the window; a float = explicit zoom factor
+        self._def_fwd, self._def_rev = figures._DOT_FWD, figures._DOT_REV
+        self.fwd_color, self.rev_color = self._def_fwd, self._def_rev
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
+
+        # row 1 — which view
+        bar = QHBoxLayout()
+        bar.setSpacing(6)
+        self._btns = {}
+        for key, label, tip in (
+                ("dot", "Dot plot", "One mark per matching position pair — shows WHERE repeats are"),
+                ("heat", "Heat map", "Match density per bin — shows HOW MUCH of the locus takes part, "
+                                     "which a binary mark cannot once bins saturate")):
+            b = QPushButton(label)
+            b.setProperty("sm", True)
+            b.setToolTip(tip)
+            b.clicked.connect(lambda _=False, k=key: self._set_mode(k))
+            self._btns[key] = b
+            bar.addWidget(b)
+        self.layerBtn = QPushButton("Inverted layer")
+        self.layerBtn.setProperty("sm", True)
+        self.layerBtn.setToolTip("Heat map only: switch between direct (LTR-type) and inverted "
+                                 "(TIR-type) match density")
+        self.layerBtn.clicked.connect(self._toggle_layer)
+        bar.addWidget(self.layerBtn)
+        self.guideBtn = QPushButton("Hide guides")
+        self.guideBtn.setProperty("sm", True)
+        self.guideBtn.setToolTip("Shaded bands mark the terminal repeats TEagle detected. Hide them to "
+                                 "read the raw self-similarity without that prompt.")
+        self.guideBtn.clicked.connect(self._toggle_guides)
+        bar.addWidget(self.guideBtn)
+        bar.addStretch(1)
+        lay.addLayout(bar)
+
+        # row 2 — zoom · export colours · export formats
+        tools = QHBoxLayout()
+        tools.setSpacing(6)
+        for label, tip, slot in (("−", "Zoom out (or Ctrl + mouse wheel)", lambda: self._zoom_by(1 / 1.25)),
+                                 ("Fit", "Fit the whole plot to the window", self._fit),
+                                 ("+", "Zoom in (or Ctrl + mouse wheel)", lambda: self._zoom_by(1.25))):
+            b = QPushButton(label)
+            b.setProperty("sm", True)
+            b.setToolTip(tip)
+            b.clicked.connect(slot)
+            tools.addWidget(b)
+        tools.addSpacing(12)
+        self.fwdBtn = QPushButton("Forward")
+        self.fwdBtn.setProperty("sm", True)
+        self.fwdBtn.setToolTip("Colour of the direct-repeat (forward) marks — applies on screen and in every export")
+        self.fwdBtn.clicked.connect(lambda: self._pick_color("fwd"))
+        self.revBtn = QPushButton("Reverse")
+        self.revBtn.setProperty("sm", True)
+        self.revBtn.setToolTip("Colour of the inverted-repeat (reverse-complement) marks")
+        self.revBtn.clicked.connect(lambda: self._pick_color("rev"))
+        rst = QPushButton("Reset colours")
+        rst.setProperty("sm", True)
+        rst.setToolTip("Restore the colour-vision-safe Okabe–Ito default pair")
+        rst.clicked.connect(self._reset_colors)
+        tools.addWidget(self.fwdBtn)
+        tools.addWidget(self.revBtn)
+        tools.addWidget(rst)
+        tools.addStretch(1)
+        for label, tip, slot in (
+                ("SVG", "Vector export — text stays text, legible on white", self._export_svg),
+                ("PNG", "Raster export at publication resolution", self._export_png),
+                ("PDF", "Vector PDF — one journal-ready figure per page", self._export_pdf)):
+            b = QPushButton(label)
+            b.setProperty("sm", True)
+            b.setToolTip(tip)
+            b.clicked.connect(slot)
+            tools.addWidget(b)
+        lay.addLayout(tools)
+
+        # the canvas lives in a scroll area so a zoomed plot can exceed the window and be panned
+        self.canvas = _DotCanvas(self)
+        self.canvas.setToolTip(self.HELP)
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(False)
+        self._scroll.setAlignment(Qt.AlignCenter)
+        self._scroll.setWidget(self.canvas)
+        lay.addWidget(self._scroll, 1)
+
+        self.note = QLabel("")
+        self.note.setObjectName("cardmeta")
+        self.note.setWordWrap(True)
+        lay.addWidget(self.note)
+        self._sync_swatches()
+
+    def _swatch(self, color):
+        pm = QPixmap(12, 12)
+        pm.fill(QColor(color))
+        return QIcon(pm)
+
+    def _sync_swatches(self):
+        self.fwdBtn.setIcon(self._swatch(self.fwd_color))
+        self.revBtn.setIcon(self._swatch(self.rev_color))
+
+    def _pick_color(self, which):
+        cur = self.fwd_color if which == "fwd" else self.rev_color
+        c = QColorDialog.getColor(QColor(cur), self, "Choose mark colour")
+        if not c.isValid():
+            return
+        if which == "fwd":
+            self.fwd_color = c.name()
+        else:
+            self.rev_color = c.name()
+        self._sync_swatches()
+        self._render()
+
+    def _reset_colors(self):
+        self.fwd_color, self.rev_color = self._def_fwd, self._def_rev
+        self._sync_swatches()
+        self._render()
+
+    def _apply_zoom(self):
+        if not self.matrix or self.canvas._w <= 1:
+            return
+        if self.zoom is None:                             # fit the WHOLE plot (both axes) into the viewport
+            vp = self._scroll.viewport()
+            z = min((vp.width() - 4) / self.canvas._w, (vp.height() - 4) / self.canvas._h)
+            z = max(z, 0.15)
+        else:
+            z = self.zoom
+        self.canvas.setFixedSize(max(int(self.canvas._w * z), 60), max(int(self.canvas._h * z), 60))
+
+    def _zoom_by(self, f):
+        cur = (self.canvas.width() / self.canvas._w) if self.canvas._w > 1 else 1.0
+        self.zoom = max(0.2, min(cur * f, 8.0))
+        self._apply_zoom()
+
+    def _fit(self):
+        self.zoom = None
+        self._apply_zoom()
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if self.zoom is None:                             # fit follows the window until the user zooms explicitly
+            self._apply_zoom()
+
+    def set_matrix(self, matrix, guides=None, threshold=1, scope=""):
+        self.matrix = matrix
+        self.guides = guides or []
+        self.threshold = threshold or 1
+        self.note.setText(scope)
+        self._render()
+
+    def apply_app_theme(self, app_theme):
+        if not self._theme_locked:
+            self.theme = "white" if app_theme == "light" else "dark"
+            self._render()
+
+    def _set_mode(self, mode):
+        self.mode = mode
+        self._render()
+
+    def _toggle_layer(self):
+        self.layer = "reverse" if self.layer == "forward" else "forward"
+        self._render()
+
+    def _toggle_guides(self):
+        self.show_guides = not self.show_guides
+        self.guideBtn.setText("Show guides" if not self.show_guides else "Hide guides")
+        self._render()
+
+    def _svg(self, w, for_export=False):
+        import figures
+        g = self.guides if self.show_guides else None
+        if self.mode == "heat":
+            return figures.svg_dotheat(self.matrix, W=w, theme=self.theme, for_export=for_export,
+                                       guides=g, which=self.layer, fwd=self.fwd_color, rev=self.rev_color)
+        return figures.svg_dotplot(self.matrix, W=w, theme=self.theme, for_export=for_export,
+                                   guides=g, read_threshold=self.threshold, fwd=self.fwd_color, rev=self.rev_color)
+
+    def _render(self):
+        if not self.matrix:
+            return
+        for key, b in self._btns.items():
+            b.setProperty("primary", key == self.mode)
+            b.style().unpolish(b)
+            b.style().polish(b)
+        self.layerBtn.setEnabled(self.mode == "heat")
+        self.layerBtn.setText("Direct layer" if self.layer == "reverse" else "Inverted layer")
+        # author the SVG once at a fixed logical width; the zoom factor scales the display, not the SVG
+        self.canvas.set_svg(self._svg(self._BASE_W))
+        self._apply_zoom()
+
+    def _export_svg(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Export SVG", self.base_name + ".svg", "SVG (*.svg)")
+        if path:
+            save_svg(self._svg(920, for_export=not self._theme_locked), path)
+
+    def _export_png(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Export PNG", self.base_name + ".png", "PNG (*.png)")
+        if path:
+            render_png(self._svg(920, for_export=not self._theme_locked), path)
+
+    def _export_pdf(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Export PDF", self.base_name + ".pdf", "PDF (*.pdf)")
+        if path:
+            render_pdf(self._svg(920, for_export=not self._theme_locked), path)

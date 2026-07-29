@@ -1,7 +1,11 @@
 # TEagle native app — pinned dependencies (reproducibility)
 primer3-py==2.3.0
-ViennaRNA==2.7.2
 pyhmmer==0.12.1
 PySide6==6.11.1
 openpyxl==3.1.5
 certifi==2026.6.17
+
+# OPTIONAL — not bundled in the release and not required to run TEagle.
+# ViennaRNA's licence forbids redistribution for a fee, so it cannot ship inside an AGPL work.
+# Install it yourself to enable the second, independent primer secondary-structure engine.
+# ViennaRNA==2.7.2

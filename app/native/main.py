@@ -264,10 +264,6 @@ def _clear_layout(layout):
                 _clear_layout(sub)
 
 
-def _hline():
-    f = QFrame(); f.setObjectName("hline"); f.setFixedHeight(1); return f
-
-
 def _kb_links(lab):
     """Make a rich-text label's links Tab-reachable and Enter-activatable. A QLabel's default
     interaction flags are mouse-only, which leaves focusPolicy at NoFocus, so keyboard users could
@@ -348,6 +344,16 @@ def _export_table_btn(table, base, parent):
             widgets.export_table(table._headers, table.rows_data(), base, parent, fmt=fmt)
     b.clicked.connect(lambda _=False: pop())
     return b
+
+
+def _qq_note():
+    """RepeatMasker runs in -qq (quick) mode. That was an invisible speed choice while only a family NAME
+    was shown; once its divergence and coverage are displayed as curation evidence the search sensitivity
+    becomes part of the claim, so it is stated beside the numbers rather than buried in the manifest."""
+    return _note("Search run in RepeatMasker's quick mode (-qq): faster and less sensitive than a default "
+                 "search. Divergence is the raw substitution percentage, not Kimura-corrected, and coverage "
+                 "is of the Dfam consensus — both are alignment evidence, not a family-membership test.",
+                 "info")
 
 
 class MainWindow(QMainWindow):
@@ -567,7 +573,8 @@ class MainWindow(QMainWindow):
         self.seq.setMinimumHeight(round(120 * theme_mod.UI_SCALE)); self.seq.textChanged.connect(self._seq_changed)
         lay.addWidget(self.seq)
         row = QHBoxLayout()
-        ls = QPushButton("Load sample element"); ls.setProperty("link", True); ls.clicked.connect(self._load_sample)
+        ls = QPushButton("Load example element ▾"); ls.setProperty("link", True); ls.clicked.connect(self._pick_example)
+        ls.setToolTip("Five published elements — copia, gypsy, LINE-1, Tc1, Ac — plus a synthetic negative control")
         row.addWidget(ls); row.addStretch(1)
         self.charCount = QLabel("0 nt"); self.charCount.setObjectName("kdim"); row.addWidget(self.charCount)
         lay.addLayout(row)
@@ -946,11 +953,45 @@ class MainWindow(QMainWindow):
                 self.state["features"] = None
             self._update_splice_ref()                         # refresh the 'Genomic reference' label to the edited specimen
 
-    def _load_sample(self):
-        self._set_seq(make_sample())
+    def _apply_example(self, fasta):
+        self._set_seq(fasta)
         self.state["source"] = None
         self.accMeta.setText(""); self.coordMeta.setText("")
         self._update_splice_ref()                             # _set_seq runs under the _loading guard, so refresh the label here
+
+    def _load_sample(self):
+        """Load the generated demo construct directly.
+
+        Kept as a NON-BLOCKING, no-argument action because it is the programmatic entry point: the test
+        suite calls it, and turning it into a modal menu made every one of those calls block forever —
+        tests/test_native.py went from seconds to a hard hang. The user-facing picker is _pick_example."""
+        self._apply_example(make_sample())
+
+    def _pick_example(self):
+        """Offer the real published specimens first; the generated construct stays, labelled for what it
+        is. Its ORF is random sequence, so it cannot match a Pfam profile — landing a first-time user on
+        a structural-only null result and making the domain panel look broken when it is working."""
+        from PySide6.QtWidgets import QMenu
+        from teagle_core import examples
+        menu = QMenu(self)
+        for acc, label, organism, expected in examples.available():
+            act = menu.addAction(f"{label} — {organism}  ({acc})")
+            act.setToolTip(f"Published as: {expected}")
+            act.triggered.connect(lambda _=False, a=acc: self._load_example(a))
+        if not menu.isEmpty():
+            menu.addSeparator()
+        neg = menu.addAction("Synthetic construct (negative control)")
+        neg.setToolTip("Seeded random LTR-like sequence. Structure is detectable; the ORF is random, so "
+                       "no protein domain should be found — that null result is the expected outcome.")
+        neg.triggered.connect(lambda _=False: self._apply_example(make_sample()))
+        menu.exec(QCursor.pos())
+
+    def _load_example(self, accession):
+        from teagle_core import examples
+        fasta = examples.load(accession)
+        if not fasta:
+            return self._banner("This build does not include that example sequence.", "warn")
+        self._apply_example(fasta)
 
     def _upload(self):
         path, _ = QFileDialog.getOpenFileName(self, "Open FASTA", "",
@@ -1225,9 +1266,26 @@ class MainWindow(QMainWindow):
         recs = res.get("records", [])
         if not recs:
             return
-        rec = recs[0]
-        self.state["last_rec"] = rec
+        self.state["analysis"] = res
+        self.state["records"] = recs
         self.state["analyzed_clean"] = self._clean_seq(self.state.get("analyzed_seq", ""))   # snapshot, not the live box — a keystroke mid-analysis must not defeat the stale-block guard
+        self._show_record(0)
+
+    # engine.analyze already classifies EVERY record; the UI used to take records[0] and discard the rest,
+    # so a user arriving with a shortlist saw one answer and no indication the others had been computed.
+    _MAX_RECORDS = 200
+
+    def _show_record(self, index: int):
+        """Render one record's detail. Every downstream step (primers, PCR, splice) stays bound to the
+        selected record, so the choice is explicit rather than implied by file order."""
+        res = self.state.get("analysis") or {}
+        recs = self.state.get("records") or []
+        if not recs:
+            return
+        index = max(0, min(index, len(recs) - 1))
+        rec = recs[index]
+        self.state["last_rec"] = rec
+        self.state["record_index"] = index
         self._update_splice_ref()
         self.designBtn.setEnabled(True); self.designHint.setText("")
         comp = rec.get("composition", {})
@@ -1239,6 +1297,25 @@ class MainWindow(QMainWindow):
         self._set_trace_counts(recs, rec)
         self._render_struct_card(rec, res)
         self._uppercase_buttons()
+
+    def _record_summary_rows(self, recs):
+        """One row per record: what was actually computed for each, not a promise that it was."""
+        rows = []
+        for i, r in enumerate(recs[:self._MAX_RECORDS]):
+            cl = r.get("classification") or {}
+            comp = r.get("completeness") or cl.get("completeness") or {}
+            doms = sorted({d["domain"] for d in (r.get("domains") or [])})
+            struct = sorted({e["type"].split(" (")[0] for e in (r.get("structural") or [])})
+            rows.append([i + 1, r.get("id", ""), f"{(r.get('composition') or {}).get('length', 0):,}",
+                         f"{(r.get('composition') or {}).get('gc', 0)}%",
+                         "valid" if r.get("valid") else "INVALID",
+                         cl.get("te_class") or "—", cl.get("confidence") or "—",
+                         "·".join(doms) or "—", ", ".join(struct) or "—",
+                         comp.get("tier") or "—"])
+        return rows
+
+    _RECORD_HEADERS = ["#", "Record", "Length", "GC", "Input", "Class", "Confidence",
+                       "Domains", "Structural", "Completeness"]
 
     def _accent_link(self, href, text):
         return f"<a href='{href}' style='color:{theme_mod.ACCENT[self.theme]};text-decoration:none'>{text}</a>"
@@ -1285,10 +1362,112 @@ class MainWindow(QMainWindow):
         self.rStruct.setToolTip(" · ".join(e["type"].split(" (")[0] for e in rec.get("structural", [])) or "none detected")
         self.rOrf.setText(self._accent_link("#orfs", str(len(rec.get("orfs", [])))))
 
+    def _build_selfsim(self, rec):
+        """Open the self-similarity plot for the analysed record in its own resizable window.
+
+        A dedicated window (rather than an inline card panel) keeps a near-square matrix from dominating
+        the results column, and gives the plot room to be zoomed and panned. The word size follows the
+        shortest terminal repeat TEagle actually measured: a repeat SHORTER than the word size cannot
+        produce a single exact match, so a fixed k=13 hides an 11 bp hAT TIR entirely (measured on maize
+        Ac: reverse signal 2 at k=13, 600 at k=8)."""
+        from teagle_core import dotplot
+        # this record's OWN sequence — the coordinate system its structural guides index. analyzed_clean
+        # concatenates every record of a multi-FASTA paste, which would plot a chimeric matrix here.
+        seq = rec.get("seq") or self.state.get("analyzed_clean") or ""
+        if not seq:
+            return self._banner("Run an analysis first — the self-similarity plot needs the analysed sequence.")
+        struct = rec.get("structural") or []
+        k = dotplot.suggest_k(struct)
+        m = dotplot.self_matrix(seq, k=k)
+        guides = [{"start": e[q][0], "end": e[q][1], "color": theme_mod.OK.get("LTR", "#0072B2")}
+                  for e in struct for q in ("five_prime", "three_prime") if e.get(q)]
+        rid = (rec.get("id") or "locus").split()[0]
+        # ONE reused window (hidden, not destroyed, on close) whose body is re-populated per record — never a
+        # rebuilt widget, which is what collapsed a reused dialog in an earlier release.
+        dlg = getattr(self, "_selfsim_dlg", None)
+        if dlg is None:
+            dlg = QDialog(self)
+            dlg.setObjectName("selfsimdlg")
+            dlg.resize(940, 820)
+            _l = QVBoxLayout(dlg)
+            _l.setContentsMargins(12, 12, 12, 12)
+            dlg._panel = widgets.DotPanel(base_name="TEagle_selfsim", parent=dlg)
+            _l.addWidget(dlg._panel)
+            self._selfsim_dlg = dlg
+            self._uppercase_buttons()
+        panel = dlg._panel
+        dlg.setWindowTitle(f"Self-similarity — {rid}")
+        panel.base_name = f"TEagle_{rid}_selfsim"
+        panel.apply_app_theme(self.theme)
+        panel.zoom = None                                 # fit the new record to the window
+        panel.set_matrix(m, guides=guides, threshold=dotplot.above_chance(m), scope=dotplot.scope_note(m))
+        dlg.show(); dlg.raise_(); dlg.activateWindow()
+        panel._fit()
+        self._uppercase_buttons()
+
+    def _export_annotation(self, rec):
+        """Write the record's annotation as GFF3 or BED.
+
+        Coordinates are LOCUS-RELATIVE and the seqid is the record's own id: exporting locus offsets
+        under a chromosome name would silently misplace every feature in a browser. GFF3 embeds the
+        sequence after ##FASTA so the file stands alone."""
+        from PySide6.QtWidgets import QMenu
+        from teagle_core import gff3
+        from teagle_core import __version__ as teagle_ver
+        teagle_version = lambda: teagle_ver
+        menu = QMenu(self)
+        a_gff = menu.addAction("GFF3 (.gff3) — ontology terms + sub-features + sequence")
+        a_bed = menu.addAction("BED (.bed) — intervals only")
+        chosen = menu.exec(QCursor.pos())
+        if chosen is None:
+            return
+        fmt = "gff3" if chosen is a_gff else "bed"
+        seqid = (rec.get("id") or "locus").split()[0]
+        base = f"TEagle_{seqid}"
+        path, _ = QFileDialog.getSaveFileName(self, f"Export {fmt.upper()}", base + "." + fmt,
+                                              f"{fmt.upper()} (*.{fmt})")
+        if not path:
+            return
+        if not path.lower().endswith("." + fmt):
+            path += "." + fmt
+        # the record's OWN sequence (not analyzed_clean, which concatenates every record of a multi-FASTA
+        # paste — embedding that after ##FASTA would contradict this record's own coordinates)
+        seq = rec.get("seq") or None
+        text = (gff3.to_gff3(rec, seqid=seqid, sequence=seq,
+                             source_note=f"TEagle {teagle_version()}")
+                if fmt == "gff3" else gff3.to_bed(rec, seqid=seqid))
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(text)
+        self._banner(f"Annotation written to {os.path.basename(path)}.", level="success")
+
+    def _render_record_table(self, card):
+        """Per-record summary for a multi-record input, above the selected record's detail."""
+        recs = self.state.get("records") or []
+        if len(recs) < 2:
+            return
+        rows = self._record_summary_rows(recs)
+        t = DataTable(self._RECORD_HEADERS, GLOSS)
+        t.set_rows(rows)
+        t.set_row_menu(lambda r: [("Show this record below", lambda i=r: self._show_record(i))])
+        sel = self.state.get("record_index", 0)
+        head = QLabel(f"<b>{len(recs)} records analysed</b> — every one was classified; the detail below is "
+                      f"record {sel + 1}. Right-click a row to show it, or export the table."
+                      + (f" Showing the first {self._MAX_RECORDS} of {len(recs)}."
+                         if len(recs) > self._MAX_RECORDS else ""))
+        head.setTextFormat(Qt.RichText); head.setWordWrap(True); head.setObjectName("cardmeta")
+        wrap = QWidget(); wl = QVBoxLayout(wrap)
+        wl.setContentsMargins(0, 0, 0, 0); wl.setSpacing(theme_mod.sp(6))
+        wl.addWidget(head); wl.addWidget(t)
+        frow = QHBoxLayout(); frow.addStretch(1)
+        frow.addWidget(_export_table_btn(t, "TEagle_records", self))
+        wl.addLayout(frow)
+        card.bodylay.addWidget(wrap)
+
     def _render_struct_card(self, rec, res):
         card = self.card_struct
         card.clear_body()
         card.expand()
+        self._render_record_table(card)
         cl = rec.get("classification") or {}
         banner = QFrame(); banner.setObjectName("classbn")
         bl = QVBoxLayout(banner)
@@ -1331,13 +1510,18 @@ class MainWindow(QMainWindow):
             cw = QLabel(f"<div style='line-height:150%'>{line}</div>"); cw.setObjectName("classexp"); cw.setTextFormat(Qt.RichText); cw.setWordWrap(True)
             bl.addWidget(cw)
             # the essential caveat stays visible; the full methodology collapses behind a disclosure (less crowding)
-            caveat = QLabel("Scoped to the tested Pfam domain panel — a completeness tier, not a transposition-competence claim.")
+            caveat = QLabel("Structural evidence in this one sequence, scored against the tested Pfam panel — "
+                            "not a claim about expression, transposition competence, or any individual genome.")
             caveat.setObjectName("cardmeta"); caveat.setWordWrap(True); bl.addWidget(caveat)
             scope = QLabel(f"Domains tested: {comp.get('scope','')}. “Not detected” is relative to this profile "
                            "panel — a divergent or unmodelled domain reads as not-detected, not as element decay "
                            "(completeness after Wicker 2007 / TEsorter / LTR_retriever). The tier reports how much of "
-                           "the expected architecture is present at the domain level; it is not a claim that the ORFs "
-                           "are intact or that the element is transposition- or infection-competent.")
+                           "the expected architecture is present at the domain level in THIS SEQUENCE. It says "
+                           "nothing about three separate questions it is easily confused with: whether the element "
+                           "is transcribed, whether it retains transposition or infection competence, and whether "
+                           "any given individual or population carries this insertion. Answering those needs "
+                           "expression data, a functional assay, and population genotyping respectively "
+                           "(Lanciano &amp; Cristofari 2020, Nat Rev Genet 21:721-736).")
             scope.setObjectName("cardmeta"); scope.setWordWrap(True)
             self._disclosure(bl, "Scope and methods", scope, expanded=False)
         else:
@@ -1422,6 +1606,32 @@ class MainWindow(QMainWindow):
             drow = QHBoxLayout(); drow.addStretch(1); drow.addWidget(_export_table_btn(t, "TEagle_domains", self))
             card.bodylay.addLayout(drow)
 
+        # Self-similarity: the one view that looks for repeats WITHOUT being told what to expect, so it
+        # can catch what a targeted detector missed. Generated on request rather than with every
+        # analysis — it is the only panel whose cost grows with the square of the repeat content.
+        srow = QHBoxLayout(); srow.addStretch(1)
+        selfsim = QPushButton("Self-similarity plot…")
+        selfsim.setProperty("sm", True)
+        selfsim.setToolTip(
+            "Open a resizable window comparing this sequence with itself, plotting every exact word match.\n\n"
+            "Finds repeats the targeted detectors were not looking for: a block where nothing was "
+            "called is worth investigating. Direct repeats (LTRs) appear off the main diagonal; "
+            "inverted repeats (TIRs) appear on the anti-diagonal.\n\n"
+            "It cannot do the reverse — exact word matching is not an alignment, so a diverged repeat "
+            "fades and an absent block is not evidence that no repeat exists.")
+        selfsim.clicked.connect(lambda _=False, r=rec: self._build_selfsim(r))
+        srow.addWidget(selfsim)
+        card.bodylay.addLayout(srow)
+
+        # Annotation export: the whole record as GFF3/BED so the call survives into a genome browser.
+        # Placed on the structure card because that is where the annotation being exported is shown.
+        arow = QHBoxLayout(); arow.addStretch(1)
+        ann = QPushButton("Export annotation ▾"); ann.setProperty("sm", True)
+        ann.setToolTip("GFF3 (Sequence Ontology terms, sub-features, embedded FASTA) or BED6 intervals")
+        ann.clicked.connect(lambda: self._export_annotation(rec))
+        arow.addWidget(ann)
+        card.bodylay.addLayout(arow)
+
         # gene model (exon/intron/CDS) — only when a fetched accession carries feature annotation.
         # For an ERV the host-style CDS/exon view is the misleading one (it shows the env CDS as a single
         # "exon"); the retroviral transcript architecture above is the correct model, so the raw gene model is
@@ -1435,7 +1645,7 @@ class MainWindow(QMainWindow):
             gmbox = QWidget(); gmlay = QVBoxLayout(gmbox); gmlay.setContentsMargins(0, 0, 0, 0); gmlay.setSpacing(6)
             title = "Gene model — NCBI annotation" + (" (feature table + CDS-inferred exons)" if derived else " (feature table)")
             gmlay.addWidget(_sl(title))
-            if not demote and (cl.get("is_erv") or _tc.startswith(("LTR", "LINE", "retro", "DNA"))):
+            if not demote and (cl.get("is_erv") or _tc.startswith(("LTR", "LINE", "retro", "DNA", "DIRS"))):
                 cav = QLabel("This is a transposable element, not a host gene: its coding organisation is the domain "
                              "architecture above, not a host exon–intron structure. The blocks below are the record's own CDS annotation.")
                 cav.setObjectName("orient"); cav.setWordWrap(True); gmlay.addWidget(cav)
@@ -2820,31 +3030,116 @@ class MainWindow(QMainWindow):
         if d.get("provenance"):
             self._render_provenance(d["provenance"])
 
-    _LC = {"Low_complexity", "Simple_repeat", "Satellite", "Unknown", "Unspecified"}
+    # A satellite or simple repeat is a POSITIVE annotation — RepeatMasker identified what the locus is,
+    # and the answer is "not a transposable element". "Unknown" is a different statement: a repeat whose
+    # class could not be assigned. Neither is an absence of result, so neither is silently dropped.
+    _NONTE = {"Low_complexity", "Simple_repeat", "Satellite"}
+    _UNCLASSED = {"Unknown", "Unspecified"}
+
+    def _repeat_table(self, hits):
+        t = DataTable(["#", "Class/family", "Dfam family", "Coords (0-based)", "Str", "Div", "Score"], GLOSS)
+        t.set_rows([[i + 1, h["class_family"], h["family"], f"{h['q_start']}–{h['q_end']}",
+                     h["strand"], f"{h['divergence']}%", h["score"]] for i, h in enumerate(hits)])
+        return t
 
     def _render_family(self, d):
-        te = [h for h in d.get("hits", []) if h["class_family"] not in self._LC]
-        lc = len(d.get("hits", [])) - len(te)
+        hits = d.get("hits", [])
+        te = [h for h in hits if h["class_family"] not in self._NONTE | self._UNCLASSED]
+        nonte = [h for h in hits if h["class_family"] in self._NONTE]
+        unclassed = [h for h in hits if h["class_family"] in self._UNCLASSED]
         if not te:
-            no_species = not d.get("species") or str(d.get("species")).startswith("(all")
-            hint = (" Set the organism/species above — RepeatMasker needs a lineage." if no_species
-                    else " The family may need an additional Dfam taxon partition.")
-            msg = f"No TE family named under the current criteria" + (f" ({lc} low-complexity region(s) found)" if lc else "") + "." + hint
-            self._set_body(self.wslBody, _note(msg, "warn"))
+            cont = QWidget(); cl = QVBoxLayout(cont); cl.setContentsMargins(0, 0, 0, 0); cl.setSpacing(6)
+            if nonte:
+                kinds = sorted({h["class_family"].replace("_", " ").lower() for h in nonte})
+                cl.addWidget(_note(f"RepeatMasker annotated this locus as {' and '.join(kinds)} — "
+                                   f"{len(nonte)} region(s). That is a result, not a failure: the sequence "
+                                   f"matches a tandem/low-complexity repeat, and no transposable-element "
+                                   f"family was found in it.", "info"))
+                cl.addWidget(self._repeat_table(nonte))
+            if unclassed:
+                cl.addWidget(_note(f"{len(unclassed)} repeat region(s) matched a Dfam entry whose class is "
+                                   f"unassigned ('Unknown'). A repeat is present; its type is not established.",
+                                   "info"))
+                cl.addWidget(self._repeat_table(unclassed))
+            if not hits:
+                # Two independent conditions decide whether a family CAN be named, and the message names
+                # whichever is actually missing rather than guessing. Both were measured on Drosophila
+                # copia: with the uncurated partitions installed AND a species, it resolves to Copia_LTR
+                # and Copia_I at 100% consensus coverage; with the partitions but NO species it returns
+                # only low-complexity, because RepeatMasker searches a limited default set without a
+                # lineage; with a species but curated-only it also fails, since the curated library holds
+                # just 9 families for D. melanogaster and copia is not among them.
+                parts = ((d.get("dfam_library") or {}).get("partitions")) or []
+                has_unc = any("uncurated" in str(p).lower() for p in parts)
+                sp = d.get("species") or ""
+                has_sp = bool(sp) and not str(sp).startswith("(all")
+                if not has_sp:
+                    cl.addWidget(_note("No Dfam family matched — and no organism was set. RepeatMasker "
+                                       "searches only a limited default set without a lineage, so an "
+                                       "organism is usually what turns a blank result into a named family. "
+                                       "Set the organism above and run again.", "warn"))
+                elif not has_unc:
+                    cl.addWidget(_note(f"No Dfam family matched for “{sp}” — and only the CURATED Dfam "
+                                       "partitions are installed. Most TE families of most organisms are "
+                                       "uncurated in Dfam 4.0: the curated library holds just 9 families "
+                                       "for Drosophila melanogaster, and copia, gypsy, hobo and mdg1 are "
+                                       "not among them. Install the optional uncurated partitions from "
+                                       "03 → Backend installer.", "warn"))
+                else:
+                    cl.addWidget(_note(f"No Dfam family matched this locus for “{sp}”. The curated and "
+                                       "uncurated partitions were both searched with a lineage set, so "
+                                       "this is a genuine no-match rather than a gap in the installed "
+                                       "library. The structural and protein-domain evidence above does "
+                                       "not depend on this search.", "warn"))
+            frow = QHBoxLayout(); frow.addStretch(1)
+            if hits:
+                frow.addWidget(_export_table_btn(self._repeat_table(nonte + unclassed), "TEagle_repeats", self))
+            cl.addLayout(frow)
+            self._set_body(self.wslBody, cont)
             return
         self.state["family"] = te
+        # name the partitions actually searched, not a fixed "curated": with the optional uncurated partitions
+        # installed RepeatMasker searches them too, and a hit named only from the uncurated set must not be
+        # reported as curated (curated = manually reviewed; uncurated = auto-generated, less vetted).
+        _parts = ((d.get("dfam_library") or {}).get("partitions")) or []
+        _dfam_lbl = "Dfam 4.0 curated + uncurated" if any("uncurated" in str(p).lower() for p in _parts) else "Dfam 4.0 curated"
         head = QLabel(f"<b>Dfam · {te[0]['class_family']}</b> — {' · '.join(sorted({h['family'] for h in te}))} "
-                      f"· Dfam 4.0 curated{self._src_html('Dfam')} · RepeatMasker {d.get('repeatmasker_version','')}"
+                      f"· {_dfam_lbl}{self._src_html('Dfam')} · RepeatMasker {d.get('repeatmasker_version','')}"
                       f"{self._src_html('RepeatMasker')} · species: {d.get('species','')}")
         head.setTextFormat(Qt.RichText); head.setWordWrap(True); head.setOpenExternalLinks(True); _kb_links(head)
-        headers = ["#", "Class/family", "Dfam family", "Coords (0-based)", "Str", "Div", "Score"]
+        # %div/%del/%ins and the consensus-side coverage are RepeatMasker's own alignment evidence; they
+        # were parsed and discarded before. Divergence is RAW (not Kimura-corrected) and the header says so.
+        headers = ["#", "Class/family", "Dfam family", "Coords (0-based)", "Str",
+                   "Div (raw)", "Del", "Ins", "Consensus", "Cov", "Blocks", "Score"]
         t = DataTable(headers, GLOSS)
-        t.set_rows([[i + 1, h["class_family"], h["family"], f"{h['q_start']}–{h['q_end']}",
-                     h["strand"], f"{h['divergence']}%", h["score"]] for i, h in enumerate(te)])
+
+        def _cons(h):
+            if h.get("cons_start") is None or h.get("cons_length") is None:
+                return "—"
+            return f"{h['cons_start']}–{h['cons_end']} / {h['cons_length']}"
+
+        t.set_rows([[i + 1, h["class_family"], h["family"], f"{h['q_start']}–{h['q_end']}", h["strand"],
+                     f"{h['divergence']}%",
+                     ("—" if h.get("pct_del") is None else f"{h['pct_del']}%"),
+                     ("—" if h.get("pct_ins") is None else f"{h['pct_ins']}%"),
+                     _cons(h),
+                     ("—" if h.get("cons_coverage_pct") is None else f"{h['cons_coverage_pct']}%"),
+                     h.get("n_fragments", 1), h["score"]] for i, h in enumerate(te)])
         t.set_row_menu(lambda r: self._feat_menu(te[r]["q_start"], te[r]["q_end"], te[r]["strand"],
                                                  te[r]["family"], src_seq=self.state.get("family_seq")))
         cont = QWidget(); cl = QVBoxLayout(cont); cl.setContentsMargins(0, 0, 0, 0); cl.setSpacing(6)
         cl.addWidget(head); cl.addWidget(t)
+        merged = [h for h in te if h.get("n_fragments", 1) > 1]
+        if merged:
+            cl.addWidget(_note("; ".join(h["fragment_note"] for h in merged) +
+                               ". Merged so an interrupted element is one row, with the outermost query span "
+                               "and the summed consensus coverage.", "info"))
+        cl.addWidget(_qq_note())
+        if nonte or unclassed:                     # reported, never silently dropped
+            extra = [f"{len(nonte)} tandem / low-complexity region(s)"] if nonte else []
+            extra += [f"{len(unclassed)} repeat(s) of unassigned class"] if unclassed else []
+            cl.addWidget(_note("Also annotated in this locus: " + " and ".join(extra) +
+                               ", listed apart from the TE families above.", "info"))
         frow = QHBoxLayout(); frow.addStretch(1); frow.addWidget(_export_table_btn(t, "TEagle_family", self))
         cl.addLayout(frow)
         self._set_body(self.wslBody, cont)
@@ -3016,9 +3311,13 @@ def selftest():
         problems.append("bundled fonts missing from build: " + ", ".join(missing_fonts))
     if primers.PRIMER3_VERSION == "unavailable":
         problems.append(f"primer3 failed to load ({primers.PRIMER3_ERROR})")
-    from teagle_core import oligoqc                          # the advertised secondary-structure cross-check engine
-    if not oligoqc.available().get("viennarna"):
-        problems.append(f"ViennaRNA cross-check engine missing from bundle ({oligoqc.available().get('viennarna_error')})")
+    from teagle_core import oligoqc                          # secondary-structure QC; primer3 required, ViennaRNA optional
+    if not oligoqc.available().get("primer3"):               # the PRIMARY engine must be in the bundle
+        problems.append(f"primer3 secondary-structure engine missing from bundle "
+                        f"({oligoqc.available().get('primer3_error')})")
+    # ViennaRNA is deliberately NOT bundled — its licence forbids redistribution inside an AGPL work, so it
+    # is a user-installed optional second engine. Its absence is the expected shipped state, never a build
+    # failure; the UI already reports which engines ran and the manifest records it.
     if domains.PYHMMER_VERSION == "unavailable":
         problems.append("pyhmmer failed to load")
     if not domains.HMM_SHA256:
@@ -3027,11 +3326,14 @@ def selftest():
         try:
             n_hmm = len(domains._hmms())
             codes = {v[0] for v in domains.DOMAIN_INFO.values()}
-            miss = {"GAG", "PR", "RT", "RNaseH", "INT", "ENV", "CHR", "TPase"} - codes
+            # every class the 30-model panel claims must be represented, incl. the LINE ORF1p/EN, the DIRS
+            # tyrosine recombinase (YR) and the Helitron (HEL) modules added this release
+            miss = {"GAG", "PR", "RT", "RNaseH", "INT", "ENV", "CHR", "TPase", "ORF1", "EN", "YR", "HEL"} - codes
             if miss:
                 problems.append(f"domain profile set missing expected codes: {sorted(miss)}")
-            if n_hmm < 21:
-                problems.append(f"domain profile set loaded {n_hmm} profiles, expected >= 21 (gag/env models may be missing)")
+            if n_hmm < len(domains.DOMAIN_INFO):          # the bundled .hmm must load the full declared panel, not a truncated subset
+                problems.append(f"domain profile set loaded {n_hmm} profiles, expected {len(domains.DOMAIN_INFO)} "
+                                "(bundled .hmm may be truncated)")
         except Exception as e:
             problems.append(f"domain profile set failed to load: {type(e).__name__}: {e}")
     # end-to-end science through the shared engine (also exercises the fixture-free sample)
@@ -3071,7 +3373,8 @@ def selftest():
     if problems:
         sys.stderr.write("TEAGLE SELFTEST FAILED:\n  - " + "\n  - ".join(problems) + "\n")
         return 1
-    print(f"TEAGLE SELFTEST OK · primer3 {primers.PRIMER3_VERSION} · ViennaRNA {oligoqc.VIENNARNA_VERSION} "
+    _vr = oligoqc.VIENNARNA_VERSION if oligoqc.available().get("viennarna") else "not installed (optional)"
+    print(f"TEAGLE SELFTEST OK · primer3 {primers.PRIMER3_VERSION} · ViennaRNA {_vr} "
           f"· pyhmmer {domains.PYHMMER_VERSION} · HMM {domains.HMM_SHA256[:12]} ({len(domains._hmms())} profiles) "
           f"· QtSvg ok · install dialog ok")
     return 0
