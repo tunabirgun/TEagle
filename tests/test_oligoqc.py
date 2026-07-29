@@ -68,11 +68,17 @@ def test_tier_thresholds():
     assert oligoqc._tier(-10.0, -9, -5) == "warn"
 
 
-def test_engine_agreement_labels():
+def test_engine_agreement_labels(monkeypatch):
     assert oligoqc._agree(-8.0, -7.0) == "agree"         # within band
     assert oligoqc._agree(-28.0, -9.0) == "disagree"     # far apart (the palindrome case)
-    assert oligoqc._agree(-5.0, None) == "single"        # one engine only
     assert oligoqc._agree(None, None) == "none"
+    # the one-engine label depends on whether the ViennaRNA cross-check engine is importable, so pin
+    # oligoqc.RNA explicitly — the assertion must not silently depend on the test host having ViennaRNA
+    # installed (it fails on a hermetic CI runner, where ViennaRNA is optional and absent, otherwise).
+    monkeypatch.setattr(oligoqc, "RNA", object())        # engine present -> a genuine one-engine result
+    assert oligoqc._agree(-5.0, None) == "single"
+    monkeypatch.setattr(oligoqc, "RNA", None)             # engine absent -> the cross-check could not run
+    assert oligoqc._agree(-5.0, None) == "n/a"
 
 
 def test_worst_of_engines_drives_flag():
