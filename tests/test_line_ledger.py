@@ -124,3 +124,41 @@ def test_tsd_congruence_reaches_the_evidence_string():
     incongruent = " ".join(classify.classify([_tir(), _tsd(3)], [_tpase()])["evidence"])
     assert "3 bp where" in incongruent or "coincidental" in incongruent, \
         "an incongruent TSD must be reported, not silently accepted as confirming the termini"
+
+
+def test_tsd_refine_prefers_superfamily_length_over_coincidental_flank():
+    """detect_all picks the LONGEST exact flanking repeat before the superfamily is known; once classify
+    resolves a Tc1/Mariner call it must re-detect with the diagnostic 2 bp TA preferred, so a coincidental
+    longer flank does not flip a genuinely complete element to 'incongruent'. (fix loop round 5, MODERATE)"""
+    # element [100, 930] flanked by an exact 6-mer TATATA on both sides: longest-first reports 6 bp, but the
+    # immediate 2 bp flank is also an exact TA repeat, so the superfamily-aware re-run must prefer the 2 bp TA.
+    chars = list("C" * 940)
+    chars[94:100] = list("TATATA"); chars[930:936] = list("TATATA")
+    seq = "".join(chars)
+    tsd = {"type": "TSD (target-site duplication)", "length": 6, "motif": "TATATA",
+           "upstream": [94, 100], "downstream": [930, 936]}
+    ev = " ".join(classify.classify([_tir(), tsd], [_tpase(cls="dna:Tc1-Mariner")], seq=seq)["evidence"])
+    assert tsd["length"] == 2 and tsd["motif"] == "TA"        # corrected in place -> the GFF3 export carries 2 bp
+    assert "congruent" in ev and "incongruent" not in ev      # the corrected length now corroborates the termini
+
+
+def test_tsd_refine_is_a_noop_without_the_sequence():
+    # backward compatible: with no seq (every non-engine caller) the ungated longest-first length stands
+    tsd = {"type": "TSD (target-site duplication)", "length": 6, "motif": "GGGGTA",
+           "upstream": [94, 100], "downstream": [930, 936]}
+    ev = " ".join(classify.classify([_tir(), tsd], [_tpase(cls="dna:Tc1-Mariner")])["evidence"])
+    assert tsd["length"] == 6                                 # unchanged
+    assert "incongruent" in ev or "6 bp where" in ev
+
+
+def test_ltr_congruent_tsd_evidence_states_the_observed_length():
+    """The LTR congruent-TSD sentence once read 'a target-site duplication of the length Copia duplicates
+    (...) flanks the element' — grammatically broken and missing the observed length. (fix loop round 5, LOW)"""
+    struct = [{"type": "LTR (terminal direct repeat)", "element_span": [0, 9000], "identity": 98.0},
+              {"type": "TSD (target-site duplication)", "length": 5, "motif": "ACGTA",
+               "upstream": [95, 100], "downstream": [9000, 9005]}]
+    doms = [{"domain": "INT", "nt": [100, 300], "strand": "+", "score": 40.0, "class": "retro"},
+            {"domain": "RT", "nt": [500, 1400], "strand": "+", "score": 90.0, "class": "retro"}]
+    ev = " ".join(classify.classify(struct, doms)["evidence"])
+    assert "5 bp target-site duplication" in ev               # the observed length is stated, not omitted
+    assert "congruent" in ev and "incongruent" not in ev

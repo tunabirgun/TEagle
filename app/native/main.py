@@ -28,7 +28,7 @@ from widgets import FigurePanel, GenomePanel, DataTable, BusyBar
 from sample import make_sample
 import theme as theme_mod
 from teagle_core import appdirs, classify           # classify.DOMAINS_TESTED = the tested-profile panel (scope caveat)
-from teagle_core.fetch import (COORD_ASSEMBLIES, all_assemblies, add_custom_assembly,   # pinned + user-added assemblies
+from teagle_core.fetch import (COORD_ASSEMBLIES, all_assemblies,                        # pinned + user-added assemblies
                                complete_gene_model, cross_check_models, retrieve)        # + gene model / transcript fetch
 from teagle_core import __version__ as APP_VERSION    # single source of truth (never hardcode a duplicate version)
 # common model organisms for RepeatMasker/Dfam lineage (display, value passed to -species).
@@ -382,6 +382,7 @@ class MainWindow(QMainWindow):
         self._design_inflight = False                         # one primer design at a time (self._design_tmpl is shared state)
         self._genome_inflight = False                         # one whole-genome isPcr scan at a time
         self._genome_prep_inflight = False                    # one genome download/prepare at a time (large, one-time)
+        self._add_asm_inflight = False                        # one custom-assembly resolve at a time (survives a dialog close/reopen)
         self._pending_scan = None                             # a scan queued behind a just-started genome download
         self._prepared_genomes = []                           # downloaded+verified (.done) genomes; the ONLY source for the PCR organism dropdown
 
@@ -974,6 +975,7 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QMenu
         from teagle_core import examples
         menu = QMenu(self)
+        menu.setToolTipsVisible(True)                      # QMenu hides action tooltips by default (Qt 5.1+)
         for acc, label, organism, expected in examples.available():
             act = menu.addAction(f"{label} — {organism}  ({acc})")
             act.setToolTip(f"Published as: {expected}")
@@ -1065,6 +1067,8 @@ class MainWindow(QMainWindow):
             self._on_genome_list(res)
         elif key == "genome_remove":
             self._on_genome_remove(res)
+        elif key == "add_custom_assembly":
+            self._on_add_custom_assembly(res)
 
     def _reset_buttons(self, key):
         if key == "analyze":
@@ -1087,6 +1091,16 @@ class MainWindow(QMainWindow):
             for lbl in (self.accMeta, self.coordMeta):        # clear only the in-flight indicator, keep a prior result
                 if lbl.text() == "fetching…":
                     lbl.setText("")
+        elif key == "add_custom_assembly":
+            self._add_asm_inflight = False                    # bad query / fault — clear the guard and re-enable so the user can retry
+            e = getattr(self, "_addAsmEdit", None)
+            b = getattr(self, "_addAsmBtn", None)
+            for w in (e, b):
+                try:
+                    if w is not None:
+                        w.setEnabled(True)
+                except RuntimeError:
+                    pass
 
     def _on_user_error(self, key, msg):
         if key.startswith("pcr#"):                            # a failed pair fills its slot so the batch still renders
@@ -1182,7 +1196,7 @@ class MainWindow(QMainWindow):
 
     def _render_env(self, e):
         if e.get("error"):
-            self.envBox.setText(f"<span style='color:#E06A5A'>{e['error'][:60]}</span>"); return
+            self.envBox.setText(f"<span style='color:{theme_mod.BAD[self.theme]}'>{e['error'][:60]}</span>"); return
         pkgs = "<br>".join(f"{p['name']} {'ok' if p.get('ok') else str(p.get('installed','missing'))}"
                            for p in e.get("packages", []))
         st = ("install needed" if e.get("needs_install") else "up to date")
@@ -1286,6 +1300,17 @@ class MainWindow(QMainWindow):
         rec = recs[index]
         self.state["last_rec"] = rec
         self.state["record_index"] = index
+        # Bind every downstream step (primer design, in-silico PCR, splice, annotate, feature slicing) to
+        # THIS record's own sequence. state["seq"]/["analyzed_seq"] otherwise hold the raw textbox, which
+        # for a multi-FASTA paste is all records concatenated — so selecting a non-first record would
+        # silently run design/PCR/annotate/splice on record 1 (engine stores each record's seq since v3.2.0).
+        if rec.get("seq"):
+            self.state["seq"] = rec["seq"]
+            self.state["analyzed_seq"] = rec["seq"]        # _slice() keys off this -> per-record feature coords
+            # NB: do NOT touch state["analyzed_clean"] here. It is the whole-textbox snapshot _stale_block()
+            # compares the live box against; overwriting it with one record's bases made the box (all records)
+            # always differ from it, so the "sequence changed" guard permanently blocked Design/PCR for every
+            # multi-FASTA analysis. The stale guard tracks box edits; per-record targeting rides on seq/analyzed_seq.
         self._update_splice_ref()
         self.designBtn.setEnabled(True); self.designHint.setText("")
         comp = rec.get("composition", {})
@@ -1371,9 +1396,10 @@ class MainWindow(QMainWindow):
         produce a single exact match, so a fixed k=13 hides an 11 bp hAT TIR entirely (measured on maize
         Ac: reverse signal 2 at k=13, 600 at k=8)."""
         from teagle_core import dotplot
-        # this record's OWN sequence — the coordinate system its structural guides index. analyzed_clean
-        # concatenates every record of a multi-FASTA paste, which would plot a chimeric matrix here.
-        seq = rec.get("seq") or self.state.get("analyzed_clean") or ""
+        # this record's OWN sequence only — never fall back to analyzed_clean, which for a multi-FASTA paste
+        # concatenates every record and would plot a chimeric matrix. A record with an empty sequence
+        # (malformed FASTA: back-to-back headers) instead hits the empty-seq banner below.
+        seq = rec.get("seq") or ""
         if not seq:
             return self._banner("Run an analysis first — the self-similarity plot needs the analysed sequence.")
         struct = rec.get("structural") or []
@@ -1572,6 +1598,9 @@ class MainWindow(QMainWindow):
             t.set_row_menu(lambda r: self._struct_menu(struct[r]))
             t.setMaximumHeight(round(180 * theme_mod.UI_SCALE))
             card.bodylay.addWidget(t)
+            srow = QHBoxLayout(); srow.addStretch(1)          # exportable like every sibling results table
+            srow.addWidget(_export_table_btn(t, "TEagle_structural", self))
+            card.bodylay.addLayout(srow)
 
         # ORFs
         orfs = rec.get("orfs", [])
@@ -1580,7 +1609,8 @@ class MainWindow(QMainWindow):
             t = DataTable(ORF_COLS, GLOSS)
             t.set_rows([[o["strand"], o["frame"], o["start"], o["end"], o["length_aa"]] for o in orfs])
             t.set_row_menu(lambda r: self._feat_menu(orfs[r]["start"], orfs[r]["end"], orfs[r]["strand"],
-                                                     f"ORF_{orfs[r]['strand']}{orfs[r]['frame']}"))
+                                                     f"ORF_{orfs[r]['strand']}{orfs[r]['frame']}",
+                                                     src_seq=rec.get("seq")))
             t.setMaximumHeight(round(160 * theme_mod.UI_SCALE))
             card.bodylay.addWidget(t)
 
@@ -1596,7 +1626,8 @@ class MainWindow(QMainWindow):
                          d.get("confidence", "")]
                         for d in doms])
             t.set_row_menu(lambda r: self._feat_menu(doms[r]["nt"][0], doms[r]["nt"][1], doms[r].get("strand", "+"),
-                                                     doms[r]["domain"], protein=doms[r].get("protein")))
+                                                     doms[r]["domain"], protein=doms[r].get("protein"),
+                                                     src_seq=rec.get("seq")))
             t.setMaximumHeight(round(180 * theme_mod.UI_SCALE))
             card.bodylay.addWidget(t)
             dhint = QLabel("The last column is <b>Conf</b> (per-domain confidence). On a narrow window, scroll the table "
@@ -1823,7 +1854,7 @@ class MainWindow(QMainWindow):
 
     def _feat_menu(self, start, end, strand, label, protein=None, dna=None, src_seq=None, kind=None):
         """Right-click menu for a feature — CONTEXTUAL: only actions valid for the clicked item. Coordinates
-        address `src_seq` (default: the panel-01 specimen); pass `dna` when the exact sequence is already known
+        address `src_seq` (default: the currently selected record's analysed sequence); pass `dna` when the exact sequence is already known
         (an amplicon carries its own seq), so copies never re-slice the wrong template. `kind` (the feature type)
         gates the action items so a short structural motif is not offered primer design or splice routing."""
         explicit = dna is not None
@@ -2595,9 +2626,12 @@ class MainWindow(QMainWindow):
         arow = QHBoxLayout()
         self._addAsmEdit = QLineEdit()
         self._addAsmEdit.setPlaceholderText("Add an organism by name or assembly accession — e.g. Danio rerio or GCF_000002035.6")
-        addBtn = QPushButton("Add"); addBtn.setProperty("sm", True); addBtn.setEnabled(not busy)
+        addBtn = QPushButton("Add"); addBtn.setProperty("sm", True); addBtn.setEnabled(not busy and not self._add_asm_inflight)
         addBtn.setAccessibleName("Add the typed organism or assembly accession to the genome list")
         addBtn.clicked.connect(self._add_custom_assembly); self._addAsmEdit.returnPressed.connect(self._add_custom_assembly)
+        self._addAsmBtn = addBtn                               # kept so the add handlers can disable/re-enable it across a dialog rebuild
+        if self._add_asm_inflight:                            # a resolve started in a since-closed dialog is still running
+            self._addAsmEdit.setEnabled(False)
         arow.addWidget(self._addAsmEdit, 1); arow.addWidget(addBtn); lay.addLayout(arow)
         prepared = {g["accession"]: g for g in d.get("genomes", [])}
         asm = all_assemblies(); orgs = sorted(asm)            # curated + user-added
@@ -2710,19 +2744,31 @@ class MainWindow(QMainWindow):
         """Resolve a typed organism name / assembly accession ONCE, pin its versioned accession to the user store,
         then rebuild the manager + dropdowns so it is immediately scannable. The versioned accession is the seal
         anchor (a bare name can be promoted to a new RefSeq build over time); the name is a display label only."""
+        if self._add_asm_inflight:                            # a rapid second click / Enter must not queue a duplicate resolve
+            return
         edit = getattr(self, "_addAsmEdit", None)
         q = edit.text().strip() if edit is not None else ""
         if not q:
             return
-        edit.setEnabled(False); QApplication.setOverrideCursor(Qt.WaitCursor)
-        try:
-            entry = add_custom_assembly(q)                    # network resolve + persist; raises CoordError on a bad query
-        except Exception as e:
-            QApplication.restoreOverrideCursor(); edit.setEnabled(True)
-            msg = e.args[0] if getattr(e, "args", None) else str(e)
-            self._banner(f"Could not add “{q}”: {msg}", "warn")
-            return
-        QApplication.restoreOverrideCursor(); edit.setEnabled(True); edit.clear()
+        self._add_asm_inflight = True
+        edit.setEnabled(False)                                # off-thread resolve: never block the UI (the app's
+        btn = getattr(self, "_addAsmBtn", None)               # only network call that used to freeze the window)
+        if btn is not None:
+            try:
+                btn.setEnabled(False)                         # the button, not just the field — a disabled field still returns .text()
+            except RuntimeError:
+                pass
+        self._banner(f"Resolving “{q}” against NCBI…", "info")   # an in-progress status, not an error dialog
+        self.engine.submit("add_custom_assembly", {"query": q}, key="add_custom_assembly")
+
+    def _on_add_custom_assembly(self, entry):
+        self._add_asm_inflight = False                        # cleared before the rebuild so the fresh Add control is enabled
+        e = getattr(self, "_addAsmEdit", None)
+        try:                                                  # the manager dialog may have been closed mid-resolve
+            if e is not None:
+                e.setEnabled(True); e.clear()
+        except RuntimeError:
+            pass
         self._banner(f"Added {entry['organism']} · {entry['assemblyName']} · {entry['assemblyAccession']} — "
                      "download it in the table below to scan.", "success")
         self.engine.submit("genome_list", {}, key="genome_list")   # rebuild manager + dropdowns with the new organism
@@ -2844,6 +2890,9 @@ class MainWindow(QMainWindow):
         self._uppercase_buttons()
         if provs:
             self._render_provenance(provs[0])
+            # the card shows the first pair's seal, but a batch has one manifest per pair — the EXPORT must
+            # cover every lane on the gel, not just pair 1. Store the full list for _export_manifest.
+            self.state["prov_manifest_all"] = provs
 
     def _render_pcr(self, lanes, amps):
         _clear_layout(self.pcrBody)
@@ -2952,7 +3001,7 @@ class MainWindow(QMainWindow):
 
     def _on_wsl_status(self, w):
         if w.get("error"):
-            self.wslStatus.setText(f"<span style='color:#E06A5A'>WSL status error: {w['error']}</span>"); return
+            self.wslStatus.setText(f"<span style='color:{theme_mod.BAD[self.theme]}'>WSL status error: {w['error']}</span>"); return
         if not w.get("wsl2"):
             self.wslStatus.setText("<b>WSL2 not installed</b> — this optional step names the Dfam family. "
                                    "The domain-based superfamily above works without it. Install it in one click with "
@@ -2962,7 +3011,7 @@ class MainWindow(QMainWindow):
             return
         self.engine.submit("genome_list", {}, key="genome_list")   # WSL is up — populate the downloaded-genome dropdown
         if w.get("ready"):
-            self.wslStatus.setText(f"<span style='color:#178A5C'>● ready</span> · RepeatMasker {w.get('repeatmasker')} "
+            self.wslStatus.setText(f"<span style='color:{theme_mod.GOOD[self.theme]}'>● ready</span> · RepeatMasker {w.get('repeatmasker')} "
                                    f"· Dfam curated · distro {w.get('distro')}")
             self.annotateBtn.setEnabled(True)
         else:
@@ -2970,7 +3019,7 @@ class MainWindow(QMainWindow):
                                    f"(RepeatMasker {w.get('repeatmasker') or 'missing'}, Dfam {'ok' if w.get('dfam') else 'missing'}).")
             self.wslInstallBtn.setVisible(True)
         if w.get("minimap2"):
-            self.spliceStatus.setText(f"<span style='color:#178A5C'>● ready</span> · minimap2 {w.get('minimap2')} "
+            self.spliceStatus.setText(f"<span style='color:{theme_mod.GOOD[self.theme]}'>● ready</span> · minimap2 {w.get('minimap2')} "
                                       "· align a transcript to resolve exon–intron structure")
             self.spliceBtn.setEnabled(True)
         elif w.get("wsl2"):
@@ -3281,7 +3330,38 @@ class MainWindow(QMainWindow):
         if refs:
             html += f"<br><br><b>References (source-verified)</b><br>{refs}"
         lab = QLabel(html); lab.setTextFormat(Qt.RichText); lab.setWordWrap(True); lab.setObjectName("cardmeta")
+        lab.setTextInteractionFlags(Qt.TextSelectableByMouse)   # the hashes/versions must be selectable to copy
         self.card_prov.bodylay.addWidget(lab)
+        # the seal is the reproducibility record — it must be able to leave the app, not only be read on screen.
+        self.state["prov_manifest"] = m
+        self.state["prov_manifest_all"] = [m]              # single by default; a PCR batch overrides with all pairs
+        erow = QHBoxLayout(); erow.addStretch(1)
+        eb = QPushButton("Export manifest (.json)"); eb.setProperty("sm", True)
+        eb.setToolTip("Write the full run-provenance manifest (input hash, tool + database versions, "
+                      "parameters, checksums) as a JSON file so the result stays reproducible outside TEagle.")
+        eb.clicked.connect(self._export_manifest)
+        erow.addWidget(eb); self.card_prov.bodylay.addLayout(erow)
+        self._uppercase_buttons()
+
+    def _export_manifest(self):
+        import json
+        allm = self.state.get("prov_manifest_all") or ([self.state["prov_manifest"]]
+                                                        if self.state.get("prov_manifest") else [])
+        if not allm:
+            return self._banner("No run provenance to export — run an analysis first.")
+        rid = (str(allm[0].get("input", {}).get("id") or "run")).split()[0]
+        path, _ = QFileDialog.getSaveFileName(self, "Export provenance manifest",
+                                              f"TEagle_{rid}_manifest.json", "JSON (*.json)")
+        if not path:
+            return
+        if not path.lower().endswith(".json"):
+            path += ".json"
+        # a batch (multi-pair in-silico PCR) seals one manifest PER pair — export them all so the file
+        # covers every lane shown, not just the first; a single run writes its one manifest as before.
+        payload = {"runs": allm} if len(allm) > 1 else allm[0]
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(payload, fh, indent=2, ensure_ascii=False, sort_keys=True)
+        self._banner(f"Provenance manifest written to {os.path.basename(path)}.", level="success")
 
     def _set_body(self, layout, widget):
         _clear_layout(layout)                                 # recursive: also removes any addLayout'd sub-layouts

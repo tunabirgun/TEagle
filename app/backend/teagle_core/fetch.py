@@ -2,7 +2,7 @@
 Verifies metadata (esummary) before pulling the sequence (efetch). Errors are typed
 and explicit; a failed or empty fetch is never returned as a sequence."""
 from __future__ import annotations
-import os, ssl, urllib.request, urllib.parse, urllib.error, json, re, datetime, hashlib, time
+import os, ssl, urllib.request, urllib.parse, urllib.error, json, re, datetime, hashlib, time, threading
 
 # Verify TLS against certifi's CA bundle when available (some Windows Pythons lack the roots for UCSC/EBI/
 # NCBI chains); falls back to the system default. Hardens every HTTPS call the app makes.
@@ -489,6 +489,7 @@ def resolve_assembly(query: str) -> dict:
 # byte-identically to a curated COORD_ASSEMBLIES entry — the versioned accession is the sole reproducibility
 # anchor (a bare organism NAME can be promoted to a new RefSeq build over time, so it is frozen here).
 _CUSTOM_ASM_PATH = os.path.join(appdirs.user_data_dir(), "custom_assemblies.json")
+_CUSTOM_ASM_LOCK = threading.Lock()     # serialise the read-modify-write so concurrent adds cannot clobber an entry
 
 def load_custom_assemblies() -> dict:
     try:
@@ -517,13 +518,14 @@ def add_custom_assembly(query: str) -> dict:
     entry = {"assemblyName": a["assemblyName"], "assemblyAccession": a["assemblyAccession"],
              "taxid": str(a.get("taxid", "")),
              "resolvedUtc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
-    store = load_custom_assemblies()
-    store[org] = entry
-    os.makedirs(os.path.dirname(_CUSTOM_ASM_PATH), exist_ok=True)
-    tmp = _CUSTOM_ASM_PATH + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(store, f, indent=1)
-    os.replace(tmp, _CUSTOM_ASM_PATH)
+    with _CUSTOM_ASM_LOCK:                                # atomic read-modify-write: a second add cannot read a stale store and clobber this entry
+        store = load_custom_assemblies()
+        store[org] = entry
+        os.makedirs(os.path.dirname(_CUSTOM_ASM_PATH), exist_ok=True)
+        tmp = _CUSTOM_ASM_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(store, f, indent=1)
+        os.replace(tmp, _CUSTOM_ASM_PATH)
     return {"organism": org, **entry}
 
 

@@ -91,6 +91,25 @@ def test_doc_has_a_decision_methodology_table(doc):
         assert rule in text, f"{doc} decision table omits the {rule!r} rule"
 
 
+def test_report_oligoqc_table_row_count_matches_the_benchmark():
+    """The report's primer-QC table (tab:oligoqc) must have one data row per benchmarked pair. It had
+    drifted to a stale 6-row set (different primers, one non-reproducing value) while the benchmark held 12;
+    this ties the table size to LIT_PRIMERS so the primer set cannot silently diverge again. (Row COUNT
+    only — the per-cell ΔG values are ViennaRNA-dependent and so not hermetically assertable.)"""
+    text = _doc("teagle_report.tex")
+    if text is None:
+        pytest.skip("report not present")
+    import sys as _sys, re as _re
+    _t = os.path.join(_ROOT, "tests")
+    if _t not in _sys.path:
+        _sys.path.insert(0, _t)
+    from test_benchmarks import LIT_PRIMERS
+    body = text.split(r"\label{tab:oligoqc}", 1)[1].split(r"\end{tabularx}", 1)[0]
+    rows = [l for l in body.splitlines() if l.strip().endswith(r"\\") and ("ok" in l or "caution" in l or "warn" in l)]
+    assert len(rows) == len(LIT_PRIMERS), \
+        f"report oligoqc table has {len(rows)} data rows but the benchmark has {len(LIT_PRIMERS)} pairs"
+
+
 @pytest.mark.parametrize("doc", ["teagle_manual.tex", "teagle_report.tex"])
 def test_doc_lists_every_reported_domain_code_pfam_accession(doc):
     """Each Pfam accession in the bundled panel must appear in the doc's domain table — the table is the

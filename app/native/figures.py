@@ -520,6 +520,28 @@ _DOT_FOOTER = ("Exact k-mer matching, not local alignment — an absent or faint
                "repeat is absent; a visible block is.")
 
 
+def _dot_run_caveat(m):
+    """Run-SPECIFIC caveats (masking / truncation) that the on-screen scope note shows. An exported figure
+    must carry them too — omitting them would let a masked or truncated picture read as complete."""
+    parts = []
+    if m.get("masked_kmers"):
+        parts.append("%d k-mer(s) over %d× were masked (%d positions) as simple/satellite repeat and are "
+                     "not shown." % (m["masked_kmers"], m.get("max_occ", 0), m.get("masked_positions", 0)))
+    if m.get("truncated"):
+        parts.append("Comparison truncated at the work limit — the picture is incomplete.")
+    return " ".join(parts)
+
+
+def _dot_footer_svg(ML, y, T, m):
+    """The generic method caveat plus, on a second line, any run-specific masking/truncation caveat."""
+    out = '<text x="%.1f" y="%.1f" fill="%s" font-size="7.5">%s</text>' % (ML, y, T["faint"], esc(_DOT_FOOTER))
+    run = _dot_run_caveat(m)
+    if run:
+        out += '<text x="%.1f" y="%.1f" fill="%s" font-size="7.5" font-weight="700">%s</text>' % (
+            ML, y + 10, T["faint"], esc(run))
+    return out
+
+
 def _dot_theme(theme: str, for_export: bool) -> dict:
     return dict(_DOT_THEME["export" if for_export else ("white" if theme == "white" else "dark")])
 
@@ -635,8 +657,7 @@ def svg_dotplot(m: dict, W: float = 620, theme: str = "dark", for_export: bool =
     s += _dot_guides(m, ML, MT, plot, T, guides)
     s += _dot_legend(ML, MT + plot + 28, T, heat=None, fwd=fwd, rev=rev)
     if for_export:
-        s += '<text x="%.1f" y="%.1f" fill="%s" font-size="7.5">%s</text>' % (
-            ML, MT + plot + 44, T["faint"], esc(_DOT_FOOTER))
+        s += _dot_footer_svg(ML, MT + plot + 44, T, m)
     return s + "</svg>"
 
 
@@ -665,6 +686,5 @@ def svg_dotheat(m: dict, W: float = 620, theme: str = "dark", for_export: bool =
     s += _dot_guides(m, ML, MT, plot, T, guides)
     s += _dot_legend(ML, MT + plot + 28, T, heat=(base, peak))
     if for_export:
-        s += '<text x="%.1f" y="%.1f" fill="%s" font-size="7.5">%s</text>' % (
-            ML, MT + plot + 44, T["faint"], esc(_DOT_FOOTER))
+        s += _dot_footer_svg(ML, MT + plot + 44, T, m)
     return s + "</svg>"

@@ -159,7 +159,7 @@ def test_every_record_is_classified_not_only_the_first():
     res = engine.analyze(fa)
     assert len(res["records"]) == 3
     classes = [r["classification"]["te_class"] for r in res["records"]]
-    assert classes == ["LTR/Copia", "LINE", "DNA/Tc1"], classes
+    assert classes == ["LTR/Copia", "LINE", "DNA/Tc1-Mariner"], classes
     for r in res["records"]:                       # each record carries its OWN evidence, not the first's
         assert r["classification"]["completeness"] is not None
         assert r["composition"]["length"] > 0

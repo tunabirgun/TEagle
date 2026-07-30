@@ -4,7 +4,7 @@
   <img alt="TEagle" src="docs/img/teagle-banner-light.png" width="460">
 </picture>
 
-![Version](https://img.shields.io/badge/version-3.2.0-0A7259) ![Platform](https://img.shields.io/badge/platform-Windows%20x64-1FB89C) ![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-0A7259) ![Built with](https://img.shields.io/badge/built%20with-PySide6%20%C2%B7%20Primer3%20%C2%B7%20HMMER-2B3740)
+![Version](https://img.shields.io/badge/version-3.2.1-0A7259) ![Platform](https://img.shields.io/badge/platform-Windows%20x64-1FB89C) ![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-0A7259) ![Built with](https://img.shields.io/badge/built%20with-PySide6%20%C2%B7%20Primer3%20%C2%B7%20HMMER-2B3740)
 </div>
 
 **TEagle** is a native Windows desktop tool that annotates transposable elements, reads their gene structure, and designs TE-aware PCR primers — all in one window, no command line, with every result reproducible from the exact database and software versions that produced it. The scientific core (structural detection, HMMER protein-domain scanning, superfamily classification, Primer3 design, primer secondary-structure QC, in-silico PCR, provenance) runs in-process; two optional features (Dfam family naming, de-novo splice) use a managed WSL backend the app installs for you.
@@ -48,7 +48,7 @@ The complete, illustrated user guide — every panel, every option, and how to r
 ```powershell
 python app/teagle.py             # native window (first run auto-installs pinned deps)
 python app/teagle.py --selftest  # headless bundle self-test (imports + QtSvg + a real analysis)
-python -m pytest tests/ -q       # test suite (480+ hermetic tests; @wsl/@network gated separately)
+python -m pytest tests/ -q       # test suite (500+ hermetic tests; @wsl/@network gated separately)
 powershell -File installer/build_installer.ps1   # freeze + bundle guard + self-test gate + Inno Setup
 ```
 

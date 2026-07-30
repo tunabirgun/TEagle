@@ -5,7 +5,7 @@ This is the **working** TEagle application — a **native Windows desktop app** 
 1. **Reads a DNA sequence** — paste, FASTA, or **fetch by accession live from NCBI** — and checks it.
 2. **Finds structural features** — LTRs (the repeated ends of some transposons), inverted repeats (TIRs), ORFs (protein-coding stretches), and tails.
 3. **Detects protein domains** — reverse transcriptase, integrase, RNase H, protease, gag, transposase — using **HMMER** against bundled CC0 **Pfam** profiles (runs natively, no Linux needed).
-4. **Classifies the element** — Class I vs II, and superfamily: **Copia, Gypsy, LINE, hAT, Tc1/Mariner** — from the domain architecture. Copia vs Gypsy is decided by the diagnostic **integrase-vs-RT order**, exactly as in the literature.
+4. **Classifies the element** — Class I vs II, and superfamily: **Copia, Gypsy, ERV/errantivirus, DIRS, LINE, hAT, Tc1/Mariner, CACTA, MULE, IS4-like/piggyBac** — from the domain architecture. Copia vs Gypsy is decided by the diagnostic **integrase-vs-RT order**, exactly as in the literature.
 5. **Designs PCR primers** with **Primer3**, including **domain-specific PCR** (primers placed inside a chosen domain).
 6. **Runs in-silico PCR** — predicts which product(s) your primer pair would make, shown as a gel.
 
@@ -15,7 +15,7 @@ This is the **working** TEagle application — a **native Windows desktop app** 
 
 ![TEagle analysing a copia element](../docs/img/overview.png)
 
-Right-click any structural, ORF, domain, family, or amplicon row — or any feature in the genome viewer or gel — to copy its FASTA/DNA/coordinates/protein or design a primer there; hover a table header for a plain-language definition, or a figure feature for its size and type. Every table exports to CSV/TSV and every figure to SVG/PNG.
+Right-click any structural, ORF, domain, family, or amplicon row — or any feature in the genome viewer or gel — to copy its FASTA/DNA/coordinates/protein or design a primer there; hover a table header for a plain-language definition, or a figure feature for its size and type. Every table exports to XLSX/CSV/TSV and every figure to SVG/PNG.
 
 ## The WSL backend (Dfam / RepeatMasker family naming)
 
@@ -58,7 +58,7 @@ Fetched sequences are **cached locally** (`.teagle/cache/fetch/`), so re-fetchin
 
 | Panel | What to do | What you get (all real) |
 |---|---|---|
-| **01 Specimen** | **Fetch** an accession, paste DNA, or click **“load sample element.”** Press **Run analysis**. | Length, GC%, N%, IUPAC validity; counts of structural features and ORFs. |
+| **01 Specimen** | **Fetch** an accession, paste DNA, or click **“Load example element.”** Press **Run analysis**. | Length, GC%, N%, IUPAC validity; counts of structural features and ORFs. |
 | **02 Structure** | (auto-fills after analysis) | An interactive map (zoom / pan / export SVG+PNG) + tables: LTR/TIR spans, protein domains, ORFs, method used. If you **fetched** an annotated accession, a **gene-structure** figure + table shows its exons / introns / CDS straight from the record. |
 | **Splice detection** | Paste a transcript / cDNA, press **Detect exons/introns** (needs the WSL backend). | De-novo exon–intron structure by spliced alignment (minimap2), with each intron's splice site checked against canonical GT–AG. |
 | **Primer design** | Pick a **preset** (Standard / qPCR / High-specificity / Permissive) or open **Advanced parameters**, press **Design primers**. | Real Primer3 pairs — sequences (3′ end underlined = specificity-determining), Tm, GC, product size. |
@@ -74,12 +74,12 @@ The in-silico PCR primer scan is a direct O(n·m) search, bounded by a hard cap 
 - It never says a primer is “specific.” It says *“no additional amplicon was predicted in the searched sequences under these criteria”* — and lists what was **not** searched.
 - Structural findings are **candidate evidence**, never a family name.
 - A source it did not run is shown as **not run**, never as a negative result.
-- Every result carries the versions + checksums that produced it (see panel 05), **plus source-verified citations** for every database/tool used (Pfam, HMMER, Primer3, NCBI, Wicker 2007) with DOIs.
+- Every result carries the versions + checksums that produced it (see panel 07), **plus source-verified citations** for every database/tool used (Pfam, HMMER, Primer3, NCBI, Wicker 2007) with DOIs.
 - **Click any detected domain** to see its DNA + protein sequence and copy it (DNA / protein / FASTA), or design a primer inside it.
 
 ## Verified against real transposable elements
 
-`python verification/verify_organisms.py` fetches **13 well-characterised TEs from 13 organisms** live from NCBI and checks the app's detection against each element's published signature. Result: **11/13 PASS** — LTRs found in copia (*Drosophila*), Ta1 (*Arabidopsis*), Tnt1 (tobacco), Ty1 (yeast), IAP (mouse); TIRs in Ac (maize, 11 bp), Tc1 (*C. elegans*, 54 bp), mariner, and the rice mPing MITE; LINE signatures in human L1 and *Drosophila* Doc. Detected sizes match the literature (e.g. copia LTR 276 bp, human L1 ORF2 1275 aa). The 2 "ANALYZED" cases (barley BARE-1 in a 13 kb flanked record; medaka Tol2's atypical ends) are reported honestly as heuristic limits, not hidden. Full table: **[verification/organism_studies.md](../verification/organism_studies.md)**. Re-runs are deterministic (metadata + FASTA cached).
+`python verification/verify_organisms.py` fetches **13 well-characterised TEs from 13 organisms** live from NCBI and checks the app's detection against each element's published signature. Result: **12/13 PASS** — LTRs found in copia (*Drosophila*), Ta1 (*Arabidopsis*), Tnt1 (tobacco), Ty1 (yeast), IAP (mouse); TIRs in Ac (maize, 11 bp), Tc1 (*C. elegans*, 54 bp), mariner, medaka Tol2, and the rice mPing MITE; LINE signatures in human L1 and *Drosophila* Doc. Detected sizes match the literature (e.g. copia LTR 276 bp, human L1 ORF2 1275 aa). The single "ANALYZED" case (barley BARE-1 in a 13 kb flanked record, whose LTR the heuristic does not catch) is reported honestly as a heuristic limit, not hidden. Full table: **[verification/organism_studies.md](../verification/organism_studies.md)**. Re-runs are deterministic (metadata + FASTA cached).
 
 ## What’s under the hood
 

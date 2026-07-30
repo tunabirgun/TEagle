@@ -36,7 +36,10 @@ def test_l1_is_line():
 
 def test_tc1_is_dna_transposon():
     cl, dcodes = _classify("X01005")
-    assert cl["te_class"].startswith("DNA/")
+    # exact value, not just the prefix: the compound superfamily must survive into te_class
+    # (truncating "Tc1/Mariner" to "DNA/Tc1" dropped "Mariner" and over-narrowed the headline call).
+    assert cl["te_class"] == "DNA/Tc1-Mariner"
+    assert cl["superfamily"].startswith("Tc1/Mariner")
     assert "TPase" in dcodes
     assert "Class II" in cl["class"]
 
@@ -59,6 +62,20 @@ def test_ac_is_hat():
     cl, dcodes = _classify("X05424")
     assert cl["te_class"] == "DNA/hAT"
     assert "TPase" in dcodes
+
+
+def test_ltr_gag_rt_without_integrase_is_partial_not_fragment():
+    """A degenerate LTR retroelement that kept gag capsid + RT + RNaseH + paired LTRs but lost the DDE
+    integrase must read 'partial', not collapse to the bare 'fragment' tier (which ranked it BELOW a
+    2-domain RT+INT 'partial' — a broken ordering). Integrase is a core module, so the call is partial."""
+    st = [{"type": "LTR (terminal direct repeat)", "five_prime": [0, 300], "three_prime": [4000, 4300]}]
+    dm = [{"domain": "GAG", "hmm": "Gag_p24", "class": "", "nt": [400, 700], "strand": "+", "score": 100.0},
+          {"domain": "RT", "class": "", "nt": [1000, 1600], "strand": "+", "score": 200.0},
+          {"domain": "RNaseH", "class": "", "nt": [1600, 1800], "strand": "+", "score": 60.0}]
+    cl = classify.classify(st, dm)
+    tier = cl["completeness"]["tier"]
+    assert tier.startswith("partial") and "fragment" not in tier, tier
+    assert "integrase not confirmed" in tier
 
 
 def test_cacta_te_class_is_a_clean_token():

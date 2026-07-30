@@ -45,7 +45,7 @@ def test_unclassified_exports_as_repeat_region():
     ("LTR/Gypsy", ["RT", "INT"], ["GAG"], "LTR_retrotransposon"),
     ("LINE", ["ORF1", "EN", "RT"], [], "LINE_element"),
     ("DIRS", ["RT"], [], "YR_retrotransposon"),
-    ("DNA/Tc1", ["TPase", "TIR (5′)", "TIR (3′)"], [], "terminal_inverted_repeat_element"),
+    ("DNA/Tc1-Mariner", ["TPase", "TIR (5′)", "TIR (3′)"], [], "terminal_inverted_repeat_element"),
 ])
 def test_classes_with_coding_evidence_get_their_term(te_class, present, missing, expected):
     cl = {"te_class": te_class,
@@ -185,6 +185,59 @@ def test_ppt_evidence_survives_into_the_export():
     assert any(r[2] == "RR_tract" for r in rows), "PPT evidence must survive into the GFF3"
 
 
+def test_esc_percent_encoded_first():
+    """A literal '%' in a value (e.g. a PBS note's '61.1%') must become '%25', and the '%' introduced for
+    other reserved chars ('%3B') must not be double-encoded. Regression: _esc omitted '%'."""
+    assert gff3._esc("61.1%") == "61.1%25"
+    assert gff3._esc("a;b") == "a%3Bb"                       # ';' still encodes to a single, un-doubled %3B
+
+
+def test_ppt_purine_frac_and_tsd_congruence_reach_the_export():
+    """A PPT row must carry its purine_frac quality metric; a TSD row must carry the superfamily-length
+    congruence verdict classify() computed (the hedge shown on screen). Both were dropped from the file."""
+    from teagle_core import classify
+    st = [{"type": "TIR (terminal inverted repeat)", "five_prime": [0, 20], "three_prime": [880, 900]},
+          {"type": "TSD (target-site duplication)", "upstream": [0, 3], "downstream": [900, 903], "length": 3},
+          {"type": "PPT (polypurine tract)", "pos": [850, 862], "purine_frac": 0.92}]
+    dm = [{"domain": "TPase", "class": "dna:hAT", "nt": [100, 800], "strand": "+", "score": 200.0}]
+    cl = classify.classify(st, dm)
+    rec = {"classification": cl, "composition": {"length": 1000}, "structural": st, "domains": dm}
+    g = gff3.to_gff3(rec, seqid="x")
+    assert "purine_frac=0.92" in g
+    assert "tsd_congruence=incongruent" in g                 # hAT expects 8 bp; a 3 bp TSD is incongruent
+
+
+def test_pbs_confidence_hedge_survives_into_the_export():
+    """A diverged PBS is reported on screen with priming_trna='undetermined' + a note; the GFF3 must carry
+    that hedge, not a bare primer_binding_site a browser would read as a confident call. (An export that
+    silently drops a hedge is a defect — this locks the invariant so it can't regress.)"""
+    rec = {"classification": {"te_class": "LTR/Gypsy", "superfamily": "Gypsy", "confidence": "High",
+                              "completeness": {"tier": "intact", "present": ["RT", "INT"], "missing": [], "scope": "x"}},
+           "composition": {"length": 5000},
+           "structural": [{"type": "PBS (primer-binding site)", "pos": [100, 118],
+                           "priming_trna": "undetermined", "best_match": "tRNA-Lys3", "identity": 61.1,
+                           "confident": False, "note": "priming tRNA undetermined — often diverged"}],
+           "domains": []}
+    g = gff3.to_gff3(rec, seqid="x")
+    row = next((l for l in g.splitlines() if "primer_binding_site" in l), "")
+    assert "priming_trna=undetermined" in row
+    assert "confident=false" in row
+    assert "identity_pct=61.1" in row
+    assert "note=" in row                                    # the explanatory hedge travels too
+
+
+def test_poly_a_tail_survives_into_the_export():
+    """M80343 (LINE-1) has a 3' poly-A tail — a dedicated on-screen genome-viewer track. It was dropped
+    from GFF3/BED because its type ('poly-A tail') had no _STRUCT_TERM entry. It now exports as the generic
+    sequence_feature (SO:0000110): no genomic-specific SO term exists, and polyA_sequence (SO:0000610) is an
+    mRNA feature, so asserting it here would misdescribe the genomic tract."""
+    rows = _rows(gff3.to_gff3(_rec("M80343"), seqid="M80343"))
+    tail = [r for r in rows if r[2] == "sequence_feature"]
+    assert tail, "the poly-A tail must survive into the GFF3 (not be silently dropped)"
+    assert all("SO:0000110" in r[8] for r in tail)
+    assert any("Name=poly-A" in r[8] or "Name=poly-T" in r[8] for r in tail)
+
+
 def test_multi_record_export_embeds_the_selected_records_own_sequence():
     """The UI once passed analyzed_clean (every record of a multi-FASTA paste concatenated) as the export
     sequence, so a non-first record's GFF3 embedded the wrong bases under its own coordinates. Each record
@@ -201,7 +254,7 @@ def test_multi_record_export_embeds_the_selected_records_own_sequence():
 
 
 def test_tsd_and_pbs_sub_features_are_not_dropped():
-    rec = {"classification": {"te_class": "DNA/Tc1",
+    rec = {"classification": {"te_class": "DNA/Tc1-Mariner",
                               "completeness": {"tier": "intact / autonomous-consistent",
                                                "present": ["TPase", "TIR (5′)", "TIR (3′)"], "missing": []}},
            "composition": {"length": 2000},

@@ -293,7 +293,9 @@ def find_tsd(seq: str, elem_start: int, elem_end: int, min_tsd: int = 2, max_tsd
 
     `expect` (a length, when the superfamily is known) is tested FIRST. Plain longest-first search lets a
     chance 7-mer in an AT-rich flank outrank the real 2 bp TA of a Tc1/Mariner element, which is also why
-    min_tsd is 2 rather than 4 — at 4 the diagnostic TA was unreachable."""
+    min_tsd is 2 rather than 4 — at 4 the diagnostic TA was unreachable. The detect_all call sites run
+    BEFORE the superfamily is known, so they pass no `expect`; classify.classify re-runs find_tsd with the
+    resolved superfamily's expected length once it has one, correcting a coincidental longer pick in place."""
     order = [L for L in ([expect] if expect else []) if min_tsd <= L <= max_tsd]
     order += [L for L in range(max_tsd, min_tsd - 1, -1) if L not in order]
     for L in order:

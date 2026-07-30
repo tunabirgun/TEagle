@@ -222,6 +222,8 @@ _PAL = {"dark": _DARK, "light": _LIGHT}
 # every token below DERIVES from the palettes above — never restate a palette hex here
 ACCENT = {k: p["accent"] for k, p in _PAL.items()}
 TEXT = {k: p["text"] for k, p in _PAL.items()}         # wordmark "TE" ink, per theme
+GOOD = {k: p["good"] for k, p in _PAL.items()}         # per-theme "ready/ok" status ink (WCAG-tuned both tracks)
+BAD = {k: p["bad"] for k, p in _PAL.items()}           # per-theme "error/failed" status ink
 # header accent underline (teal fading to transparent), like the web header::after
 HEADRULE = {k: f"qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {c}, stop:0.42 transparent)"
             for k, c in ACCENT.items()}

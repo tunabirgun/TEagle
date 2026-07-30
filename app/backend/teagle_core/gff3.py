@@ -37,6 +37,10 @@ SO = {
     "RR_tract": "SO:0000435",
     "ORF": "SO:0000236",
     "polypeptide_domain": "SO:0000417",
+    # A LINE's genomic 3' poly-A / 5' poly-T tail. SO's polyA_sequence (SO:0000610) is specifically the
+    # post-transcriptional poly-A ADDED TO AN mRNA, so it would misdescribe this genomic tract; the honest
+    # generic term is sequence_feature. Verified on OLS4: "Any extent of continuous biological sequence."
+    "sequence_feature": "SO:0000110",
 }
 
 # te_class prefix -> the SO term the evidence supports when coding evidence IS present.
@@ -49,13 +53,18 @@ _CLASS_TERM = {
     "HEL": "helitron",
 }
 
-# structural evidence type -> SO term for the sub-feature rows
+# structural evidence type (first token of ev["type"]) -> SO term for the sub-feature rows
 _STRUCT_TERM = {
     "LTR": "long_terminal_repeat",
     "TIR": "terminal_inverted_repeat",
     "TSD": "target_site_duplication",
     "PBS": "primer_binding_site",
     "PPT": "RR_tract",
+    # LINE tail: no genomic-specific SO subclass exists, so emit the generic sequence_feature (Name=
+    # "poly-A"/"poly-T", the same short-token convention as the other rows) rather than drop this
+    # on-screen track from the file.
+    "poly-A": "sequence_feature",
+    "poly-T": "sequence_feature",
 }
 
 
@@ -89,9 +98,11 @@ def so_term_for(classification) -> str:
 
 
 def _esc(v) -> str:
-    """GFF3 attribute escaping: the reserved characters must be percent-encoded, not stripped."""
+    """GFF3 attribute escaping: the reserved characters must be percent-encoded, not stripped.
+    '%' is encoded FIRST so the '%' we introduce for the others (e.g. '%3B') is not re-escaped, and a
+    literal '%' in a value (e.g. a PBS note's '61.1%') is preserved rather than left as a bare '%'."""
     s = "" if v is None else str(v)
-    for ch, rep in ((";", "%3B"), ("=", "%3D"), ("&", "%26"), (",", "%2C"),
+    for ch, rep in (("%", "%25"), (";", "%3B"), ("=", "%3D"), ("&", "%26"), (",", "%2C"),
                     ("\t", "%09"), ("\n", "%0A"), ("\r", "%0D")):
         s = s.replace(ch, rep)
     return s
@@ -146,6 +157,18 @@ def build_features(rec, seqid="locus"):
                 ("Ontology_term", SO.get(sub, "")),
                 # a length still limited by the record is declared here too, not silently exported
                 ("length_is_lower_bound", "true" if ev.get("length_is_lower_bound") else None),
+                # carry the evidence's OWN confidence/hedge into the file — dropping it would let a browser
+                # read an unhedged call the on-screen panel qualified (e.g. a diverged PBS whose priming tRNA
+                # is "undetermined"). _attrs omits any field that is None/""/[] , so these appear only when set.
+                ("identity_pct", ev.get("identity")),
+                ("priming_trna", ev.get("priming_trna")),
+                ("priming_trna_best_match", ev.get("best_match")),
+                ("confident", ("true" if ev.get("confident") else "false") if "confident" in ev else None),
+                ("note", ev.get("note")),
+                ("purine_frac", ev.get("purine_frac")),   # PPT tract quality (fraction of purines)
+                # the TSD-length congruence verdict classify() computed against the superfamily's expected
+                # length — the hedge shown on screen ("ends not credited from it") must reach the file too.
+                ("tsd_congruence", ev.get("tsd_congruence")),
             ])))
     for i, d in enumerate(rec.get("domains") or [], 1):
         nt = d.get("nt") or [0, 0]

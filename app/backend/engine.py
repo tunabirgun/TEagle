@@ -161,7 +161,7 @@ def analyze(seq_text: str, source: dict | None = None):
                 rec["domains"] = domains.scan_domains(seq)
             except Exception as e:
                 rec["notes"].append(f"domain scan unavailable: {type(e).__name__}")
-            rec["classification"] = classify.classify(rec["structural"], rec["domains"])
+            rec["classification"] = classify.classify(rec["structural"], rec["domains"], seq=seq)
             rec["orfs"] = sequtil.find_orfs(seq)
             # retroviral transcript architecture (ERV only) — the correct coding-organisation model in place
             # of a host exon-intron gene model; None for non-ERVs, so it never overrides a normal record.
@@ -522,6 +522,19 @@ def run_genome_remove(body):
     """Delete a cached genome to reclaim disk."""
     acc = str(body.get("assemblyAccession", "")).strip()
     return wsl.genome_remove(acc)
+
+
+def run_add_custom_assembly(body):
+    """Resolve a typed organism / assembly accession against NCBI and pin it to the user store. Runs off the
+    UI thread via the engine worker so the resolve never freezes the window; a bad query raises BadRequest
+    (surfaced as a clean user error, not a traceback)."""
+    q = (body.get("query") or "").strip()
+    if not q:
+        raise BadRequest("enter an organism name or an assembly accession")
+    try:
+        return fetch.add_custom_assembly(q)
+    except fetch.CoordError as e:
+        raise BadRequest(e.args[0] if getattr(e, "args", None) else str(e))
 
 
 def run_genome_pcr(body):

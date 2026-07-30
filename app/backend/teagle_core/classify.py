@@ -43,7 +43,27 @@ def _ordered(cset):
     return [c for c in _CODE_ORDER if c in cset] + sorted(c for c in cset if c not in _CODE_ORDER)
 
 
-def classify(structural, domains):
+def _refine_tsd(tsd, superfamily, seq):
+    """Re-detect the TSD now that the superfamily is known, preferring its literature target-site length.
+    detect_all runs before classification, so it picked the LONGEST exact flanking repeat — which a
+    coincidental longer direct repeat in an AT-rich flank can win over the real short TSD (e.g. a Tc1/Mariner
+    2 bp TA). Re-running find_tsd with `expect` returns the expected length only when it genuinely flanks
+    (and it is always <= the longest pick), so this can only shorten a coincidental TSD to the diagnostic
+    one, never lengthen or fabricate. No-op without a sequence, without an expected length, or when unchanged."""
+    if not seq or not tsd:
+        return
+    up, dn = tsd.get("upstream"), tsd.get("downstream")
+    if not up or not dn:                                  # a real TSD always carries flank coordinates
+        return
+    exp = structural_mod.tsd_congruence(tsd.get("length"), superfamily).get("expected")
+    if not exp:                                           # no attributable expected length for this superfamily
+        return
+    refined = structural_mod.find_tsd(seq, up[1], dn[0], expect=exp)
+    if refined and refined["length"] == exp and refined["length"] != tsd.get("length"):
+        tsd.update(refined)                              # correct length/motif/coords/matched_expected in place
+
+
+def classify(structural, domains, seq=None):
     has_ltr = any(e["type"].startswith("LTR") for e in structural)
     tir_ev = next((e for e in structural if e["type"].startswith("TIR")), None)
     has_tir = tir_ev is not None
@@ -108,6 +128,22 @@ def classify(structural, domains):
                 ev.append("aspartic-protease domain present")
             if "RNaseH" in cset:
                 ev.append("RNase H domain present")
+            # TSD-length congruence, same discipline as the DNA branch: Copia/Gypsy duplicate a 5 bp target
+            # site (Ou 2019), so a flanking repeat of another length is likely coincidental and its ends are
+            # not credited. TSD_EXPECT already carries the Copia/Gypsy lengths; this wires them for LTR too.
+            if has_tsd:
+                _ltsd = next((e for e in structural if e["type"].startswith("TSD")), None)
+                _refine_tsd(_ltsd, superfamily, seq)      # prefer the superfamily's target-site length over a coincidental longer flank
+                _lcong = structural_mod.tsd_congruence((_ltsd or {}).get("length"), superfamily)
+                if _ltsd is not None:
+                    _ltsd["tsd_congruence"] = _lcong["verdict"]
+                if _lcong["verdict"] == "incongruent":
+                    ev.append(f"a flanking target-site duplication is present but {_lcong['observed']} bp where "
+                              f"{superfamily.split(' ')[0]} elements duplicate {_lcong['expected']} bp "
+                              f"({_lcong['basis']}) — likely coincidental, so the ends are not credited from it")
+                elif _lcong["verdict"] == "congruent":
+                    ev.append(f"a {_lcong['observed']} bp target-site duplication flanks the element — congruent "
+                              f"with the {superfamily.split(' ')[0]} target-site length ({_lcong['basis']})")
         elif not has_ltr and not intg:
             superfamily, te_class = "LINE (non-LTR)", "LINE"
             ev.append("RT without a DDE integrase and without LTRs → non-LTR retrotransposon (LINE)")
@@ -154,9 +190,12 @@ def classify(structural, domains):
             superfamily = "DDE transposon"
         else:
             superfamily = "DNA transposon"
-        # take the leading token, then the part before any "/" — mirrors the LTR branch. Splitting only on
-        # "/" garbled a name whose slash sits inside a parenthetical ("CACTA (En/Spm)" -> "CACTA (En").
-        _sf_token = superfamily.split(" ")[0].split("/")[0]
+        # take the leading token before any parenthetical ("CACTA (En/Spm)" -> "CACTA"), but KEEP a
+        # compound superfamily name whose "/" joins two members ("Tc1/Mariner"): rewrite that "/" to "-"
+        # so the full superfamily survives without a second slash (the "/" in te_class separates class
+        # from subclass). Truncating at "/" dropped "Mariner" and asserted a narrower call than the
+        # domain evidence supports (Tc1/Mariner is one Wicker superfamily).
+        _sf_token = superfamily.split(" ")[0].replace("/", "-")
         # the generic "DNA transposon" fallback would collapse to a redundant "DNA/DNA"; name it honestly
         te_class = "DNA/" + (_sf_token if _sf_token != "DNA" else "unclassified")
         ev.append("transposase domain present → Class II DNA transposon")
@@ -171,17 +210,25 @@ def classify(structural, domains):
         # superfamily's expected one, and the incongruent case is reported instead of suppressed.
         if tir_ok and has_tsd:
             _tsd = next((e for e in structural if e["type"].startswith("TSD")), None)
+            _refine_tsd(_tsd, superfamily, seq)               # prefer the superfamily's target-site length over a coincidental longer flank
             _cong = structural_mod.tsd_congruence((_tsd or {}).get("length"), superfamily)
+            if _tsd is not None:
+                _tsd["tsd_congruence"] = _cong["verdict"]     # carry the verdict to the record (GFF3 export reads it)
             if _cong["verdict"] == "incongruent":
                 ev.append(f"a target-site duplication flanks the inverted repeats, but it is "
                           f"{_cong['observed']} bp where {superfamily} elements duplicate "
                           f"{_cong['expected']} bp ({_cong['basis']}) — the repeat may be coincidental, or the "
                           f"boundary or superfamily call may be wrong, so the ends are not credited from it")
-            else:
+            elif _cong["verdict"] == "congruent":
                 ev.append("a target-site duplication flanks the inverted repeats — the insertion site itself is "
-                          "captured, so both element termini are present in the record"
-                          + (f" (length congruent with {superfamily}, {_cong['basis']})"
-                             if _cong["verdict"] == "congruent" else ""))
+                          f"captured, so both element termini are present in the record (length congruent with "
+                          f"{superfamily}, {_cong['basis']})")
+            else:
+                # a TSD flanks the repeats but this superfamily has no literature-attributed expected length,
+                # so the length cannot corroborate the termini — say that rather than imply congruence.
+                ev.append("a target-site duplication flanks the inverted repeats — the insertion site itself is "
+                          "captured, so both element termini are present in the record; no literature-attributed "
+                          f"expected target-site length exists for {superfamily} to corroborate its length")
         elif has_tir and tir_encloses_tpase is False:
             ev.append("the detected inverted-repeat pair does not enclose the transposase — the termini and the "
                       "coding module may not belong to the same element, so the ends are not credited")
@@ -321,6 +368,12 @@ def _completeness(cset, rt, intg, tpase, has_ltr, has_tir, has_polya, is_erv, or
             tier = "near-complete"
         elif core_ok:                                     # gag core + pol present; LTRs / order just not confirmed
             tier = "coding core present (gag + pol" + ("; env" if "ENV" in cset else "") + "); LTRs not confirmed"
+        elif gag_core and rt and has_ltr and not intg:
+            # capsid/matrix gag + RT + paired LTRs, but the DDE integrase specifically was not detected — a
+            # common state in aged/degenerate copies whose integrase ORF diverged first. Without this branch the
+            # record collapsed to the bare "fragment" tier, ranking BELOW a 2-domain RT+INT "partial" despite
+            # carrying more recovered core architecture. Integrase is a core module, so this is a 'partial' tier.
+            tier = "partial (gag + RT core present; integrase not confirmed)"
         elif rt and intg:
             # keep the tier a short label — the results banner renders the 'not detected' list itself, so
             # embedding it here too would double-render it. Only flag the nucleocapsid-only case, which the

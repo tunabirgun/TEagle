@@ -246,6 +246,24 @@ def test_staleness_guard_blocks_stale_primer(win):
     assert win._stale_block() is True                          # design must be blocked
 
 
+def test_multi_record_analysis_does_not_false_trigger_stale_guard(win):
+    """A 2+-record FASTA must NOT self-block Design/PCR. Regression: _show_record once overwrote
+    state['analyzed_clean'] with the selected record's bases, so the whole-box _stale_block() comparison
+    always mismatched for multi-record input and permanently fired the 'sequence changed' banner."""
+    from teagle_core import examples
+    fa = examples.load("M11240") + "\n" + examples.load("X01005")   # two records, no edits after analysis
+    win.seq.setPlainText(fa)
+    win._run_analysis()
+    assert _spin(lambda: win.state.get("analyzed_clean")), "analyze did not complete"
+    assert len(win.state.get("records") or []) == 2
+    assert win._stale_block() is False, "record-0 view falsely reads as stale on a multi-record analysis"
+    win._show_record(1)                                           # select the second record
+    assert win._stale_block() is False, "selecting record 2 falsely trips the stale guard"
+    assert win.designBtn.isEnabled()
+    # downstream design must now target the SELECTED record's own sequence (the original CRITICAL)
+    assert win.state["seq"] == win.state["records"][1]["seq"]
+
+
 # ---------- specimen-identity / stale-state provenance integrity (Loop-1 fixes) ----------
 def test_genome_scan_submits_local(win):
     win._prepared_genomes = [{"accession": "GCF_000001405.40", "n_seqs": 24, "bytes": 1_000_000}]

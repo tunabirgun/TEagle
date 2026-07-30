@@ -9,6 +9,16 @@ and propagates to the backend health endpoint, the UI header badge, every run
 provenance manifest, the packaged executable's Windows file-version metadata, and
 the LaTeX report title page.
 
+## [3.2.1] — 2026-07-30
+
+A fix release: no new feature, one scientific-correctness fix and a set of robustness and documentation corrections found by a full review of 3.2.0. **A reported target-site duplication can differ from 3.2.0** for a flanked element whose superfamily has a literature target-site length and whose insertion happens to sit in a coincidental longer exact repeat — see *Fixed*. A bare pasted element is unaffected.
+### Fixed
+- **The target-site duplication is now measured with the classified superfamily's expected length preferred.** Structural detection runs before the superfamily is known, so it selected the longest exact flanking repeat; a coincidental longer repeat in an AT-rich flank could outrank the diagnostic short duplication — a Tc1/*mariner* element's 2 bp TA in particular — which then read as *incongruent* (discrediting genuinely complete termini) and exported the wrong duplication coordinates. Once the superfamily is resolved, the duplication is re-detected with its literature length preferred; the correction can only shorten a coincidental repeat to the diagnostic length when that length genuinely flanks, never lengthen or fabricate one.
+- **Adding a custom organism no longer races on its store.** Two concurrent resolves could read the assembly store, each add its entry, and the second write clobber the first — an organism the app had reported as added would silently vanish. The read-modify-write is now serialised.
+- **The "Add" control is disabled for the duration of its network resolve.** Only the text field was disabled before, so a double-click or Enter-then-click queued duplicate NCBI lookups; a single-flight guard now survives a manager close/reopen.
+- **The "Resolving… against NCBI" status shows as a Notice, not an Error.** It had inherited the default error styling — an *Error*-titled, focus-stealing dialog for a routine in-progress message.
+- **Documentation corrections.** The report cited the wrong *mariner* Mos1 accession (M14653 → X78906, the record actually benchmarked) and an unsubstantiated Tam3 specimen (removed). `app/README.md` pointed the provenance cross-reference at the wrong panel (05 → 07), listed a superfamily set that predated the 3.2.0 panel growth (now includes ERV, DIRS, CACTA, MULE and IS4-like/piggyBac), and omitted XLSX from the table-export formats.
+
 ## [3.2.0] — 2026-07-28
 
 TEagle is now free software. The annotation can leave the tool as a genome-browser file, a first-time user opens a real published element instead of a synthetic null, a self-similarity view catches repeats the targeted detectors miss, and the primer secondary-structure cross-check no longer requires a manual ViennaRNA install. **Results may differ from 3.1.0**: the wider domain panel adds a DIRS-group class, and terminal-repeat lengths are now measured by diagonal extension — re-run any record whose classification or terminal-repeat length you have on file (see *Changed*).
