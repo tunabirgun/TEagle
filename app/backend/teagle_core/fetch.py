@@ -6,11 +6,23 @@ import os, ssl, urllib.request, urllib.parse, urllib.error, json, re, datetime, 
 
 # Verify TLS against certifi's CA bundle when available (some Windows Pythons lack the roots for UCSC/EBI/
 # NCBI chains); falls back to the system default. Hardens every HTTPS call the app makes.
-try:
-    import certifi
-    _SSL_CTX = ssl.create_default_context(cafile=certifi.where())
-except Exception:
-    _SSL_CTX = None
+#
+# Built on FIRST USE, not at import. Parsing the CA bundle costs ~140 ms, which was paid on every launch
+# even though most sessions start with a pasted sequence and never open a socket. The context is created
+# once and cached, so the first network call pays it and no later call does.
+_SSL_CTX_CACHE = []
+
+
+def _ssl_ctx():
+    if not _SSL_CTX_CACHE:
+        try:
+            import certifi
+            _SSL_CTX_CACHE.append(ssl.create_default_context(cafile=certifi.where()))
+        except Exception:
+            _SSL_CTX_CACHE.append(None)
+    return _SSL_CTX_CACHE[0]
+
+
 
 EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
 ENA = "https://www.ebi.ac.uk/ena/browser/api/fasta/"
@@ -54,7 +66,7 @@ class FetchError(Exception):
 def _get(url: str, timeout: int = 25) -> str:
     req = urllib.request.Request(url, headers={"User-Agent": "TEagle/0.1 (+local)"})
     try:
-        with urllib.request.urlopen(req, timeout=timeout, context=_SSL_CTX) as r:
+        with urllib.request.urlopen(req, timeout=timeout, context=_ssl_ctx()) as r:
             return r.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
         raise FetchError(f"HTTP {e.code} from source")

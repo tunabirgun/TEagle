@@ -3,7 +3,7 @@ column of collapsible result cards. All science runs in-process through the shar
 GUI thread via engine_worker.Engine. This module wires the analyze workflow, primer/PCR, WSL family
 annotation, splice detection, provenance and exports."""
 from __future__ import annotations
-import gzip, os, re, sys
+import gzip, json, os, re, sys
 
 from PySide6.QtCore import Qt, QTimer, QByteArray, QSettings
 from PySide6.QtGui import (QGuiApplication, QFont, QPixmap, QPainter, QIcon, QCursor, QShortcut,
@@ -28,6 +28,8 @@ from widgets import FigurePanel, GenomePanel, DataTable, BusyBar
 from sample import make_sample
 import theme as theme_mod
 from teagle_core import appdirs, classify           # classify.DOMAINS_TESTED = the tested-profile panel (scope caveat)
+from teagle_core.wsl import curated_coverage_sentence as _curated_coverage   # measured, never retyped on a panel
+from teagle_core import domains as domains_mod      # DOMAIN_INFO: the methods panel is derived from it, never retyped
 from teagle_core.fetch import (COORD_ASSEMBLIES, all_assemblies,                        # pinned + user-added assemblies
                                complete_gene_model, cross_check_models, retrieve)        # + gene model / transcript fetch
 from teagle_core import __version__ as APP_VERSION    # single source of truth (never hardcode a duplicate version)
@@ -383,6 +385,8 @@ class MainWindow(QMainWindow):
         self._genome_inflight = False                         # one whole-genome isPcr scan at a time
         self._genome_prep_inflight = False                    # one genome download/prepare at a time (large, one-time)
         self._add_asm_inflight = False                        # one custom-assembly resolve at a time (survives a dialog close/reopen)
+        self._annot_inflight = False                          # one whole-genome TE annotation at a time (hours; huge disk/CPU)
+        self._annot_result = None                             # last completed landscape (kept for the results window + exports)
         self._pending_scan = None                             # a scan queued behind a just-started genome download
         self._prepared_genomes = []                           # downloaded+verified (.done) genomes; the ONLY source for the PCR organism dropdown
 
@@ -456,6 +460,14 @@ class MainWindow(QMainWindow):
         self.statusTxt = QLabel("connecting…"); self.statusTxt.setObjectName("statusTxt")
         cl.addWidget(self.led); cl.addWidget(self.statusTxt)
         h.addWidget(chip)
+        # Top-level entry to the backend installer. It used to be reachable only from a secondary button
+        # inside panel 03, where a user who had not yet opened that card never saw it — yet it is what
+        # turns on Dfam family naming, splice detection and whole-genome scans.
+        self.backendBtn = QPushButton("BACKEND"); self.backendBtn.setProperty("sm", True)
+        self.backendBtn.setToolTip("Backend installer — install, repair and check the optional Linux (WSL) "
+                                   "stack: Dfam family naming, splice detection, whole-genome scans")
+        self.backendBtn.clicked.connect(self._open_installer)
+        h.addWidget(self.backendBtn)
         sc = QPushButton("SCALE"); sc.setProperty("sm", True)
         sc.setToolTip("Global UI scale — shrink or enlarge the whole interface (applied live; pixel-exact on next launch)")
         sc.clicked.connect(lambda: self._ui_scale_menu(sc))
@@ -702,6 +714,24 @@ class MainWindow(QMainWindow):
         self.annotateBtn.setEnabled(False); self.annotateBtn.clicked.connect(self._annotate)
         row.addWidget(self.annotateBtn)
         card.bodylay.addLayout(row)
+        # Which families are searched. RepeatMasker reads the CURATED families only unless it is asked
+        # for both, so without this the optional uncurated partitions sit on disk unreachable and a blank
+        # result means "not searched" rather than "not present". Shown only once they are installed —
+        # offering a library the machine does not have would promise a search it cannot run.
+        librow = QHBoxLayout()
+        librow.addWidget(QLabel("Library"))
+        self.wslLibrary = _Combo()
+        self.wslLibrary.addItem("Curated families only", False)
+        self.wslLibrary.addItem("Include uncurated families", True)
+        self.wslLibrary.setToolTip(
+            "Which Dfam families RepeatMasker searches. Curated families are reviewed but cover few "
+            "lineages deeply; outside a handful of intensively studied species almost every family is "
+            "uncurated, so a curated-only search can return nothing for a real element. Including the "
+            "uncurated families searches both and is recorded with the result.")
+        librow.addWidget(self.wslLibrary, 1); librow.addStretch(1)
+        self.wslLibraryRow = QWidget(); self.wslLibraryRow.setLayout(librow)
+        self.wslLibraryRow.setVisible(False)      # revealed by _on_wsl_status once the partitions are there
+        card.bodylay.addWidget(self.wslLibraryRow)
         self.wslInstallBtn = QPushButton("Backend installer — install · repair · check integrity")
         self.wslInstallBtn.setProperty("sm", True)
         self.wslInstallBtn.clicked.connect(self._open_installer)
@@ -1069,6 +1099,14 @@ class MainWindow(QMainWindow):
             self._on_genome_remove(res)
         elif key == "add_custom_assembly":
             self._on_add_custom_assembly(res)
+        elif key == "annotate_budget":
+            self._on_annotate_budget(res)
+        elif key == "genome_annotate":
+            self._on_genome_annotate(res)
+        elif key == "genome_annotate_log":
+            self._on_genome_annotate_log(res)
+        elif key == "genome_annotate_reset":
+            self._on_genome_annotate_reset(res)
 
     def _reset_buttons(self, key):
         if key == "analyze":
@@ -1091,6 +1129,17 @@ class MainWindow(QMainWindow):
             for lbl in (self.accMeta, self.coordMeta):        # clear only the in-flight indicator, keep a prior result
                 if lbl.text() == "fetching…":
                     lbl.setText("")
+        elif key in ("genome_annotate", "annotate_budget"):
+            # a failed annotation (or budget probe) must clear the guard, stop the progress poll and
+            # re-enable the manager's action — otherwise the feature is dead until the app restarts.
+            self._annot_inflight = False
+            t = getattr(self, "_annot_timer", None)
+            if t is not None:
+                try:
+                    t.stop()
+                except RuntimeError:
+                    pass
+            self._refresh_genome_manager()
         elif key == "add_custom_assembly":
             self._add_asm_inflight = False                    # bad query / fault — clear the guard and re-enable so the user can retry
             e = getattr(self, "_addAsmEdit", None)
@@ -1575,11 +1624,14 @@ class MainWindow(QMainWindow):
         # retroviral transcript architecture (ERV) — the correct coding-organisation model + cis-element legend
         arch = rec.get("retroviral")
         if arch:
-            has_cis = any(e["type"].startswith(("PBS", "PPT")) for e in rec.get("structural", []))
-            leg = ("<span style='color:#009E73'>■</span> env exon &nbsp; "
-                   "<span style='color:#B0752E'>■</span> gag–pro–pol intron (fused polyprotein)"
-                   + (" &nbsp; <span style='color:#8459C4'>■</span> PBS &nbsp; "
-                      "<span style='color:#2C7FB8'>■</span> PPT" if has_cis else ""))
+            # swatches derive from the figure palette (theme.ARCHCOL / theme.CISCOL) instead of repeating the
+            # hex here — a legend that duplicated the hues could drift out of step with the bands it labels.
+            _cis = [(k, lbl) for k, pre, lbl in (("PBS", "PBS", "PBS"), ("PPT", "PPT", "PPT"),
+                                                 ("PAS", "polyA-signal", "PAS · polyA signal (motif)"))
+                    if any(e["type"].startswith(pre) for e in rec.get("structural", []))]
+            leg = (f"<span style='color:{theme_mod.ARCHCOL['exon']}'>■</span> env exon &nbsp; "
+                   f"<span style='color:{theme_mod.ARCHCOL['intron']}'>■</span> gag–pro–pol intron (fused polyprotein)"
+                   + "".join(f" &nbsp; <span style='color:{theme_mod.CISCOL[k]}'>■</span> {lbl}" for k, lbl in _cis))
             legw = QLabel(leg); legw.setObjectName("orient"); legw.setTextFormat(Qt.RichText); legw.setWordWrap(True)
             card.bodylay.addWidget(legw)
             note = QLabel("<b>Endogenous retrovirus — transcript architecture.</b> " + arch["note"] +
@@ -1598,6 +1650,15 @@ class MainWindow(QMainWindow):
             t.set_row_menu(lambda r: self._struct_menu(struct[r]))
             t.setMaximumHeight(round(180 * theme_mod.UI_SCALE))
             card.bodylay.addWidget(t)
+            # The polyA-signal row is a MOTIF, not a located cleavage site. Its caveat rides in the row's
+            # tooltip, but a tooltip is not a disclosure a user is guaranteed to see — so when the row is
+            # present the limit is stated in the card itself, next to the table that shows it.
+            if any(e.get("type", "").startswith("polyA-signal") for e in struct):
+                pas_note = QLabel("The polyA-signal row is a sequence motif with its downstream element — advisory "
+                                  "context only. It does not locate the U3–R–U5 boundaries, the cleavage site, or "
+                                  "the transcript end, which need RNA evidence TEagle does not use.")
+                pas_note.setObjectName("orient"); pas_note.setWordWrap(True)
+                card.bodylay.addWidget(pas_note)
             srow = QHBoxLayout(); srow.addStretch(1)          # exportable like every sibling results table
             srow.addWidget(_export_table_btn(t, "TEagle_structural", self))
             card.bodylay.addLayout(srow)
@@ -1738,11 +1799,8 @@ class MainWindow(QMainWindow):
         p, h, w, dfam = (self._src_html(k) for k in ("Pfam", "HMMER", "Wicker2007", "Dfam"))
         return (
             "<b>Protein domains</b> — profile-HMM search (HMMER" + h + ", run in-process via pyhmmer) of the "
-            "6-frame ORFs (≥ 40 aa) against a bundled Pfam-A" + p + " TE-domain profile set (21 models, all CC0): "
-            "<b>POL</b> — RT PF00078/PF07727/PF13456, integrase PF00665, RNase&nbsp;H PF00075, protease PF00077; "
-            "<b>GAG</b> — matrix PF02337, capsid PF00607/PF19317, nucleocapsid PF14787, retrotransposon-gag PF03732; "
-            "<b>ENV</b> — envelope glycoprotein PF13804, transmembrane PF00517, surface PF00429; chromodomain PF00385; "
-            "and transposases PF01498/PF03184/PF13358/PF01359/PF05699/PF14372. A hit is kept at per-domain "
+            "6-frame ORFs (≥ 40 aa) against a bundled Pfam-A" + p + " TE-domain profile set "
+            f"({self._domain_panel_html()}). A hit is kept at per-domain "
             "E-value ≤ 1e-3; the gag + env models let TEagle recover the full GAG–POL–ENV architecture of ERVs (HERV-K, "
             "-W, -L …), not just the pol enzymes.<br>"
             "<b>Structural evidence</b> — heuristic terminal-repeat detectors (no external database): LTR by k-mer "
@@ -1764,6 +1822,21 @@ class MainWindow(QMainWindow):
             "<b>Family naming</b> (optional, WSL backend) — RepeatMasker (RMBLAST) against the curated Dfam&nbsp;4.0" + dfam +
             " library; this is the only step that makes a database family call, and it is absent from the offline path.")
 
+    @staticmethod
+    def _domain_panel_html():
+        """The panel sentence, DERIVED from the profile table the scan actually loads.
+
+        This text used to be hand-written and said "21 models" long after the panel had grown to 30 — the
+        app under-reported its own method, which no test could catch because the claim lived in a UI string.
+        Built from domains.DOMAIN_INFO, it cannot disagree with the models that were searched."""
+        from collections import OrderedDict
+        groups = OrderedDict()
+        for _hmm, (code, _label, _cls, pfam) in domains_mod.DOMAIN_INFO.items():
+            groups.setdefault(code, []).append(pfam)
+        parts = [f"{c}&nbsp;{'/'.join(p)}" for c, p in groups.items()]
+        return (f"{len(domains_mod.DOMAIN_INFO)} models, all CC0, in {len(groups)} reported groups: "
+                + ", ".join(parts))
+
     # Detector parameters for the evidence types whose backend record carries no "method" key (the values are
     # structural.py's own defaults, which detect_all uses). Without this the Method column — glossed "How TEagle
     # detected this feature" — rendered EMPTY for PBS, PPT, TSD and the poly-A/T tails.
@@ -1773,6 +1846,8 @@ class MainWindow(QMainWindow):
         "TSD": "exact 4–12 bp direct repeat flanking the element",
         "poly-A": "terminal homopolymer run (≥ 8 bp)",
         "poly-T": "terminal homopolymer run (≥ 8 bp)",
+        "polyA-signal": ("poly(A)-signal hexamer panel in the 3′ LTR, gated on a GU/U-rich downstream "
+                         "element 20–60 nt past the hexamer (≥ 65% G+T, ≥ 4 T)"),
     }
 
     def _struct_row(self, e):
@@ -1795,7 +1870,22 @@ class MainWindow(QMainWindow):
     def _struct_tips(self, e):
         """Per-cell tooltip overrides for one structural row: carry the detector's own hedge (e.g. a PBS below
         the confident threshold) into the table, where it previously showed only in the genome-viewer hover tip."""
-        note = e.get("note") if (e.get("note") and not e.get("confident", True)) else None
+        # the polyA-signal note is a standing scope limit, not a per-call hedge, so it rides along even when
+        # the motif passed its gate (confident=True) — a confident MOTIF is still not a cleavage site.
+        always = str(e.get("type", "")).startswith("polyA-signal")
+        note = e.get("note") if (e.get("note") and (always or not e.get("confident", True))) else None
+        # The terminal-motif badge was computed but never surfaced anywhere the user could see it. It
+        # belongs on the LTR row it describes: canonical TG…CA, one of the documented non-canonical
+        # termini, or neither — with the standing caveat that absence is not evidence against the call.
+        tm = e.get("termini") or {}
+        if tm:
+            tier = tm.get("motif_tier")
+            obs = f"{tm.get('five_start','')}…{tm.get('five_end','')}"
+            lead = ("termini " + obs + " — " +
+                    {"canonical": "the canonical TG…CA integrase att motif",
+                     "non-canonical": f"the non-canonical motif {tm.get('noncanonical_motif')}",
+                     }.get(tier, "no known terminal motif"))
+            note = (note + "\n\n" if note else "") + lead + ". " + (tm.get("note") or "")
         return [note, None, None, note, None]
 
 
@@ -1852,6 +1942,21 @@ class MainWindow(QMainWindow):
         QApplication.clipboard().setText(text)
         QToolTip.showText(QCursor.pos(), "copied", self)     # brief feedback at the cursor, not the status chip
 
+    def _save_text(self, text, base, ext):
+        """Write a text payload to a user-chosen file, with the same confirm-and-extension behaviour the
+        annotation export uses, so every 'export' in the app behaves the same way."""
+        if not text:
+            self._banner("There is nothing to export.", "info"); return
+        path, _ = QFileDialog.getSaveFileName(self, f"Export {ext.upper()}", f"{base}.{ext}",
+                                              f"{ext.upper()} (*.{ext})")
+        if not path:
+            return
+        if not path.lower().endswith("." + ext):
+            path += "." + ext
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(text if text.endswith("\n") else text + "\n")
+        self._banner(f"Written to {os.path.basename(path)}.", "success")
+
     def _feat_menu(self, start, end, strand, label, protein=None, dna=None, src_seq=None, kind=None):
         """Right-click menu for a feature — CONTEXTUAL: only actions valid for the clicked item. Coordinates
         address `src_seq` (default: the currently selected record's analysed sequence); pass `dna` when the exact sequence is already known
@@ -1879,13 +1984,101 @@ class MainWindow(QMainWindow):
         # a primer designed INSIDE a repeat would be non-specific, and "send to splice" on a motif is meaningless. A
         # coding/transcript-like feature that is long enough (room for two primers + a product) gets primer + splice + sub-region.
         long_enough = len(dna) >= 50
-        structural_motif = str(kind or "").split(" ")[0] in ("LTR", "TIR", "TSD", "PBS", "PPT", "poly-A", "poly-T")
+        structural_motif = str(kind or "").split(" ")[0] in ("LTR", "TIR", "TSD", "PBS", "PPT", "poly-A", "poly-T",
+                                                             "polyA-signal")
         if long_enough and not structural_motif:
             items.append(("Design primer here", _design))
             items.append(("Send to splice detection",
                           lambda: self._send_to_splice(f">{fid}_{start}-{end}{rev}\n{dna}")))
             items.append(("Select a sub-region → primer / splice…", lambda: self._subregion(dna, fid)))
+        # Flanking sequence is offered for EVERY feature, including the structural motifs above: designing
+        # primers in the flanks to amplify ACROSS an insertion is the standard way a bench scientist
+        # genotypes one, and it is the case where designing inside the element would be wrong.
+        if not explicit:
+            items.append(("Flanking sequence (upstream / downstream)…",
+                          lambda: self._flank_picker(start, end, strand, label, src_seq)))
         return items
+
+    def _flank_picker(self, start, end, strand, label, src_seq=None):
+        """Take the sequence upstream and/or downstream of a feature and copy, export or design on it.
+
+        Sides are named in RECORD orientation (upstream = the 5' side of the sequence as loaded), which is
+        unambiguous regardless of the feature's strand; a minus-strand feature says so on screen rather
+        than silently swapping the meaning of the two words."""
+        seq = src_seq if src_seq is not None else self.state.get("seq", "")
+        if not seq:
+            self._banner("No sequence is loaded to take flanks from.", "info"); return
+        n = len(seq)
+        fid = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(label)).strip("_") or "feature"
+        dlg = QDialog(self); dlg.setWindowTitle("Flanking sequence"); dlg.setModal(False)
+        dlg.setAttribute(Qt.WA_DeleteOnClose, True)
+        lay = QVBoxLayout(dlg)
+        lay.setContentsMargins(theme_mod.sp(14), theme_mod.sp(12), theme_mod.sp(14), theme_mod.sp(12))
+        lay.setSpacing(theme_mod.sp(8))
+        head = QLabel(f"Flanks of {label} ({start}–{end}, {strand} strand)")
+        hf = head.font(); hf.setBold(True); head.setFont(hf); lay.addWidget(head)
+        note = QLabel("“Upstream” is the 5′ side of the sequence as loaded and “downstream” the 3′ side, so the "
+                      "two names do not change meaning with the feature's strand."
+                      + ("  This feature is on the minus strand, so its own biological upstream is the "
+                         "downstream side here." if strand == "-" else ""))
+        note.setObjectName("orient"); note.setWordWrap(True); lay.addWidget(note)
+        row = QHBoxLayout()
+        side = QComboBox()
+        side.addItem("Upstream only", "up"); side.addItem("Downstream only", "down")
+        side.addItem("Both flanks (separate records)", "both")
+        side.setToolTip("Which side of the feature to take. Both gives two FASTA records, never a "
+                        "concatenation — joining them would create a junction that does not exist.")
+        spin = QSpinBox(); spin.setRange(1, 100000); spin.setValue(500); spin.setSuffix(" bp")
+        spin.setToolTip("How many bases to take on each chosen side. Clipped at the ends of the record; "
+                        "the actual length taken is shown below.")
+        row.addWidget(QLabel("Side")); row.addWidget(side, 1)
+        row.addWidget(QLabel("Length")); row.addWidget(spin, 1); lay.addLayout(row)
+        info = QLabel(""); info.setObjectName("orient"); info.setWordWrap(True); lay.addWidget(info)
+
+        def parts():
+            L = spin.value(); which = side.currentData(); out = []
+            if which in ("up", "both"):
+                s = max(0, start - L)
+                if s < start:
+                    out.append((f"{fid}_upstream_{s}-{start}", seq[s:start]))
+            if which in ("down", "both"):
+                e = min(n, end + L)
+                if end < e:
+                    out.append((f"{fid}_downstream_{end}-{e}", seq[end:e]))
+            return out
+
+        def refresh():
+            p = parts()
+            if not p:
+                info.setText("No flanking sequence is available on that side — the feature reaches the end "
+                             "of the record."); return
+            info.setText(" · ".join(f"{nm}: {len(s)} bp" for nm, s in p)
+                         + ("" if all(len(s) == spin.value() for _, s in p)
+                            else "  (clipped by the end of the record)"))
+        side.currentIndexChanged.connect(lambda *_: refresh()); spin.valueChanged.connect(lambda *_: refresh())
+        refresh()
+
+        def fasta():
+            return "\n".join(f">{nm}\n{s}" for nm, s in parts())
+
+        def design():
+            p = parts()
+            if not p:
+                return
+            nm, s = p[0]
+            self._design_for_domain(0, len(s), nm, seq=s)
+            dlg.accept()
+
+        brow = QHBoxLayout(); brow.addStretch(1)
+        for txt, fn in (("Copy FASTA", lambda: self._copy(fasta())),
+                        ("Export FASTA…", lambda: self._save_text(fasta(), fid + "_flank", "fasta")),
+                        ("Design primers", design)):
+            b = QPushButton(txt); b.setProperty("sm", True); b.clicked.connect(fn); brow.addWidget(b)
+        close = QPushButton("Close"); close.setProperty("sm", True); close.clicked.connect(dlg.reject)
+        brow.addWidget(close); lay.addLayout(brow)
+        self._uppercase_buttons(dlg)
+        dlg.adjustSize(); dlg.show(); dlg.raise_()
+        self._flank_dlg = dlg
 
     def _subregion(self, dna, fid):
         """Pick a sub-interval WITHIN a feature (1-based inclusive, offsets into the feature's own sequence) and
@@ -2621,7 +2814,9 @@ class MainWindow(QMainWindow):
                        "≥8 GB free disk in WSL: extraction peaks near 4 GB (FASTA ~3 GB + 2bit ~0.8 GB) before the "
                        "temporary files are removed.")
         intro.setObjectName("orient"); intro.setWordWrap(True); lay.addWidget(intro)
-        busy = self._genome_prep_inflight or self._genome_inflight   # lock every action while any download/scan runs
+        # lock every action while any download/scan/annotation runs. The annotation belongs in this guard:
+        # it reads the cached genome for hours, and Delete does `rm -rf` on that same directory.
+        busy = self._genome_prep_inflight or self._genome_inflight or self._annot_inflight
         # ADD-ORGANISM row — one input, auto-detects an organism name vs a GCF/GCA accession; resolved + pinned once.
         arow = QHBoxLayout()
         self._addAsmEdit = QLineEdit()
@@ -2723,7 +2918,16 @@ class MainWindow(QMainWindow):
             b.setObjectName("orient"); b.setWordWrap(True); lay.addWidget(b)
         close = QPushButton("Close"); close.setProperty("sm", True); close.clicked.connect(dlg.accept)
         close.setAccessibleName("Close the genome manager")
-        crow = QHBoxLayout(); crow.addStretch(1); crow.addWidget(close); crow.addStretch(1); lay.addLayout(crow)
+        # Whole-genome TE annotation lives in the footer rather than a per-row button: the Action column's
+        # width and row height are pinned from ONE measured button, and a second per-row control would
+        # reopen the squeeze/clipping problems that sizing was written to prevent.
+        annot = QPushButton("Annotate TE landscape…"); annot.setProperty("sm", True)
+        annot.setAccessibleName("Annotate every transposable element in a downloaded genome")
+        annot.setToolTip("Run RepeatMasker over a downloaded genome and summarise its transposable-element content")
+        annot.setEnabled(bool(prepared) and not busy and not self._annot_inflight)
+        annot.clicked.connect(self._annotate_genome_dialog)
+        crow = QHBoxLayout(); crow.addStretch(1); crow.addWidget(annot); crow.addWidget(close)
+        crow.addStretch(1); lay.addLayout(crow)
         self._uppercase_buttons(dlg)                          # ADD/CLOSE match the row DOWNLOAD/DELETE; measured below
         # ---- fit: full table if it fits the screen, else cap to whole rows + a vertical scroll (button never squeezed) ----
         dlg.setFixedWidth(target_w)                           # set the real width first so the intro wraps as it truly will
@@ -2739,6 +2943,411 @@ class MainWindow(QMainWindow):
             dlg.adjustSize()
         dlg.setFixedSize(target_w, min(dlg.sizeHint().height(), avail_h))
         dlg.show(); dlg.raise_()
+
+    # =================== whole-genome TE annotation ===================
+    # Wording taken verbatim from RepeatMasker's own -h text, not paraphrased: an earlier draft turned
+    # "5-10% less sensitive" into "5-10x faster", which would have misled the user about both axes.
+    _ANNOT_LOW_LIBRARY = 25          # see _on_annotate_budget for how this was chosen (measured, not assumed)
+    _ANNOT_SENS = [("default", "Default — the balance RepeatMasker ships with"),
+                   ("quick", "Quick (-q) — 2–5× faster, 5–10% less sensitive"),
+                   ("slow", "Slow (-s) — 2–3× slower, 0–5% more sensitive")]
+
+    def _annotate_genome_dialog(self):
+        """Choose a downloaded genome and the run's parameters, and state the cost BEFORE anything starts.
+
+        The cost panel is the scientific gate as much as the practical one: it reports how many family
+        models the installed Dfam partitions actually hold for the chosen lineage. A lineage with none
+        cannot yield a TE result at any runtime, and the user is told that here rather than after hours."""
+        if self._annot_inflight:
+            self._banner("A genome annotation is already running.", "info"); return
+        # _prepared_genomes is the app's single store of what is cached on disk (kept current by the one
+        # genome_list fan-out), so the picker can never disagree with the manager table beside it.
+        prepared = [g for g in (getattr(self, "_prepared_genomes", None) or []) if g.get("accession")]
+        if not prepared:
+            self._banner("Download a genome first — annotation runs on a genome already on this machine.", "info")
+            return
+        asm = all_assemblies()
+        acc_to_org = {m["assemblyAccession"]: o for o, m in asm.items()}
+        dlg = QDialog(self); dlg.setWindowTitle("Annotate TE landscape"); dlg.setModal(False)
+        dlg.setAttribute(Qt.WA_DeleteOnClose, True)
+        lay = QVBoxLayout(dlg)
+        lay.setContentsMargins(theme_mod.sp(14), theme_mod.sp(12), theme_mod.sp(14), theme_mod.sp(12))
+        lay.setSpacing(theme_mod.sp(8))
+        t = QLabel("Annotate the TE landscape of a downloaded genome")
+        tf = t.font(); tf.setBold(True); tf.setPointSizeF(tf.pointSizeF() + 1); t.setFont(tf); lay.addWidget(t)
+        intro = QLabel("TEagle runs RepeatMasker over the whole assembly and summarises which transposable-element "
+                       "families it places, how much of the genome they cover, and how diverged each is. This finds "
+                       "copies of families that are already in the installed Dfam library; it does not discover new "
+                       "families, so coverage depends on that library.")
+        intro.setObjectName("orient"); intro.setWordWrap(True); lay.addWidget(intro)
+
+        grid = QHBoxLayout()
+        gsel = QComboBox()
+        for g in prepared:
+            org = acc_to_org.get(g["accession"], g["accession"])
+            gsel.addItem(f"{org} · {g['accession']} · {(g.get('bytes') or 0)/1e6:.0f} MB", g["accession"])
+        gsel.setToolTip("A genome already downloaded to this machine. Only downloaded genomes can be "
+                        "annotated — the whole assembly is read locally, nothing is sent to a server.")
+        _gl = QLabel("Genome"); _gl.setToolTip(gsel.toolTip())
+        grid.addWidget(_gl); grid.addWidget(gsel, 1)
+        ssel = QComboBox()
+        for key, label in self._ANNOT_SENS:
+            ssel.addItem(label, key)
+        ssel.setToolTip("How hard RepeatMasker looks. The figures are RepeatMasker's own: Quick (-q) is "
+                        "2–5× faster and 5–10% less sensitive; Slow (-s) is 2–3× slower and 0–5% more "
+                        "sensitive. Sensitivity here means recovering older, more diverged copies — the "
+                        "recent ones are found either way.")
+        _sl2 = QLabel("Sensitivity"); _sl2.setToolTip(ssel.toolTip())
+        grid.addWidget(_sl2); grid.addWidget(ssel, 1)
+        lay.addLayout(grid)
+        # LIBRARY CHOICE — the single setting that decides which families can be found at all, so it is
+        # offered explicitly rather than assumed. The two options are alternatives, not additions:
+        # RepeatMasker's -lib replaces the database search, so a run uses one or the other.
+        lrow = QHBoxLayout()
+        lsel = QComboBox()
+        lsel.addItem("Installed Dfam library — curated families only", "")
+        lsel.addItem("Installed Dfam library — include uncurated families", "uncurated")
+        lsel.addItem("My own repeat library (FASTA)…", "custom")
+        lsel.setToolTip(
+            "Dfam families are either curated (reviewed) or uncurated (automatically built). RepeatMasker "
+            "searches curated families only unless you ask for both.\n\n"
+            "Outside a few heavily studied species most families are uncurated, so curated-only can find "
+            "nothing at all: on baker's yeast it sees 9 families and reports no transposable element, while "
+            "including uncurated sees 421 more and finds the Ty elements the genome really has.\n\n"
+            "Including them needs the optional uncurated partitions from the backend installer, and the "
+            "extra families are lower confidence — the result says which setting produced it.\n\n"
+            "A custom FASTA library replaces Dfam entirely for that run.")
+        lrow.addWidget(QLabel("Library")); lrow.addWidget(lsel, 1)
+        libpath = QLabel(""); libpath.setObjectName("orient"); libpath.setWordWrap(True)
+        lrow.addWidget(libpath, 2); lay.addLayout(lrow)
+        self._annot_custom_lib = None
+        self._annot_uncurated = False
+
+        def pick_library(idx):
+            self._annot_uncurated = (lsel.currentData() == "uncurated")
+            if lsel.currentData() != "custom":
+                self._annot_custom_lib = None
+                libpath.setText("Curated + uncurated families. Needs the uncurated Dfam partitions installed; "
+                                "uncurated families are automatically built and lower confidence."
+                                if self._annot_uncurated else "")
+                return
+            fn, _ = QFileDialog.getOpenFileName(dlg, "Choose a repeat library (FASTA)", "",
+                                                "FASTA library (*.fa *.fasta *.lib *.txt);;All files (*)")
+            if not fn:
+                lsel.setCurrentIndex(0); self._annot_custom_lib = None; libpath.setText(""); return
+            self._annot_custom_lib = fn
+            libpath.setText(f"{os.path.basename(fn)} — searched instead of Dfam; TEagle records its checksum "
+                            "but cannot vouch for its contents.")
+        lsel.currentIndexChanged.connect(pick_library)
+        cost = QLabel("Estimating…"); cost.setObjectName("orient"); cost.setWordWrap(True)
+        cost.setTextInteractionFlags(Qt.TextSelectableByMouse); lay.addWidget(cost)
+        warn = QLabel(""); warn.setObjectName("errbanner"); warn.setWordWrap(True); warn.hide(); lay.addWidget(warn)
+        start = QPushButton("Start annotation"); start.setEnabled(False)
+        cancel = QPushButton("Close"); cancel.setProperty("sm", True); cancel.clicked.connect(dlg.reject)
+        brow = QHBoxLayout(); brow.addStretch(1); brow.addWidget(start); brow.addWidget(cancel); lay.addLayout(brow)
+        self._annot_cost_state = {}
+
+        def refresh_cost():
+            acc = gsel.currentData()
+            g = next((x for x in prepared if x["accession"] == acc), {})
+            org = acc_to_org.get(acc, "")
+            cost.setText("Estimating cost — reading the WSL budget and the installed Dfam library…")
+            start.setEnabled(False); warn.hide()
+            self._annot_cost_state = {"accession": acc, "organism": org, "sha256": g.get("sha256")}
+            self.engine.submit("annotate_budget",
+                               {"species": org, "genome_bytes": int(g.get("bytes") or 0)}, key="annotate_budget")
+
+        self._annot_cost_widgets = (cost, warn, start, gsel, ssel)
+        gsel.currentIndexChanged.connect(lambda *_: refresh_cost())
+        start.clicked.connect(lambda: (self._start_genome_annotate(gsel.currentData(), acc_to_org.get(gsel.currentData(), ""),
+                                                                   ssel.currentData(), self._annot_custom_lib,
+                                                                   getattr(self, "_annot_uncurated", False)), dlg.accept()))
+        self._uppercase_buttons(dlg)
+        refresh_cost()
+        dlg.adjustSize(); dlg.show(); dlg.raise_()
+        self._annot_dialog = dlg
+
+    def _on_annotate_budget(self, b):
+        """Fill the cost panel from the measured WSL budget + the library's coverage for this lineage."""
+        w = getattr(self, "_annot_cost_widgets", None)
+        if not w:
+            return
+        cost, warn, start, gsel, ssel = w
+        try:
+            st = self._annot_cost_state
+            # keep the MEASURED thread count so the run uses the number the dialog promised
+            self._annot_threads = int(b.get("recommended_threads") or 4)
+            fams = b.get("library_families_for_species")
+            gb = b.get("disk_needed_gb")
+            lines = [
+                f"<b>This machine (WSL):</b> {b.get('cores')} cores · {b.get('mem_gb')} GB RAM · "
+                f"{b.get('avail_gb')} GB free. TEagle will use {b.get('recommended_threads')} parallel "
+                f"RepeatMasker jobs (limited by {b.get('limited_by')}).",
+                f"<b>Disk needed:</b> about {gb} GB — the genome sequence is fetched once and kept, and the "
+                "work chunks are removed as they finish.",
+                "<b>Time:</b> a fly-sized genome (~140 Mb) takes minutes to about an hour here; a mammalian "
+                "genome (~3 Gb) takes many hours to a day. The run continues in the background and can be "
+                "re-started later — finished chunks are not repeated.",
+                f"<b>Library coverage:</b> the installed Dfam partitions hold "
+                f"<b>{fams if fams is not None else 'an unknown number of'}</b> family models for "
+                f"{st.get('organism') or 'this lineage'}.",
+            ]
+            cost.setText("<br>".join(lines))
+            if b.get("disk_ok") is False:
+                warn.setText(f"Not enough free disk in WSL — about {gb} GB is needed. Free space, or remove a "
+                             "cached genome from this manager, then try again.")
+                warn.show(); start.setEnabled(False); return
+            # Threshold rationale: measured on this backend, a lineage Dfam covers usefully has hundreds
+            # of models (D. melanogaster 399, H. sapiens 1439) while an uncovered one has single digits
+            # (S. cerevisiae 9, and its run found zero TEs). 25 sits in the empty gap between those two
+            # regimes; it is a warning trigger only — it never blocks a run or changes a result.
+            if fams is not None and fams < self._ANNOT_LOW_LIBRARY:
+                warn.setText(f"The installed Dfam library holds only {fams} family model(s) for "
+                             f"{st.get('organism') or 'this lineage'}. A run would report tandem and "
+                             "low-complexity repeats but could not find transposable elements, however long it "
+                             "ran — that would be a limit of the library, not a property of the genome. Install "
+                             "the additional Dfam partitions from the backend installer before relying on this.")
+                warn.show()
+            start.setEnabled(True)
+        except RuntimeError:
+            pass
+
+    def _start_genome_annotate(self, acc, organism, sensitivity, custom_lib=None, include_uncurated=False):
+        if self._annot_inflight or not acc:
+            return
+        self._annot_inflight = True
+        self._banner(f"Annotating {organism or acc} — this runs in the background; progress appears here.", "info")
+        self._refresh_genome_manager()
+        self.engine.submit("genome_annotate",
+                           {"assemblyAccession": acc, "species": organism, "sensitivity": sensitivity,
+                            # the thread count the budget probe MEASURED for this machine — the cost dialog
+                            # showed it, so the run must actually use it rather than a fixed default
+                            "threads": int(getattr(self, "_annot_threads", 0) or 4),
+                            "chunk_mb": int(getattr(self, "_annot_chunk_mb", 0) or 40),
+                            "custom_library": custom_lib, "include_uncurated": bool(include_uncurated),
+                            "sha256": (self._annot_cost_state or {}).get("sha256")},
+                           key="genome_annotate")
+        self._annot_timer = QTimer(self); self._annot_timer.setInterval(6000)
+        self._annot_timer.timeout.connect(lambda: self.engine.submit("genome_annotate_log", {"tail": 1},
+                                                                     key="genome_annotate_log"))
+        self._annot_timer.start()
+
+    def _on_genome_annotate_log(self, d):
+        line = (d or {}).get("log") or ""
+        if line and self._annot_inflight:
+            self._set_status_line(f"Genome annotation · {line}")
+
+    def _set_status_line(self, text):
+        lbl = getattr(self, "_annotStatus", None)
+        if lbl is not None:
+            try:
+                lbl.setText(text)
+            except RuntimeError:
+                pass
+
+    def _on_genome_annotate(self, r):
+        self._annot_inflight = False
+        t = getattr(self, "_annot_timer", None)
+        if t is not None:
+            t.stop()
+        # The backend reports a refused or failed run as {"ok": False, ...} — a normal RETURN, not an
+        # exception — so it arrives here on the success signal. Without this guard the failure was
+        # announced as a finished annotation and then crashed the results window on the missing fields.
+        if not r or not r.get("ok"):
+            msg = (r or {}).get("error") or "the annotation did not complete"
+            self._refresh_genome_manager()
+            # A settings clash is the one failure the user can clear, so offer the action instead of
+            # telling them to do something the window gives them no way to do.
+            if "different settings" in msg:
+                acc = (self._annot_cost_state or {}).get("accession")
+                box = QMessageBox(self)
+                box.setWindowTitle("Previous annotation found")
+                box.setIcon(QMessageBox.Question)
+                box.setText("This genome has a part-finished annotation that used different settings.")
+                box.setInformativeText(
+                    "Chunks already finished were searched with the earlier settings, so they cannot be "
+                    "combined with new ones. Discard that unfinished work and start again with the "
+                    "settings you just chose?")
+                discard = box.addButton("Discard and start over", QMessageBox.AcceptRole)
+                box.addButton("Keep it", QMessageBox.RejectRole)
+                box.exec()
+                if box.clickedButton() is discard and acc:
+                    self.engine.submit("genome_annotate_reset", {"assemblyAccession": acc},
+                                       key="genome_annotate_reset")
+                return
+            self._banner("Genome annotation did not finish — " + msg, "warn")
+            return
+
+    def _on_genome_annotate_reset(self, r):
+        if r.get("ok"):
+            self._banner("Previous annotation discarded. Open “Annotate TE landscape” to start again.",
+                         "success")
+        else:
+            self._banner(r.get("error") or "Could not clear the previous annotation.", "warn")
+        self._annot_result = r
+        self._refresh_genome_manager()
+        if r.get("coverage_warning"):
+            self._banner(r["coverage_warning"], "warn")
+        else:
+            self._banner(f"Genome annotation finished — transposable elements cover "
+                         f"{r.get('te_percent')}% of the assembly across {r.get('te_family_count')} families.",
+                         "success")
+        self._show_annot_window(r)
+
+    _ANNOT_COLS = [("Family", "The repeat family RepeatMasker assigned (class/subfamily)"),
+                   ("Kind", "TE = transposable element; tandem = simple/low-complexity/satellite; other = "
+                            "rRNA, tRNA and unclassified repeats"),
+                   ("Copies", "How many separate hits were placed"),
+                   ("Bases", "Total bases covered by those hits"),
+                   ("% genome", "Share of the whole assembly covered"),
+                   ("Mean divergence %", "RepeatMasker's RAW percent mismatch to the family consensus, "
+                                         "averaged weighted by hit length. It is NOT Kimura- or "
+                                         "CpG-corrected, so it saturates for old copies and is inflated "
+                                         "where CpG sites decay fast. Higher means more decayed, but it "
+                                         "is a similarity measure, not an age.")]
+
+    @staticmethod
+    def _annot_report_md(r):
+        """The landscape as a self-contained Markdown report.
+
+        Every hedge the window shows travels with it: what was searched, what the two percentages mean,
+        and why an empty TE result may be a library limit. An export that carried only the table would
+        read as an unqualified statement about the genome."""
+        fams = r.get("families") or []
+        te = [f for f in fams if f.get("kind") == "TE"]
+        L = [f"# Transposable-element landscape — {r.get('species')} ({r.get('accession')})", "",
+             f"- **Transposable elements: {r.get('te_percent')}%** of "
+             f"{(r.get('genome_bp') or 0)/1e6:.1f} Mb, across {r.get('te_family_count')} families",
+             f"- All repeat classes together: {r.get('masked_percent')}% "
+             f"({r.get('total_hits'):,} alignment rows)",
+             f"- Searched with RepeatMasker {r.get('repeatmasker_version')} against "
+             f"{r.get('library_kind')} (Dfam {r.get('dfam_version')}); "
+             f"{r.get('library_families_for_species')} family models available for this lineage",
+             f"- Sensitivity {r.get('sensitivity')} · {r.get('chunks')} chunks · "
+             f"complete: {bool(r.get('complete'))}", ""]
+        if r.get("coverage_warning"):
+            L += ["> **Coverage warning.** " + r["coverage_warning"], ""]
+        L += ["## Scope and limits", "",
+              "- Copies of families already present in the searched library, placed by homology. New",
+              "  families are not discovered, and a family absent from the library cannot appear here —",
+              "  absence is not evidence of absence.",
+              "- Transposable elements are counted separately from tandem repeats (simple repeats,",
+              "  low-complexity sequence, satellites) and non-TE entries; only the first is a statement",
+              "  about transposable-element content.",
+              "- Coverage is computed on merged intervals, so overlapping alignments are not double-counted.",
+              "- Divergence is RepeatMasker's raw percent mismatch to the consensus, length-weighted. It is",
+              "  not Kimura- or CpG-corrected and is not an age.",
+              "- Percentages are of the whole assembly, including unplaced scaffolds.", "",
+              "## Families", "",
+              "| Family | Kind | Copies (alignment rows) | Bases (merged) | % genome | Mean divergence % |",
+              "|---|---|---|---|---|---|"]
+        for f in fams:
+            L.append(f"| {f.get('family')} | {f.get('kind')} | {f.get('n'):,} | {f.get('bp'):,} | "
+                     f"{f.get('percent')} | {f.get('divergence')} |")
+        L += ["", f"_{len(te)} of {len(fams)} rows are transposable-element families._"]
+        return "\n".join(L)
+
+    def _annot_row_menu(self, f):
+        """Context menu for one genome-landscape row — aggregate-appropriate actions only."""
+        kind = f.get("kind")
+        items = [(f"Copy family name ({f.get('family')})", lambda: self._copy(str(f.get("family")))),
+                 ("Copy this row (TSV)", lambda: self._copy("\t".join(
+                     str(x) for x in (f.get("family"), f.get("kind"), f.get("n"), f.get("bp"),
+                                      f.get("percent"), f.get("divergence")))))]
+        if kind != "TE":
+            items.append(("Why is this not counted as a TE?",
+                          lambda: self._banner(
+                              "Simple repeats, low-complexity sequence and satellites are tandem repeats, and "
+                              "rRNA/tRNA/unclassified entries are not transposable elements. RepeatMasker places "
+                              "them alongside TEs, so TEagle counts them separately — they are included in the "
+                              "all-repeat percentage but never in the transposable-element percentage.", "info")))
+        else:
+            items.append(("What does mean divergence mean?",
+                          lambda: self._banner(
+                              "Average percent difference between the placed copies and their family consensus, "
+                              "weighted by how long each copy is. Higher means older, more decayed copies; lower "
+                              "means recent or still-active ones. It is a homology measure, not an age in years.",
+                              "info")))
+        return items
+
+    def _show_annot_window(self, r):
+        """The genome-wide result, in its own window: what was found, what was searched, and what that does
+        and does not license the reader to conclude."""
+        w = QDialog(self); w.setWindowTitle("Genome TE landscape"); w.setModal(False)
+        w.setAttribute(Qt.WA_DeleteOnClose, True)
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(theme_mod.sp(14), theme_mod.sp(12), theme_mod.sp(14), theme_mod.sp(12))
+        lay.setSpacing(theme_mod.sp(8))
+        head = QLabel(f"{r.get('species')} · {r.get('accession')}")
+        hf = head.font(); hf.setBold(True); hf.setPointSizeF(hf.pointSizeF() + 2); head.setFont(hf); lay.addWidget(head)
+        # headline numbers: the TE share is stated separately from every repeat, because they are different
+        # claims and merging them would overstate transposable-element content.
+        tot = QLabel(f"<b>Transposable elements: {r.get('te_percent')}%</b> of "
+                     f"{(r.get('genome_bp') or 0)/1e6:.1f} Mb, in {r.get('te_family_count')} families &nbsp;·&nbsp; "
+                     f"all repeat classes together: {r.get('masked_percent')}% &nbsp;·&nbsp; "
+                     f"{r.get('total_hits'):,} hits")
+        tot.setTextFormat(Qt.RichText); tot.setWordWrap(True)
+        tot.setToolTip("Transposable elements = the share of the assembly covered by TE families (LTR, LINE, "
+                       "SINE, DNA transposons, rolling-circle, retroposons).\n"
+                       "All repeat classes = that plus tandem repeats (simple repeats, low-complexity "
+                       "sequence, satellites) and non-TE entries such as rRNA and tRNA genes.\n"
+                       "The two are shown separately because only the first is a statement about "
+                       "transposable-element content.")
+        lay.addWidget(tot)
+        prov = QLabel(f"Searched with RepeatMasker {r.get('repeatmasker_version')} against Dfam "
+                      f"{r.get('dfam_version')} ({r.get('library_families_for_species')} family models available "
+                      f"for this lineage) · sensitivity {r.get('sensitivity')} · "
+                      f"{r.get('chunks')} chunks · {r.get('elapsed_s')} s")
+        prov.setObjectName("orient"); prov.setWordWrap(True)
+        prov.setToolTip("The exact tool and library this result came from. 'Family models available for this "
+                        "lineage' is how many family profiles the installed Dfam partitions hold for this "
+                        "organism — a small number means most of its TEs cannot be found, whatever the "
+                        "settings. Chunks are the pieces the assembly was split into so progress could be "
+                        "shown and the run resumed.")
+        lay.addWidget(prov)
+        scope = QLabel("What this is: copies of families already present in the installed Dfam library, placed by "
+                       "homology. It is not a discovery of new families, and a family absent from the library "
+                       "cannot appear here — so absence is not evidence of absence. Percentages are of the whole "
+                       "assembly, including unplaced scaffolds.")
+        scope.setObjectName("orient"); scope.setWordWrap(True); lay.addWidget(scope)
+        if r.get("coverage_warning"):
+            cw = QLabel(r["coverage_warning"]); cw.setObjectName("errbanner"); cw.setWordWrap(True); lay.addWidget(cw)
+        fams = r.get("families") or []
+        t = DataTable([c[0] for c in self._ANNOT_COLS], dict(self._ANNOT_COLS))
+        t.set_rows([[f["family"], f["kind"], f["n"], f["bp"], f.get("percent"), f["divergence"]] for f in fams])
+        # Row menu matched to what the row IS. A landscape row is a per-family AGGREGATE, not a locus, so
+        # it offers no "design primer here" or "copy sequence" — there is no single sequence behind it.
+        # A tandem/other row additionally says why it is not counted as a transposable element.
+        t.set_row_menu(lambda r, _f=fams: self._annot_row_menu(_f[r]) if r < len(_f) else [])
+        t.setMinimumHeight(round(260 * theme_mod.UI_SCALE)); lay.addWidget(t)
+        # FigurePanel re-renders on theme/zoom, so it takes a builder (bg -> svg), not a rendered string.
+        fig = FigurePanel(lambda bg, _r=r: figures.svg_te_composition(_r, theme=bg), "TEagle_TE_landscape")
+        fig.setMinimumHeight(round(190 * theme_mod.UI_SCALE)); lay.addWidget(fig)
+        row = QHBoxLayout(); row.addStretch(1)
+        row.addWidget(_export_table_btn(t, f"TEagle_TE_landscape_{r.get('accession')}", self))
+        # A genome run is sealed like every other result, so the seal has to be reachable from the result
+        # — otherwise the run is reproducible in principle and not in practice. The report carries the
+        # same hedges the screen shows, so an exported file cannot read as an unqualified claim.
+        rep = QPushButton("Export report (.md)"); rep.setProperty("sm", True)
+        rep.setToolTip("The summary table plus what was searched, what the numbers mean, and the limits "
+                       "stated on this screen — the same hedges, in the file.")
+        rep.clicked.connect(lambda: self._save_text(self._annot_report_md(r),
+                                                    f"TEagle_TE_landscape_{r.get('accession')}", "md"))
+        row.addWidget(rep)
+        manb = QPushButton("Export manifest (.json)"); manb.setProperty("sm", True)
+        manb.setToolTip("The sealed provenance record: tool and library versions, every parameter, the "
+                        "genome checksum, and whether the run covered the whole assembly.")
+        manb.setEnabled(bool(r.get("provenance")))
+        manb.clicked.connect(lambda: self._save_text(
+            json.dumps(r.get("provenance") or {}, indent=2, sort_keys=True),
+            f"TEagle_TE_landscape_{r.get('accession')}_manifest", "json"))
+        row.addWidget(manb)
+        close = QPushButton("Close"); close.setProperty("sm", True); close.clicked.connect(w.accept)
+        row.addWidget(close); lay.addLayout(row)
+        self._uppercase_buttons(w)
+        w.resize(round(1000 * theme_mod.UI_SCALE), round(760 * theme_mod.UI_SCALE))
+        w.show(); w.raise_()
+        self._annot_window = w
 
     def _add_custom_assembly(self):
         """Resolve a typed organism name / assembly accession ONCE, pin its versioned accession to the user store,
@@ -3010,9 +3619,20 @@ class MainWindow(QMainWindow):
             self.spliceStatus.setText("<b>WSL2 not installed</b> — de-novo splice detection needs it (optional).")
             return
         self.engine.submit("genome_list", {}, key="genome_list")   # WSL is up — populate the downloaded-genome dropdown
+        # offer the library choice only once the uncurated partitions are actually on the machine —
+        # a curated-only backend has nothing extra to search, so the option would promise a search it
+        # cannot run. Read from the library famdb reports, not from an assumption about the install.
+        _parts = ((w.get("dfam_library") or {}).get("partitions")) or []
+        # tracked explicitly, not read back off isVisible(): a widget inside a collapsed card reports
+        # not-visible, and reading the choice from that would silently discard what the user selected
+        self._uncurated_available = any("uncurated" in str(p).lower() for p in _parts)
+        self.wslLibraryRow.setVisible(self._uncurated_available)
         if w.get("ready"):
+            # name the partitions actually on the machine — "Dfam curated" was fixed text and read as a
+            # statement about the library even where the uncurated partitions were installed alongside it
+            _lib = "Dfam curated + uncurated available" if self._uncurated_available else "Dfam curated"
             self.wslStatus.setText(f"<span style='color:{theme_mod.GOOD[self.theme]}'>● ready</span> · RepeatMasker {w.get('repeatmasker')} "
-                                   f"· Dfam curated · distro {w.get('distro')}")
+                                   f"· {_lib} · distro {w.get('distro')}")
             self.annotateBtn.setEnabled(True)
         else:
             self.wslStatus.setText(f"WSL2 ok ({w.get('distro')}); annotation stack not installed "
@@ -3066,8 +3686,10 @@ class MainWindow(QMainWindow):
         self.state["family_seq"] = self._norm_seq(seq)    # hit coords index THIS sequence (backend-normalized), not always panel-01
         self.annotateBtn.setEnabled(False); self.annotateBtn.setText("◴ annotating…")
         self._set_body(self.wslBody, BusyBar("Running RepeatMasker against Dfam — this can take a minute or two…"))
-        self.engine.submit("annotate", {"sequence": seq, "species": self._species(),
-                                        "source": src}, key="annotate")
+        self.engine.submit("annotate", {"sequence": seq, "species": self._species(), "source": src,
+                                        "include_uncurated": bool(self.wslLibrary.currentData())
+                                        if getattr(self, "_uncurated_available", False) else False},
+                           key="annotate")
 
     def _on_annotate(self, d):
         self.annotateBtn.setEnabled(True); self.annotateBtn.setText("Run family annotation")
@@ -3112,14 +3734,15 @@ class MainWindow(QMainWindow):
                 cl.addWidget(self._repeat_table(unclassed))
             if not hits:
                 # Two independent conditions decide whether a family CAN be named, and the message names
-                # whichever is actually missing rather than guessing. Both were measured on Drosophila
-                # copia: with the uncurated partitions installed AND a species, it resolves to Copia_LTR
-                # and Copia_I at 100% consensus coverage; with the partitions but NO species it returns
-                # only low-complexity, because RepeatMasker searches a limited default set without a
-                # lineage; with a species but curated-only it also fails, since the curated library holds
-                # just 9 families for D. melanogaster and copia is not among them.
+                # whichever is actually missing rather than guessing. Measured on Drosophila copia: with
+                # the uncurated partitions installed AND a species it resolves to Copia_LTR and Copia_I at
+                # 100% consensus coverage; with the partitions but NO species it returns only
+                # low-complexity, because RepeatMasker searches a limited default set without a lineage.
+                # How much the curated-only case costs depends entirely on the lineage, so the message
+                # below no longer names a figure for one organism — see _CURATED_COVERAGE.
                 parts = ((d.get("dfam_library") or {}).get("partitions")) or []
                 has_unc = any("uncurated" in str(p).lower() for p in parts)
+                searched_unc = bool(d.get("include_uncurated"))
                 sp = d.get("species") or ""
                 has_sp = bool(sp) and not str(sp).startswith("(all")
                 if not has_sp:
@@ -3127,13 +3750,21 @@ class MainWindow(QMainWindow):
                                        "searches only a limited default set without a lineage, so an "
                                        "organism is usually what turns a blank result into a named family. "
                                        "Set the organism above and run again.", "warn"))
-                elif not has_unc:
+                elif not searched_unc and not has_unc:
                     cl.addWidget(_note(f"No Dfam family matched for “{sp}” — and only the CURATED Dfam "
-                                       "partitions are installed. Most TE families of most organisms are "
-                                       "uncurated in Dfam 4.0: the curated library holds just 9 families "
-                                       "for Drosophila melanogaster, and copia, gypsy, hobo and mdg1 are "
-                                       "not among them. Install the optional uncurated partitions from "
-                                       "03 → Backend installer.", "warn"))
+                                       "partitions are installed. How much that costs depends entirely on "
+                                       "the lineage: " + _curated_coverage() + " A blank result here may "
+                                       "therefore be a limit of the installed library rather than a "
+                                       "property of the sequence. Install the optional uncurated "
+                                       "partitions from BACKEND in the header, then run again with "
+                                       "<b>Library</b> set to include them.", "warn"))
+                elif not searched_unc:
+                    cl.addWidget(_note(f"No Dfam family matched for “{sp}” — but this run searched the "
+                                       "CURATED families only. The uncurated partitions are installed on "
+                                       "this machine and were not read: RepeatMasker searches curated "
+                                       "families unless it is asked for both. Set <b>Library</b> to "
+                                       "“Include uncurated families” and run again before concluding "
+                                       "anything from this blank result.", "warn"))
                 else:
                     cl.addWidget(_note(f"No Dfam family matched this locus for “{sp}”. The curated and "
                                        "uncurated partitions were both searched with a lineage set, so "
@@ -3147,11 +3778,14 @@ class MainWindow(QMainWindow):
             self._set_body(self.wslBody, cont)
             return
         self.state["family"] = te
-        # name the partitions actually searched, not a fixed "curated": with the optional uncurated partitions
-        # installed RepeatMasker searches them too, and a hit named only from the uncurated set must not be
-        # reported as curated (curated = manually reviewed; uncurated = auto-generated, less vetted).
-        _parts = ((d.get("dfam_library") or {}).get("partitions")) or []
-        _dfam_lbl = "Dfam 4.0 curated + uncurated" if any("uncurated" in str(p).lower() for p in _parts) else "Dfam 4.0 curated"
+        # Name the family set actually SEARCHED, which is decided by the run, not by what is on disk.
+        # RepeatMasker reads the curated families unless it is asked for both, so a machine with the
+        # uncurated partitions installed still searches curated-only by default — labelling such a result
+        # "curated + uncurated" would credit it with a search it did not perform. Conversely a hit named
+        # from the uncurated set must not be reported as curated: curated means manually reviewed,
+        # uncurated means automatically built and less vetted.
+        _dfam_lbl = ("Dfam 4.0 curated + uncurated" if d.get("include_uncurated")
+                     else "Dfam 4.0 curated only")
         head = QLabel(f"<b>Dfam · {te[0]['class_family']}</b> — {' · '.join(sorted({h['family'] for h in te}))} "
                       f"· {_dfam_lbl}{self._src_html('Dfam')} · RepeatMasker {d.get('repeatmasker_version','')}"
                       f"{self._src_html('RepeatMasker')} · species: {d.get('species','')}")
@@ -3198,6 +3832,11 @@ class MainWindow(QMainWindow):
         Re-probe WSL status when it closes so the panel reflects any newly-installed backend."""
         from install_dialog import InstallDialog
         dlg = InstallDialog(self)
+        # Destroy it on close. A QDialog with a parent is owned by Qt, and accept() only hides it, so
+        # every open used to leave behind a live dialog with its own Engine and QThreadPool. The header
+        # BACKEND button makes reopening cheap enough that a user checking on a long download would
+        # accumulate them for the life of the session.
+        dlg.setAttribute(Qt.WA_DeleteOnClose)
         dlg.finished.connect(lambda _=0: self._init_wsl())
         dlg.exec()
 
@@ -3368,9 +4007,17 @@ class MainWindow(QMainWindow):
         layout.addWidget(widget)
 
     def closeEvent(self, e):
-        it = getattr(self, "_prep_timer", None)               # the genome-download poll timer (the only QTimer here)
-        if it is not None:
-            it.stop()
+        # Stop EVERY polling timer, not a named one. This used to stop only the genome-download poll, so
+        # each timer added later (the annotation progress poll, for one) could still fire while the window
+        # was being torn down. Walking the children keeps that correct without anyone remembering to.
+        for t in self.findChildren(QTimer):
+            try:
+                t.stop()
+            except RuntimeError:                              # already destroyed by Qt — nothing to stop
+                pass
+        # Off-thread engine jobs are deliberately NOT waited on: a whole-genome annotation runs for hours
+        # inside WSL and resumes on the next launch, so blocking the close would trade a slow exit for no
+        # benefit. _Job._emit already drops results whose receiver has gone.
         super().closeEvent(e)
 
 
@@ -3436,7 +4083,9 @@ def selftest():
         if not widgets._HAS_XLSX:
             problems.append("openpyxl (XLSX table export) missing from bundle")
         else:
-            wb = widgets._XlWorkbook(); wb.active.append(["h", 1]); wb.save(io.BytesIO())
+            # go through the lazy accessor, which is the path a real export takes — this check exists to
+            # prove openpyxl actually LOADS and writes inside the frozen bundle, not merely that it is present
+            wb = widgets._xl()["Workbook"](); wb.active.append(["h", 1]); wb.save(io.BytesIO())
     except Exception as e:
         problems.append(f"XLSX export self-check failed: {type(e).__name__}: {e}")
     # the installer dialog must construct offscreen (it ships in the frozen build)

@@ -553,12 +553,35 @@ def _csv_escape(v, sep):
     return v
 
 
-try:                                                     # Excel export is optional: degrade to CSV/TSV if openpyxl is absent
-    from openpyxl import Workbook as _XlWorkbook
-    from openpyxl.styles import Font as _XlFont
-    _HAS_XLSX = True
-except Exception:
-    _HAS_XLSX = False
+# Excel export is optional: degrade to CSV/TSV if openpyxl is absent OR broken.
+#
+# The import is DEFERRED. openpyxl pulls numpy and costs ~245 ms — a quarter of a second added to every
+# launch, for a feature used only when someone exports a table. `find_spec` locates the package without
+# executing it, which is what makes the saving possible.
+#
+# But locating is a WEAKER test than importing: a present-but-broken install (a shadowing openpyxl.py, a
+# truncated package, a submodule that raises) passes find_spec and then fails on the first export. The old
+# eager `try: import ... except: _HAS_XLSX = False` caught that at startup and simply hid the Excel option.
+# To keep that behaviour, `_xl()` returns None instead of raising when the real import fails, and clears
+# `_HAS_XLSX` so every later menu, format list and writer sees the same answer the eager version gave.
+import importlib.util as _ilu
+
+_HAS_XLSX = _ilu.find_spec("openpyxl") is not None
+_XL = {}
+
+
+def _xl():
+    """Import openpyxl on first use; return None (and disable XLSX) if it cannot be imported."""
+    global _HAS_XLSX
+    if not _XL:
+        try:
+            from openpyxl import Workbook
+            from openpyxl.styles import Font
+        except Exception:
+            _HAS_XLSX = False                                # broken install: behave exactly as if absent
+            return None
+        _XL["Workbook"], _XL["Font"] = Workbook, Font
+    return _XL
 
 
 def _xlsx_val(v):
@@ -581,12 +604,17 @@ def _xlsx_val(v):
 
 
 def _export_xlsx(headers, rows, path):
-    wb = _XlWorkbook()
+    """Write the table as a workbook. Returns False when openpyxl cannot be imported, so the caller can
+    fall back — a broken install must cost the user their chosen FORMAT, never their data or a traceback."""
+    _x = _xl()                                           # first XLSX export pays the import, later ones do not
+    if _x is None:
+        return False                                     # unusable install — write_table falls back to CSV
+    wb = _x["Workbook"]()
     ws = wb.active
     ws.title = "TEagle"
     ws.append([str(h) for h in headers])
     for cell in ws[1]:
-        cell.font = _XlFont(bold=True)
+        cell.font = _x["Font"](bold=True)
     for r in rows:
         ws.append([_xlsx_val(c) for c in r])
     ws.freeze_panes = "A2"                                # keep the header visible while scrolling
@@ -644,8 +672,12 @@ def write_table(headers, rows, path):
     """Write a table to `path`, choosing the format from its extension."""
     low = str(path).lower()
     if low.endswith(".xlsx") and _HAS_XLSX:
-        _export_xlsx(headers, rows, path)
-        return
+        if _export_xlsx(headers, rows, path) is not False:
+            return
+        # openpyxl was locatable but would not import: write the same data as CSV under the chosen name's
+        # stem rather than failing. _xl() has already cleared _HAS_XLSX, so the option disappears next time.
+        path = path[:-5] + ".csv"
+        low = path.lower()
     sep = "\t" if low.endswith(".tsv") else ","
     with open(path, "w", encoding="utf-8-sig", newline="") as f:      # BOM so Excel reads UTF-8
         f.write(serialize_table(headers, rows, sep))

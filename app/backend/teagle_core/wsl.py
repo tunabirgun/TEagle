@@ -7,7 +7,7 @@ part of a command); the only interpolated values are a self-generated run-id and
 strictly-validated species token. No shell-string concatenation of untrusted input.
 """
 from __future__ import annotations
-import os, subprocess, re, secrets, threading
+import os, subprocess, re, secrets, threading, hashlib
 from . import appdirs
 
 # Suppress the console-window flash when the windowed GUI spawns wsl.exe (Windows only; 0 elsewhere).
@@ -287,16 +287,72 @@ _DFAM_BASE = "https://www.dfam.org/releases/Dfam_4.0/families/FamDB"   # pinned 
 _DFAM_FILES = {
     "dfam_root":    ("dfam40.0.h5", "234d177775f1bf3445b1fe146bc6e65e"),
     "dfam_curated": ("dfam40.curated.consensus.0.h5", "7892e18016fc820264e625cbb9ec607b"),
-    # OPTIONAL uncurated consensus partitions. The curated library holds only ~9 families for
-    # D. melanogaster: copia, gypsy, hobo and mdg1 — and most plant and invertebrate TE families —
-    # are UNCURATED in Dfam 4.0, so a curated-only search returns nothing for them. Not installed by
-    # default: partition 1 alone is 3.85 GiB compressed. md5s from Dfam's own .md5 sidecars.
+    # OPTIONAL uncurated consensus partitions. What they add is entirely lineage-dependent — measured
+    # curated-only vs all: Arabidopsis 9 -> 512 models, yeast 9 -> 398, Drosophila 399 -> 998, human
+    # 1439 -> 1439 (see _DFAM_CURATED_COVERAGE). For a plant or a fungus a curated-only search finds no
+    # transposable element at all. Not installed by default: partition 1 alone is 3.85 GiB compressed
+    # and 22.6 GiB unpacked. md5s from Dfam's own .md5 sidecars.
     "dfam_unc_root": ("dfam40.uncurated.consensus.0.h5", "e7092e3ba01d887d4e7f84c86fa2d2ba"),
     "dfam_unc_euk":  ("dfam40.uncurated.consensus.1.h5", "2803414c3420cd8b9ebbc077d78491c4"),
 }
 
-# free space each Dfam artefact needs (compressed download + the decompressed .h5 alongside it)
-_DFAM_NEED_GB = {"dfam_root": 2, "dfam_curated": 2, "dfam_unc_root": 2, "dfam_unc_euk": 14}
+# Unpacked size of each partition, in bytes, MEASURED with `stat -c %s` after gunzip (Dfam 4.0,
+# 2026-07-31). It cannot be derived at run time: a gzip trailer stores the original size modulo 4 GiB,
+# and the eukaryote partition is 22.6 GiB. This is the single source for both the disk-space gate in
+# _dfam_step and the "free space needed" figure the installer panel shows, so the two cannot drift.
+# The panel previously said ~14 GB for a file that needs 22.6 GiB unpacked: a machine with 15 GB free
+# passed the gate, downloaded for an hour, then failed at decompression.
+_DFAM_UNPACKED_B = {
+    "dfam_root":       447531894,
+    "dfam_curated":    155463080,
+    "dfam_unc_root":     1865736,
+    "dfam_unc_euk":  24242422200,
+}
+
+# Compressed size of each archive, from the server's own Content-Length (measured 2026-07-31). The run
+# takes the live HEAD when it can; this is the fallback, so a HEAD that fails cannot silently drop the
+# download half of the disk-space gate and let a transfer start that has nowhere to land.
+_DFAM_ARCHIVE_B = {
+    "dfam_root":       60708386,
+    "dfam_curated":    28260067,
+    "dfam_unc_root":     264500,
+    "dfam_unc_euk":  4130166278,
+}
+
+
+def _gib(n: int) -> str:
+    """Bytes as GiB for user-facing text, matching how `df` and the install log report free space."""
+    return f"{n / 1073741824:.1f} GiB"
+
+
+# What the CURATED partitions alone cover, per lineage: (curated-only, curated + uncurated) family models.
+# MEASURED 2026-07-31 on Dfam 4.0 with the same query dfam_lineage_families() makes — `famdb.py families
+# -a -f summary "<species>"` counted over its "len=" lines — first with only dfam40.0.h5 +
+# dfam40.curated.consensus.0.h5 present, then with both uncurated partitions added.
+#
+# This exists because the app used to tell a user "the curated library holds just 9 families for
+# Drosophila melanogaster, and copia, gypsy, hobo and mdg1 are not among them". Both halves are false:
+# curated-only Drosophila holds 399 models and does contain Copia_I, Copia_LTR, Gypsy_I, Gypsy_LTR, hobo
+# and MDG1_I/LTR. The 9 was the yeast figure attached to the wrong organism. Coverage is not a property
+# of Dfam as a whole — it is a property of the lineage — so the panels quote this table rather than one
+# number, and dfam_lineage_families() reports the live count for the organism actually selected.
+_DFAM_CURATED_COVERAGE = {
+    "Homo sapiens":             (1439, 1439),
+    "Drosophila melanogaster":  (399, 998),
+    "Arabidopsis thaliana":     (9, 512),
+    "Saccharomyces cerevisiae": (9, 398),
+}
+
+
+def curated_coverage_sentence() -> str:
+    """One sentence naming the best- and worst-covered lineages in the measured table, built from that
+    table so a figure shown on screen can never drift from the measurement it came from."""
+    best = max(_DFAM_CURATED_COVERAGE.items(), key=lambda kv: kv[1][0] / max(kv[1][1], 1))
+    worst = min(_DFAM_CURATED_COVERAGE.items(), key=lambda kv: kv[1][0] / max(kv[1][1], 1))
+    (bs, (bc, bu)), (ws, (wc, wu)) = best, worst
+    same = " — the same set either way" if bc == bu else ""
+    return (f"{bs} has {bc} of {bu} family models in the curated partitions alone{same}, "
+            f"while {ws} has only {wc} of {wu}.")
 
 _PRELUDE = r'''#!/usr/bin/env bash
 set -uo pipefail
@@ -317,8 +373,37 @@ if [ -d "$LOCK" ] && { [ ! -f "$LOCK/pid" ] || ! kill -0 "$(cat "$LOCK/pid" 2>/d
 fi
 if ! mkdir "$LOCK" 2>/dev/null; then echo "[teagle] FAILED: install already running"; exit 1; fi
 echo $$ > "$LOCK/pid"
-trap 'rm -rf "$LOCK" 2>/dev/null' EXIT
+# BG holds any background helper (a download and its progress watcher). Closing the app kills the WSL
+# session and with it this script; without the kill here the watcher is orphaned and keeps appending to
+# the log after the lock is gone, so the panel would report progress for a download that is no longer running.
+BG=""
+cleanup(){ [ -n "$BG" ] && kill $BG 2>/dev/null; rm -rf "$LOCK" 2>/dev/null; return 0; }
+trap cleanup EXIT
+trap 'cleanup; exit 143' TERM HUP INT
 fail(){ echo "[teagle] FAILED: $1"; exit 1; }
+# byte count as a size a reader can act on. Fixed MiB renders the 0.3 MiB Dfam root partition as "0 MiB";
+# numfmt picks the unit from the number itself, and falls back to MiB where coreutils is too old for it.
+hr(){ [ "${1:-0}" -eq 0 ] && { echo 0; return 0; }; numfmt --to=iec --format='%.1f' "$1" 2>/dev/null || echo "$(($1/1048576))M"; }
+# Did a download finish? Answered ONLY from positive evidence: curl exited clean, or the file reached a
+# known total. Everything else is "partial". This decides whether a failed checksum may delete the file,
+# and deleting a multi-gigabyte partial costs the user the whole transfer again — so an unknown total
+# (the size HEAD can fail, or a server can answer without Content-Length) must never license a delete.
+#   $1 curl exit status   $2 total bytes, 0 = unknown   $3 bytes on disk
+transfer_state(){
+  [ "$1" -eq 0 ] && { echo complete; return 0; }
+  [ "$2" -gt 0 ] && [ "$3" -ge "$2" ] && { echo complete; return 0; }
+  echo partial
+}
+# Free bytes a partition still needs: what is LEFT to fetch (bytes already on disk are not demanded a
+# second time on a resume), plus the library it unpacks to, plus a gigabyte of headroom — gunzip holds
+# the archive and its output at once. An unknown live total falls back to the measured archive size, so
+# a failed size request cannot silently drop the download half of the estimate.
+#   $1 live total, 0 = unknown   $2 measured archive size   $3 bytes on disk   $4 unpacked size
+space_need(){
+  a=$1; [ "$a" -gt 0 ] || a=$2
+  l=$(( a > $3 ? a - $3 : 0 ))
+  echo $(( l + $4 + 1073741824 ))
+}
 # A truncated/corrupt repodata shard (interrupted or concurrent fetch) makes every solve die with
 # "Could not load repodata.json ... after retry" and stays stuck across re-runs. On the first failure
 # purge the index cache + pkgs cache (mamba's own advice: `clean -a`) and retry once — never touch the
@@ -332,8 +417,34 @@ mm_reset_cache(){
 }
 mm_create(){   # create the shared 'te' env if absent; clean-index + retry once on a solve failure
   [ -d "$ENV/conda-meta" ] && return 0
-  "$MM" create -y -n te -c conda-forge -c bioconda && return 0
-  mm_reset_cache; "$MM" create -y -n te -c conda-forge -c bioconda
+  # A prefix that exists but holds no conda-meta is not an environment, and micromamba refuses it
+  # outright ("Non-conda folder exists at prefix - aborting"), permanently. A Dfam partition installed
+  # before the environment existed leaves exactly that: its famdb directory creates the prefix. Set the
+  # stray content aside, create the environment, then move the libraries back — the download can be
+  # several gigabytes, so it is moved rather than copied and never re-fetched.
+  STASH=""
+  if [ -d "$ENV" ]; then
+    echo "[teagle] $ENV exists but is not a conda environment — setting it aside to create one"
+    STASH="$ENV.stash.$$"
+    mv "$ENV" "$STASH" || fail "cannot set aside the non-environment prefix at $ENV"
+  fi
+  if ! "$MM" create -y -n te -c conda-forge -c bioconda; then
+    mm_reset_cache
+    if ! "$MM" create -y -n te -c conda-forge -c bioconda; then
+      [ -n "$STASH" ] && mv "$STASH" "$ENV"      # restore what was there; the caller reports the failure
+      return 1
+    fi
+  fi
+  if [ -n "$STASH" ]; then
+    OLDFAM="$STASH/share/RepeatMasker/Libraries/famdb"
+    if [ -d "$OLDFAM" ]; then
+      mkdir -p "$FAMDIR"
+      for f in "$OLDFAM"/*; do [ -e "$f" ] && mv -f "$f" "$FAMDIR/"; done
+      echo "[teagle] kept the Dfam files that were downloaded before the environment existed"
+    fi
+    rm -rf "$STASH"
+  fi
+  return 0
 }
 mm_install(){  # install package(s) into 'te'; clean-index + force-reinstall retry once on a solve failure
   "$MM" install -y -n te -c conda-forge -c bioconda "$@" && return 0
@@ -345,21 +456,84 @@ echo "[teagle] START $(date -u +%FT%TZ)"
 
 def _dfam_step(key: str) -> str:
     fname, md5 = _DFAM_FILES[key]
-    need = _DFAM_NEED_GB.get(key, 2)
+    unpacked = _DFAM_UNPACKED_B[key]
+    unpacked_h = _gib(unpacked)
+    archive = _DFAM_ARCHIVE_B[key]
     return f'''
 echo "[teagle] STEP {key} START"
 mkdir -p "$FAMDIR" || fail "mkdir famdb"
 cd "$FAMDIR" || fail "cd famdb"
-if [ -f "{fname}" ]; then echo "[teagle] {fname} already present"; else
-  avail_gb=$(df -BG --output=avail . 2>/dev/null | tail -1 | tr -dc '0-9'); avail_gb=${{avail_gb:-99}}
-  [ "$avail_gb" -ge {need} ] || fail "insufficient disk space (${{avail_gb}}G free, need ~{need}G)"
-  echo "[teagle] downloading {fname}.gz (resumable)"
-  # if the .gz is already complete, a resumed request returns HTTP 416 and --fail errors — don't abort;
-  # fall through to the md5 gate, which validates a good file or removes a bad one for a clean retry.
-  curl -L --fail -C - --retry 5 --retry-delay 5 -o "{fname}.gz" "{_DFAM_BASE}/{fname}.gz" || {{ [ -f "{fname}.gz" ] || fail "download {fname}"; }}
-  echo "{md5}  {fname}.gz" | md5sum -c - || {{ rm -f "{fname}.gz"; fail "md5 mismatch {fname} (removed; re-run to retry)"; }}
-  echo "[teagle] md5 OK {fname}"
+if [ -f "{fname}" ]; then echo "[teagle] {fname} already present — delete it inside WSL to force a fresh download"; else
+  # Total size comes from a separate HEAD. A resumed (-C -) GET answers 206 with Content-Length set to
+  # the REMAINING bytes, so reading the total off the transfer itself would make every percentage wrong.
+  # Retried like the transfer itself: an unknown total costs the percentage AND the completeness evidence
+  # that decides whether a failed checksum may delete the file.
+  total_b=$(curl -sIL --max-time 60 --retry 3 --retry-delay 2 "{_DFAM_BASE}/{fname}.gz" | tr -d '\\r' | awk 'tolower($1)=="content-length:"{{n=$2}} END{{print n+0}}')
+  total_b=${{total_b:-0}}
+  have_b=$(stat -c %s "{fname}.gz" 2>/dev/null || echo 0)
+  # Gate on what this file still needs. The unpacked size is measured ({unpacked_h}) because a gzip
+  # trailer records the original size only modulo 4 GiB and this library is far larger than that.
+  need_b=$(space_need "$total_b" {archive} "$have_b" {unpacked})
+  avail_b=$(df -B1 --output=avail . 2>/dev/null | tail -1 | tr -dc '0-9')
+  # an EMPTY reading means df could not answer and the gate cannot judge; a reading of 0 means a full
+  # disk, which must fail rather than be waved through as "unknown"
+  if [ -n "$avail_b" ] && [ "$avail_b" -lt "$need_b" ]; then
+    fail "not enough disk space in WSL for {fname}: $(hr $avail_b) free, $(hr $need_b) needed (it unpacks to $(hr {unpacked}), and the archive sits beside it until it does)"
+  fi
+  if [ "$total_b" -gt 0 ]; then
+    echo "[teagle] downloading {fname}.gz — $(hr $total_b) total, $(hr $have_b) already here (resumes where it stopped if interrupted)"
+  else
+    echo "[teagle] downloading {fname}.gz (resumes where it stopped if interrupted)"
+  fi
+  # curl's own meter is one endless carriage-return line, which the app's log panel cannot tail — a
+  # multi-GB download looked frozen there. Silence it (-sS keeps real errors) and report whole lines
+  # from a watcher instead, so progress is visible while the transfer runs.
+  curl -sS -L --fail -C - --retry 5 --retry-delay 5 -o "{fname}.gz" "{_DFAM_BASE}/{fname}.gz" &
+  dl_pid=$!
+  (
+    while kill -0 "$dl_pid" 2>/dev/null; do
+      sleep 15
+      kill -0 "$dl_pid" 2>/dev/null || break
+      now_b=$(stat -c %s "{fname}.gz" 2>/dev/null || echo 0)
+      # a percentage is only printed when the total is known AND consistent with what is on disk;
+      # a redirect hop's Content-Length would otherwise produce a figure above 100%
+      if [ "$total_b" -gt 0 ] && [ "$now_b" -le "$total_b" ]; then
+        echo "[teagle] {fname}.gz  $(hr $now_b) / $(hr $total_b)  ($((now_b*100/total_b))%)"
+      else
+        echo "[teagle] {fname}.gz  $(hr $now_b) downloaded"
+      fi
+    done
+  ) &
+  mon_pid=$!
+  BG="$dl_pid $mon_pid"
+  wait "$dl_pid"; dl_rc=$?
+  kill "$mon_pid" 2>/dev/null; wait "$mon_pid" 2>/dev/null; BG=""
+  now_b=$(stat -c %s "{fname}.gz" 2>/dev/null || echo 0)
+  [ "$now_b" -gt 0 ] || fail "download {fname} produced no file"
+  # the two silent stages warn about their cost only when the file is actually large enough to have one
+  slow=""; [ "$now_b" -gt 1073741824 ] && slow=" — a few minutes at this size"
+  # An INTERRUPTED transfer must not reach the delete-on-mismatch gate below: that would throw away a
+  # multi-GB partial the next run could have resumed, and the panel promises it resumes. Without positive
+  # evidence the transfer completed, the archive is still CHECKED — a complete file whose size was never
+  # advertised verifies fine, and refusing it outright would loop forever — but it is never deleted.
+  verified=0
+  if [ "$(transfer_state "$dl_rc" "$total_b" "$now_b")" = partial ]; then
+    echo "[teagle] the transfer ended early at $(hr $now_b) — checking whether what is here is nonetheless complete$slow"
+    if echo "{md5}  {fname}.gz" | md5sum -c - >/dev/null 2>&1; then
+      echo "[teagle] md5 OK {fname} — the file was complete despite the transfer error"
+      verified=1
+    else
+      fail "download interrupted at $(hr $now_b) — the partial file is KEPT; start it again and it resumes from there"
+    fi
+  fi
+  if [ "$verified" -eq 0 ]; then
+    echo "[teagle] downloaded $(hr $now_b) — verifying checksum$slow"
+    echo "{md5}  {fname}.gz" | md5sum -c - || {{ rm -f "{fname}.gz"; fail "md5 mismatch {fname} — the file transferred completely but its contents are wrong, so it was removed; start it again for a clean download"; }}
+    echo "[teagle] md5 OK {fname}"
+  fi
+  echo "[teagle] decompressing {fname}.gz$slow"
   gunzip -f "{fname}.gz" || fail "gunzip {fname}"
+  echo "[teagle] decompressed {fname} — $(hr $(stat -c %s "{fname}" 2>/dev/null || echo 0)) on disk"
 fi
 cd "$HOME"
 echo "[teagle] STEP {key} OK"
@@ -520,9 +694,19 @@ _COMP_META = [
      "Optional. Uncurated root partition (0.3 MiB). Curated-only search names very few families outside "
      "the root set."),
     ("dfam_unc_euk",  "Dfam uncurated · Eukaryota (optional)", True,
-     "Optional, 3.9 GiB download (~14 GB free needed while extracting). Adds the uncurated eukaryote "
-     "families — copia, gypsy, hobo, Ac, Tnt1, Tc1 and most plant/invertebrate TEs are uncurated in "
-     "Dfam 4.0 and cannot be named without it."),
+     f"Optional, 3.9 GiB download that unpacks to {_gib(_DFAM_UNPACKED_B['dfam_unc_euk'])} — leave about "
+     f"{_gib(_DFAM_UNPACKED_B['dfam_unc_euk'] + 5 * 1073741824)} free in WSL, since the archive and the "
+     "library it unpacks to are both on disk for a while. Adds the uncurated eukaryote "
+     "families — copia, gypsy, hobo, Ac, Tnt1, Tc1, the yeast Ty elements and most plant/invertebrate TEs "
+     "are uncurated in Dfam 4.0 and cannot be named without it. Installing it is only half of what is "
+     "needed: RepeatMasker searches curated families ONLY unless it is asked for both, so choose the "
+     "'include uncurated families' library option to actually use what this downloads. Measured on baker's "
+     "yeast, curated-only searches 9 families and finds no transposable element at all, while including "
+     "uncurated searches 421 more and finds Ty elements over 4.5% of the genome. Expect roughly 40-60 minutes: Dfam serves "
+     "this file at about 2 MB/s per client, and measured here, splitting it across parallel connections "
+     "made it SLOWER, not faster. The download resumes where it stopped if it is interrupted, so a failed "
+     "attempt does not start over. There is no smaller alternative: RepeatMasker's RMBLAST engine reads the "
+     "consensus component, which Dfam 4.0 ships as only a root partition and this one."),
 ]
 
 
@@ -658,13 +842,19 @@ def components_status() -> dict:
             "disk_free_gb": kv.get("disk_free_gb"), "components": [comp[c[0]] for c in _COMP_META]}
 
 
+# which Dfam partitions the default install ships, and which are installed only on request — read off
+# the step list rather than restated, so adding a partition cannot leave the integrity probe behind
+_DFAM_REQUIRED = [k for k in _DFAM_FILES if k in _ALL_STEPS]
+_DFAM_OPTIONAL = [k for k in _DFAM_FILES if k not in _ALL_STEPS]
+
 _INTEGRITY_PROBE = r'''cd "$HOME" 2>/dev/null
 export MAMBA_ROOT_PREFIX="$HOME/micromamba"
 MM="$HOME/bin/micromamba"; ENV="$HOME/micromamba/envs/te"; FAMDIR="$ENV/share/RepeatMasker/Libraries/famdb"
 echo "=RM="; "$MM" run -n te RepeatMasker -v 2>&1 | head -1
 echo "=MM="; "$ENV/bin/minimap2" --version 2>&1 | head -1
 echo "=FAMDB="; "$MM" run -n te famdb.py info 2>&1 | grep -iE "version|families|consensus" | head -3
-echo "=FILES="; for f in dfam40.0.h5 dfam40.curated.consensus.0.h5; do if [ -f "$FAMDIR/$f" ]; then echo "present $f $(stat -c %s "$FAMDIR/$f" 2>/dev/null)"; else echo "MISSING $f"; fi; done
+echo "=FILES="; for f in ''' + " ".join(_DFAM_FILES[k][0] for k in _DFAM_REQUIRED) + r'''; do if [ -f "$FAMDIR/$f" ]; then echo "present $f $(stat -c %s "$FAMDIR/$f" 2>/dev/null)"; else echo "MISSING $f"; fi; done
+echo "=OPTFILES="; for f in ''' + " ".join(_DFAM_FILES[k][0] for k in _DFAM_OPTIONAL) + r'''; do if [ -f "$FAMDIR/$f" ]; then echo "present $f"; else echo "absent $f"; fi; done
 echo "=SCAN="; { [ -x "$ENV/bin/isPcr" ] && echo "isPcr present"; } || echo "isPcr MISSING"; { [ -x "$ENV/bin/datasets" ] && echo "datasets present"; } || echo "datasets MISSING"
 echo "=VRNA="; "$MM" run -n teagle-vrna python -c "import RNA;print('ViennaRNA '+RNA.__version__)" 2>&1 | head -1
 '''
@@ -692,12 +882,19 @@ def integrity_check() -> dict:
     mm_txt = " ".join(sec.get("MM", [])).strip()
     fam_txt = " ".join(sec.get("FAMDB", []))
     files = [l for l in sec.get("FILES", []) if l.strip()]
+    # optional partitions are REPORTED, never graded: absent is a normal state, and a user who has just
+    # spent 40 minutes downloading one should be able to see it named here rather than infer it
+    opt = [l.split() for l in sec.get("OPTFILES", []) if l.strip()]
+    opt_txt = ", ".join(f"{f} {'present' if s == 'present' else 'not installed'}" for s, f in opt if f)
     scan_txt = " ".join(sec.get("SCAN", []))
     checks = [
         {"name": "RepeatMasker runs", "ok": "RepeatMasker version" in rm_txt, "detail": rm_txt.strip()[:80] or "no version reported"},
         {"name": "minimap2 runs", "ok": bool(re.match(r"^\d+\.\d+", mm_txt)), "detail": mm_txt[:60] or "no version reported"},
         {"name": "FamDB loads", "ok": bool(re.search(r"(?i)version|families|consensus", fam_txt)), "detail": fam_txt.strip()[:90] or "famdb.py info returned nothing"},
-        {"name": "Dfam library files present", "ok": len(files) >= 2 and all(f.startswith("present") for f in files), "detail": "; ".join(files)[:90] or "missing"},
+        {"name": "Dfam library files present",
+         "ok": len(files) >= len(_DFAM_REQUIRED) and all(f.startswith("present") for f in files),
+         "detail": ("; ".join(files)[:90] or "missing")
+                   + (f" | optional: {opt_txt}" if opt_txt else "")},
         # the whole-genome off-target scan needs isPcr + NCBI datasets; verify them here so a "healthy" deep-check
         # never precedes a scan that fails at first use (same binding-truthfulness class as the fixed unzip gap)
         {"name": "isPcr + NCBI datasets (whole-genome scan)", "ok": "isPcr present" in scan_txt and "datasets present" in scan_txt,
@@ -706,12 +903,19 @@ def integrity_check() -> dict:
     return {"ok": all(c["ok"] for c in checks), "checks": checks, "raw": out[-1500:]}
 
 
-def install_log(tail: int = 40) -> str:
+def install_log(tail: int = 200) -> str:
+    """Tail the in-WSL install log, normalised for a plain-text panel.
+
+    A tool that draws a carriage-return progress meter (micromamba's solver, and curl before the Dfam
+    step was changed to report whole lines) writes its entire meter as ONE line. `tail -n` then returns
+    a single line of hundreds of kilobytes that no log panel can render usefully, so the read is bounded
+    by bytes and each line is collapsed to the text after its last CR — the state the meter ended on."""
     try:
-        _, out, _ = _wsl(f'tail -n {int(tail)} "$HOME/teagle_wsl_install.log" 2>/dev/null || echo "(no install log yet)"', timeout=30)
-        return out
+        _, out, _ = _wsl('tail -c 262144 "$HOME/teagle_wsl_install.log" 2>/dev/null || echo "(no install log yet)"', timeout=30)
     except Exception as e:
         return f"(log unavailable: {e})"
+    lines = [ln.rpartition("\r")[2] for ln in out.replace("\r\n", "\n").split("\n")]
+    return "\n".join(lines[-int(tail):])
 
 
 # ---------- WSL2 itself (Windows-side, elevated) — install the distro when WSL is absent ----------
@@ -827,8 +1031,14 @@ def resolve_species(species: str, timeout: int = 90) -> dict:
     return {"ok": True}
 
 
-def annotate(fasta_text: str, species: str | None = None, threads: int = 4, timeout: int = 600) -> dict:
-    """Run RepeatMasker (WSL) on the sequence and return family-level hits (Layer A)."""
+def annotate(fasta_text: str, species: str | None = None, threads: int = 4, timeout: int = 600,
+             include_uncurated: bool = False) -> dict:
+    """Run RepeatMasker (WSL) on the sequence and return family-level hits (Layer A).
+
+    `include_uncurated` decides WHICH families are reachable, so it is part of the result's identity, not
+    a convenience. RepeatMasker searches curated families only unless asked for both, and for most
+    lineages nearly every family is uncurated — so without this flag the optional uncurated partitions a
+    user downloaded are on disk but unreachable, and a blank result means "not searched", not "not there"."""
     sp = ""
     if species:
         if not _SPECIES_RE.match(species):           # validate untrusted input first (hermetic, fast)
@@ -836,7 +1046,7 @@ def annotate(fasta_text: str, species: str | None = None, threads: int = 4, time
         chk = resolve_species(species)
         if not chk.get("ok"):
             return {"ok": False, "error": chk["error"], "ambiguous_species": chk.get("ambiguous", False)}
-        sp = f'-species "{species}"'
+        sp = f'-species "{species}"' + (" -uncurated" if include_uncurated else "")
     st = env_status()
     if not st["ready"]:
         return {"ok": False, "error": "WSL annotation backend not ready "
@@ -864,6 +1074,11 @@ def annotate(fasta_text: str, species: str | None = None, threads: int = 4, time
         return {"ok": True, "hits": hits, "n_hits": len(hits),
                 "repeatmasker_version": st["repeatmasker"], "raw_out": out[-4000:],
                 "dfam_version": (lib or {}).get("version"), "dfam_library": lib,
+                # which family universe was searched — the same library with and without this flag
+                # answers a different question, so it travels with the result and into the seal
+                "include_uncurated": bool(include_uncurated),
+                "library_kind": ("installed Dfam partitions, curated + uncurated" if include_uncurated
+                                 else "installed Dfam partitions, curated families only"),
                 "species": species or "(all installed families)"}
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": f"RepeatMasker timed out after {timeout}s"}
@@ -1286,6 +1501,436 @@ def genome_scan(accession: str, query_text: str, max_size: int = 4000, min_size:
             _wsl(f'rm -rf /tmp/{rid}', timeout=30)             # always clean the staged query dir, even on timeout
         except Exception:
             pass
+
+
+# ---------------- whole-genome TE annotation (RepeatMasker over a cached assembly) ----------------
+# Design constraints this script exists to satisfy:
+#   * a mammalian genome yields millions of hits and ~1 GB of .out text, so the per-hit rows NEVER cross
+#     into the app — the summary is aggregated here, in awk, and the detail stays on disk in WSL until the
+#     user exports it;
+#   * work is done in contig CHUNKS so the UI can show N-of-M progress, a cancel can keep what finished,
+#     and a re-run resumes instead of restarting;
+#   * every chunk's RepeatMasker exit code is checked, so a failed chunk fails the run loudly instead of
+#     being summarised as "no repeats found";
+#   * the run is only ever sealed as COMPLETE when every chunk finished (see genome_annotate).
+_GENOME_ANNOT_LOG = "$HOME/teagle_genome_annotate.log"
+
+_ANNOT_SCRIPT = r'''#!/usr/bin/env bash
+set -uo pipefail
+cd "$HOME" || exit 1
+export MAMBA_ROOT_PREFIX="$HOME/micromamba"
+ENV="$HOME/micromamba/envs/te"
+ACC="__ACC__"
+GDIR="$HOME/teagle_genomes/$ACC"
+ADIR="$GDIR/annot"
+LOG="$HOME/teagle_genome_annotate.log"
+CHUNKBP=__CHUNKBP__
+PA=__PA__
+SENS="__SENS__"
+plog(){ echo "[annot] $1"; echo "$1" >> "$LOG"; }
+[ -f "$GDIR/.done" ] || { echo "FAIL genome not prepared"; exit 1; }
+mkdir -p "$ADIR" || { echo "FAIL mkdir"; exit 1; }
+LOCK="$ADIR/.lock"
+if [ -d "$LOCK" ] && { [ ! -f "$LOCK/pid" ] || ! kill -0 "$(cat "$LOCK/pid" 2>/dev/null)" 2>/dev/null; }; then rm -rf "$LOCK" 2>/dev/null; fi
+if ! mkdir "$LOCK" 2>/dev/null; then echo "FAIL an annotation for this genome is already running"; exit 1; fi
+echo $$ > "$LOCK/pid"
+trap 'rm -rf "$LOCK" 2>/dev/null' EXIT
+
+# 1) a FASTA is required (the cache keeps a compact 2bit for isPcr; RepeatMasker needs the sequence).
+FNA="$GDIR/genome.fna"
+if [ ! -s "$FNA" ]; then
+  plog "fetching genome FASTA (one time; kept for later runs)"
+  cd "$GDIR" || exit 1
+  ok=0; delay=5
+  for attempt in 1 2 3 4 5; do
+    if "$ENV/bin/datasets" download genome accession "$ACC" --include genome --filename adl.zip >/dev/null 2>adl.err; then ok=1; break; fi
+    [ "$attempt" = 5 ] && break
+    plog "download attempt $attempt did not complete — retrying in ${delay}s"; rm -f adl.zip; sleep "$delay"; delay=$((delay*2))
+  done
+  [ "$ok" = 1 ] || { echo "FAIL genome download (after 5 attempts): $(tail -c 200 adl.err 2>/dev/null | tr '\n' ' ')"; exit 1; }
+  rm -rf aex; mkdir -p aex
+  if python3 -m zipfile -e adl.zip aex/ 2>/dev/null; then :
+  elif command -v unzip >/dev/null 2>&1 && unzip -oq adl.zip -d aex; then :
+  else echo "FAIL extract (need python3 with zipfile, or unzip)"; exit 1; fi
+  rm -f adl.zip
+  SRC=$(find aex -name '*_genomic.fna' | head -1)
+  [ -n "$SRC" ] || { echo "FAIL no genomic fna in package"; exit 1; }
+  # the sealed identity is the SOURCE FASTA sha256 recorded at prepare time; refuse to annotate a file
+  # that is not the sequence this genome was sealed from, rather than silently annotating something else.
+  WANT=$(sed -n 's/^sha256=//p' "$GDIR/meta.txt")
+  GOT=$(sha256sum "$SRC" | cut -d' ' -f1)
+  if [ -n "$WANT" ] && [ "$WANT" != "$GOT" ]; then rm -rf aex; echo "FAIL fetched FASTA does not match the sealed genome checksum"; exit 1; fi
+  mv "$SRC" "$FNA" 2>/dev/null || cp "$SRC" "$FNA"; rm -rf aex
+fi
+
+# 2) disk: the chunk set is written up front and each chunk is deleted as it is consumed, so the peak
+# extra requirement is one FASTA. Derived from the actual file, never a fixed number.
+FBYTES=$(stat -c %s "$FNA" 2>/dev/null || echo 0)
+NEEDG=$(( FBYTES / 1073741824 + 2 ))
+availg=$(df -BG --output=avail "$GDIR" 2>/dev/null | tail -1 | tr -dc '0-9'); availg=${availg:-0}
+[ "$availg" -ge "$NEEDG" ] || { echo "FAIL insufficient disk (${availg}G free, need >=${NEEDG}G to annotate this genome)"; exit 1; }
+
+# 3) split into contig chunks of ~CHUNKBP bases (one streaming pass; a contig is never split in half, so
+# every RepeatMasker coordinate stays a real coordinate on a real contig).
+# A resumed run MUST use the same library, species, sensitivity and chunk size as the chunks already on
+# disk. Otherwise half the assembly is searched one way and half another, and the seal — which records a
+# single value for each — would describe a run that never happened. The parameters are written beside the
+# chunks at first split and compared on every resume; a mismatch stops the run and says what differs.
+RUNSIG="species=__SPSIG__|sens=$SENS|chunkbp=$CHUNKBP"
+if [ -f "$ADIR/.runsig" ]; then
+  OLDSIG=$(cat "$ADIR/.runsig")
+  if [ "$OLDSIG" != "$RUNSIG" ]; then
+    echo "FAIL this genome has a part-finished annotation run with different settings ($OLDSIG) than the ones requested ($RUNSIG). Finish or discard that run before starting a different one."
+    exit 1
+  fi
+fi
+printf '%s' "$RUNSIG" > "$ADIR/.runsig"
+if [ ! -f "$ADIR/.split_done" ]; then
+  plog "splitting genome into work chunks"
+  rm -f "$ADIR"/chunk_*.fa
+  awk -v dir="$ADIR" -v lim="$CHUNKBP" '
+    /^>/ { if (n > 0 && bp >= lim) { close(f); i++; bp = 0 }
+           if (f == "") { i = 1 } ; f = sprintf("%s/chunk_%04d.fa", dir, i); n++ }
+    f == "" { next }                      # sequence before any header: malformed, skip rather than write to ""
+    { print >> f }
+    !/^>/ { bp += length($0) }
+  ' "$FNA" || { echo "FAIL split"; exit 1; }
+  touch "$ADIR/.split_done"
+fi
+# a finished chunk has its .fa deleted and its .out kept, so the work total is pending + finished — counting
+# only the .fa files made a fully-completed genome look like "no chunks produced" on a re-run.
+PEND_N=$(ls "$ADIR"/chunk_*.fa 2>/dev/null | wc -l)
+DONE_N=$(ls "$ADIR"/chunk_*.out 2>/dev/null | wc -l)
+TOTAL=$((PEND_N + DONE_N))
+[ "$TOTAL" -ge 1 ] || { echo "FAIL no chunks produced"; exit 1; }
+plog "chunks: $TOTAL total, $DONE_N already finished"
+echo "TOTAL_CHUNKS $TOTAL"
+
+# 4) RepeatMasker per chunk. A chunk whose .out already exists is skipped (resume). Each exit code is
+# checked: a nonzero exit aborts the run instead of contributing an empty .out to the summary.
+cd "$ADIR" || exit 1
+idx=0
+for c in chunk_*.fa; do
+  [ -e "$c" ] || continue
+  idx=$((idx+1))
+  base="${c%.fa}"
+  [ -s "$base.out" ] && continue
+  plog "RepeatMasker chunk $idx/$TOTAL"
+  # invoked through micromamba (as annotate() does), not the bare binary: RepeatMasker needs the env's
+  # Perl/library variables set, which `micromamba run` provides and a direct exec does not.
+  "$HOME/bin/micromamba" run -n te RepeatMasker -pa "$PA" $SENS __SP__ "$c" >"$base.rmlog" 2>&1
+  ec=$?
+  if [ "$ec" != "0" ]; then echo "FAIL RepeatMasker exited $ec on chunk $idx: $(tail -3 "$base.rmlog" | tr '\n' ' ')"; exit 1; fi
+  # RepeatMasker writes <chunk>.fa.out; a chunk with no repeats legitimately produces a header-only file.
+  if [ -f "$c.out" ]; then mv "$c.out" "$base.out"; else printf '' > "$base.out"; fi
+  rm -f "$c" "$c.masked" "$c.cat" "$c.cat.gz" "$c.tbl" "$c.ori.out" 2>/dev/null
+  echo "CHUNK_DONE $idx/$TOTAL"
+done
+
+# 5) combine + summarise. The summary is computed HERE so the app never reads the per-hit rows: for each
+# repeat class/family, the hit count, the bases covered, and the divergence averaged weighted by length.
+plog "summarising"
+cat chunk_*.out > all.out 2>/dev/null || true
+GENOME_BP=$(awk '!/^>/ { t += length($0) } END { print t+0 }' "$FNA")
+echo "GENOME_SHA256 $(sed -n 's/^sha256=//p' "$GDIR/meta.txt")"
+# Coverage is computed on MERGED intervals, per family and overall. RepeatMasker legitimately emits
+# overlapping rows for the same bases (a younger element inserted into an older one, and its own
+# fragmented re-alignments), so summing row lengths double-counts sequence and can push the reported
+# coverage above what is actually masked. Rows are sorted by family and start, then merged before the
+# bases are counted; divergence stays length-weighted over the raw rows, where each alignment's own
+# divergence belongs. The row COUNT is reported as alignment rows, which is what it is.
+# sort by family, THEN contig, THEN start — merging needs rows grouped per (family, contig) and ordered
+# by position; sorting on family+start alone interleaves contigs and merges intervals that never touch.
+sort -k11,11 -k5,5 -k6,6n all.out 2>/dev/null | awk -v gbp="$GENOME_BP" '
+  $1 ~ /^[0-9]+$/ {
+    div=$2+0; qs=$6+0; qe=$7+0; seqid=$5; fam=$11
+    if (qe < qs) { t=qs; qs=qe; qe=t }
+    n[fam]++; dv[fam]+=div*(qe-qs+1); wt[fam]+=(qe-qs+1); tot_n++
+    key=fam SUBSEP seqid
+    if (key != prev) { if (prev != "") { bp[pf]+=(pe-ps+1); gtot+=(pe-ps+1) } ; prev=key; pf=fam; ps=qs; pe=qe }
+    else if (qs > pe+1) { bp[pf]+=(pe-ps+1); gtot+=(pe-ps+1); ps=qs; pe=qe }
+    else if (qe > pe) { pe=qe }
+  }
+  END {
+    if (prev != "") { bp[pf]+=(pe-ps+1); gtot+=(pe-ps+1) }
+    printf "GENOME_BP %d\n", gbp
+    printf "TOTAL_HITS %d\nTOTAL_BP %d\n", tot_n+0, gtot+0
+    for (f in n) printf "FAM\t%s\t%d\t%d\t%.2f\n", f, n[f], bp[f], (wt[f]>0 ? dv[f]/wt[f] : 0)
+  }
+'
+echo "ANNOT_OK"
+'''
+
+
+_LIBDIR = "$HOME/micromamba/envs/te/share/RepeatMasker/Libraries/famdb"
+
+# RepeatMasker's class/family column mixes transposable elements with tandem and non-TE repeats. Reporting
+# one merged "% repeats" as a TE landscape would overstate TE content — a yeast run masks ~1.3% of the
+# genome while finding ZERO transposable elements (measured), all of it simple/low-complexity sequence.
+_TE_PREFIXES = ("LTR", "LINE", "SINE", "DNA", "RC", "Retroposon")
+_TANDEM = ("Simple_repeat", "Low_complexity", "Satellite")
+
+
+def repeat_kind(family_class: str) -> str:
+    """TE / tandem / other for a RepeatMasker class-family token. 'other' covers rRNA, tRNA, snRNA and
+    unclassified entries — real repeats, but not evidence of transposable-element content."""
+    fam = (family_class or "").strip()
+    head = fam.split("/")[0]
+    if head in _TANDEM:
+        return "tandem"
+    if head in _TE_PREFIXES:
+        return "TE"
+    return "other"
+
+
+def dfam_lineage_families(species: str) -> dict:
+    """How many family models the INSTALLED Dfam partitions can actually supply for this lineage.
+
+    This is the preflight that stops a multi-hour run from quietly producing a scientifically empty result.
+    Dfam is partitioned; a machine that installed only the curated partitions holds deep coverage for a few
+    heavily curated lineages and almost nothing elsewhere. Curated-only, measured 2026-07-31 (see
+    _DFAM_CURATED_COVERAGE): Homo sapiens 1439 models, Drosophila melanogaster 399, Saccharomyces
+    cerevisiae 9, Arabidopsis thaliana 9 — so a yeast or Arabidopsis genome annotation cannot find their
+    transposable elements no matter how long it runs, and the user has to be told BEFORE starting."""
+    if not species or not _SPECIES_RE.match(species):
+        return {"ok": False, "error": "invalid species token"}
+    # the family lines end with "len=<n>"; everything above them is the CC0 banner, which must not be counted
+    script = (f'"{_MM}" run -n te famdb.py -i "{_LIBDIR}" families -a -f summary "{species}" 2>/dev/null '
+              f'| grep -c "len="\n')
+    try:
+        rc, out, _ = _wsl_script(script, timeout=300)
+        n = int((out.strip().splitlines() or ["0"])[-1] or 0)
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    return {"ok": True, "species": species, "families": n}
+
+
+def annotate_budget(genome_bytes: int = 0) -> dict:
+    """CPU / RAM / disk the annotation may use, measured INSIDE WSL.
+
+    WSL2 caps cores and memory independently of the Windows host (.wslconfig), so the host's numbers would
+    over-promise. RepeatMasker's -pa starts N parallel RMBlast jobs, each needing its own memory, so the
+    thread count is the LOWER of what the cores allow and what the RAM allows — the same rule the project
+    applies to every other parallel step."""
+    try:
+        rc, out, _ = _wsl_script(
+            'echo "cores=$(nproc 2>/dev/null || echo 0)"\n'
+            'echo "memkb=$(awk \'/MemTotal/ {print $2}\' /proc/meminfo 2>/dev/null || echo 0)"\n'
+            'echo "availg=$(df -BG --output=avail "$HOME" 2>/dev/null | tail -1 | tr -dc \'0-9\')"\n', timeout=45)
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    d = dict(l.split("=", 1) for l in out.splitlines() if "=" in l)
+    cores = int(d.get("cores") or 0)
+    mem_gb = round(int(d.get("memkb") or 0) / 1048576, 1)
+    avail_gb = int(d.get("availg") or 0)
+    # ~2 GB per RMBlast job is the working figure for a Dfam-sized library; keep one core for the UI.
+    by_cpu = max(1, cores - 1)
+    by_ram = max(1, int(mem_gb // 2))
+    threads = max(1, min(by_cpu, by_ram))
+    need_gb = int(genome_bytes / 1073741824) + 2 if genome_bytes else None
+    return {"ok": True, "cores": cores, "mem_gb": mem_gb, "avail_gb": avail_gb,
+            "recommended_threads": threads, "limited_by": ("memory" if by_ram < by_cpu else "cores"),
+            "disk_needed_gb": need_gb,
+            "disk_ok": (avail_gb >= need_gb) if need_gb else None}
+
+
+def stage_library(path: str) -> dict:
+    """Copy a user-supplied repeat library (FASTA) into WSL and checksum it.
+
+    A custom library is the standard RepeatMasker escape hatch (`-lib`) for a lineage Dfam does not cover
+    well. TEagle cannot vouch for its contents, so the run records the file's sha256 and is labelled
+    user-supplied: the checksum makes the run reproducible without implying TEagle validated the library."""
+    if not path or not os.path.isfile(path):
+        return {"ok": False, "error": "library file not found"}
+    try:
+        with open(path, "rb") as fh:
+            data = fh.read()
+    except Exception as e:
+        return {"ok": False, "error": f"could not read the library file: {type(e).__name__}"}
+    if not data.lstrip()[:1] == b">":
+        return {"ok": False, "error": "the library must be a FASTA file (it does not start with '>')"}
+    sha = hashlib.sha256(data).hexdigest()
+    dest = f"$HOME/teagle_libs/{sha[:16]}.fa"
+    rc, out, err = _wsl(f'mkdir -p "$HOME/teagle_libs" && cat > "{dest}"', stdin=data, timeout=300)
+    if rc != 0:
+        return {"ok": False, "error": "could not stage the library into WSL: " + err.strip()[:160]}
+    n = data.count(b"\n>") + (1 if data.lstrip()[:1] == b">" else 0)
+    return {"ok": True, "path": dest, "sha256": sha, "sequences": n, "bytes": len(data),
+            "name": os.path.basename(path)}
+
+
+def genome_annotate(accession: str, species: str | None = None, threads: int = 4,
+                    sensitivity: str = "default", chunk_mb: int = 40, timeout: int = 86400,
+                    custom_lib: str | None = None, include_uncurated: bool = False) -> dict:
+    """Annotate every transposable element RepeatMasker can place in a cached assembly, against the
+    installed Dfam library. Chunked, resumable, and summarised inside WSL — the caller receives per-family
+    aggregates, never the millions of individual hits (those stay on disk for export).
+
+    `sensitivity` is one of default / quick / slow, mapping to RepeatMasker's own speed-vs-recall flags.
+    The run is homology-bound: only families present in the installed library can be found, so the caller
+    must state which library was searched next to any coverage claim."""
+    if not _ACC_RE.match(accession or ""):
+        return {"ok": False, "error": "invalid assembly accession"}
+    sens = {"default": "", "quick": "-q", "slow": "-s"}.get(sensitivity)
+    if sens is None:
+        return {"ok": False, "error": "invalid sensitivity (use default, quick or slow)"}
+    # LIBRARY CHOICE. Either the installed Dfam partitions filtered to a lineage (-species), or a
+    # user-supplied FASTA library (-lib). RepeatMasker treats these as alternatives, not additions: -lib
+    # replaces the database search entirely, so the two are never combined here — combining them would
+    # make the result's provenance unstateable.
+    lib_info = None
+    sp = ""
+    if custom_lib:
+        staged = stage_library(custom_lib)
+        if not staged.get("ok"):
+            return staged
+        lib_info = staged
+        sp = f'-lib "{staged["path"]}"'
+    elif species:
+        if not _SPECIES_RE.match(species):
+            return {"ok": False, "error": "invalid species token"}
+        chk = resolve_species(species)
+        if not chk.get("ok"):
+            return {"ok": False, "error": chk["error"], "ambiguous_species": chk.get("ambiguous", False)}
+        # RepeatMasker searches CURATED families only unless told otherwise, so the optional uncurated
+        # Dfam partitions are inert without this flag. Measured on S. cerevisiae: curated-only sees 9
+        # ancestor families and no lineage-specific ones and finds ZERO transposable elements, while
+        # -uncurated sees the same 9 plus 421 lineage-specific families and recovers the Ty1/Copia and
+        # Gypsy elements the genome actually carries. Uncurated families are auto-generated and lower
+        # confidence, so this stays the caller's decision rather than a silent default.
+        sp = f'-species "{species}"' + (" -uncurated" if include_uncurated else "")
+    st = env_status()
+    if not st["ready"]:
+        return {"ok": False, "error": "WSL annotation backend not ready "
+                f"(RepeatMasker={st['repeatmasker']}, Dfam={st['dfam']})", "status": st}
+    # the signature identifies WHICH library/lineage was searched, so a resume with a different one is
+    # caught; the thread count is deliberately NOT part of it (it changes speed, never which families hit)
+    # The INSTALLED PARTITION SET belongs in the signature too. Adding a Dfam partition changes which
+    # families exist to be found, so chunks finished before an install and chunks finished after it were
+    # searched against different libraries — the same "one run, two searches" defect as a changed species,
+    # and just as invisible in the finished summary.
+    _parts = ",".join((st.get("dfam_library") or {}).get("partitions") or [])
+    spsig = ((f"lib:{lib_info['sha256'][:16]}" if lib_info else f"species:{species or 'all'}")
+             + f"|parts:{hashlib.sha256(_parts.encode()).hexdigest()[:12]}"
+             + f"|unc:{int(bool(include_uncurated))}")     # curated-only vs +uncurated is a different search
+    script = (_ANNOT_SCRIPT.replace("__ACC__", accession).replace("__PA__", str(max(1, int(threads))))
+              .replace("__CHUNKBP__", str(max(1, int(chunk_mb)) * 1_000_000))
+              .replace("__SENS__", sens).replace("__SPSIG__", spsig).replace("__SP__", sp))
+    try:
+        rc, out, err = _wsl_script(script, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": f"annotation timed out after {timeout}s — re-run to resume from the "
+                                      "chunks that already finished"}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    if "ANNOT_OK" not in out:
+        fl = next((l for l in out.splitlines() if l.startswith("FAIL")), "") or err.strip()[:200]
+        return {"ok": False, "error": "genome annotation failed: " + (fl.replace("FAIL", "").strip() or "unknown error"),
+                "partial": True}
+    fams, totals = [], {}
+    for line in out.splitlines():
+        if line.startswith("FAM\t"):
+            _, fam, n, bp, div = line.split("\t")
+            fams.append({"family": fam, "n": int(n), "bp": int(bp), "divergence": float(div)})
+        elif line.startswith(("TOTAL_HITS ", "TOTAL_BP ", "GENOME_BP ", "TOTAL_CHUNKS ")):
+            k, v = line.split(); totals[k.lower()] = int(v)
+        elif line.startswith("GENOME_SHA256 "):
+            totals["genome_sha256"] = line.split(None, 1)[1].strip()
+    gbp = totals.get("genome_bp", 0)
+    genome_sha = totals.get("genome_sha256")
+    by_kind = {"TE": 0, "tandem": 0, "other": 0}
+    for f in fams:
+        f["percent"] = round(100.0 * f["bp"] / gbp, 4) if gbp else None
+        f["kind"] = repeat_kind(f["family"])
+        by_kind[f["kind"]] += f["bp"]
+    fams.sort(key=lambda f: -f["bp"])
+    lib = st.get("dfam_library")
+    te_bp = by_kind["TE"]
+    n_te_fams = sum(1 for f in fams if f["kind"] == "TE")
+    # with a custom library the lineage count is meaningless — what was searched is the user's file
+    avail = dfam_lineage_families(species) if (species and not lib_info) else {"ok": False}
+    return {"ok": True, "accession": accession, "families": fams, "genome_sha256": genome_sha,
+            "total_hits": totals.get("total_hits", 0), "total_bp": totals.get("total_bp", 0),
+            "genome_bp": gbp, "chunks": totals.get("total_chunks", 0),
+            # masked_percent is EVERY repeat RepeatMasker placed; te_percent is the transposable-element
+            # subset. They are reported separately because they are different claims — a genome can mask
+            # several percent while containing no detected TE at all.
+            "masked_percent": round(100.0 * totals.get("total_bp", 0) / gbp, 3) if gbp else None,
+            "te_bp": te_bp, "te_percent": round(100.0 * te_bp / gbp, 3) if gbp else None,
+            "tandem_bp": by_kind["tandem"], "other_bp": by_kind["other"],
+            "te_family_count": n_te_fams,
+            "library_families_for_species": avail.get("families") if avail.get("ok") else None,
+            # the honest headline when a run completes but the installed library had nothing to find with
+            "library_kind": ("user-supplied FASTA library" if lib_info else
+                             ("installed Dfam partitions, curated + uncurated" if include_uncurated
+                              else "installed Dfam partitions, curated only")),
+            "custom_library": lib_info, "include_uncurated": bool(include_uncurated),
+            "coverage_warning": (
+                None if n_te_fams else
+                (("No transposable-element family was found. The supplied library "
+                  f"({lib_info['name']}, {lib_info['sequences']} sequences) placed no TE in this assembly — "
+                  "check that the library matches this organism before drawing any conclusion.")
+                 if lib_info else
+                 ("No transposable-element family was found. This is a limit of what was SEARCHED, not a "
+                  "finding about the genome"
+                  + (f" — the installed Dfam partitions hold {avail['families']} family model(s) for "
+                     f"{species or 'this lineage'}" if avail.get("ok") else "")
+                  + (", and this run used only the CURATED subset of them. Most families outside a few "
+                     "heavily curated species are uncurated in Dfam, so re-running with uncurated families "
+                     "included is the first thing to try: measured on S. cerevisiae, curated-only sees 9 "
+                     "families and finds no transposable element, while including uncurated sees 421 more "
+                     "and recovers the Ty elements the genome carries."
+                     if not include_uncurated else
+                     ". Uncurated families were already included, so consider whether Dfam covers this "
+                     "lineage at all, or supply a species-specific library.")))),
+            "repeatmasker_version": st["repeatmasker"], "dfam_version": (lib or {}).get("version"),
+            "dfam_library": lib, "species": species or "(all installed families)",
+            "sensitivity": sensitivity, "threads": int(threads), "chunk_mb": int(chunk_mb),
+            "complete": True}
+
+
+def genome_annotate_reset(accession: str) -> dict:
+    """Discard a part-finished annotation so a run with different settings can start clean.
+
+    The refusal that sends a user here exists because finished chunks and new chunks would otherwise have
+    been searched differently; the only safe way to change the settings is to drop the finished work.
+    Removes the annotation working directory only — the cached genome and its FASTA are untouched."""
+    if not _ACC_RE.match(accession or ""):
+        return {"ok": False, "error": "invalid assembly accession"}
+    rc, out, err = _wsl_script(f'A="{_GENOMES}/{accession}/annot"\n'
+                              f'if [ -d "$A/.lock" ] && [ -f "$A/.lock/pid" ] && kill -0 "$(cat "$A/.lock/pid")" 2>/dev/null; then\n'
+                              f'  echo RUNNING; exit 3\n'
+                              f'fi\n'
+                              f'rm -rf "$A" && echo RESET\n', timeout=120)
+    if rc == 3 or "RUNNING" in out:
+        return {"ok": False, "error": "an annotation is still running for this genome — let it finish or "
+                                      "close it before discarding the results"}
+    if "RESET" not in out:
+        return {"ok": False, "error": "could not clear the previous annotation: " + err.strip()[:160]}
+    return {"ok": True, "accession": accession}
+
+
+def genome_annotate_log(tail: int = 1) -> str:
+    """Tail the annotation milestone log — the UI's N-of-M progress line during a multi-hour run."""
+    try:
+        _, out, _ = _wsl(f'tail -n {int(tail)} "{_GENOME_ANNOT_LOG}" 2>/dev/null || true', timeout=15)
+        return out.strip()
+    except Exception:
+        return ""
+
+
+def genome_annotate_status(accession: str) -> dict:
+    """How much of an annotation is already on disk (drives resume + the cost dialog's honesty)."""
+    if not _ACC_RE.match(accession or ""):
+        return {"ok": False, "error": "invalid assembly accession"}
+    rc, out, _ = _wsl_script(
+        f'A="{_GENOMES}/{accession}/annot"\n'
+        f'echo "chunks=$(ls "$A"/chunk_*.fa 2>/dev/null | wc -l)"\n'
+        f'echo "done=$(ls "$A"/chunk_*.out 2>/dev/null | wc -l)"\n'
+        f'echo "fasta=$([ -s "{_GENOMES}/{accession}/genome.fna" ] && echo 1 || echo 0)"\n', timeout=30)
+    d = dict(l.split("=", 1) for l in out.splitlines() if "=" in l)
+    return {"ok": True, "pending_chunks": int(d.get("chunks", 0) or 0),
+            "finished_chunks": int(d.get("done", 0) or 0), "fasta_cached": d.get("fasta") == "1"}
 
 
 def genome_list() -> dict:

@@ -41,6 +41,9 @@ SO = {
     # post-transcriptional poly-A ADDED TO AN mRNA, so it would misdescribe this genomic tract; the honest
     # generic term is sequence_feature. Verified on OLS4: "Any extent of continuous biological sequence."
     "sequence_feature": "SO:0000110",
+    # verified against the Sequence Ontology (OLS4): "The recognition sequence necessary for endonuclease
+    # cleavage of an RNA transcript that is followed by polyadenylation; consensus=AATAAA."
+    "polyA_signal_sequence": "SO:0000551",
 }
 
 # te_class prefix -> the SO term the evidence supports when coding evidence IS present.
@@ -65,6 +68,10 @@ _STRUCT_TERM = {
     # on-screen track from the file.
     "poly-A": "sequence_feature",
     "poly-T": "sequence_feature",
+    # the advisory poly(A)-SIGNAL motif inside an LTR (first token of "poly(A) signal (motif)"). SO's
+    # polyA_signal_sequence is exactly this recognition hexamer ("consensus=AATAAA"), NOT the tail above,
+    # so the two never share a term. The row still carries the motif's own hedge in `note`.
+    "polyA-signal": "polyA_signal_sequence",
 }
 
 
@@ -169,6 +176,13 @@ def build_features(rec, seqid="locus"):
                 # the TSD-length congruence verdict classify() computed against the superfamily's expected
                 # length — the hedge shown on screen ("ends not credited from it") must reach the file too.
                 ("tsd_congruence", ev.get("tsd_congruence")),
+                # poly(A)-signal motif: which hexamer, how common that variant is, whether the gating
+                # downstream element was found (or could not be assessed), and whether both LTR copies
+                # agree. A browser must not read this motif as a located cleavage site.
+                ("polya_variant", ev.get("variant")),
+                ("downstream_element", ev.get("dse_state")),
+                ("in_both_ltr_copies", ("true" if ev.get("in_both_ltr_copies") else "false")
+                 if "in_both_ltr_copies" in ev else None),
             ])))
     for i, d in enumerate(rec.get("domains") or [], 1):
         nt = d.get("nt") or [0, 0]

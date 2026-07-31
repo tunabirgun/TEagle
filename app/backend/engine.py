@@ -102,7 +102,9 @@ def run_wsl_install():
 
 
 def run_wsl_install_log():
-    return {"log": wsl.install_log(60)}
+    # 200 lines, not 60: the Dfam download reports progress every 15 s, and at 60 lines the step header
+    # that names what is downloading scrolled out of the panel within a quarter of an hour.
+    return {"log": wsl.install_log(200)}
 
 
 def run_wsl_install_wsl2():
@@ -253,9 +255,10 @@ def run_annotate(body):
     sp = body.get("species")
     if sp is not None and not isinstance(sp, str):
         raise BadRequest("species must be a string")
+    unc = bool(body.get("include_uncurated"))
     t0 = time.time()
     r = wsl.annotate(f">{recs[0][0]}\n{seq}", species=(sp or None),
-                     timeout=int(_num(body.get("timeout"), 600)))
+                     timeout=int(_num(body.get("timeout"), 600)), include_uncurated=unc)
     if r.get("ok"):
         el = time.time() - t0
         timing.record("annotate", len(seq), el)
@@ -282,7 +285,10 @@ def run_annotate(body):
                             "family calls are unaffected; the provenance record is weaker.")
         r["provenance"] = provenance.build_manifest(
             "annotate", seq, recs[0][0],
-            {"engine": "RMBLAST", "mode": "-qq", "species": r.get("species")},
+            # the searched family universe is a PARAMETER of the run: the same library answers a
+            # different question with and without the uncurated families, so it is sealed, not implied
+            {"engine": "RMBLAST", "mode": "-qq", "species": r.get("species"),
+             "library": r.get("library_kind")},
             not_run=["External NCBI Primer-BLAST", "De novo family discovery"],
             databases=[dfam_db, {"name": "RepeatMasker", "version": r.get("repeatmasker_version")}],
             source=body.get("source"), references=references)
@@ -516,6 +522,95 @@ def run_genome_prepare_log(body):
 def run_genome_list(body):
     """List locally cached genomes (accession, size, contig count) for the genome manager."""
     return wsl.genome_list()
+
+
+def run_annotate_budget(body):
+    """CPU/RAM/disk the WSL backend can give a whole-genome annotation, plus how many Dfam family models
+    the installed partitions hold for the chosen lineage. The UI shows all of it BEFORE a run starts: an
+    annotation costs hours, and a lineage with no family models cannot produce a TE result at any cost."""
+    b = body or {}
+    r = wsl.annotate_budget(int(_num(b.get("genome_bytes"), 0)))
+    sp = b.get("species")
+    if sp:
+        if not isinstance(sp, str):
+            raise BadRequest("species must be a string")
+        lib = wsl.dfam_lineage_families(sp)
+        r["library_families_for_species"] = lib.get("families") if lib.get("ok") else None
+        r["species"] = sp
+    return r
+
+
+def run_genome_annotate(body):
+    """Whole-genome TE annotation: RepeatMasker over a cached assembly, chunked and resumable.
+
+    Homology-bound by construction — only families present in the INSTALLED Dfam partitions can be found —
+    so the result carries the family count available for the lineage and, when nothing was found, an
+    explicit statement that this is a library-coverage limit rather than a fact about the genome."""
+    acc = str(body.get("assemblyAccession", "")).strip()
+    if not acc:
+        raise BadRequest("choose a downloaded genome to annotate")
+    sp = body.get("species")
+    if sp is not None and not isinstance(sp, str):
+        raise BadRequest("species must be a string")
+    sens = str(body.get("sensitivity", "default"))
+    if sens not in ("default", "quick", "slow"):
+        raise BadRequest("sensitivity must be default, quick or slow")
+    t0 = time.time()
+    lib = body.get("custom_library") or None
+    if lib is not None and not isinstance(lib, str):
+        raise BadRequest("custom_library must be a path")
+    r = wsl.genome_annotate(acc, species=(sp or None), threads=int(_num(body.get("threads"), 4)),
+                            sensitivity=sens, chunk_mb=int(_num(body.get("chunk_mb"), 40)),
+                            timeout=int(_num(body.get("timeout"), 86400)), custom_lib=lib,
+                            include_uncurated=bool(body.get("include_uncurated")))
+    if r.get("ok"):
+        r["elapsed_s"] = round(time.time() - t0, 1)
+        references = refs.for_run("annotate", fetched=False)
+        r["references"] = references
+        lib = r.get("dfam_library") or {}
+        dfam_db = {"name": "Dfam (via famdb)",
+                   "version": lib.get("version") or "unresolved — famdb reported no library version"}
+        for src_k, dst_k in (("date", "releaseDate"), ("famdbFormat", "famdbFormat"),
+                             ("partitions", "partitions"), ("consensusSequences", "consensusSequences")):
+            if lib.get(src_k) is not None:
+                dfam_db[dst_k] = lib[src_k]
+        # The seal identifies the GENOME by the checksum recorded at prepare time and records every
+        # parameter that changes which families could be found. `complete` is sealed too: a run that
+        # stopped early must never be indistinguishable from one that covered the whole assembly.
+        r["provenance"] = provenance.build_manifest(
+            "genome_annotate", "", acc,
+            {"engine": "RMBLAST", "species": r.get("species"), "sensitivity": sens,
+             "threads": int(_num(body.get("threads"), 4)), "chunk_mb": int(_num(body.get("chunk_mb"), 40)),
+             "chunks": r.get("chunks"), "complete": bool(r.get("complete")),
+             # which library was searched is part of what the result MEANS, so it is sealed with the run:
+             # the same genome against a different library is a different experiment.
+             "library_kind": r.get("library_kind"),
+             "include_uncurated": bool(r.get("include_uncurated")),
+             "custom_library_sha256": ((r.get("custom_library") or {}).get("sha256"))},
+            not_run=["De novo family discovery (RepeatModeler/EDTA)",
+                     "Dfam partitions not installed on this machine"],
+            databases=[dfam_db, {"name": "RepeatMasker", "version": r.get("repeatmasker_version")}],
+            # the genome's sealed checksum comes from the PREPARE step's own meta.txt (wsl returns it),
+            # not from whatever the caller passed in — a caller-supplied hash would let the manifest
+            # claim an identity the analysed sequence was never checked against.
+            source={"assemblyAccession": acc, "sha256": r.get("genome_sha256") or body.get("sha256")},
+            references=references)
+    return r
+
+
+def run_genome_annotate_reset(body):
+    """Discard a part-finished annotation so a run with different settings can start clean."""
+    return wsl.genome_annotate_reset(str(body.get("assemblyAccession", "")).strip())
+
+
+def run_genome_annotate_log(body):
+    """Latest annotation milestone (drives the N-of-M progress line during a multi-hour run)."""
+    return {"log": wsl.genome_annotate_log(int(_num((body or {}).get("tail"), 1)))}
+
+
+def run_genome_annotate_status(body):
+    """How much of an annotation already exists on disk (resume + honest cost estimate)."""
+    return wsl.genome_annotate_status(str(body.get("assemblyAccession", "")).strip())
 
 
 def run_genome_remove(body):

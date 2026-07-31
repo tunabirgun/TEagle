@@ -85,6 +85,14 @@ def gv_tracks_from_rec(rec: dict) -> dict:
                 if p:
                     reps.append({"start": p[0], "end": p[1], "color": col, "label": t.split(" ")[0],
                                  "kind": t.split(" ")[0], "tip": f"{t} {p[0]}–{p[1]}"})
+        elif t.startswith("polyA-signal"):
+            # an LTR cis-element, NOT the LINE poly-A tail — it must not land in the tail track below, where
+            # a motif would read as a detected tail. Labelled with the hexamer so the row is self-describing.
+            p = e["pos"]
+            cis.append({"start": p[0], "end": p[1], "color": CISCOL["PAS"], "kind": "PAS",
+                        "label": "PAS·" + (e.get("motif") or "?"),
+                        "tip": (f"polyA-signal motif {e.get('motif')} ({e.get('variant')}) {p[0]}–{p[1]} · "
+                                f"downstream element {e.get('dse_state')} · advisory: a motif, not a cleavage site")})
         elif t.startswith("PBS") or t.startswith("PPT"):
             p = e["pos"]; key = t[:3]
             if key == "PBS":                              # name the tRNA only when confident, else "PBS·?"
@@ -688,3 +696,79 @@ def svg_dotheat(m: dict, W: float = 620, theme: str = "dark", for_export: bool =
     if for_export:
         s += _dot_footer_svg(ML, MT + plot + 44, T, m)
     return s + "</svg>"
+
+
+# ---------------- genome TE landscape (whole-genome annotation) ----------------
+# Class hues reuse the domain palette so a class means the same colour everywhere in the app. Tandem and
+# "other" repeats are drawn in neutral greys: they are real repeats but NOT transposable elements, and the
+# figure must not let them read as TE content.
+_TE_CLASS_COLOUR = {"LTR": OK["LTR"], "LINE": OK["RT"], "SINE": OK["RNaseH"], "DNA": OK["TIR"],
+                    "RC": OK["GAG"], "Retroposon": OK["PR"]}
+_NONTE_COLOUR = {"tandem": "#9aa3ad", "other": "#c3ccd6"}
+
+
+def _te_class_of(family: str, kind: str) -> str:
+    if kind != "TE":
+        return kind
+    return (family or "").split("/")[0]
+
+
+def svg_te_composition(r: dict, W: float = 900, theme: str = "light") -> str:
+    """Stacked composition bar: what share of the assembly each TE class covers, then tandem/other, then
+    the unannotated remainder. The remainder is drawn explicitly — a composition figure that plotted only
+    what was found would imply the rest had been examined and shown to be empty."""
+    gbp = float(r.get("genome_bp") or 0)
+    fams = r.get("families") or []
+    # honour the panel's background mode: the figure carries text and a frame, and painting them in a
+    # fixed dark ink left the whole figure unreadable on the dark track (and made the DARK/WHITE buttons
+    # look broken, because nothing changed when they were pressed).
+    dark = str(theme).lower() in ("dark", "uv", "mono-dark")
+    paper = "#12161b" if dark else "#ffffff"
+    ink = "#e6edf3" if dark else "#333333"
+    faint = "#8b929a" if dark else "#666666"
+    rule = "#5a636c" if dark else "#8b929a"
+    if gbp <= 0:
+        return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="60">'
+                f'<rect width="{W}" height="60" fill="{paper}"/></svg>')
+    agg = {}
+    for f in fams:
+        key = _te_class_of(f.get("family", ""), f.get("kind", "other"))
+        agg[key] = agg.get(key, 0) + (f.get("bp") or 0)
+    te_keys = [k for k in agg if k not in ("tandem", "other")]
+    te_keys.sort(key=lambda k: -agg[k])
+    order = te_keys + [k for k in ("tandem", "other") if agg.get(k)]
+    used = sum(agg.values())
+    H, barH, top, padx = 168, 34, 34, 12
+    x, out = padx, [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
+                    f'viewBox="0 0 {W} {H}" font-family="{FIGFONT}">',
+                    f'<rect width="{W}" height="{H}" fill="{paper}"/>']
+    out.append(f'<text x="{padx}" y="20" font-size="12" fill="{ink}">Share of the {gbp/1e6:.1f} Mb assembly '
+               f'covered, by repeat class</text>')
+    barW = W - 2 * padx
+    for k in order:
+        frac = agg[k] / gbp
+        w = max(0.0, frac * barW)
+        col = _NONTE_COLOUR.get(k) or _TE_CLASS_COLOUR.get(k, "#888888")
+        out.append(f'<rect x="{x:.2f}" y="{top}" width="{w:.2f}" height="{barH}" fill="{col}">'
+                   f'<title>{esc(k)}: {100*frac:.2f}% ({agg[k]:,} bp)</title></rect>')
+        x += w
+    rest = max(0.0, gbp - used)
+    out.append(f'<rect x="{x:.2f}" y="{top}" width="{max(0.0, (rest/gbp)*barW):.2f}" height="{barH}" '
+               f'fill="none" stroke="{rule}" stroke-dasharray="3 3">'
+               f'<title>not annotated as a repeat: {100*rest/gbp:.2f}%</title></rect>')
+    out.append(f'<rect x="{padx}" y="{top}" width="{barW}" height="{barH}" fill="none" stroke="{rule}"/>')
+    ly, lx = top + barH + 22, padx
+    for k in order + ["unannotated"]:
+        col = ("none" if k == "unannotated" else (_NONTE_COLOUR.get(k) or _TE_CLASS_COLOUR.get(k, "#888888")))
+        pct = (100 * (rest if k == "unannotated" else agg[k]) / gbp)
+        out.append(f'<rect x="{lx}" y="{ly-9}" width="11" height="11" fill="{col}" '
+                   f'stroke="{rule if k == "unannotated" else col}"/>')
+        lab = f"{k} {pct:.2f}%"
+        out.append(f'<text x="{lx+16}" y="{ly}" font-size="11" fill="{ink}">{esc(lab)}</text>')
+        lx += 16 + 7.2 * len(lab) + 16
+        if lx > W - 140:
+            lx = padx; ly += 18
+    out.append(f'<text x="{padx}" y="{H-6}" font-size="10" fill="{faint}">Homology to the installed Dfam library '
+               f'only — families absent from it cannot appear, so unannotated is not "no repeat".</text>')
+    out.append("</svg>")
+    return "".join(out)

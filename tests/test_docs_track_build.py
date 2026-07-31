@@ -169,3 +169,24 @@ def test_every_curated_accession_resolves_to_the_organism_it_claims():
         report = (json.load(urllib.request.urlopen(url, timeout=60)).get("reports") or [{}])[0]
         got = report.get("organism", {})
         assert str(got.get("tax_id")) == meta["taxid"], (organism, acc, got.get("tax_id"))
+
+
+def test_methods_panel_text_is_derived_from_the_profile_table():
+    """The in-app methods disclosure once claimed a 21-model Pfam panel after it had grown to 30 — the app
+    under-reporting its own method, in a UI string no docs test covered. It is now derived from
+    domains.DOMAIN_INFO, so the count and the Pfam list cannot disagree with what the scan loads."""
+    import os as _os, sys as _sys
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    _native = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "app", "native")
+    if _native not in _sys.path:
+        _sys.path.insert(0, _native)
+    import pytest as _pt
+    _pt.importorskip("PySide6")
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    import main
+    from teagle_core import domains
+    html = main.MainWindow._domain_panel_html()
+    assert f"{len(domains.DOMAIN_INFO)} models" in html
+    for _hmm, (_code, _label, _cls, pfam) in domains.DOMAIN_INFO.items():
+        assert pfam in html, f"{pfam} missing from the methods panel text"

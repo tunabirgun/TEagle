@@ -15,5 +15,5 @@ file and what it shows.
 | `primers.png` | Panel 04 — Primer3 design with presets and advanced parameters; the ranked pair table with per-pair secondary-structure QC and a source citation. |
 | `pcr_gel.png` | Panel 05 — staged in-silico PCR rendered as a to-scale agarose gel (MW ladder + sample lane) with the amplicon table. |
 | `genome_scan.png` | Panel 06 — live whole-genome off-target scan (isPcr) of the designed pair against the cached *Drosophila* assembly: gel, verdict, and the full match table. |
-| `installer.png` | The backend installer: each WSL/conda/Dfam component with a live status tick, per-component Repair, Install-all, Check-integrity, and a live log. |
+| `installer.png` | The backend installer: each WSL/conda/Dfam component with a live status tick, a per-component Install (absent) or Repair (present) button, Install-all, Check-integrity, and a live log. |
 | `screenshots/` | The full figure set used by the manual and the report — one per analysis outcome. See `screenshots/manifest.txt`. |

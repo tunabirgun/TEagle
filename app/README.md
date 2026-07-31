@@ -4,7 +4,7 @@ This is the **working** TEagle application — a **native Windows desktop app** 
 
 1. **Reads a DNA sequence** — paste, FASTA, or **fetch by accession live from NCBI** — and checks it.
 2. **Finds structural features** — LTRs (the repeated ends of some transposons), inverted repeats (TIRs), ORFs (protein-coding stretches), and tails.
-3. **Detects protein domains** — reverse transcriptase, integrase, RNase H, protease, gag, transposase — using **HMMER** against bundled CC0 **Pfam** profiles (runs natively, no Linux needed).
+3. **Detects protein domains** — gag (matrix/capsid/nucleocapsid), protease, reverse transcriptase, RNase H, integrase, envelope, chromodomain, LINE ORF1p and apurinic-like endonuclease, tyrosine recombinase, Helitron helicase, and the Tc1/*mariner*, hAT, CACTA, MULE and IS4 transposases — from a **30-model Pfam panel** (bundled, CC0) using **HMMER** (runs natively, no Linux needed).
 4. **Classifies the element** — Class I vs II, and superfamily: **Copia, Gypsy, ERV/errantivirus, DIRS, LINE, hAT, Tc1/Mariner, CACTA, MULE, IS4-like/piggyBac** — from the domain architecture. Copia vs Gypsy is decided by the diagnostic **integrase-vs-RT order**, exactly as in the literature.
 5. **Designs PCR primers** with **Primer3**, including **domain-specific PCR** (primers placed inside a chosen domain).
 6. **Runs in-silico PCR** — predicts which product(s) your primer pair would make, shown as a gel.
@@ -21,9 +21,10 @@ Right-click any structural, ORF, domain, family, or amplicon row — or any feat
 
 Family-level naming (e.g. `Copia_I`, `Gypsy-2_DM`) uses tools that only run on Linux, so TEagle manages a **WSL2** environment for them — you never touch a Linux shell.
 
-- **Panel 03 “Dfam / RepeatMasker family”** shows the backend status. Click **Backend installer** to open a window that lists every component (WSL2, micromamba, **RepeatMasker 4.2.4**, minimap2, the **Dfam 4.0** libraries, FamDB config) with a live status tick. Install them all with one click, **repair any single component**, or run a **check-integrity** pass; the Dfam libraries are downloaded from a pinned, md5-verified source into WSL. One time, ~a few minutes.
+- **BACKEND in the window header** (and the same button in panel 03, which also shows the backend status) opens a window listing every component — WSL2, micromamba, **RepeatMasker 4.2.4**, minimap2, the **Dfam 4.0** libraries, FamDB config — each with a live status tick. Install them all with one click, **install or repair a single component**, or run a **check-integrity** pass; the Dfam libraries are downloaded from a pinned, md5-verified source into WSL. A component that is not installed offers **Install**, one already there offers **Repair**, and every download reports its progress in the log pane as it runs. One time, ~a few minutes for the default set.
 
 ![The backend installer, component by component](../docs/img/installer.png)
+- **Which families are searched is a choice, and it changes the answer.** RepeatMasker reads Dfam's *curated* families unless it is asked for both, and outside a few intensively studied lineages almost every family is uncurated — curated-only holds 1439 of 1439 family models for human but 9 of 512 for *Arabidopsis* and 9 of 398 for yeast. Once the optional uncurated partitions are installed, panel 03 offers a **Library** choice (curated only, the default, or including uncurated); the setting is printed with the result and sealed into its provenance, so a blank result always says what was actually searched. Measured on yeast Ty1 (`M18706`): curated-only names nothing, including uncurated names an LTR/Copia family.
 - Once ready, set the **species** (auto-filled from a fetched accession's organism) and click **Run family annotation**. TEagle runs RepeatMasker (RMBLAST) against Dfam in WSL and lists the family hits with coordinates, divergence and score — Layer-A homology evidence that complements the domain-based superfamily.
 - Coverage depends on the installed Dfam partitions; the curated set names families for well-studied organisms. Security: your sequence is piped to WSL as data, never built into a shell command.
 
@@ -67,7 +68,7 @@ Fetched sequences are **cached locally** (`.teagle/cache/fetch/`), so re-fetchin
 
 ## Scope
 
-The in-silico PCR primer scan is a direct O(n·m) search, bounded by a hard cap on binding sites and amplicons so a repetitive template cannot exhaust memory. It is tuned for **single loci / elements** (up to ~tens of kb), not whole chromosomes; large-genome streaming and indexed search remain future work.
+The paste-a-background in-silico PCR check on panel **05** is a direct O(n·m) search over the sequence you supply, bounded by a hard cap of 4000 binding sites and 4000 amplicons so a repetitive template cannot exhaust memory; it is tuned for **single loci / elements** (up to ~tens of kb), not whole chromosomes. Whole chromosomes and whole genomes are handled by separate engines that run locally in the WSL backend: panel **06 Whole-genome off-target scan** runs a designed pair against a downloaded RefSeq assembly with isPcr, and **Manage genomes → Annotate TE landscape** runs RepeatMasker over a cached assembly in contig chunks.
 
 ## Honesty rules the app follows
 

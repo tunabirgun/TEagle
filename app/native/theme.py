@@ -262,7 +262,13 @@ GENECOL = {"exon": _OI["green"], "exon_derived": "#7fd3b8", "intron": "#8792a0",
 ARCHCOL = {"exon": _OI["green"], "intron": "#B0752E"}
 # LTR cis-elements: PBS (leader, purple) and PPT (before 3' LTR, blue) — each distinct from the LTR blocks,
 # the env-exon green and the intron amber.
-CISCOL = {"PBS": "#8459C4", "PPT": "#2C7FB8"}
+# PAS (the advisory polyA-signal motif) needed a third hue that no other band in a shared render already
+# owns. #B5316B is the measured pick: worst-case separation 20.6 CAM02-UCS from every required hue (PBS,
+# PPT, LTR, tail/PR, ORF, GAG, ENV, RT, INT, RNaseH, TPase, the gene-model bands and the #888 fallback),
+# holding 10.1 under deuteranomaly and 12.1 under protanomaly — the best CVD floor of the candidates
+# measured — at 3.26:1 on the dark track and 5.81:1 on the light one. Re-measure both tracks AND
+# deuteranomaly/protanomaly before changing it.
+CISCOL = {"PBS": "#8459C4", "PPT": "#2C7FB8", "PAS": "#B5316B"}
 
 # genome-viewer chrome per render target. 'export' is a print-neutral scheme (transparent paper), NOT the app's
 # light theme. Only values that genuinely equal a chrome token derive from one; figure-specific greys stay

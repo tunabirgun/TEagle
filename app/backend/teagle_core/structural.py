@@ -39,24 +39,52 @@ def _identity(r5: str, r3: str) -> float:
     return round(100 * sum(1 for x, y in zip(r5, r3) if x == y and x not in "Nn") / m, 1)
 
 
+# Terminal-motif panel. A motif is a 4-mer: the LTR's first two bases + its last two ("TGCA" = 5'-TG…CA-3').
+# TGCA is the canonical integrase att pair; the other seven are the non-canonical motifs LTR_retriever
+# searches when TGCA is absent — verified against its manual (Ou & Jiang 2018 Plant Physiol 176:1410;
+# LTR_retriever 2.9.0 manual Table 1: -motif [TCCA TGCT TACA TACT TGGA TATA TGTA TGCA]). The list is
+# copied from that default, not derived: it is prior knowledge about which termini occur in nature.
+_CANONICAL_MOTIF = "TGCA"
+_NONCANONICAL_MOTIFS = ("TCCA", "TGCT", "TACA", "TACT", "TGGA", "TATA", "TGTA")
+
+
+def _motif_mismatches(obs: dict, motif: str) -> int:
+    want = {"five_start": motif[:2], "five_end": motif[2:],
+            "three_start": motif[:2], "three_end": motif[2:]}
+    return sum(1 for k, v in want.items() if obs[k] != v)
+
+
 def _termini_motif(seq: str, l5s: int, l5e: int, l3s: int, l3e: int) -> dict:
-    """Report whether the LTR termini carry the canonical 5'-TG…CA-3' dinucleotides.
+    """Report whether the LTR termini carry the canonical 5'-TG…CA-3' dinucleotides, and — only when they
+    do not — whether they match one of the known non-canonical terminal motifs instead.
 
     A BADGE, never a boundary mover. The motif is characteristic of many LTR retrotransposons but is not
     universal — measured here, copia (M11240) satisfies it exactly while gypsy/mdg4 (M12927) reads AG…TT
     and no offset within +/-10 bp satisfies it on both copies. Snapping boundaries onto the motif would
     therefore have MOVED a correct gypsy boundary to satisfy a rule that element does not follow.
     Tolerance of one mismatch across the four positions follows LTRharvest's -motifmis 1
-    (Ellinghaus et al. 2008 BMC Bioinformatics 9:18)."""
+    (Ellinghaus et al. 2008 BMC Bioinformatics 9:18). The non-canonical panel is only consulted after the
+    canonical test fails, and only an EXACT match counts — a mismatch-tolerant search across eight motifs
+    would match almost any terminus by chance and turn the badge into noise."""
     obs = {"five_start": seq[l5s:l5s + 2].upper(), "five_end": seq[l5e - 2:l5e].upper(),
            "three_start": seq[l3s:l3s + 2].upper(), "three_end": seq[l3e - 2:l3e].upper()}
-    want = {"five_start": "TG", "five_end": "CA", "three_start": "TG", "three_end": "CA"}
-    mism = sum(1 for k, v in want.items() if obs[k] != v)
+    mism = _motif_mismatches(obs, _CANONICAL_MOTIF)
+    alt = next((m for m in _NONCANONICAL_MOTIFS if _motif_mismatches(obs, m) == 0), None) if mism else None
+    if mism == 0:
+        note = "termini match the canonical TG…CA"
+    elif alt:
+        note = (f"termini do not match TG…CA but match the non-canonical motif {alt[:2]}…{alt[2:]}, one of "
+                "the seven non-TGCA termini LTR_retriever searches (Ou & Jiang 2018 Plant Physiol 176:1410); "
+                "the motif is corroborating context only and does not set the boundaries")
+    else:
+        note = ("termini match neither TG…CA nor any of the seven known non-canonical motifs; the motif is "
+                "common but not universal among LTR retrotransposons, so its absence is not evidence "
+                "against the call")
     return {**obs, "canonical": mism == 0, "mismatches": mism,
             "within_ltrharvest_tolerance": mism <= 1,
-            "note": ("termini match the canonical TG…CA" if mism == 0 else
-                     "termini do not match TG…CA; the motif is common but not universal among LTR "
-                     "retrotransposons, so its absence is not evidence against the call")}
+            "noncanonical_motif": alt,                    # None unless an exact non-TGCA panel match
+            "motif_tier": "canonical" if mism == 0 else ("non-canonical" if alt else "none"),
+            "note": note}
 
 
 def _extend(seq: str, i: int, j: int, step: int, limit: int, x_drop: int = 30) -> int:
@@ -374,6 +402,108 @@ def find_ppt(seq: str, ltr_three_prime_start: int, window: int = 30, min_len: in
             "length": len(sub), "purine_frac": round(sum(1 for x in sub if x in "AG") / len(sub), 2), "motif": sub}
 
 
+# Polyadenylation-signal hexamer panel. AATAAA and ATTAAA together account for roughly three quarters of
+# MAMMALIAN poly(A) sites; the remainder are single-base variants of AATAAA (Beaudoing et al. 2000 Genome
+# Res 10:1001-1010). Tiers are reported, never summed into a score: a hexamer's identity says how COMMON
+# the variant is, not whether THIS copy is used.
+# SCOPE, measured: this panel is derived from mammalian 3'-end data, but the detector runs on whatever
+# element the user loads. Benchmarking across organisms returned hexamer hits inside yeast (Ty1) and plant
+# (Ta1, Tnt1) LTRs, where 3'-end formation does NOT follow the mammalian AATAAA consensus — budding-yeast
+# and plant signals are degenerate and A-rich rather than a fixed hexamer. The panel's provenance therefore
+# travels with every call (see the note built in find_polya_signal); it is never presented as a validated
+# signal outside mammals.
+_POLYA_HEXAMERS = {
+    "AATAAA": "canonical",
+    "ATTAAA": "principal variant",
+    # single-base variants of AATAAA catalogued by Beaudoing et al. 2000; each is individually uncommon
+    "AGTAAA": "minor variant", "TATAAA": "minor variant", "CATAAA": "minor variant",
+    "GATAAA": "minor variant", "AATATA": "minor variant", "AATACA": "minor variant",
+    "AATAGA": "minor variant", "ACTAAA": "minor variant", "AAGAAA": "minor variant",
+    "AATGAA": "minor variant",
+}
+
+
+def _dse_state(seq: str, hex_end: int, lo: int, hi: int, min_gt_frac: float, min_t: int) -> tuple:
+    """Downstream sequence element (DSE): the GU/U-rich stretch that follows a real poly(A) signal.
+
+    Three outcomes, like _tsd_state. A hexamer alone is not evidence — AATAAA-type words occur about once
+    per 4 kb by chance and roughly half of genomic occurrences are not used as poly(A) signals, so the
+    DSE requirement is what makes a hit worth reporting. When the record ends before the window, the
+    question was never asked: that is 'not assessable', never 'absent'.
+
+    WINDOW, derived rather than guessed: the hexamer lies 10-30 nt UPSTREAM of the cleavage site, and the
+    DSE begins roughly 15 nt DOWNSTREAM of that site and runs on for tens of bases, U/GU-rich (Zhao,
+    Hyman & Moore 1999 Microbiol Mol Biol Rev 63:405; Legendre & Gautheret 2003 NAR 31:1375; Proudfoot
+    2011 Genes Dev 25:1770). Measured from the hexamer's 3' end that places the DSE at about +25 to +60,
+    which is what `lo`/`hi` default to. An earlier draft used +10 to +30 — the gap between the hexamer and
+    the cleavage site — and therefore scored the wrong stretch of sequence entirely."""
+    w_s, w_e = hex_end + lo, hex_end + hi
+    if w_e > len(seq):
+        return "not assessable (record ends before the downstream window)", None
+    win = seq[w_s:w_e].upper()
+    if "N" in win:
+        return "not assessable (ambiguous bases in the downstream window)", None
+    t = win.count("T")
+    gt = (t + win.count("G")) / len(win)
+    det = {"window": [w_s, w_e], "gt_frac": round(gt, 2), "t_count": t}
+    if gt >= min_gt_frac and t >= min_t:
+        return "found", det
+    return "absent (window present, not GU/U-rich)", det
+
+
+def find_polya_signal(seq: str, ltr: dict, lo: int = 20, hi: int = 60,
+                      min_gt_frac: float = 0.65, min_t: int = 4):
+    """Advisory poly(A)-signal motif inside the 3' LTR copy — the copy whose signal is used in vivo.
+
+    ADVISORY ONLY. This reports a MOTIF, not a function: it never locates the R/U5 boundary, the cleavage
+    site, or a transcription end, all of which are defined by processing events that sequence alone cannot
+    place. Reported only when a hexamer from the panel is followed by a GU/U-rich downstream element
+    (`lo`-`hi` nt past the hexamer, >= `min_gt_frac` G+T and >= `min_t` T) — the hexamer alone is not
+    evidence. See _dse_state for where the window comes from.
+
+    Because the two LTR copies are duplicates, the same relative offset is checked in the 5' copy: agreement
+    corroborates, disagreement is reported as drift and lowers confidence rather than being averaged away.
+    Returns None when no hexamer is present at all."""
+    l3s, l3e = ltr["three_prime"]
+    l5s, l5e = ltr["five_prime"]
+    best = None
+    for i in range(l3s, max(l3s, l3e - 6) + 1):
+        hexa = seq[i:i + 6].upper()
+        tier = _POLYA_HEXAMERS.get(hexa)
+        if not tier:
+            continue
+        state, det = _dse_state(seq, i + 6, lo, hi, min_gt_frac, min_t)
+        rank = (0 if state == "found" else 1, 0 if tier == "canonical" else (1 if tier == "principal variant" else 2))
+        if best is None or rank < best["_rank"]:
+            best = {"_rank": rank, "pos": [i, i + 6], "motif": hexa, "variant": tier,
+                    "dse_state": state, "dse": det, "offset_in_ltr": i - l3s}
+    if best is None or best["dse_state"].startswith("absent"):
+        # The gate is the whole point: a hexamer with a assessable-but-not-GU/U-rich downstream window is
+        # the chance match this detector exists to reject, so nothing is reported. A window that could not
+        # be assessed at all is still reported (hedged) — that is "the question could not be asked", the
+        # same three-outcome discipline _tsd_state uses, not a negative result.
+        return None
+    best.pop("_rank", None)                               # sort key, not evidence
+    mirror = seq[l5s + best["offset_in_ltr"]: l5s + best["offset_in_ltr"] + 6].upper()
+    both = mirror == best["motif"]
+    confident = best["dse_state"] == "found" and both
+    # first token is the export Name and must not read like the LINE "poly-A" TAIL — a different feature
+    # with a different SO term. "polyA-signal" keeps the two distinguishable in a genome browser.
+    return {"type": "polyA-signal (motif, advisory)", **{k: v for k, v in best.items() if not k.startswith("_")},
+            "in_both_ltr_copies": both, "five_prime_copy_motif": mirror, "confident": confident,
+            "method": ("poly(A)-signal hexamer panel (Beaudoing et al. 2000 Genome Res 10:1001) in the 3' LTR, "
+                       f"gated on a GU/U-rich downstream element {lo}-{hi} nt downstream "
+                       f"(>= {int(100 * min_gt_frac)}% G+T, >= {min_t} T)"),
+            "note": ("motif only — advisory. The hexamer panel is derived from MAMMALIAN poly(A) sites; yeast, "
+                     "plant and insect 3'-end formation uses degenerate signals this panel does not model, so "
+                     "a hit outside mammals is a sequence coincidence unless independently supported. A poly(A) "
+                     "hexamer occurs by chance about once per 4 kb and about "
+                     "half of genomic occurrences are never used, so this does NOT locate the R/U5 boundary, "
+                     "the cleavage site, or the transcript end; those need RNA evidence this tool does not use."
+                     + ("" if both else " The 5' LTR copy does not carry the same motif at the same offset, "
+                        "which is consistent with post-integration drift — treat the call as weaker."))}
+
+
 def _tsd_state(seq: str, start: int, end: int, found, min_tsd: int = 2) -> str:
     """Three outcomes, not two. A TSD can only be looked for when the record extends beyond the element
     on BOTH sides; a bare pasted element — the normal case — has no flanks, so 'no TSD' there means the
@@ -401,6 +531,9 @@ def detect_all(seq: str):
         ppt = find_ppt(seq, ltr["three_prime"][0])
         if ppt:
             ev.append(ppt)
+        pas = find_polya_signal(seq, ltr)                # advisory motif; never a boundary or a cleavage site
+        if pas:
+            ev.append(pas)
     # LTR (direct) and TIR (inverted) terminal architectures are mutually exclusive:
     # only look for a TIR when no LTR was found, so an LTR element never reports a spurious TIR.
     tir = find_tir(seq) if not ltr else None

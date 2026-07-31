@@ -8,6 +8,7 @@ The characters matter here. TEagle's tables carry primes (3'), en dashes in coor
 middots between domains (RT·INT), degree and delta signs in thermodynamics (ΔG), and percent signs. All
 must survive UTF-8 encoding, delimiter escaping, and Excel's BOM convention.
 """
+import builtins
 import csv
 import io
 import os
@@ -185,3 +186,31 @@ def test_gel_svg_is_self_contained_svg():
         {"length": 400, "on_target": True, "source": "x"}]}]}, "white")
     assert svg.strip().startswith("<svg") and svg.strip().endswith("</svg>")
     assert "<text" in svg
+
+
+def test_xlsx_degrades_to_csv_when_openpyxl_is_locatable_but_broken(tmp_path, monkeypatch):
+    """Deferring the openpyxl import traded an eager try/except for find_spec, which only proves the
+    package is FINDABLE. A present-but-broken install would then advertise Excel export and raise on the
+    first click. The writer must behave exactly as it did when openpyxl was absent: quietly write the data
+    in a format that works, and stop offering the one that does not."""
+    import widgets
+    monkeypatch.setattr(widgets, "_XL", {}, raising=False)
+    monkeypatch.setattr(widgets, "_HAS_XLSX", True, raising=False)
+
+    real_import = builtins.__import__
+
+    def broken(name, *a, **k):
+        if name.startswith("openpyxl"):
+            raise ImportError("simulated broken openpyxl")
+        return real_import(name, *a, **k)
+
+    monkeypatch.setattr(builtins, "__import__", broken)
+    target = tmp_path / "t.xlsx"
+    widgets.write_table(["h1", "h2"], [["a", 1]], str(target))
+    monkeypatch.setattr(builtins, "__import__", real_import)
+
+    assert not target.exists(), "no unusable .xlsx should be left behind"
+    csv = tmp_path / "t.csv"
+    assert csv.exists(), "the data must still be written, in a format that works"
+    assert "h1" in csv.read_text(encoding="utf-8-sig")
+    assert widgets._HAS_XLSX is False, "the broken format must stop being offered"

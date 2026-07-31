@@ -1,10 +1,10 @@
-TEagle documentation screenshots — 2026-07-30 13:05 · TEagle v3.2.1 · screen 1920x1080 · window 1500x1150 · theme light · UI scale 1.0
+TEagle documentation screenshots — 2026-07-31 13:44 · TEagle v3.3.0 · screen 1920x1080 · window 1500x1150 · theme light · UI scale 1.0
 Every figure below is a real run rendered by the app; 'runs' = screenshot_runs.py, 'recap' = recapture_shots.py.
 
-OK    classify_copia             [runs  this run     79 kB]  Classification card: LTR/Copia specimen (M11240) — LTR pair, PBS/PPT, domain order
-                                 -> 1109x1315  M11240 -> LTR/Copia / High
-OK    classify_gypsy             [runs  this run     80 kB]  Classification card: LTR/Gypsy specimen (M12927) — INT downstream of RT
-                                 -> 1109x1305  M12927 -> LTR/Gypsy / High
+OK    classify_copia             [runs  this run     89 kB]  Classification card: LTR/Copia specimen (M11240) — LTR pair, PBS/PPT, domain order
+                                 -> 1109x1416  M11240 -> LTR/Copia / High
+OK    classify_gypsy             [runs  this run     90 kB]  Classification card: LTR/Gypsy specimen (M12927) — INT downstream of RT
+                                 -> 1109x1396  M12927 -> LTR/Gypsy / High
 OK    classify_line              [runs  this run     96 kB]  Classification card: LINE specimen (M80343) — 3' poly-A tail, RT domain, no terminal repeats
                                  -> 1109x1443  M80343 -> LINE / Moderate
 OK    classify_dna_tc1           [runs  this run     76 kB]  Classification card: DNA/Tc1 specimen (X01005) — TIR pair + transposase
@@ -31,69 +31,69 @@ OK    splice_multi_exon          [runs  this run     49 kB]  Splice card: multi-
                                  -> 1109x719  J00265 x NM_000207 -> 3 exons / 2 introns
 OK    splice_single_exon_trap    [runs  this run     51 kB]  Splice card: gapless alignment (0 introns) + the genomic-slice foot-gun warning
                                  -> 1109x734  genomic-slice foot-gun: 0 introns
-OK    family_annotation          [runs  this run     37 kB]  Dfam family-annotation card (RepeatMasker), real backend run
-                                 -> 1109x509  2 TE hit(s): Copia_I, Copia_LTR
-OK    herv_k_domains             [recap 2026-07-30  132 kB]  Classification card, HERV-K113: full GAG-POL-ENV architecture + per-domain confidence
+OK    family_annotation          [runs  this run     40 kB]  Dfam family-annotation card (RepeatMasker), real backend run
+                                 -> 1109x569  2 TE hit(s): Copia_I, Copia_LTR
+OK    herv_k_domains             [recap 2026-07-31  132 kB]  Classification card, HERV-K113: full GAG-POL-ENV architecture + per-domain confidence
                                  -> HERV-K113 GAG-POL-ENV + per-domain confidence + completeness tier
-OK    herv_h_partial             [recap 2026-07-30  124 kB]  Classification card, HERV-H: partial completeness tier, single 'not detected' line
+OK    herv_h_partial             [recap 2026-07-31  124 kB]  Classification card, HERV-H: partial completeness tier, single 'not detected' line
                                  -> HERV-H partial tier, single 'not detected' line
-OK    methods_databases          [recap 2026-07-30  130 kB]  Classification card with the methods & databases disclosure expanded
+OK    methods_databases          [recap 2026-07-31  140 kB]  Classification card with the methods & databases disclosure expanded
                                  -> methods & databases disclosure expanded
-OK    primer_structure_detail    [recap 2026-07-30   26 kB]  Secondary-structure detail dialog: primer3 vs ViennaRNA, side by side
+OK    primer_structure_detail    [recap 2026-07-31   26 kB]  Secondary-structure detail dialog: primer3 vs ViennaRNA, side by side
                                  -> primer3 vs ViennaRNA ΔG, side by side
-OK    subregion_picker           [recap 2026-07-30    7 kB]  Sub-region picker dialog: choose an interval inside a feature
+OK    subregion_picker           [recap 2026-07-31    7 kB]  Sub-region picker dialog: choose an interval inside a feature
                                  -> pick an interval inside a feature
-OK    genome_scan_no_locus       [recap 2026-07-30   62 kB]  Whole-genome scan with no design locus — neutral 'genomic priming site' wording
+OK    genome_scan_no_locus       [recap 2026-07-31   62 kB]  Whole-genome scan with no design locus — neutral 'genomic priming site' wording
                                  -> live scan with no design locus — neutral 'genomic priming site' wording
 
 docs/img/ (README figures) — captured by recapture_shots.py:
-OK    overview.png               [recap 2026-07-30  102 kB]  Whole main window: specimen rail, classification card, interactive genome viewer, evidence tables
-                                 -> header v3.2.1 · 1500x1150
-OK    primers.png                [recap 2026-07-30   52 kB]  Panel 04 — primer design: presets, advanced parameters, ranked pair table
+OK    overview.png               [recap 2026-07-31  107 kB]  Whole main window: specimen rail, classification card, interactive genome viewer, evidence tables
+                                 -> header v3.3.0 · 1500x1150
+OK    primers.png                [recap 2026-07-31   52 kB]  Panel 04 — primer design: presets, advanced parameters, ranked pair table
                                  -> panel 04 — 5 ranked pairs on M11240, per-pair structure QC · 1109x738
-OK    pcr_gel.png                [recap 2026-07-30   45 kB]  Panel 05 — in-silico PCR: staged pair, to-scale agarose gel, amplicon table
+OK    pcr_gel.png                [recap 2026-07-31   45 kB]  Panel 05 — in-silico PCR: staged pair, to-scale agarose gel, amplicon table
                                  -> panel 05 — staged pair, to-scale gel, 1 amplicon(s) on M11240 · 1109x981
-OK    genome_scan.png            [recap 2026-07-30   65 kB]  Panel 06 — whole-genome off-target scan (isPcr): gel, verdict, match table
+OK    genome_scan.png            [recap 2026-07-31   65 kB]  Panel 06 — whole-genome off-target scan (isPcr): gel, verdict, match table
                                  -> REAL on+off-target (1 on / 48 off) · 1109x1213
-OK    coord_fetch.png            [recap 2026-07-30   38 kB]  Panel 01 — coordinate fetch (organism + chr:start-end) in the specimen rail
+OK    coord_fetch.png            [recap 2026-07-31   38 kB]  Panel 01 — coordinate fetch (organism + chr:start-end) in the specimen rail
                                  -> panel 01 rail after a real NCBI coordinate fetch — chr13:33,016,423-33,066,143 · GRCh38.p14 · 49,721 bp · 340x1074
-OK    installer.png              [recap 2026-07-30   50 kB]  Backend installer: per-component status, Repair, Install all, Check integrity, live log
-                                 -> backend installer — per-component status, per-component Repair, Install all, Check integrity, live log · 900x1048
+OK    installer.png              [recap 2026-07-31   47 kB]  Backend installer: per-component status, Install or Repair per component, Install all, Check integrity, live log
+                                 -> backend installer — per-component status, per-component Install (absent) or Repair (present), Install all, Check integrity, live log · 900x1005
 
 report/manual_figures/ (LaTeX manual + report figures) — captured by recapture_shots.py:
-OK    overview.png                 [recap 2026-07-30  102 kB]  Whole main window — the figure the manual opens with
-                                   -> header v3.2.1 · 1500x1150
-OK    card_coord.png               [recap 2026-07-30   38 kB]  Panel 01 specimen rail after a real NCBI coordinate fetch
+OK    overview.png                 [recap 2026-07-31  107 kB]  Whole main window — the figure the manual opens with
+                                   -> header v3.3.0 · 1500x1150
+OK    card_coord.png               [recap 2026-07-31   38 kB]  Panel 01 specimen rail after a real NCBI coordinate fetch
                                    -> panel 01 rail after a real NCBI coordinate fetch — chr13:33,016,423-33,066,143 · GRCh38.p14 · 49,721 bp · 340x1074
-OK    card_coord_fetch.png         [recap 2026-07-30   15 kB]  Panel 01, coordinate half only — cropped from card_coord.png
+OK    card_coord_fetch.png         [recap 2026-07-31   15 kB]  Panel 01, coordinate half only — cropped from card_coord.png
                                    -> panel 01 coordinate fetch — chr13:33,016,423-33,066,143 · GRCh38.p14 · 340x392
-OK    card_struct.png              [recap 2026-07-30   79 kB]  Card 02 — classification: structural evidence, domains, gene model
-                                   -> captured by recapture_shots.py · 1109x1315
-OK    card_herv.png                [recap 2026-07-30  132 kB]  Card 02, HERV-K113 — full GAG-POL-ENV architecture + completeness tier
+OK    card_struct.png              [recap 2026-07-31   89 kB]  Card 02 — classification: structural evidence, domains, gene model
+                                   -> captured by recapture_shots.py · 1109x1416
+OK    card_herv.png                [recap 2026-07-31  132 kB]  Card 02, HERV-K113 — full GAG-POL-ENV architecture + completeness tier
                                    -> HERV-K113 GAG-POL-ENV + per-domain confidence + completeness tier · 1109x1699
-OK    methods_databases.png        [recap 2026-07-30  130 kB]  Card 02 with the methods & databases disclosure expanded
-                                   -> methods & databases disclosure expanded · 1109x1534
-OK    card02_methods_foot.png      [recap 2026-07-30   69 kB]  Card 02 foot — domain table + methods panel; cropped from methods_databases.png
+OK    methods_databases.png        [recap 2026-07-31  140 kB]  Card 02 with the methods & databases disclosure expanded
+                                   -> methods & databases disclosure expanded · 1109x1625
+OK    card02_methods_foot.png      [recap 2026-07-31   68 kB]  Card 02 foot — domain table + methods panel; cropped from methods_databases.png
                                    -> card 02 foot — protein-domain table + methods & databases panel · 1109x569
-OK    card_wsl.png                 [recap 2026-07-30   28 kB]  Card 03 — Dfam family annotation (RepeatMasker), real backend run
-                                   -> M80343 -> L1HS · 1109x421
-OK    card_primer.png              [recap 2026-07-30   52 kB]  Card 04 — primer design: ranked pairs + per-pair structure QC
+OK    card_wsl.png                 [recap 2026-07-31   31 kB]  Card 03 — Dfam family annotation (RepeatMasker), real backend run
+                                   -> M80343 -> L1HS · 1109x481
+OK    card_primer.png              [recap 2026-07-31   52 kB]  Card 04 — primer design: ranked pairs + per-pair structure QC
                                    -> panel 04 — 5 ranked pairs on M11240, per-pair structure QC · 1109x738
-OK    primer_structure_detail.png  [recap 2026-07-30   26 kB]  Secondary-structure detail dialog: primer3 vs ViennaRNA
+OK    primer_structure_detail.png  [recap 2026-07-31   26 kB]  Secondary-structure detail dialog: primer3 vs ViennaRNA
                                    -> primer3 vs ViennaRNA ΔG, side by side · 640x460
-OK    subregion_picker.png         [recap 2026-07-30    7 kB]  Sub-region picker dialog
+OK    subregion_picker.png         [recap 2026-07-31    7 kB]  Sub-region picker dialog
                                    -> pick an interval inside a feature · 460x200
                                    -> UNCITED: no \includegraphics of this file in report/*.tex
-OK    card_pcr.png                 [recap 2026-07-30   45 kB]  Card 05 — in-silico PCR: staged pair, to-scale gel, amplicon table
+OK    card_pcr.png                 [recap 2026-07-31   45 kB]  Card 05 — in-silico PCR: staged pair, to-scale gel, amplicon table
                                    -> panel 05 — staged pair, to-scale gel, 1 amplicon(s) on M11240 · 1109x981
-OK    card_genome.png              [recap 2026-07-30   65 kB]  Card 06 — whole-genome off-target scan (isPcr)
+OK    card_genome.png              [recap 2026-07-31   65 kB]  Card 06 — whole-genome off-target scan (isPcr)
                                    -> REAL on+off-target (1 on / 48 off) · 1109x1213
-OK    card_splice.png              [recap 2026-07-30   49 kB]  Card 07 — splice/exon-intron alignment
+OK    card_splice.png              [recap 2026-07-31   49 kB]  Card 07 — splice/exon-intron alignment
                                    -> J00265 x NM_000207 -> 3 exons / 2 introns · 1109x719
-OK    card_prov.png                [recap 2026-07-30   31 kB]  Provenance card — the reproducibility seal
-                                   -> core v3.2.1 · 1109x462
-OK    card_installer.png           [recap 2026-07-30   50 kB]  Backend installer dialog
-                                   -> backend installer — per-component status, per-component Repair, Install all, Check integrity, live log · 900x1048
+OK    card_prov.png                [recap 2026-07-31   31 kB]  Provenance card — the reproducibility seal
+                                   -> core v3.3.0 · 1109x462
+OK    card_installer.png           [recap 2026-07-31   47 kB]  Backend installer dialog
+                                   -> backend installer — per-component status, per-component Install (absent) or Repair (present), Install all, Check integrity, live log · 900x1005
 
 docs/img/ static brand assets (hand-made, NOT regenerated by these harnesses):
 OK    teagle-banner-dark.png

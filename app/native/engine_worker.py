@@ -76,6 +76,11 @@ class Engine(QObject):
         "genome_list": engine.run_genome_list,
         "genome_remove": engine.run_genome_remove,
         "add_custom_assembly": engine.run_add_custom_assembly,
+        "genome_annotate": engine.run_genome_annotate,
+        "genome_annotate_log": engine.run_genome_annotate_log,
+        "genome_annotate_status": engine.run_genome_annotate_status,
+        "genome_annotate_reset": engine.run_genome_annotate_reset,
+        "annotate_budget": engine.run_annotate_budget,
     }
 
     def __init__(self, parent=None, max_threads: int | None = None):
