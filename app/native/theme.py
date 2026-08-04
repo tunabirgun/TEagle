@@ -75,6 +75,22 @@ QLineEdit, QTextEdit, QPlainTextEdit {{ background: {bg}; border: 1px solid {lin
     selection-background-color: {accentsoft}; selection-color: {text}; }}
 QComboBox {{ background: {bg}; border: 1px solid {line2}; border-radius: 2px; padding: 6px 9px;
     color: {text}; font-family: {sans}; font-size: 12px; }}
+/* Numeric entry (flank length, sub-region start/end) is DATA, so it matches QLineEdit's mono well rather
+   than the native widget. Unstyled it kept whatever field colour the active Qt style chose while still
+   inheriting this sheet's `*` colour — measured rgb(30,30,30) against the app's rgb(10,13,16) on the
+   windows11 style here, and a light-on-light hazard on any style that picks a light field. Styling it is
+   what makes the appearance depend on the theme rather than on the machine. */
+QSpinBox, QDoubleSpinBox {{ background: {bg}; border: 1px solid {line2}; border-radius: 2px;
+    padding: 6px 9px; color: {text}; font-family: {mono}; font-size: 12px;
+    selection-background-color: {accentsoft}; selection-color: {text}; }}
+QSpinBox:focus, QDoubleSpinBox:focus {{ border: 1px solid {accent}; }}
+QSpinBox:disabled, QDoubleSpinBox:disabled {{ color: {faint}; border: 1px solid {line}; background: {panel}; }}
+/* keep the steppers on the panel ramp instead of the native chrome they would otherwise paint */
+QSpinBox::up-button, QDoubleSpinBox::up-button,
+QSpinBox::down-button, QDoubleSpinBox::down-button {{ background: {panel2}; border-left: 1px solid {line2};
+    width: 14px; }}
+QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
+QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {{ background: {panel3}; }}
 QLineEdit:focus, QTextEdit:focus, QComboBox:focus {{ border: 1px solid {accent}; }}
 QComboBox::drop-down {{ border: none; width: 18px; }}
 /* the popup's highlighted row is drawn by QComboBox's own delegate, which honours selection-background-color
@@ -149,6 +165,12 @@ QLabel#orient {{ font-family: {sans}; color: {text2}; font-size: 11px; backgroun
     border-left: 2px solid {line2}; border-radius: 2px; padding: 11px 14px; }}
 QLabel#sectionlabel {{ font-family: {mono}; color: {faint}; font-size: 10px; font-weight: 700; }}
 QLabel#cardmeta {{ font-family: {mono}; color: {dim}; font-size: 11px; }}
+/* Running prose inside a card. Identical weight, size and colour to #cardmeta — only the face differs —
+   so the multi-sentence scope/caveat paragraphs stop being set in the data face. This file's own contract
+   (SANS = prose/chrome, MONO = data/brand) was being broken by the longest text on the screen. Deliberately
+   NOT #orient: that is a bordered, tinted callout box, and boxing four consecutive paragraphs would add
+   chrome to say something the typeface already says. */
+QLabel#cardnote {{ font-family: {sans}; color: {dim}; font-size: 11px; }}
 QLabel#empty {{ font-family: {sans}; color: {faint}; font-size: 12px; }}
 QLabel#gvpos {{ font-family: {mono}; color: {faint}; font-size: 10px; }}
 /* Level vocabulary, shared by the panel note (#errbanner) and the notification dialog (#notifmsg). TWO

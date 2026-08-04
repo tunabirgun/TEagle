@@ -99,7 +99,7 @@ def _scan(pattern: str, seq: str, max_mm: int, tp: int):
 
 def in_silico_pcr(fwd: str, rev: str, seq: str, seq_id: str = "template",
                   max_mm: int = 2, tp: int = 5, prod_min: int = 70, prod_max: int = 1000,
-                  target_span: list | None = None):
+                  target_span: list | None = None, stats: dict | None = None):
     """Pair-aware in-silico PCR. Searches both strands, applies a strict 3' rule
     (zero mismatches in the terminal `tp` bases), builds amplicons from inward-facing
     sites within [prod_min, prod_max] — both two-primer (F+R) products and single-primer
@@ -111,6 +111,7 @@ def in_silico_pcr(fwd: str, rev: str, seq: str, seq_id: str = "template",
     max_mm, tp = max(0, int(max_mm)), max(0, int(tp))         # non-negative ints; tp<0 must not silently disable the 3' rule
     MAX_SITES, MAX_AMPS = 4000, 4000                          # bound work + memory on repetitive templates
     amps = []
+    sites_capped = False                                      # a binding-site scan that hit MAX_SITES stopped early
     # forward-capable binding: primer matches top strand 5'->3'; 3' end = right side
     def forward_sites(primer):
         t = min(tp, len(primer))                              # clamp so a huge tp cannot build an enormous index set
@@ -121,6 +122,8 @@ def in_silico_pcr(fwd: str, rev: str, seq: str, seq_id: str = "template",
                 continue
             sites.append({"left": i, "mm": mm, "mm_pos": pos})
             if len(sites) >= MAX_SITES:
+                nonlocal sites_capped
+                sites_capped = True
                 break
         return sites
     # reverse-capable binding: revcomp(primer) matches top strand; primer 3' = left side
@@ -134,6 +137,8 @@ def in_silico_pcr(fwd: str, rev: str, seq: str, seq_id: str = "template",
                 continue
             sites.append({"right": i + len(rc), "mm": mm, "mm_pos": pos})
             if len(sites) >= MAX_SITES:
+                nonlocal sites_capped
+                sites_capped = True
                 break
         return sites
 
@@ -164,4 +169,12 @@ def in_silico_pcr(fwd: str, rev: str, seq: str, seq_id: str = "template",
             break
     # on-target first, then strongest priming (fewest mismatches), then two-primer before self-priming, then position
     amps.sort(key=lambda a: (not a["on_target"], a["fwd_mm"] + a["rev_mm"], a["single_primer"], a["start"]))
+    if stats is not None:
+        # A truncated search must be distinguishable from an exhaustive one. Both caps bite exactly on the
+        # templates where the answer matters most — a repetitive element, where "no further off-target
+        # product" would otherwise be read as a specificity result rather than as the search giving up.
+        stats["amplicons_capped"] = capped
+        stats["sites_capped"] = sites_capped
+        stats["max_amplicons"] = MAX_AMPS
+        stats["max_sites"] = MAX_SITES
     return amps

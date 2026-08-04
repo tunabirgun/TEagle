@@ -186,13 +186,20 @@ def _tier(dg, warn, caution):
 
 
 def _agree(p3, vrna):
-    """Concordance label between the two engines. Both None -> 'none'. One value missing: 'n/a' when the
-    ViennaRNA cross-check engine is not installed (couldn't run), else 'single' (a genuine one-engine result,
-    e.g. ViennaRNA predicted no structure). Both present -> agree/disagree on the ±band."""
+    """Concordance label between the two engines. Both None -> 'none'. One value missing: 'n/a' only when the
+    cross-check engine genuinely never ran, else 'single' (a real one-engine result — ViennaRNA predicted no
+    structure). Both present -> agree/disagree on the ±band.
+
+    `RNA is None` alone does NOT mean the engine could not run: when the in-process module is absent the WSL
+    backend supplies the folds instead, and remote_active() is true. Testing only the in-process module
+    labelled a COMPLETED remote cross-check that found no structure as "not installed" — directly
+    contradicting the panel note above the same table, which truthfully said the design was cross-checked
+    against ViennaRNA. A row that ran and found nothing is evidence; "n/a" throws that evidence away."""
     if vrna is None and p3 is None:
         return "none"
     if p3 is None or vrna is None:
-        return "n/a" if RNA is None else "single"
+        ran = (RNA is not None) or remote_active()
+        return "single" if ran else "n/a"
     return "agree" if abs(p3 - vrna) <= _AGREE_BAND else "disagree"
 
 

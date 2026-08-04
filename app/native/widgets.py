@@ -3,7 +3,7 @@ an interactive genome viewer (windowed semantic zoom), and a data table with CSV
 and a copy context menu. All figure rendering goes through QSvgRenderer so on-screen output
 matches the exported SVG/PNG (the gel's Gaussian-blur glow is the one SVG-Tiny casualty on screen)."""
 from __future__ import annotations
-import math, re
+import contextlib, math, os, re
 
 from PySide6.QtCore import Qt, QByteArray, QPointF, QRectF, QSize, Signal
 from PySide6.QtGui import QImage, QPainter, QColor, QPixmap, QIcon
@@ -42,8 +42,47 @@ def _svg_size(svg: str):
     return (float(mm.group(1)), float(mm.group(2))) if mm else (800.0, 400.0)
 
 
+@contextlib.contextmanager
+def atomic_write(path: str, mode: str = "w", **kw):
+    """Write a user deliverable so an interrupted run cannot leave a half-file wearing the final name.
+
+    A plain open(path,'w') truncates the target the instant it is called, so a crash, a full disk, or a
+    closed lid mid-write leaves a file that opens fine and is quietly incomplete — a truncated results
+    table is exactly the kind of wrong data that survives into a figure unnoticed. Same temp-then-replace
+    the assembly cache already uses (fetch.py:537-540). os.replace is atomic on the same filesystem, and
+    the temp file sits beside the target so it never crosses one."""
+    tmp = f"{path}.part"
+    try:
+        with open(tmp, mode, **kw) as fh:
+            yield fh
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.remove(tmp)                      # never leave a stray .part beside the user's export
+        except OSError:
+            pass
+        raise
+
+
+def atomic_save(path: str, writer):
+    """Same guarantee for writers that take a PATH rather than a handle (QImage.save, openpyxl, QPdfWriter).
+    `writer(tmp_path)` must return falsey ONLY to signal failure — anything else counts as written."""
+    tmp = f"{path}.part"
+    try:
+        ok = writer(tmp)
+        if ok is False or not os.path.exists(tmp):
+            raise OSError(f"writer produced no file for {os.path.basename(path)}")
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def save_svg(svg: str, path: str):
-    with open(path, "w", encoding="utf-8") as f:
+    with atomic_write(path, "w", encoding="utf-8") as f:
         f.write(svg)
 
 
@@ -56,7 +95,7 @@ def render_png(svg: str, path: str, scale: int = 3):
     p = QPainter(img)
     r.render(p)
     p.end()
-    img.save(path, "PNG")
+    atomic_save(path, lambda tmp: img.save(tmp, "PNG"))
 
 
 def render_pdf(svg: str, path: str):
@@ -603,7 +642,7 @@ def _xlsx_val(v):
     return s
 
 
-def _export_xlsx(headers, rows, path):
+def _export_xlsx(headers, rows, path, notes=None):
     """Write the table as a workbook. Returns False when openpyxl cannot be imported, so the caller can
     fall back — a broken install must cost the user their chosen FORMAT, never their data or a traceback."""
     _x = _xl()                                           # first XLSX export pays the import, later ones do not
@@ -618,7 +657,12 @@ def _export_xlsx(headers, rows, path):
     for r in rows:
         ws.append([_xlsx_val(c) for c in r])
     ws.freeze_panes = "A2"                                # keep the header visible while scrolling
-    wb.save(path)
+    for n in (notes or []):                               # caveats below the data, after one blank row
+        ws.append([])
+        for ln in str(n).splitlines():
+            if ln.strip():
+                ws.append([ln])
+    atomic_save(path, lambda tmp: wb.save(tmp))
 
 
 _TABLE_FORMATS = [("Excel workbook (.xlsx)", "xlsx"),
@@ -638,7 +682,7 @@ def pick_table_format(parent, global_pos):
     return amap.get(m.exec(global_pos))
 
 
-def export_table(headers, rows, base, parent=None, fmt=None):
+def export_table(headers, rows, base, parent=None, fmt=None, notes=None):
     """Write a table to a user-chosen file. `fmt` in {'xlsx','csv','tsv'} pre-selects the format so the
     save dialog offers exactly that type; fmt=None falls back to a multi-filter dialog."""
     if fmt is None:
@@ -655,32 +699,67 @@ def export_table(headers, rows, base, parent=None, fmt=None):
             path += ext                                       # honor the chosen format if the user omits the extension
     if not path:
         return
-    write_table(headers, rows, path)
+    # A failed export must say what to do, not raise. atomic_write correctly cleans up and re-raises, and
+    # an unhandled OSError here reached the generic crash banner as a bare exception string — the exact
+    # thing AGENTS.md rule 2 forbids, on the most ordinary failure there is (a read-only folder, a
+    # disconnected drive, the file open in Excel).
+    name = os.path.basename(path)
+    try:
+        write_table(headers, rows, path, notes)
+    except PermissionError:
+        _export_failed(parent, f"“{name}” could not be written — it may be open in another program "
+                               "(Excel locks a file while it is open), or the folder may be read-only. "
+                               "Close it or choose another folder, then export again.")
+    except OSError as e:
+        _export_failed(parent, f"“{name}” could not be written. If the folder is on a network or removable "
+                               f"drive, check it is still connected, or choose a folder on this computer. "
+                               f"({type(e).__name__})")
 
 
-def serialize_table(headers, rows, sep=",") -> str:
+def _export_failed(parent, msg):
+    """Report an export failure through the parent's banner when it has one, else a message box. The table
+    widgets are reused by dialogs that are not MainWindow, so this cannot assume _banner exists."""
+    banner = getattr(parent, "_banner", None)
+    if callable(banner):
+        banner(msg, "warn")
+        return
+    from PySide6.QtWidgets import QMessageBox
+    box = QMessageBox(parent)
+    box.setWindowTitle("Export failed")
+    box.setIcon(QMessageBox.Warning)
+    box.setText(msg)
+    box.exec()
+
+
+def serialize_table(headers, rows, sep=",", notes=None) -> str:
     """The exact text written for a CSV/TSV export. Separated from the file dialog so the contract —
     every displayed row present, in order, escaped so the delimiter survives a round trip — is testable
     without a GUI. An export that silently drops a column or mangles a value is a defect, and a defect
     that only a human reading a spreadsheet can catch is one that ships."""
     lines = [sep.join(_csv_escape(h, sep) for h in headers)]
     lines += [sep.join(_csv_escape(c, sep) for c in r) for r in rows]
+    # The scientific qualifications shown beside the table travel WITH it. AGENTS.md: an export that
+    # silently drops a hedge or a units label is a defect — and these tables become figures and supplementary
+    # files in papers, where the screen the numbers came from is long gone. Comment-prefixed so the data rows
+    # stay machine-readable for anything that skips '#'.
+    for n in (notes or []):
+        lines += ["# " + ln for ln in str(n).splitlines() if ln.strip()]
     return "\r\n".join(lines)
 
 
-def write_table(headers, rows, path):
-    """Write a table to `path`, choosing the format from its extension."""
+def write_table(headers, rows, path, notes=None):
+    """Write a table to `path`, choosing the format from its extension. `notes` are the on-screen caveats."""
     low = str(path).lower()
     if low.endswith(".xlsx") and _HAS_XLSX:
-        if _export_xlsx(headers, rows, path) is not False:
+        if _export_xlsx(headers, rows, path, notes) is not False:
             return
         # openpyxl was locatable but would not import: write the same data as CSV under the chosen name's
         # stem rather than failing. _xl() has already cleared _HAS_XLSX, so the option disappears next time.
         path = path[:-5] + ".csv"
         low = path.lower()
     sep = "\t" if low.endswith(".tsv") else ","
-    with open(path, "w", encoding="utf-8-sig", newline="") as f:      # BOM so Excel reads UTF-8
-        f.write(serialize_table(headers, rows, sep))
+    with atomic_write(path, "w", encoding="utf-8-sig", newline="") as f:   # BOM so Excel reads UTF-8
+        f.write(serialize_table(headers, rows, sep, notes))
 
 
 def save_fasta(fasta: str, base: str, parent=None):
@@ -691,7 +770,7 @@ def save_fasta(fasta: str, base: str, parent=None):
         return
     if not fasta.endswith("\n"):
         fasta += "\n"
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
+    with atomic_write(path, "w", encoding="utf-8", newline="\n") as f:
         f.write(fasta)
 
 
@@ -741,6 +820,41 @@ class _Cell(QTableWidgetItem):
         return self.text().casefold() < other.text().casefold()
 
 
+# A cell that is ENTIRELY one number: optional sign, thousands separators, decimal, exponent, and an
+# optional trailing % or unit-less suffix-free tail. Deliberately stricter than _NUM_RE (which matches a
+# number ANYWHERE) because alignment is decided by what the whole cell is, not by what it contains:
+# "0–276 · 4870–5146" holds numbers but is a coordinate composite and must not right-align away from its
+# neighbours, while "2.0e-11" and "100.0%" must.
+_PURE_NUM_RE = re.compile(r'^[+-]?\d{1,3}(?:,\d{3})*(?:\.\d+)?(?:[eE][+-]?\d+)?%?$'
+                          r'|^[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?%?$')
+
+
+def _numeric_columns(rows, ncols):
+    """Which columns hold nothing but numbers, so digits can be made to line up.
+
+    DERIVED from the data on every set_rows rather than declared per call site: a column list would go
+    stale the moment a table gained a column, and would be wrong for the tables whose columns change
+    shape with the result (the Metric column is '100.0%' for an LTR and 'GAGGGGGCG' for a PPT, so it is
+    correctly NOT numeric). A column with no non-empty cell is not numeric — an all-blank column has no
+    digits to align."""
+    out = []
+    for j in range(ncols):
+        seen = False
+        numeric = True
+        for r in rows:
+            if j >= len(r):
+                continue
+            t = "" if r[j] is None else str(r[j]).strip()
+            if not t:
+                continue
+            seen = True
+            if not _PURE_NUM_RE.match(t):
+                numeric = False
+                break
+        out.append(seen and numeric)
+    return out
+
+
 class DataTable(QTableWidget):
     """A read-only table with CSV/TSV export and a copy-cell/row context menu. Optional per-row
     activation callback (double-click / Enter) and a right-click menu builder for FASTA-style actions."""
@@ -764,7 +878,7 @@ class DataTable(QTableWidget):
         self.horizontalHeader().setStretchLastSection(True)
         self.horizontalHeader().setMaximumSectionSize(360)            # cap wide free-text cols so the last column stays visible
         self.setTextElideMode(Qt.ElideRight)                          # elide overflow; full text is in the cell tooltip
-        self.horizontalHeader().setDefaultAlignment(Qt.AlignCenter)   # centered headers
+        self.horizontalHeader().setDefaultAlignment(Qt.AlignCenter)   # until set_rows sees the data, headers centre
         self.setSortingEnabled(True)                                  # click a header to sort (numeric-aware via _Cell)
         self.doubleClicked.connect(lambda idx: self.row_activated.emit(self._orig(idx.row())))
         self._row_menu = None            # callable(orig_row_index)->list[(label, fn)]
@@ -797,12 +911,27 @@ class DataTable(QTableWidget):
         DISPLAYED text carries a UI-only mark (the ΔG severity ! / ‡), so the exported column stays numeric."""
         self.setSortingEnabled(False)                # never sort mid-insert (it scrambles rows)
         self.setRowCount(0)
+        # Numeric columns right-align so their digits form a column; everything else stays centred. The
+        # data font is Cascadia Mono precisely so figures are tabular (theme.py: "numeric data stay in
+        # Cascadia Mono for column alignment"), and centring threw that away — 1409/110/98/75 sat on four
+        # different left edges, which is the one thing a monospaced column is meant to prevent.
+        numcols = _numeric_columns(rows, self.columnCount())
+        # Stretch the last column only when it holds free text (a Method or Label column genuinely wants the
+        # slack). A numeric last column stretched to the viewport strands its digits against the far edge,
+        # a column-width away from the value they belong beside — visible on the ORFs table, whose last
+        # column is "aa". Text columns keep the old behaviour.
+        self.horizontalHeader().setStretchLastSection(not (numcols and numcols[-1]))
+        for j, isnum in enumerate(numcols):
+            h = self.horizontalHeaderItem(j)
+            if h is not None:                        # header follows its column, or the label floats off its digits
+                h.setTextAlignment((Qt.AlignRight if isnum else Qt.AlignHCenter) | Qt.AlignVCenter)
         for i, r in enumerate(rows):
             self.insertRow(i)
             for j, c in enumerate(r):
                 text = "" if c is None else str(c)
                 item = _Cell(text)
-                item.setTextAlignment(Qt.AlignCenter)    # centered cells, matching the headers
+                align = Qt.AlignRight if (j < len(numcols) and numcols[j]) else Qt.AlignHCenter
+                item.setTextAlignment(align | Qt.AlignVCenter)
                 tip = tips[i][j] if (tips and tips[i] and j < len(tips[i]) and tips[i][j]) else text
                 item.setToolTip(tip)                     # full value / richer detail on hover
                 col = styles[i][j] if (styles and styles[i] and j < len(styles[i])) else None
@@ -817,6 +946,18 @@ class DataTable(QTableWidget):
         self.horizontalHeader().setSortIndicator(-1, Qt.AscendingOrder)  # keep engine order until a header is clicked
         self.setSortingEnabled(True)
         self.resizeColumnsToContents()
+        if numcols and numcols[-1]:
+            # A numeric last column does not stretch (see above), which on a wide card left the table's
+            # frame spanning the full width with most of it empty and the row-scroll thumb stranded far
+            # from the data. Cap the WIDGET to what its columns actually need, so the table reads as
+            # deliberately sized rather than as a broken full-width one. No cap when the last column is
+            # text — that column is meant to absorb the slack.
+            w = sum(self.columnWidth(j) for j in range(self.columnCount())) + 2 * self.frameWidth()
+            if self.verticalScrollBar().isVisible() or self.rowCount() > 8:
+                w += self.verticalScrollBar().sizeHint().width()
+            self.setMaximumWidth(max(w, 1))
+        else:
+            self.setMaximumWidth(16777215)                # QWIDGETSIZE_MAX: no cap for a text last column
 
     def set_row_menu(self, builder):
         self._row_menu = builder
@@ -837,8 +978,12 @@ class DataTable(QTableWidget):
         """Flat table export: pop the arrow-free format picker at gpos, then route the chosen format to export_table."""
         fmt = pick_table_format(self, gpos)
         if fmt:
-            export_table(self._headers, self.rows_data(), getattr(self, "export_base", "TEagle_table"),
-                         self, fmt=fmt)   # same base as the visible Export button -> identical proposed filename
+            # notes too, or the two entry points produce DIFFERENT files: the visible button carried the
+            # caveats and this one silently dropped them, so which path a user happened to take decided
+            # whether their exported table kept its scientific qualifications.
+            export_table(self.export_headers(), self.rows_data(), getattr(self, "export_base", "TEagle_table"),
+                         self, fmt=fmt,   # same base as the visible Export button -> identical proposed filename
+                         notes=getattr(self, "export_notes", None))
 
     def _value(self, i, j):
         """The cell's machine value: the export override when one was set, else the displayed text."""
@@ -853,7 +998,25 @@ class DataTable(QTableWidget):
             return
         QApplication.clipboard().setText("\t".join(self._value(row, j) for j in range(self.columnCount())))
 
+    def export_headers(self):
+        """Headers as written to a FILE. `export_header_map` renames a column for export only, so a units
+        or coordinate-convention label can reach the file without widening the on-screen column (headers are
+        ResizeToContents, so "Start" -> "Start (0-based)" would push the table sideways on every screen).
+        On screen the convention is a GLOSS tooltip, which no export can carry."""
+        m = getattr(self, "export_header_map", None) or {}
+        return [m.get(h, h) for h in self._headers]
+
     def rows_data(self):
+        """Rows for export/copy, in the table's current on-screen (sorted) order.
+
+        `full_rows` overrides this when the table on screen is a capped VIEW of a bigger set. A file that
+        silently held the first N of M would be the export defect AGENTS.md names: what reaches the file
+        must not be quietly less than what was computed. Both export entry points — the visible button and
+        the right-click menu — read through here, so neither can drift from the other."""
+        full = getattr(self, "full_rows", None)
+        if callable(full):
+            return full()
+
         return [[self._value(i, j) for j in range(self.columnCount())]
                 for i in range(self.rowCount())]
 

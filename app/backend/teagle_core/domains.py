@@ -92,9 +92,18 @@ def _hmms():
     return _HMMS
 
 
-def scan_domains(seq: str, max_orfs: int = 12, evalue: float = 1e-3):
+# How many ORFs the profile search actually reads. find_orfs sorts descending by length, so this keeps the
+# longest — where a TE's coding modules live — but on a sequence with more ORFs than this the remainder are
+# never searched, and an unsearched ORF must not contribute to a "not detected" claim. Named so callers can
+# compare it against the real ORF count and say so.
+MAX_ORFS_SCANNED = 12
+
+
+def scan_domains(seq: str, max_orfs: int = MAX_ORFS_SCANNED, evalue: float = 1e-3):
     """Detect TE protein domains in the sequence's ORFs. Returns hits ordered along
-    the element by genomic position, each with nucleotide coordinates."""
+    the element by genomic position, each with nucleotide coordinates.
+
+    Only the `max_orfs` longest ORFs are searched — see MAX_ORFS_SCANNED."""
     if pyhmmer is None:                             # domain detection unavailable in this environment
         return []
     orfs = find_orfs(seq)[:max_orfs]

@@ -9,6 +9,132 @@ and propagates to the backend health endpoint, the UI header badge, every run
 provenance manifest, the packaged executable's Windows file-version metadata, and
 the LaTeX report title page.
 
+## [Unreleased]
+
+A review-and-fix pass over scientific validity and the interface. **Results may differ from 3.3.0** for
+three classes of element — see *Fixed* — in every case because a call that the evidence did not support is
+now withheld or qualified rather than made.
+
+### Added
+- **Coding-structure axis on the classification card.** The completeness tier is a domain-ledger verdict:
+  it reports "partial" whenever an expected Pfam module was not detected. Read alone, that is taken as *this
+  copy is decayed* — which is why other tools call the same element "intact" (LTR_retriever) or "Complete"
+  (TEsorter). The card now states, separately, whether the domains that WERE detected sit in one
+  uninterrupted reading frame, so "modules not detected" is distinguishable from "copy broken". The tier
+  value itself is unchanged; this is an added axis, not a re-scoring.
+- **Genome-anchored GFF3 and BED export.** When the specimen came from a coordinate fetch, the annotation
+  can be exported against the chromosome accession with every feature offset into genome space, so
+  `bedtools intersect` and a genome browser find it. The locus-relative export remains the default. A
+  minus-strand fetch is offered no anchored export at all — mapping those coordinates back is a flip, not
+  an offset, and a subtly wrong file is worse than none. The anchored GFF3 omits the `##FASTA` block,
+  because embedding a slice under the chromosome's name would present the slice as the whole sequence.
+- **Detector thresholds are sealed in the analysis provenance manifest** — 17 parameters, read from the
+  signatures of the functions that apply them rather than restated, so a changed default changes the seal.
+  Previously the manifest sealed one hand-written value (`orf_min_aa: 40`) while every number that decides
+  what is found lived only as a function default, and could not be checked from the exported record.
+- **Table exports carry their on-screen caveats and their coordinate convention.** The scope and advisory
+  notes shown beside a table are written into the file as comment lines, and export-only headers spell out
+  the convention (`Start (0-based)`, `End (0-based, exclusive)`, `nt (0-based)`) that on screen is a
+  tooltip. Screen columns are unchanged — they are sized to contents, so spelling it out there would push
+  every table sideways.
+
+### Fixed — calls that claimed more than their evidence
+- **Cross-strand integrase/RT no longer produces a Copia or Gypsy call.** Translation order is recovered by
+  negating the minus-strand coordinate, which is correct within one strand and meaningless across two: the
+  comparison collapsed to "which of the two is on the minus strand" and returned the same answer whether
+  the integrase sat upstream or downstream of the RT. The element is now reported as
+  *LTR retrotransposon (superfamily undetermined)*, the label the no-integrase path already used.
+- **A failed protein-domain scan no longer reports "not detected".** If the scan raised, the empty domain
+  list was passed to the classifier, which then listed every unfound domain as absent. The card now states
+  that the scan did not run and that no domain was tested.
+- **The domain search's ORF budget is disclosed.** Only the twelve longest ORFs are searched; anything
+  beyond that was never looked at, yet still fed the visible "not detected" list. The record now says how
+  many ORFs were searched of how many found.
+- **A Helitron is no longer filed as a retroelement.** With no branch for the bundled Helitron helicase
+  profile, a hit fell through to a generic arm and emitted `retro/partial` — a Class II rolling-circle
+  element under Class I — labelled "RT/transposase not detected" on a record where the diagnostic domain
+  *was* found. The class is now left unassigned, with the helicase reported. Per the standing decision, no
+  Helitron superfamily call is made.
+- **The confidence badge follows the same terminal-repeat gate as the completeness tier.** A repeat that
+  does not enclose the transposase is explicitly not credited by the ledger, yet still lifted the badge out
+  of *Candidate*. Two records with identical ledgers no longer get different badges.
+- **A terminal-repeat pair rejected on identity alone is now reported as advisory.** LTR–LTR identity decays
+  with insertion age, so a hard 80% floor made the detector blind to older elements and reported that
+  blindness as absence. A candidate failing only that floor is returned with its measured identity, marked
+  advisory and not accepted as an LTR. Low-complexity repeats remain excluded.
+- **In-silico PCR states when it stopped early.** The search caps at 4000 products and 4000 binding sites
+  per primer; the cap was computed and discarded, so a truncated run on a repetitive template was
+  indistinguishable from an exhaustive one.
+- **The tested-panel sentence is derived from the panel.** It named five transposase groups while the panel
+  also bundles Pfam's generic DDE family, which the classifier names outright.
+- **The TSD method text states the window actually searched** (2–12 bp, not 4–12) — it had denied the 2 bp
+  Tc1/Mariner TA the detector was tuned to catch in 3.2.1.
+- **Degenerate bases are visible.** A sequence a third R/Y/W read "IUPAC valid" beside "N content 0.0%",
+  because ambiguity codes were counted by neither.
+- **The sealed whole-genome-annotation manifest no longer asserts that Dfam is not installed** on runs whose
+  own database entry carries the resolved Dfam version and partitions.
+
+### Fixed — found by a second review pass over the first pass's own changes
+- **A finished whole-genome annotation is shown.** The success handler had no success path at all: the
+  app's most expensive operation — a multi-hour, uncancellable run — completed with no banner and no
+  results window, while *discarding* an annotation announced "transposable elements cover None% of the
+  assembly across None families" and opened a results window on the discard reply's empty fields. The
+  reporting block had been misplaced into the wrong handler.
+- **A terminal-repeat pair rejected on identity can no longer be read as a confirmed one.** The advisory
+  row added above was first named with an `LTR` prefix, and four code paths dispatch on that prefix — so a
+  pair the detector had *rejected* came back as an `LTR/Copia` call at high confidence. The row is renamed,
+  and advisory evidence is now excluded from every credited-evidence test.
+- **The coding-structure axis attributes a domain to the reading frame it was actually found in**, not to
+  whichever ORF happens to contain it. Because ORFs overlap and the longest is tested first, two domains in
+  genuinely different frames both resolved to one enclosing ORF and the axis reported "single reading
+  frame" — the exact opposite of what it exists to detect.
+- **The terminal-inverted-repeat identity floor is named, sealed and shown**, like its terminal-direct-repeat
+  twin. It gates every DNA-transposon call and was visible nowhere.
+- **The sealed parameter set is complete** — the polypurine-tract purine fraction and defect allowance were
+  omitted from a list that claimed to carry every threshold.
+- **Both table-export entry points produce the same file.** The right-click export dropped the caveats the
+  visible button carried, so which route a user took decided whether their file kept its qualifications.
+- **A card's programmatic open/close cancels an in-flight animation**, instead of leaving the body clamped
+  at an interpolated height with no callback to release it.
+- **The annotation, text and manifest exports are written atomically**, like the table and figure exports.
+- **A failed export explains itself** — a read-only folder or a file open in Excel produced a raw exception
+  instead of a sentence saying what to do.
+- **The divergence explanation reached from a row menu carries the same hedges as the column it explains.**
+  It said "higher means older" where the column says the number is raw, uncorrected, saturating, and a
+  similarity measure rather than an age.
+
+### Fixed — data safety and exports
+- Deleting a cached genome is refused while an annotation is running against it; the annotation's working
+  directory lives inside the directory being removed. A refused delete now says so instead of failing silently.
+- Every export (XLSX/CSV/TSV/FASTA/SVG/PNG) is written to a temporary file and renamed, so an interrupted
+  export cannot leave a complete-looking half-file over a previous good one.
+- The record-summary export carries every analysed record; it silently truncated at the 200 the table shows.
+
+### Fixed — interface
+- The off-target scan panel names the primer pair and assembly its verdict describes, and clears when
+  primers are redesigned or a new specimen is analysed. The verdict previously survived both.
+- *Run analysis* waits until a sequence is loaded, rather than being the loudest control on a screen where
+  its only possible outcome was an error.
+- File-open and backend failures report in plain language instead of an errno with a full filesystem path,
+  or a raw exception type.
+- Numeric table columns are right-aligned so digits line up, which is what the monospaced data face is for.
+- Scope and caveat prose is set in the body face rather than the data face.
+- Cards ease open and closed (160 ms). Motion follows the Windows "show animations" setting and is absent
+  when that is off; programmatic reveals remain instantaneous.
+- `QSpinBox` is themed; header, rail and card geometry scale with the UI-scale setting.
+- **The results column scrolls sideways when — and only when — its content genuinely overflows.** The bar
+  was disabled outright, so at 1.5× UI scale in a window under roughly 1230 px the figure toolbar's SVG and
+  PNG export buttons were clipped and unreachable, with nothing to reveal them. Normal windows are
+  unaffected; wide tables still scroll inside themselves.
+- **The ViennaRNA cross-check no longer reports "engine not installed" for a fold that ran and found no
+  structure.** The label tested only the in-process module, so on a machine using the WSL backend the
+  per-row label contradicted the panel note above the same table, and a genuine negative was discarded as a
+  missing measurement.
+- The methods panel states the LTR identity floor **and what it means** — that it is an age limit, since LTR
+  copies diverge after insertion, so an older element falls below it. The thresholds are interpolated from
+  the detector rather than restated.
+- The README warns that Windows SmartScreen will flag the unsigned installer, and what to do about it.
+
 ## [3.3.0] — 2026-07-31
 
 Two additions: an element's LTR now reports its polyadenylation-signal motif and a wider set of terminal motifs, and a downloaded genome can be annotated for its whole transposable-element landscape. Both are reported with the limits of the evidence stated on screen, because both are easy to over-read. **Results may differ from 3.2.1** for LTR elements: see *Fixed*, where a mis-placed detection window is corrected.

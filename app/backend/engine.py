@@ -138,6 +138,46 @@ def run_analyze(body):
     return analyze(body.get("sequence", ""), body.get("source"))
 
 
+def _detector_parameters():
+    """Every threshold that decides a structural or domain call, READ FROM THE FUNCTION THAT APPLIES IT.
+
+    The analysis manifest sealed exactly one parameter — a hand-written {"orf_min_aa": 40} — while the
+    numbers that actually determine what is found (the HMMER E-value, the LTR seed/length/anchor/identity
+    floors, the TIR and PPT and poly-A thresholds, the TSD window, the ORF budget) lived only as function
+    defaults. A manifest that omits them cannot reproduce the run it claims to seal, and a reader cannot
+    check the call against its own criteria.
+
+    Values come from `inspect.signature`, never restated here: a default changed in a detector changes the
+    seal automatically, so the manifest cannot drift from the code the way the hand-written entry did."""
+    import inspect
+
+    def d(fn, name):
+        return inspect.signature(fn).parameters[name].default
+
+    return {
+        "orf_min_aa": d(sequtil.find_orfs, "min_aa"),
+        "domain_evalue_max": d(domains.scan_domains, "evalue"),
+        "domain_orfs_scanned_max": domains.MAX_ORFS_SCANNED,
+        "ltr_seed_k": d(structural.find_ltr, "k"),
+        "ltr_min_len": d(structural.find_ltr, "min_ltr"),
+        "ltr_min_anchors": d(structural.find_ltr, "min_anchors"),
+        "ltr_min_identity_pct": structural.MIN_LTR_IDENTITY,
+        "tir_seed_k": d(structural.find_tir, "k"),
+        "tir_min_len": d(structural.find_tir, "min_tir"),
+        "tir_min_anchors": d(structural.find_tir, "min_anchors"),
+        "tsd_min_len": structural.MIN_TSD,
+        "tsd_max_len": structural.MAX_TSD,
+        "polya_min_run": d(structural.find_polya, "min_run"),
+        "pbs_search_window": d(structural.find_pbs, "search"),
+        "pbs_min_identity": d(structural.find_pbs, "min_ident"),
+        "ppt_window": d(structural.find_ppt, "window"),
+        "ppt_min_len": d(structural.find_ppt, "min_len"),
+        "ppt_min_purine": d(structural.find_ppt, "min_purine"),
+        "ppt_max_defects": d(structural.find_ppt, "max_defects"),
+        "tir_min_identity_pct": structural.MIN_TIR_IDENTITY,
+    }
+
+
 def analyze(seq_text: str, source: dict | None = None):
     recs = sequtil.parse_fasta(seq_text)
     # RNA input (normalized U->T by parse_fasta): detect U in the SEQUENCE body only, never in a header line
@@ -159,12 +199,31 @@ def analyze(seq_text: str, source: dict | None = None):
                 rec["structural"] = structural.detect_all(seq)      # isolate: a detector fault must not 500 the whole analyze
             except Exception as e:
                 rec["notes"].append(f"structural detection unavailable: {type(e).__name__}")
+            # The classification needs the ORF count before it can say anything honest about what was
+            # searched, so the list is built here. scan_domains still calls find_orfs itself — find_orfs is
+            # a deterministic pure function of seq, so both calls return the identical list and the domain
+            # hits' `orf` indices address THIS list correctly. (An earlier version of this comment claimed
+            # the computation was shared; it is not, and a comment that misstates a code property is the
+            # kind of thing that later gets relied on.)
+            rec["orfs"] = sequtil.find_orfs(seq)
+            unscanned = max(0, len(rec["orfs"]) - domains.MAX_ORFS_SCANNED)
+            domains_ok = True
             try:
                 rec["domains"] = domains.scan_domains(seq)
             except Exception as e:
+                domains_ok = False        # empty because nothing RAN — classify must not read that as "absent"
                 rec["notes"].append(f"domain scan unavailable: {type(e).__name__}")
-            rec["classification"] = classify.classify(rec["structural"], rec["domains"], seq=seq)
-            rec["orfs"] = sequtil.find_orfs(seq)
+            if unscanned and domains_ok:
+                # The profile search reads only the longest MAX_ORFS_SCANNED ORFs. Anything beyond that was
+                # never looked at, so a domain "not detected" on this record is partly a statement about the
+                # cap rather than about the sequence. Same not-tested-vs-not-found rule as domains_ok.
+                rec["notes"].append(
+                    f"protein-domain search read the {domains.MAX_ORFS_SCANNED} longest ORFs of "
+                    f"{len(rec['orfs'])}; {unscanned} shorter ORF(s) were not searched, so a domain listed as "
+                    "not detected was not necessarily absent from the whole sequence")
+            rec["classification"] = classify.classify(rec["structural"], rec["domains"], seq=seq,
+                                                      domains_ok=domains_ok, orfs_unscanned=unscanned,
+                                                      orfs=rec["orfs"])
             # retroviral transcript architecture (ERV only) — the correct coding-organisation model in place
             # of a host exon-intron gene model; None for non-ERVs, so it never overrides a normal record.
             rec["retroviral"] = None
@@ -187,7 +246,7 @@ def analyze(seq_text: str, source: dict | None = None):
              "sha256": domains.HMM_SHA256}] if domains.HMM_SHA256 else [])
     result = {"records": out, "references": references,
               "provenance": provenance.build_manifest("analysis", joined,
-                            recs[0][0] if recs else "empty", {"orf_min_aa": 40},
+                            recs[0][0] if recs else "empty", _detector_parameters(),
                             source=source, references=references, databases=dbs)}
     if not recs:
         result["warning"] = "No sequence provided — paste, upload, or fetch a sequence first."
@@ -435,19 +494,37 @@ def run_pcr(body):
     mm = max(0, int(_num(p.get("max_mm", 2), 2)))
     try:
         amps = []
+        pcr_stats = {}
+        truncated = []
         for k, bg in enumerate(backgrounds):
+            st = {}
             amps += primers.in_silico_pcr(
                 fwd, rev, bg["seq"], bg["id"],
                 max_mm=mm, tp=tp,
                 prod_min=int(_num(p.get("prod_min", 70), 70)), prod_max=int(_num(p.get("prod_max", 1000), 1000)),
-                target_span=(list(ts) if (ts and k == 0) else None))  # on-target only on the input sequence
+                target_span=(list(ts) if (ts and k == 0) else None),  # on-target only on the input sequence
+                stats=st)
+            if st.get("amplicons_capped") or st.get("sites_capped"):
+                truncated.append(bg["id"])
+            pcr_stats = st or pcr_stats
     except (ValueError, TypeError) as e:
         raise BadRequest(f"in-silico PCR parameters rejected: {type(e).__name__}: {e}")
     seal_p = dict(p)                                     # primers/target/background drive the result -> must be in the seal
     seal_p.update({"fwd": fwd, "rev": rev, "target_span": (list(ts) if ts else None),
                    "background_sha256": (hashlib.sha256(bg_text.encode()).hexdigest() if bg_text else None)})
+    # A capped search must say so. Both caps bite on exactly the repetitive templates where "no further
+    # product" would otherwise read as a specificity result rather than as the search stopping early.
+    warning = None
+    if truncated:
+        warning = (f"in-silico PCR stopped early on {', '.join(truncated)}: the search caps at "
+                   f"{pcr_stats.get('max_amplicons', 4000)} products and {pcr_stats.get('max_sites', 4000)} "
+                   "binding sites per primer. The product list below is therefore INCOMPLETE — treat it as "
+                   "a lower bound on priming, not as an exhaustive off-target result.")
     return {
         "amplicons": amps,
+        "truncated": bool(truncated),
+        "truncatedOn": truncated,
+        "warning": warning,
         "backgroundsSearched": [bg["id"] for bg in backgrounds],
         "notSearched": ["Reference assembly (needs WSL/NCBI)", "External NCBI Primer-BLAST",
                         "IUPAC-ambiguous template bases"],
@@ -587,8 +664,14 @@ def run_genome_annotate(body):
              "library_kind": r.get("library_kind"),
              "include_uncurated": bool(r.get("include_uncurated")),
              "custom_library_sha256": ((r.get("custom_library") or {}).get("sha256"))},
-            not_run=["De novo family discovery (RepeatModeler/EDTA)",
-                     "Dfam partitions not installed on this machine"],
+            # A sealed manifest must not assert something the same manifest disproves. This list was
+            # unconditional, so a default run — which searches Dfam, and whose OWN databases entry carries
+            # the resolved Dfam version and partition list two lines below — sealed the statement "Dfam
+            # partitions not installed on this machine" as part of its content-addressed identity. The
+            # claim is only true when a custom library replaced Dfam and no partitions were resolved.
+            not_run=(["De novo family discovery (RepeatModeler/EDTA)"]
+                     + ([] if lib.get("partitions") or lib.get("version")
+                        else ["Dfam partitions not installed on this machine"])),
             databases=[dfam_db, {"name": "RepeatMasker", "version": r.get("repeatmasker_version")}],
             # the genome's sealed checksum comes from the PREPARE step's own meta.txt (wsl returns it),
             # not from whatever the caller passed in — a caller-supplied hash would let the manifest

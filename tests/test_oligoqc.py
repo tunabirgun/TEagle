@@ -112,10 +112,30 @@ def test_qc_pair_guards_empty_primer():
 
 
 def test_graceful_without_viennarna(monkeypatch):
-    # ViennaRNA absent -> cross-check returns None, primer3 primary still works, flags still computed
+    # ViennaRNA absent -> cross-check returns None, primer3 primary still works, flags still computed.
+    # "Absent" means NEITHER engine: the in-process module AND the WSL backend cache. Clearing only RNA
+    # used to be enough, back when _agree read the in-process module alone — which mislabelled a completed
+    # remote cross-check as "not installed". The cache is cleared here so this tests the state it names.
     monkeypatch.setattr(oligoqc, "RNA", None)
+    monkeypatch.setattr(oligoqc, "_REMOTE_CACHE", {})
     o = oligoqc.qc_oligo("GCGCGCGCATATATGCGCGCGC")
     assert o["ok"] and o["hairpin"]["p3"] is not None and o["hairpin"]["vrna"] is None
-    assert o["hairpin"]["agree"] == "n/a"                     # ViennaRNA not installed -> cross-check couldn't run (not 'single')
+    assert o["hairpin"]["agree"] == "n/a"                     # neither engine ran -> cross-check couldn't run (not 'single')
     r = oligoqc.qc_pair("ATCTGGCGGCGGAGTGGGCG", "GCCGCCTACGCCACCAAGAC")
     assert r["ok"] and r["hetero_dimer"]["vrna"] is None
+
+
+def test_completed_remote_crosscheck_with_no_structure_is_single_not_na(monkeypatch):
+    """A ViennaRNA fold that RAN via the WSL backend and found no structure must read as a real one-engine
+    result, not as "engine not installed". _agree tested only the in-process module, so on a machine using
+    the remote backend the per-row label said "n/a" while the panel note above the same table truthfully
+    said the design had been cross-checked against ViennaRNA — the table contradicted its own caption, and
+    a genuine negative was thrown away as a missing measurement."""
+    monkeypatch.setattr(oligoqc, "RNA", None)
+    monkeypatch.setattr(oligoqc, "_REMOTE_CACHE", {("mfe", "SOMETHING"): -1.0})   # remote demonstrably ran
+    assert oligoqc.remote_active() is True
+    assert oligoqc._agree(-3.1, None) == "single"
+
+    monkeypatch.setattr(oligoqc, "_REMOTE_CACHE", {})                            # neither engine
+    assert oligoqc.remote_active() is False
+    assert oligoqc._agree(-3.1, None) == "n/a"

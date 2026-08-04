@@ -69,7 +69,30 @@ def test_order_indeterminate_downgrades_confidence():
     # INT and RT on different strands -> order not resolvable -> must not be High
     cl = classify.classify(LTR, [_dom("INT", (100, 300), "+", 40), _dom("RT", (500, 1400), "-", 90)])
     assert cl["confidence"] != "High"
-    assert cl["superfamily"].split(" ")[0] in ("Copia", "Gypsy")
+    # ...and the superfamily is NOT named. This assertion was previously the opposite: it required a
+    # tentative "Copia" or "Gypsy". That name was an artifact, not a weak signal — see the invariance
+    # test below — so naming it put a family in the card headline on evidence that could not support one.
+    assert "undetermined" in cl["superfamily"], cl["superfamily"]
+    assert cl["te_class"] == "LTR/unclassified", cl["te_class"]
+    assert any("cannot be determined" in e for e in cl["evidence"]), cl["evidence"]
+
+
+def test_cross_strand_superfamily_does_not_track_coordinates_so_is_not_called():
+    """Why the cross-strand case must not be named at all.
+
+    _pos negates the minus-strand coordinate to recover translation order. Within one strand that is
+    correct. Across two strands a minus-strand hit is always negative, so the comparison collapses to
+    "which one is on the minus strand" and stops depending on position entirely. Moving INT from far
+    upstream to far downstream of RT must therefore not change the answer — proving the old tentative
+    Copia/Gypsy label carried no information about the question it appeared to answer."""
+    upstream = classify.classify(LTR, [_dom("INT", (100, 300), "+", 40), _dom("RT", (500, 1400), "-", 90)])
+    downstream = classify.classify(LTR, [_dom("INT", (1200, 1400), "+", 40), _dom("RT", (100, 1000), "-", 90)])
+    assert upstream["superfamily"] == downstream["superfamily"]      # position changed, verdict did not
+    assert "undetermined" in upstream["superfamily"]
+
+    # the mirror pair: swapping which domain is on the minus strand is what used to flip the call
+    flipped = classify.classify(LTR, [_dom("INT", (100, 300), "-", 40), _dom("RT", (500, 1400), "+", 90)])
+    assert "undetermined" in flipped["superfamily"], flipped["superfamily"]
 
 
 def test_split_orf_does_not_flip_on_orf_length():

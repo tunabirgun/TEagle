@@ -1953,11 +1953,23 @@ def genome_list() -> dict:
 
 
 def genome_remove(accession: str) -> dict:
-    """Delete a cached genome to reclaim disk."""
+    """Delete a cached genome to reclaim disk.
+
+    Refuses while an annotation is running against it. The annotation's working directory lives INSIDE the
+    genome directory ({_GENOMES}/<acc>/annot), so an unguarded rm -rf here deletes the working set out from
+    under a live multi-hour run — the same hazard genome_annotate_reset already guards, checked the same way."""
     if not _ACC_RE.match(accession or ""):
         return {"ok": False, "error": "invalid assembly accession"}
     av = available()
     if not av["wsl2"]:
         return {"ok": False, "error": "WSL2 not available"}
-    rc, out, _ = _wsl(f'rm -rf "{_GENOMES}/{accession}" && echo REMOVED', timeout=60)
-    return {"ok": "REMOVED" in out, "accession": accession}
+    rc, out, err = _wsl_script(f'A="{_GENOMES}/{accession}/annot"\n'
+                               f'if [ -d "$A/.lock" ] && [ -f "$A/.lock/pid" ] && kill -0 "$(cat "$A/.lock/pid")" 2>/dev/null; then\n'
+                               f'  echo RUNNING; exit 3\n'
+                               f'fi\n'
+                               f'rm -rf "{_GENOMES}/{accession}" && echo REMOVED\n', timeout=60)
+    if rc == 3 or "RUNNING" in out:
+        return {"ok": False, "error": "an annotation is still running against this genome — let it finish, "
+                                      "or discard the annotation first, before deleting the genome"}
+    return {"ok": "REMOVED" in out, "accession": accession,
+            **({} if "REMOVED" in out else {"error": "could not delete the genome: " + err.strip()[:160]})}

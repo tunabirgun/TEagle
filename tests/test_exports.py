@@ -169,11 +169,18 @@ def test_export_flat_action_routes_chosen_format(monkeypatch):
     # it pops the flat format picker then routes the chosen format to export_table
     from PySide6.QtCore import QPoint
     calls = []
-    monkeypatch.setattr(widgets, "export_table", lambda h, r, b, p, fmt=None: calls.append(fmt))
+    # capture headers and notes too: the context-menu path silently dropped the on-screen caveats that the
+    # visible Export button carried, so which entry point a user happened to take decided whether their
+    # exported table kept its scientific qualifications. Both paths must now pass the same things.
+    monkeypatch.setattr(widgets, "export_table",
+                        lambda h, r, b, p, fmt=None, notes=None: calls.append((fmt, h, notes)))
     monkeypatch.setattr(widgets, "pick_table_format", lambda parent, pos: "csv")
     t = widgets.DataTable(["c"], {}); t.set_rows([["v"]])
+    t.export_notes = ["a caveat that must reach the file"]
     t._do_export(QPoint(0, 0))
-    assert calls == ["csv"]
+    assert [c[0] for c in calls] == ["csv"]
+    assert calls[0][1] == ["c"]                               # export headers, not the raw widget headers
+    assert calls[0][2] == ["a caveat that must reach the file"]
     assert not hasattr(widgets, "add_export_submenu")         # the arrow-prone submenu helper is gone
 
 

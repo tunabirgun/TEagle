@@ -197,32 +197,53 @@ def build_features(rec, seqid="locus"):
     return rows
 
 
-def to_gff3(rec, seqid="locus", sequence=None, source_note=None) -> str:
+def _shift(row, offset: int):
+    """Move one GFF3 row into genome space. Columns 4/5 are 1-based inclusive, so a locus feature at 1-based
+    p sits at p + offset, where offset is the 0-based genome coordinate of the locus's first base."""
+    chrom, src, term, start, end, score, strand, phase, attrs = row
+    return (chrom, src, term, int(start) + offset, int(end) + offset, score, strand, phase, attrs)
+
+
+def to_gff3(rec, seqid="locus", sequence=None, source_note=None, offset: int = 0, region_span=None) -> str:
     """A complete, self-contained GFF3 document.
 
     Coordinates are LOCUS-RELATIVE unless the caller supplies a genome-anchored seqid, because exporting
     locus offsets under a chromosome name would silently misplace every feature. The sequence is embedded
     after ##FASTA so the file stands alone in a browser that has no matching reference."""
     rows = build_features(rec, seqid)
+    if offset:
+        rows = [_shift(r, offset) for r in rows]
     length = (rec.get("composition") or {}).get("length") or 1
-    out = ["##gff-version 3", f"##sequence-region {seqid} 1 {length}"]
+    lo, hi = region_span if region_span else (1, length)
+    out = ["##gff-version 3", f"##sequence-region {seqid} {lo} {hi}"]
+    if offset:
+        out.append(f"#!coordinates genome-anchored on {seqid}; a +{offset} bp locus offset is applied to "
+                   "every feature. The sequence is deliberately NOT embedded below: this file describes a "
+                   "slice of a chromosome, and a ##FASTA block under the chromosome's name would supply the "
+                   "slice as if it were the whole sequence.")
     if source_note:
         out.append(f"#!source {source_note}")
     out.append("#!provenance column 3 is gated on the completeness tier; a structural-only call exports "
                "as repeat_region, never a specific subclass")
     out += ["\t".join(str(c) for c in r) for r in rows]
-    if sequence:
+    if sequence and not offset:
         out.append("##FASTA")
         out.append(f">{seqid}")
         out += [sequence[i:i + 60] for i in range(0, len(sequence), 60)]
     return "\n".join(out) + "\n"
 
 
-def to_bed(rec, seqid="locus") -> str:
+def to_bed(rec, seqid="locus", offset: int = 0) -> str:
     """BED12-less BED6: chrom, start (0-based), end, name, score, strand — the lowest common denominator
-    every browser reads. GFF3 carries the ontology; BED carries the intervals."""
+    every browser reads. GFF3 carries the ontology; BED carries the intervals.
+
+    `offset` shifts every interval into genome space (the 0-based genome coordinate of the locus's first
+    base), so the file can be intersected against a chromosome-space track. Without it a locus-relative BED
+    intersected against a real genome track returns zero overlaps — silently, which is the dangerous part."""
     lines = []
     for r in build_features(rec, seqid):
+        if offset:
+            r = _shift(r, offset)
         chrom, _src, term, start, end, score, strand, _ph, attrs = r
         name = term
         for part in attrs.split(";"):

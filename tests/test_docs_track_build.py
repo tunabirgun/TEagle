@@ -190,3 +190,57 @@ def test_methods_panel_text_is_derived_from_the_profile_table():
     assert f"{len(domains.DOMAIN_INFO)} models" in html
     for _hmm, (_code, _label, _cls, pfam) in domains.DOMAIN_INFO.items():
         assert pfam in html, f"{pfam} missing from the methods panel text"
+
+
+def test_tsd_method_text_states_the_window_the_detector_actually_searches():
+    """Both TSD method strings claimed "4-12 bp" while find_tsd has searched from 2 bp since 3.2.1 — so the
+    screen (and the exported Method column) told the user that the diagnostic 2 bp Tc1/Mariner TA, the exact
+    case the detector was tuned to catch, could not be found. Both strings are now interpolated from
+    structural.MIN_TSD/MAX_TSD; this fails if either drifts from the search bounds again."""
+    import os as _os, sys as _sys
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    _native = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "app", "native")
+    if _native not in _sys.path:
+        _sys.path.insert(0, _native)
+    import pytest as _pt
+    _pt.importorskip("PySide6")
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    import inspect
+    import main
+    from teagle_core import structural
+
+    # the constants must be what find_tsd actually defaults to, or deriving from them proves nothing
+    sig = inspect.signature(structural.find_tsd)
+    assert sig.parameters["min_tsd"].default == structural.MIN_TSD
+    assert sig.parameters["max_tsd"].default == structural.MAX_TSD
+
+    window = f"{structural.MIN_TSD}–{structural.MAX_TSD} bp"
+    assert window in main.MainWindow._STRUCT_METHOD["TSD"], main.MainWindow._STRUCT_METHOD["TSD"]
+
+    # _methods_html reads only self._src_html (citation links), so a stub `self` exercises the real string
+    # without standing up a MainWindow.
+    class _Stub:
+        _domain_panel_html = staticmethod(main.MainWindow._domain_panel_html)
+
+        def _src_html(self, _key):
+            return ""
+
+    html = main.MainWindow._methods_html(_Stub())
+    assert window in html, "the Methods & databases disclosure states a stale TSD window"
+
+
+def test_domains_tested_names_every_transposase_group_the_panel_can_call():
+    """The scope sentence named five transposase groups while the panel also bundles Pfam's generic DDE
+    family (PF03184, class dna:DDE) — which classify names outright as "DDE transposon". A user reading
+    that line was told a family the classifier CAN call is not tested, which is the not-detected-vs-
+    not-tested confusion the line exists to prevent. The phrase is now derived from DOMAIN_INFO; this
+    fails if a transposase class is added to the panel and the sentence does not follow."""
+    from teagle_core import classify, domains
+
+    panel = {cls for code, _l, cls, _p in domains.DOMAIN_INFO.values()
+             if code == "TPase" and cls.startswith("dna:")}
+    assert panel, "no dna: transposase classes in the panel — update this test if that is intended"
+    assert len(classify._tpase_groups()) == len(panel), (classify._tpase_groups(), panel)
+    for group in classify._tpase_groups():
+        assert group in classify.DOMAINS_TESTED, f"{group} missing from the tested-panel sentence"

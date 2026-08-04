@@ -114,3 +114,42 @@ def test_false_positive_rate_on_random_sequence_stays_low():
             tir_hits += 1
     assert ltr_hits == 0, f"{ltr_hits}/{trials} random sequences called as LTR pairs"
     assert tir_hits <= trials * 0.05, f"{tir_hits}/{trials} random sequences called as TIRs"
+
+
+def test_subthreshold_terminal_repeat_is_reported_but_never_credited():
+    """A pair rejected on identity is REPORTED evidence, never CREDITED evidence.
+
+    The advisory near-miss row was first named "LTR candidate below identity threshold". Four consumers
+    dispatch on a "LTR" prefix — classify.has_ltr, retroviral.py's ltr lookup, figures.py's band colour and
+    main.py's evidence roll-up — so the rejected pair was read as a confirmed terminal repeat and came back
+    as LTR/Copia at HIGH confidence. That is strictly worse than the silent discard the row replaced: the
+    detector said "not an LTR" and the classifier answered "LTR, high confidence".
+
+    Two independent guards, both asserted here: the type must not begin with a credited prefix, and an
+    `advisory` row must be excluded even if it does."""
+    from teagle_core import classify
+
+    def dom(code, nt):
+        return {"domain": code, "nt": list(nt), "strand": "+", "score": 90.0, "aa": [1, 100], "class": "retro"}
+
+    doms = [dom("INT", (400, 700)), dom("RT", (800, 1400))]
+    near = {"type": "Sub-threshold terminal direct repeat (advisory)", "identity": 78.4, "advisory": True,
+            "five_prime": [0, 300], "three_prime": [1500, 1800], "element_span": [0, 1800]}
+
+    # guard 1: the shipped name must not collide with any credited prefix
+    for prefix in ("LTR", "TIR", "TSD", "poly"):
+        assert not near["type"].startswith(prefix), f"advisory type collides with the {prefix!r} prefix"
+
+    cl = classify.classify([near], doms)
+    assert cl["te_class"] != "LTR/Copia", cl
+    assert "LTR" not in (cl["te_class"] or ""), cl["te_class"]
+
+    # guard 2: the advisory flag blocks it even under a colliding name
+    legacy = dict(near, type="LTR candidate below identity threshold")
+    assert classify.classify([legacy], doms)["te_class"] != "LTR/Copia"
+
+    # and a genuine accepted LTR is unaffected
+    real = {"type": "LTR (terminal direct repeat)", "five_prime": [0, 300],
+            "three_prime": [1500, 1800], "element_span": [0, 1800]}
+    good = classify.classify([real], doms)
+    assert good["te_class"] == "LTR/Copia" and good["confidence"] == "High", good

@@ -5,7 +5,7 @@ annotation, splice detection, provenance and exports."""
 from __future__ import annotations
 import gzip, json, os, re, sys
 
-from PySide6.QtCore import Qt, QTimer, QByteArray, QSettings
+from PySide6.QtCore import Qt, QTimer, QByteArray, QSettings, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import (QGuiApplication, QFont, QPixmap, QPainter, QIcon, QCursor, QShortcut,
                            QKeySequence, QColor)
 from PySide6.QtSvg import QSvgRenderer
@@ -30,6 +30,15 @@ import theme as theme_mod
 from teagle_core import appdirs, classify           # classify.DOMAINS_TESTED = the tested-profile panel (scope caveat)
 from teagle_core.wsl import curated_coverage_sentence as _curated_coverage   # measured, never retyped on a panel
 from teagle_core import domains as domains_mod      # DOMAIN_INFO: the methods panel is derived from it, never retyped
+from teagle_core import structural as structural_mod   # MIN_TSD/MAX_TSD: the TSD method text states the real window
+
+
+def _SIG(fn, name):
+    """A detector's actual default, for panels that DESCRIBE that detector. The methods disclosure restated
+    the LTR thresholds as literal prose, so it could drift from the code silently — the TSD line already had,
+    claiming a 4 bp floor against a detector searching from 2."""
+    import inspect
+    return inspect.signature(fn).parameters[name].default
 from teagle_core.fetch import (COORD_ASSEMBLIES, all_assemblies,                        # pinned + user-added assemblies
                                complete_gene_model, cross_check_models, retrieve)        # + gene model / transcript fetch
 from teagle_core import __version__ as APP_VERSION    # single source of truth (never hardcode a duplicate version)
@@ -84,6 +93,12 @@ def _app_icon() -> QIcon:                                 # OS window/taskbar ic
 
 STRUCT_COLS = ["Feature", "Coords (0-based)", "Len", "Metric", "Method"]
 ORF_COLS = ["Strand", "Frame", "Start", "End", "aa"]
+# Export-only header renames. On screen the convention is a GLOSS tooltip and the columns are sized to
+# contents, so spelling it out would push the table sideways at every window size; in a FILE the tooltip is
+# gone and an unlabelled "Start" is ambiguous between the two conventions this app legitimately uses
+# (0-based half-open for locus features, 1-based inclusive for isPcr genome hits).
+EXPORT_HEADERS = {"Start": "Start (0-based)", "End": "End (0-based, exclusive)",
+                  "nt": "nt (0-based)", "Coords": "Coords (0-based, half-open)"}
 DOMAIN_COLS = ["Domain", "Label", "Pfam", "aa", "nt", "Score", "E-value", "Conf"]
 # plain-language glossary for every table header (hover to learn the abbreviation) — mirrors web GLOSSARY
 GLOSS = {
@@ -206,9 +221,40 @@ REFLINKS = {
 }
 
 
+_QWIDGETSIZE_MAX = 16777215          # Qt's "no maximum"; a height animation must hand this back or the body freezes
+CARD_ANIM_MS = 160                   # long enough to read as motion, short enough that it never gates the next click
+
+
+def motion_enabled() -> bool:
+    """Whether UI motion should play, honouring the OS accessibility setting.
+
+    Qt exposes no `prefers-reduced-motion` equivalent, so read Windows' "Show animations in Windows"
+    flag (SPI_GETCLIENTAREAANIMATION = 0x1042) directly. Cached: the setting changes about once in a
+    user's life, and a per-click syscall is not worth it. A platform or call that cannot answer leaves
+    motion ON, matching the Windows default — this is a 160 ms height ease, not something whose absence
+    would be safer than its presence."""
+    cached = getattr(motion_enabled, "_v", None)
+    if cached is not None:
+        return cached
+    v = True
+    try:
+        import ctypes
+        got = ctypes.c_int(0)
+        if ctypes.windll.user32.SystemParametersInfoW(0x1042, 0, ctypes.byref(got), 0):
+            v = bool(got.value)
+    except Exception:                 # non-Windows, or a locked-down user32 — fall back to the default
+        pass
+    motion_enabled._v = v
+    return v
+
+
 class CollapsibleCard(QFrame):
     """A titled result card that expands/collapses on header click. Starts collapsed; reveal_on_data
-    auto-expands the first time content is set, mirroring the web UI's progressive reveal."""
+    auto-expands the first time content is set, mirroring the web UI's progressive reveal.
+
+    Only a HUMAN header click animates. set_collapsed()/expand() — the programmatic API every result
+    handler, test and screenshot harness drives — stays instantaneous, so a captured figure can never
+    catch a card mid-ease and no test has to wait on a timer."""
     def __init__(self, number: str, title: str, meta: str = "", collapsed=True):
         super().__init__()
         self.setObjectName("card")
@@ -232,10 +278,52 @@ class CollapsibleCard(QFrame):
         self.set_collapsed(collapsed)
 
     def _toggle(self):
-        self.set_collapsed(self.body.isVisible())
+        self.set_collapsed(self.body.isVisible(), animate=True)
 
-    def set_collapsed(self, collapsed: bool):
-        self.body.setVisible(not collapsed)
+    def _ease(self, collapsed: bool):
+        """Ease the body's height. Animates maximumHeight rather than the widget's own height because the
+        card sits in a QVBoxLayout, which owns height directly and would fight a height animation."""
+        prev = getattr(self, "_anim", None)
+        if prev is not None:
+            prev.stop()                                   # a fast double-click must not leave two animations racing
+        if collapsed:
+            start, end = self.body.height(), 0
+        else:
+            self.body.setVisible(True)
+            self.body.setMaximumHeight(0)
+            start, end = 0, max(self.body.sizeHint().height(), 1)
+        anim = QPropertyAnimation(self.body, b"maximumHeight", self)
+        anim.setDuration(CARD_ANIM_MS)
+        anim.setStartValue(start)
+        anim.setEndValue(end)
+        anim.setEasingCurve(QEasingCurve.OutCubic)        # decelerate into rest; entering motion, not bouncing
+
+        def settled():
+            if collapsed:
+                self.body.setVisible(False)
+            # Hand the cap back unconditionally: a body pinned at its opening sizeHint could not grow when
+            # a later result made it taller, which would clip the card's own content.
+            self.body.setMaximumHeight(_QWIDGETSIZE_MAX)
+
+        anim.finished.connect(settled)
+        self._anim = anim
+        anim.start()
+
+    def set_collapsed(self, collapsed: bool, animate: bool = False):
+        if animate and motion_enabled():
+            self._ease(collapsed)
+        else:
+            # Cancel any in-flight human-triggered ease FIRST. Without this, a programmatic reveal that
+            # lands mid-animation (a result handler calling expand(), or _scroll_to navigating to the card
+            # the user just clicked) set the final state and then let the running animation keep driving
+            # maximumHeight — and QPropertyAnimation.stop() does not emit `finished`, so the body could be
+            # left clamped at an interpolated height with no callback to hand the cap back.
+            anim = getattr(self, "_anim", None)
+            if anim is not None:
+                anim.stop()
+                self._anim = None
+            self.body.setVisible(not collapsed)
+            self.body.setMaximumHeight(_QWIDGETSIZE_MAX)
         arrow = "▸" if collapsed else "▾"
         title = self._title.replace("&", "&&")           # QPushButton eats a lone '&' as a mnemonic
         meta = self._meta.replace("&", "&&") if self._meta else ""
@@ -343,7 +431,8 @@ def _export_table_btn(table, base, parent):
     def pop():
         fmt = widgets.pick_table_format(b, b.mapToGlobal(b.rect().bottomLeft()))
         if fmt:
-            widgets.export_table(table._headers, table.rows_data(), base, parent, fmt=fmt)
+            widgets.export_table(table.export_headers(), table.rows_data(), base, parent, fmt=fmt,
+                                 notes=getattr(table, "export_notes", None))
     b.clicked.connect(lambda _=False: pop())
     return b
 
@@ -381,6 +470,7 @@ class MainWindow(QMainWindow):
         self.state = {"seq": "", "source": None, "last_rec": None}
         self._loading = False                                 # True while a programmatic load writes the specimen box
         self._pcr_gen = 0                                     # monotonic in-silico-PCR batch id (drops stale sibling results)
+        self._analyze_inflight = False                        # gates Run analysis alongside "is there a sequence yet?"
         self._design_inflight = False                         # one primer design at a time (self._design_tmpl is shared state)
         self._genome_inflight = False                         # one whole-genome isPcr scan at a time
         self._genome_prep_inflight = False                    # one genome download/prepare at a time (large, one-time)
@@ -398,8 +488,8 @@ class MainWindow(QMainWindow):
         central = QWidget(); central.setObjectName("central")
         self.setCentralWidget(central)
         outer = QVBoxLayout(central)
-        outer.setContentsMargins(12, 10, 12, 10)
-        outer.setSpacing(8)
+        outer.setContentsMargins(theme_mod.sp(12), theme_mod.sp(10), theme_mod.sp(12), theme_mod.sp(10))
+        outer.setSpacing(theme_mod.sp(8))
         outer.addWidget(self._build_header())
 
         split = QSplitter(Qt.Horizontal)
@@ -429,7 +519,7 @@ class MainWindow(QMainWindow):
     def _build_header(self):
         wrap = QWidget()
         col = QVBoxLayout(wrap); col.setContentsMargins(6, 0, 2, 0); col.setSpacing(0)
-        h = QHBoxLayout(); h.setContentsMargins(0, 2, 0, 8); h.setSpacing(10)
+        h = QHBoxLayout(); h.setContentsMargins(0, 2, 0, theme_mod.sp(8)); h.setSpacing(theme_mod.sp(10))
         self.railToggle = QPushButton("Hide"); self.railToggle.setProperty("sm", True)
         self.railToggle.setToolTip("Hide the specimen panel for more analysis width (Ctrl+B)")
         self.railToggle.clicked.connect(self._toggle_rail)
@@ -455,7 +545,7 @@ class MainWindow(QMainWindow):
         h.addWidget(tag)
         h.addStretch(1)
         chip = QFrame(); chip.setObjectName("statuschip")
-        cl = QHBoxLayout(chip); cl.setContentsMargins(10, 5, 11, 5); cl.setSpacing(8)
+        cl = QHBoxLayout(chip); cl.setContentsMargins(theme_mod.sp(10), theme_mod.sp(5), theme_mod.sp(11), theme_mod.sp(5)); cl.setSpacing(theme_mod.sp(8))
         self.led = QLabel(); self.led.setObjectName("led")   # size via QSS #led min/max-width (scales with UI_SCALE)
         self.statusTxt = QLabel("connecting…"); self.statusTxt.setObjectName("statusTxt")
         cl.addWidget(self.led); cl.addWidget(self.statusTxt)
@@ -532,7 +622,7 @@ class MainWindow(QMainWindow):
     def _build_rail(self):
         rail = QFrame(); rail.setObjectName("rail")
         rail.setMinimumWidth(round(300 * theme_mod.UI_SCALE)); rail.setMaximumWidth(round(430 * theme_mod.UI_SCALE))
-        lay = QVBoxLayout(rail); lay.setContentsMargins(12, 12, 12, 12); lay.setSpacing(8)
+        lay = QVBoxLayout(rail); lay.setContentsMargins(*(theme_mod.sp(12),) * 4); lay.setSpacing(theme_mod.sp(8))
         lay.addWidget(self._sec("01", "Specimen"))
         accrow = QHBoxLayout()
         self.acc = QLineEdit(); self.acc.setPlaceholderText("accession — e.g. M11240, NC_003075.7")
@@ -550,7 +640,9 @@ class MainWindow(QMainWindow):
         self.coordToggle.setAccessibleDescription("Disclosure toggle — shows or hides the coordinate-fetch fields.")
         self.coordToggle.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         self.coordToggle.clicked.connect(self._toggle_coord); lay.addWidget(self.coordToggle)
-        self.coordBox = QWidget(); cb = QVBoxLayout(self.coordBox); cb.setContentsMargins(0, 2, 0, 2); cb.setSpacing(5)
+        # 2px insets stay literal: sp(2) snaps to 0 on the (0,6,10,16) ladder, which would delete the gap
+        # rather than scale it. Only the spacing, which is on-ladder, goes through sp().
+        self.coordBox = QWidget(); cb = QVBoxLayout(self.coordBox); cb.setContentsMargins(0, 2, 0, 2); cb.setSpacing(theme_mod.sp(5))
         # the rail grants this box less width than its combos ask for; unclamped, the rail's layout would
         # evaluate the box's heightForWidth at that unreachable minimum width and hand back one line too
         # few, clipping the wrapped hint below. Let it be as narrow as the rail actually makes it.
@@ -582,7 +674,14 @@ class MainWindow(QMainWindow):
 
         ub = QPushButton("Upload FASTA (.fa / .fasta / .gz)"); ub.setProperty("sm", True)
         ub.clicked.connect(self._upload); lay.addWidget(ub)
-        self.seq = QTextEdit(); self.seq.setPlaceholderText("…or paste DNA (FASTA or raw). Real IUPAC validation runs on analyze.")
+        self.seq = QTextEdit()
+        # A QTextEdit placeholder is painted on ONE line and clipped at the viewport — it never wraps. The
+        # old string ran to "…Real IUPAC validation runs on analyze." and lost its last four words at 1.0x
+        # and its last seven at 1.5x, so the only part a user ever read was the half that says nothing.
+        # The clause is NOT relegated to a tooltip: a tooltip has no keyboard or touch path, so a scientific
+        # statement parked there is unreachable for some users. It keeps a visible home in the IUPAC readout
+        # below, which reads "—" before a run and reports the verdict (and any ambiguous-base content) after.
+        self.seq.setPlaceholderText("…or paste DNA (FASTA or raw)")
         self.seq.setMinimumHeight(round(120 * theme_mod.UI_SCALE)); self.seq.textChanged.connect(self._seq_changed)
         lay.addWidget(self.seq)
         row = QHBoxLayout()
@@ -593,6 +692,13 @@ class MainWindow(QMainWindow):
         lay.addLayout(row)
         self.runBtn = QPushButton("Run analysis"); self.runBtn.setProperty("primary", True)
         self.runBtn.clicked.connect(self._run_analysis); lay.addWidget(self.runBtn)
+        # The loudest control on the first screen used to be armed with nothing to act on: clicking it before
+        # loading anything only ever produced "paste, upload, or fetch a sequence first". A primary button
+        # whose single guaranteed outcome is an error is pointing at the wrong step. It now waits for a
+        # sequence, the same disabled-until-ready contract designBtn/annotateBtn/spliceBtn already use, which
+        # leaves Fetch / Upload / Load example as the live affordances on an empty panel.
+        self.runBtn.setEnabled(False)
+        self.runBtn.setToolTip("Paste, upload, or fetch a sequence first — or use “Load example element”.")
 
         # readout gauges (2×2)
         lay.addSpacing(6)
@@ -639,14 +745,14 @@ class MainWindow(QMainWindow):
         return wrap
 
     def _sec(self, n, title):
-        w = QWidget(); r = QHBoxLayout(w); r.setContentsMargins(0, 4, 0, 2); r.setSpacing(9)
+        w = QWidget(); r = QHBoxLayout(w); r.setContentsMargins(0, theme_mod.sp(4), 0, 2); r.setSpacing(theme_mod.sp(9))
         num = QLabel(n); num.setObjectName("secn"); num.setAlignment(Qt.AlignCenter); r.addWidget(num)
         h = QLabel(title); h.setObjectName("sech"); r.addWidget(h); r.addStretch(1)
         return w
 
     def _readout(self, grid, idx, label):
         cell = QFrame(); cell.setObjectName("cell")
-        cl = QVBoxLayout(cell); cl.setContentsMargins(10, 8, 10, 9); cl.setSpacing(2)
+        cl = QVBoxLayout(cell); cl.setContentsMargins(theme_mod.sp(10), theme_mod.sp(8), theme_mod.sp(10), theme_mod.sp(9)); cl.setSpacing(2)
         k = QLabel(label.upper()); k.setObjectName("kdim")
         v = QLabel("—"); v.setObjectName("value")
         cl.addWidget(k); cl.addWidget(v)
@@ -657,10 +763,18 @@ class MainWindow(QMainWindow):
     # ---------- results column ----------
     def _build_results(self):
         wrap = QScrollArea(); wrap.setWidgetResizable(True)
-        wrap.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # page body never scrolls sideways; wide tables scroll
+        # Sideways scrolling ON DEMAND, not never. The invariant was "the page body never scrolls sideways;
+        # wide tables scroll inside themselves" — which holds for tables, and fails for everything that is
+        # not one. At 1.5x UI scale in a window under ~1230 px the figure toolbar (bg modes + zoom + FIT +
+        # SVG + PNG) exceeds the viewport, and with the bar ALWAYS off Qt squeezes the inner widget below its
+        # own minimum and CLIPS the children that cannot shrink: the SVG and PNG export buttons became
+        # unreachable, with no scrollbar to reveal them and no way to get them back short of resizing the
+        # window. AsNeeded keeps the intended behaviour whenever the content fits — which is every normal
+        # window — and degrades to a scrollbar instead of to lost controls when it does not.
+        wrap.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.resultsScroll = wrap                          # inside their own viewport (per the crowding invariant)
         inner = QWidget(); inner.setObjectName("central")
-        self.results = QVBoxLayout(inner); self.results.setContentsMargins(4, 0, 8, 0); self.results.setSpacing(9)
+        self.results = QVBoxLayout(inner); self.results.setContentsMargins(theme_mod.sp(4), 0, theme_mod.sp(8), 0); self.results.setSpacing(theme_mod.sp(9))
 
         self.card_struct = CollapsibleCard("02", "Classification & structure",
                                            "LTR/TIR repeats, ORFs, protein domains")
@@ -976,6 +1090,9 @@ class MainWindow(QMainWindow):
         txt = self.seq.toPlainText()
         body = "".join(l for l in txt.splitlines() if not l.startswith(">"))
         self.charCount.setText(f"{len(body)} nt")
+        # Arm Run analysis exactly when there is something to analyse — never while a run is already in
+        # flight, or a keystroke mid-analysis would re-enable the button _run_analysis just disabled.
+        self.runBtn.setEnabled(bool(body.strip()) and not self._analyze_inflight)
         self.state["seq"] = txt.strip()                       # specimen tracks the box: splice/annotate read this
         if not self._loading:
             if self.state.get("source") is not None:
@@ -1030,6 +1147,11 @@ class MainWindow(QMainWindow):
                                               "FASTA (*.fa *.fasta *.fna *.txt *.gz);;All files (*)")
         if not path:
             return
+        if os.path.isdir(path):
+            # Windows raises PermissionError (errno 13) for open() on a directory, not IsADirectoryError, so
+            # the exception type cannot tell these apart here — ask the filesystem instead of the errno.
+            return self._banner(f"“{os.path.basename(path.rstrip(os.sep))}” is a folder, not a sequence "
+                                "file. Choose a .fa, .fasta, .fna, .txt or .gz file.")
         try:
             if path.lower().endswith(".gz"):
                 with gzip.open(path, "rt", encoding="utf-8", errors="replace") as f:
@@ -1037,8 +1159,25 @@ class MainWindow(QMainWindow):
             else:
                 with open(path, "r", encoding="utf-8", errors="replace") as f:
                     data = f.read()
+        except (gzip.BadGzipFile, EOFError):
+            # BEFORE the OSError arm: BadGzipFile subclasses OSError, so it would otherwise be swallowed by
+            # the generic message. EOFError (truncated stream) is not an OSError at all.
+            return self._banner(f"“{os.path.basename(path)}” looks like a .gz file but could not be "
+                                "decompressed — it may be incomplete or not really gzip-compressed.")
         except OSError as e:
-            return self._banner(f"could not read file: {e}")
+            # AGENTS.md rule 2: an error says what went wrong and what to do next, and never puts a raw
+            # traceback or errno in front of the user. str(OSError) is "[Errno 13] Permission denied:
+            # 'C:\\Users\\...\\x.fa'" — an errno and a full filesystem path, which is neither.
+            name = os.path.basename(path)
+            if isinstance(e, PermissionError):
+                msg = (f"“{name}” could not be opened — it may be open in another program, or you may not "
+                       "have permission to read it. Close it elsewhere and try again.")
+            elif isinstance(e, FileNotFoundError):
+                msg = f"“{name}” is no longer there — it may have been moved or renamed since you picked it."
+            else:
+                msg = (f"“{name}” could not be read. If it is on a network or removable drive, copy it to "
+                       "this computer and try again.")
+            return self._banner(msg)
         self._set_seq(data)
         self.state["source"] = None
         self.accMeta.setText(f"loaded {os.path.basename(path)}"); self.coordMeta.setText("")
@@ -1061,6 +1200,7 @@ class MainWindow(QMainWindow):
             return self._banner("paste, upload, or fetch a sequence first")
         self.state["seq"] = seq
         self.state["analyzed_seq"] = seq                  # snapshot the sequence the reported feature coords index
+        self._analyze_inflight = True
         self.runBtn.setEnabled(False); self.runBtn.setText("… analysing")
         self.engine.submit("analyze", {"sequence": seq, "source": self.state["source"]}, key="analyze")
 
@@ -1110,7 +1250,10 @@ class MainWindow(QMainWindow):
 
     def _reset_buttons(self, key):
         if key == "analyze":
-            self.runBtn.setEnabled(True); self.runBtn.setText("Run analysis")
+            self._analyze_inflight = False
+            # re-arm only if the box still holds something — an analysis that failed on an empty/cleared box
+            # must not leave the primary button armed with nothing to act on
+            self.runBtn.setEnabled(bool(self.seq.toPlainText().strip())); self.runBtn.setText("Run analysis")
         elif key == "primers":
             self._design_inflight = False
             self._pending_domain = None                       # a failed routed design must not leave a stale re-anchor or busy body
@@ -1189,7 +1332,25 @@ class MainWindow(QMainWindow):
             self._banner("Genome download failed — " + msg, "warn"); return
         else:
             self._reset_buttons(key)
-        self._banner(f"unexpected error: {msg}")
+        # AGENTS.md rule 2: an error never puts a raw traceback in front of the user as the primary message.
+        # `msg` is "{ExceptionType}: {str(e)}" straight from engine_worker, so "unexpected error: KeyError:
+        # 'accession'" was the whole sentence a bench scientist got. Lead with what failed and what to do;
+        # keep the technical string, clearly subordinate, because it is what they would quote in a bug report.
+        # The full traceback already went to stderr above and is not shown here.
+        # No "nothing was changed" reassurance here: this branch is reached by keys that DO change state
+        # (genome_annotate, genome_remove), so that would be a claim the handler cannot make.
+        self._banner(f"{self._STEP_NAMES.get(key, 'This step')} could not be completed. Try it again — and if "
+                     f"it keeps happening, report the detail below.\n\nDetail: {msg}")
+
+    # Plain names for the engine keys, so a failure says which step failed in the words the panel uses.
+    _STEP_NAMES = {
+        "analyze": "The analysis", "fetch": "The accession fetch", "coord_fetch": "The coordinate fetch",
+        "primers": "Primer design", "pcr": "The in-silico PCR", "genome_pcr": "The whole-genome scan",
+        "genome_prepare": "The genome download", "genome_list": "The genome list",
+        "genome_remove": "Deleting the genome", "annotate": "Dfam/RepeatMasker family naming",
+        "genome_annotate": "Whole-genome annotation", "splice": "Splice detection",
+        "oligoqc": "Primer secondary-structure QC", "health": "The backend check",
+    }
 
     def _banner(self, msg, level="error"):
         # transient messages surface as a small, closable notification dialog centred over the window — never a
@@ -1289,6 +1450,9 @@ class MainWindow(QMainWindow):
         self.coordMeta.setText(f"{res.get('assemblyName','')} · {res.get('organism','')}{cached}{ncbi}<br>" + "<br>".join(lines))
         _kb_links(self.coordMeta)                             # text now carries a link -> re-arm the tab stop
         self.state["source"] = res.get("source", {})
+        # Keep the fetched region so an annotation export can be anchored back into genome space. Analysis
+        # runs on the FIRST region only (stated in the panel), so only that one can be anchored.
+        self.state["coord_region"] = dict(regions[0]) if regions else None
         self.state["features"] = None
 
     def _on_fetch(self, res):
@@ -1322,7 +1486,8 @@ class MainWindow(QMainWindow):
         self._update_splice_ref()
 
     def _on_analyze(self, res):
-        self.runBtn.setEnabled(True); self.runBtn.setText("Run analysis")
+        self._analyze_inflight = False
+        self.runBtn.setEnabled(bool(self.seq.toPlainText().strip())); self.runBtn.setText("Run analysis")
         self._clear_banner()
         if res.get("warning"):
             self._banner(res["warning"], level="warn")
@@ -1332,6 +1497,8 @@ class MainWindow(QMainWindow):
         self.state["analysis"] = res
         self.state["records"] = recs
         self.state["analyzed_clean"] = self._clean_seq(self.state.get("analyzed_seq", ""))   # snapshot, not the live box — a keystroke mid-analysis must not defeat the stale-block guard
+        self._reset_genome_scan("New specimen analysed — the previous whole-genome scan described different "
+                                "primers. Design a pair (panel 04), then scan here.")
         self._show_record(0)
 
     # engine.analyze already classifies EVERY record; the UI used to take records[0] and discard the rest,
@@ -1366,16 +1533,32 @@ class MainWindow(QMainWindow):
         self.mLen.setText(f"{comp.get('length', 0):,}")
         self.mGC.setText(f"{comp.get('gc', 0)}%")
         self.mN.setText(f"{comp.get('n', 0)}%")
-        self.mValid.setText("valid" if rec.get("valid") else "invalid")
-        self.mValid.setProperty("state", "good" if rec.get("valid") else "bad"); self._repolish(self.mValid)
+        # "valid" alone was read as "clean, unambiguous DNA": a sequence a third R/Y/W is perfectly valid
+        # IUPAC and showed "valid" beside "N content 0.0%", because degenerate bases are counted by neither.
+        # Say how much of it is degenerate whenever any is, so the reading is not more confident than the
+        # sequence. The gauge stays "valid"/"invalid" — the verdict is unchanged, only its scope is stated.
+        amb = comp.get("ambiguous", 0.0)
+        ok = rec.get("valid")
+        self.mValid.setText(("valid" if ok else "invalid") + (f" · {amb}% ambig" if ok and amb else ""))
+        if amb:
+            codes = ", ".join(f"{b}×{c}" for b, c in sorted((comp.get("ambiguous_counts") or {}).items()))
+            self.mValid.setToolTip(f"IUPAC degenerate bases present ({codes}). They are excluded from the GC "
+                                   f"denominator and are not counted as N.")
+        else:
+            self.mValid.setToolTip("")
+        self.mValid.setProperty("state", "good" if ok else "bad"); self._repolish(self.mValid)
         self._set_trace_counts(recs, rec)
         self._render_struct_card(rec, res)
         self._uppercase_buttons()
 
-    def _record_summary_rows(self, recs):
-        """One row per record: what was actually computed for each, not a promise that it was."""
+    def _record_summary_rows(self, recs, limit=None):
+        """One row per record: what was actually computed for each, not a promise that it was.
+
+        `limit=None` means every record. The on-screen table passes _MAX_RECORDS because a 200-row widget is
+        already unwieldy, but the EXPORT passes None — engine.analyze classified all of them, so capping the
+        file would drop computed results without saying so."""
         rows = []
-        for i, r in enumerate(recs[:self._MAX_RECORDS]):
+        for i, r in enumerate(recs if limit is None else recs[:limit]):
             cl = r.get("classification") or {}
             comp = r.get("completeness") or cl.get("completeness") or {}
             doms = sorted({d["domain"] for d in (r.get("domains") or [])})
@@ -1465,7 +1648,7 @@ class MainWindow(QMainWindow):
             dlg.setObjectName("selfsimdlg")
             dlg.resize(940, 820)
             _l = QVBoxLayout(dlg)
-            _l.setContentsMargins(12, 12, 12, 12)
+            _l.setContentsMargins(*(theme_mod.sp(12),) * 4)
             dlg._panel = widgets.DotPanel(base_name="TEagle_selfsim", parent=dlg)
             _l.addWidget(dlg._panel)
             self._selfsim_dlg = dlg
@@ -1493,11 +1676,31 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         a_gff = menu.addAction("GFF3 (.gff3) — ontology terms + sub-features + sequence")
         a_bed = menu.addAction("BED (.bed) — intervals only")
+        # Genome-anchored variants, offered ONLY when this record demonstrably came from a coordinate fetch
+        # of the plus strand. A locus-relative file intersected against a chromosome-space track returns
+        # zero overlaps and says nothing about it, which is the failure a bioinformatician hits first.
+        reg = self.state.get("coord_region") or {}
+        anchorable = bool(reg.get("chrAccession")) and reg.get("strand") != 2 and self.state.get("source")
+        a_gff_g = a_bed_g = None
+        if anchorable:
+            menu.addSeparator()
+            a_gff_g = menu.addAction(f"GFF3, genome-anchored on {reg.get('chromLabel') or reg['chrAccession']}")
+            a_bed_g = menu.addAction(f"BED, genome-anchored on {reg.get('chromLabel') or reg['chrAccession']}")
+        elif reg.get("strand") == 2:
+            # a minus-strand fetch is reverse-complemented, so locus coordinates run against the chromosome.
+            # Mapping them back is a flip, not an offset — refuse rather than ship a subtly wrong file.
+            a_note = menu.addAction("Genome-anchored export unavailable (minus-strand fetch)")
+            a_note.setEnabled(False)
         chosen = menu.exec(QCursor.pos())
         if chosen is None:
             return
-        fmt = "gff3" if chosen is a_gff else "bed"
+        anchored = chosen in (a_gff_g, a_bed_g) and anchorable
+        fmt = "gff3" if chosen in (a_gff, a_gff_g) else "bed"
         seqid = (rec.get("id") or "locus").split()[0]
+        # 0-based genome coordinate of the locus's first base; the fetch reports 1-based inclusive starts
+        offset = int(reg.get("start", 1)) - 1 if anchored else 0
+        if anchored:
+            seqid = reg["chrAccession"]
         base = f"TEagle_{seqid}"
         path, _ = QFileDialog.getSaveFileName(self, f"Export {fmt.upper()}", base + "." + fmt,
                                               f"{fmt.upper()} (*.{fmt})")
@@ -1508,10 +1711,11 @@ class MainWindow(QMainWindow):
         # the record's OWN sequence (not analyzed_clean, which concatenates every record of a multi-FASTA
         # paste — embedding that after ##FASTA would contradict this record's own coordinates)
         seq = rec.get("seq") or None
+        span = ((int(reg["start"]), int(reg["stop"])) if anchored else None)
         text = (gff3.to_gff3(rec, seqid=seqid, sequence=seq,
-                             source_note=f"TEagle {teagle_version()}")
-                if fmt == "gff3" else gff3.to_bed(rec, seqid=seqid))
-        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+                             source_note=f"TEagle {teagle_version()}", offset=offset, region_span=span)
+                if fmt == "gff3" else gff3.to_bed(rec, seqid=seqid, offset=offset))
+        with widgets.atomic_write(path, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(text)
         self._banner(f"Annotation written to {os.path.basename(path)}.", level="success")
 
@@ -1520,9 +1724,12 @@ class MainWindow(QMainWindow):
         recs = self.state.get("records") or []
         if len(recs) < 2:
             return
-        rows = self._record_summary_rows(recs)
+        rows = self._record_summary_rows(recs, limit=self._MAX_RECORDS)
         t = DataTable(self._RECORD_HEADERS, GLOSS)
         t.set_rows(rows)
+        if len(recs) > self._MAX_RECORDS:
+            # the widget shows the first _MAX_RECORDS; the file gets all of them (see rows_data)
+            t.full_rows = lambda: self._record_summary_rows(recs, limit=None)
         t.set_row_menu(lambda r: [("Show this record below", lambda i=r: self._show_record(i))])
         sel = self.state.get("record_index", 0)
         head = QLabel(f"<b>{len(recs)} records analysed</b> — every one was classified; the detail below is "
@@ -1579,15 +1786,30 @@ class MainWindow(QMainWindow):
             tier = comp["tier"]
             if any("truncat" in str(n) for n in (rec.get("notes") or [])) and "intact" in tier.lower():
                 tier += " at the domain level — but the sequence is 3′-truncated (see note below)"
+            # "not detected" is a claim about the sequence; it may only be made when the scan actually ran.
+            # When it raised, the same list is a claim about TEagle, so it is worded as unassessed.
+            _dead = cl.get("domains_unavailable")
             line = (f"<b>Structural completeness:</b> {tier}  ·  {comp.get('kind','')}"
                     + (f"<br><b>Domain architecture:</b> {arch}" if arch else "")
-                    + (f"  ·  not detected: {', '.join(miss)}" if miss else ""))
+                    + ("<br><b>Domain architecture:</b> not assessed — the protein-domain scan did not run "
+                       "(see note below); no domain was tested" if _dead else "")
+                    + (f"  ·  not detected: {', '.join(miss)}" if miss and not _dead else "")
+                    # the list is scoped to the ORFs actually searched, not to the whole sequence
+                    + (f" <i>(not searched in {cl['orfs_unscanned']} shorter ORF(s) — see note below)</i>"
+                       if miss and not _dead and cl.get("orfs_unscanned") else ""))
+            # The coding axis, stated beside the tier. "partial" is a domain-ledger verdict, and on its own a
+            # reader takes it as "this copy is decayed" — which is why LTR_retriever and TEsorter can say
+            # "intact"/"Complete" about the same element. Saying whether the detected domains actually sit in
+            # one uninterrupted reading frame separates "modules not detected" from "copy broken".
+            _cod = comp.get("coding") or {}
+            if _cod.get("note"):
+                line += f"<br><b>Coding structure:</b> {_cod['note']}"
             cw = QLabel(f"<div style='line-height:150%'>{line}</div>"); cw.setObjectName("classexp"); cw.setTextFormat(Qt.RichText); cw.setWordWrap(True)
             bl.addWidget(cw)
             # the essential caveat stays visible; the full methodology collapses behind a disclosure (less crowding)
             caveat = QLabel("Structural evidence in this one sequence, scored against the tested Pfam panel — "
                             "not a claim about expression, transposition competence, or any individual genome.")
-            caveat.setObjectName("cardmeta"); caveat.setWordWrap(True); bl.addWidget(caveat)
+            caveat.setObjectName("cardnote"); caveat.setWordWrap(True); bl.addWidget(caveat)
             scope = QLabel(f"Domains tested: {comp.get('scope','')}. “Not detected” is relative to this profile "
                            "panel — a divergent or unmodelled domain reads as not-detected, not as element decay "
                            "(completeness after Wicker 2007 / TEsorter / LTR_retriever). The tier reports how much of "
@@ -1597,17 +1819,27 @@ class MainWindow(QMainWindow):
                            "any given individual or population carries this insertion. Answering those needs "
                            "expression data, a functional assay, and population genotyping respectively "
                            "(Lanciano &amp; Cristofari 2020, Nat Rev Genet 21:721-736).")
-            scope.setObjectName("cardmeta"); scope.setWordWrap(True)
+            scope.setObjectName("cardnote"); scope.setWordWrap(True)
             self._disclosure(bl, "Scope and methods", scope, expanded=False)
         else:
             # a no-evidence / structural-only call still needs its SCOPE stated — the essential caveat stays visible
             rl = QLabel("RELIABILITY & COMPLETENESS"); rl.setObjectName("sectionlabel"); bl.addWidget(rl)
-            caveat = QLabel("No panel domain was detected — scoped to the tested Pfam panel, not proof the sequence is not a TE.")
-            caveat.setObjectName("cardmeta"); caveat.setWordWrap(True); bl.addWidget(caveat)
-            scope = QLabel(f"Domains tested: {classify.DOMAINS_TESTED}. None were detected — this is relative to this "
-                           "bundled Pfam profile panel; a divergent or unmodelled domain reads as not-detected, not as "
-                           "proof the sequence is not a transposable element.")
-            scope.setObjectName("cardmeta"); scope.setWordWrap(True)
+            # Same not-detected-vs-not-tested distinction as the completeness branch above: when the scan
+            # raised, "no panel domain was detected" is a false statement about the sequence.
+            if cl.get("domains_unavailable"):
+                caveat = QLabel("The protein-domain scan did not run for this record (see note below), so no "
+                                "domain was tested — this is not a finding that none is present.")
+                scope_txt = (f"Domains that WOULD have been tested: {classify.DOMAINS_TESTED}. None of them were "
+                             "searched on this record, so nothing here says whether the sequence is a "
+                             "transposable element.")
+            else:
+                caveat = QLabel("No panel domain was detected — scoped to the tested Pfam panel, not proof the sequence is not a TE.")
+                scope_txt = (f"Domains tested: {classify.DOMAINS_TESTED}. None were detected — this is relative to this "
+                             "bundled Pfam profile panel; a divergent or unmodelled domain reads as not-detected, not as "
+                             "proof the sequence is not a transposable element.")
+            caveat.setObjectName("cardnote"); caveat.setWordWrap(True); bl.addWidget(caveat)
+            scope = QLabel(scope_txt)
+            scope.setObjectName("cardnote"); scope.setWordWrap(True)
             self._disclosure(bl, "Scope and methods", scope, expanded=False)
         card.bodylay.addWidget(banner)
 
@@ -1646,6 +1878,18 @@ class MainWindow(QMainWindow):
             hdr = QHBoxLayout(); hdr.addWidget(_sl("Structural evidence")); hdr.addStretch(1)
             hdr.addWidget(self._src_link("Wicker2007")); card.bodylay.addLayout(hdr)
             t = DataTable(STRUCT_COLS, GLOSS)
+            t.export_header_map = EXPORT_HEADERS
+            # the caveats shown beneath this table are part of what the numbers mean, so they go in the file
+            t.export_notes = [
+                "Structural evidence detected de novo by heuristic terminal-repeat detectors — not retrieved "
+                "from a database. Coordinates are 0-based half-open [start, end).",
+                "The polyA-signal row is a sequence motif with its downstream element — advisory context only. "
+                "It does not locate the U3-R-U5 boundaries, the cleavage site, or the transcript end, which "
+                "need RNA evidence TEagle does not use.",
+                f"An LTR pair is accepted at >= {structural_mod.MIN_LTR_IDENTITY:g}% identity. That floor is an "
+                "age limit: LTR copies diverge after insertion, so an older element falls below it and is "
+                "reported as an advisory candidate rather than an LTR.",
+            ]
             t.set_rows([self._struct_row(e) for e in struct], tips=[self._struct_tips(e) for e in struct])
             t.set_row_menu(lambda r: self._struct_menu(struct[r]))
             t.setMaximumHeight(round(180 * theme_mod.UI_SCALE))
@@ -1668,6 +1912,9 @@ class MainWindow(QMainWindow):
         if orfs:
             card.bodylay.addWidget(_sl(f"ORFs (≥40 aa) — {len(orfs)}"))
             t = DataTable(ORF_COLS, GLOSS)
+            t.export_header_map = EXPORT_HEADERS
+            t.export_notes = ["Open reading frames >= 40 aa, 0-based half-open coordinates on the record's "
+                              "own sequence. An ORF is a reading frame, not evidence that it is translated."]
             t.set_rows([[o["strand"], o["frame"], o["start"], o["end"], o["length_aa"]] for o in orfs])
             t.set_row_menu(lambda r: self._feat_menu(orfs[r]["start"], orfs[r]["end"], orfs[r]["strand"],
                                                      f"ORF_{orfs[r]['strand']}{orfs[r]['frame']}",
@@ -1681,6 +1928,16 @@ class MainWindow(QMainWindow):
             hdr = QHBoxLayout(); hdr.addWidget(_sl("Protein domains (HMMER)")); hdr.addStretch(1)
             hdr.addWidget(self._src_link("Pfam")); card.bodylay.addLayout(hdr)
             t = DataTable(DOMAIN_COLS, GLOSS)
+            t.export_header_map = EXPORT_HEADERS
+            t.export_notes = [
+                f"Protein domains from the bundled {len(domains_mod.DOMAIN_INFO)}-model Pfam panel via "
+                "HMMER/pyhmmer. Conf is the per-domain call confidence from the HMMER i-Evalue — the "
+                "reliability of THIS domain call, separate from the element-level completeness tier.",
+                f"Only the {domains_mod.MAX_ORFS_SCANNED} longest ORFs are searched. A domain absent here was "
+                "not necessarily absent from the whole sequence.",
+                f"Domains tested: {classify.DOMAINS_TESTED}. 'Not detected' is relative to this panel — a "
+                "divergent or unmodelled domain reads as not-detected, not as element decay.",
+            ]
             t.set_rows([[d["domain"], d.get("label", ""), d.get("pfam", ""),
                          f"{d['aa'][0]}–{d['aa'][1]}", f"{d['nt'][0]}–{d['nt'][1]}",
                          d.get("score"), f"{d.get('evalue'):.1e}" if d.get("evalue") is not None else "",
@@ -1804,8 +2061,19 @@ class MainWindow(QMainWindow):
             "E-value ≤ 1e-3; the gag + env models let TEagle recover the full GAG–POL–ENV architecture of ERVs (HERV-K, "
             "-W, -L …), not just the pol enzymes.<br>"
             "<b>Structural evidence</b> — heuristic terminal-repeat detectors (no external database): LTR by k-mer "
-            "seed + diagonal cluster (k=13, ≥ 80 bp, ≥ 80% identity, ≥ 4 anchors); TIR by a terminal inverted-repeat "
-            "scan plus a k-mer-vs-reverse-complement search; poly-A/poly-T tail ≥ 8 bp; TSD as a 4–12 bp exact "
+            f"seed + diagonal cluster (k={_SIG(structural_mod.find_ltr, 'k')}, "
+            f"≥ {_SIG(structural_mod.find_ltr, 'min_ltr')} bp, "
+            f"≥ {structural_mod.MIN_LTR_IDENTITY:g}% identity, "
+            f"≥ {_SIG(structural_mod.find_ltr, 'min_anchors')} anchors — <b>and that identity floor is an age "
+            "limit</b>: the two copies of an LTR are identical at insertion and diverge with time, so an older "
+            "element falls below it and is NOT reported as an LTR. A pair that fails only that floor is now "
+            "listed separately as an advisory candidate with its measured identity, so 'below threshold' is "
+            "distinguishable from 'nothing found'; below roughly 72% identity the k-mer seeding itself stops "
+            "finding the pair, which no threshold change would recover); TIR by a terminal inverted-repeat "
+            f"scan plus a k-mer-vs-reverse-complement search, accepted at ≥ {structural_mod.MIN_TIR_IDENTITY:g}% "
+            "identity — the same kind of floor as the LTR one, gating every DNA-transposon call the same way; "
+            f"poly-A/poly-T tail ≥ 8 bp; TSD as a "
+            f"{structural_mod.MIN_TSD}–{structural_mod.MAX_TSD} bp exact "
             "flanking direct repeat. For an LTR element the two retroviral cis-elements are also scanned: <b>PBS</b>, "
             "the best reverse-complement match to a bundled 18 nt primer-tRNA panel within the 44 nt leader after the "
             "5′ LTR, reported at ≥ 55% identity but only NAMED at ≥ 72% — a weaker match is reported as priming tRNA "
@@ -1843,7 +2111,7 @@ class MainWindow(QMainWindow):
     _STRUCT_METHOD = {
         "PBS": "reverse-complement match to a bundled 18 nt primer-tRNA panel in the 44 nt leader (≥ 55% identity)",
         "PPT": "purine-run extension from the 3′-LTR boundary (≥ 9 bp, ≥ 82% purine, ≤ 2 defects, 30 nt window)",
-        "TSD": "exact 4–12 bp direct repeat flanking the element",
+        "TSD": f"exact {structural_mod.MIN_TSD}–{structural_mod.MAX_TSD} bp direct repeat flanking the element",
         "poly-A": "terminal homopolymer run (≥ 8 bp)",
         "poly-T": "terminal homopolymer run (≥ 8 bp)",
         "polyA-signal": ("poly(A)-signal hexamer panel in the 3′ LTR, gated on a GU/U-rich downstream "
@@ -1953,7 +2221,7 @@ class MainWindow(QMainWindow):
             return
         if not path.lower().endswith("." + ext):
             path += "." + ext
-        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        with widgets.atomic_write(path, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(text if text.endswith("\n") else text + "\n")
         self._banner(f"Written to {os.path.basename(path)}.", "success")
 
@@ -2315,6 +2583,8 @@ class MainWindow(QMainWindow):
             return
         self._design_inflight = True
         self.designBtn.setEnabled(False); self.designBtn.setText("◴ designing…")
+        self._reset_genome_scan("Primers redesigned — the previous whole-genome scan described the earlier "
+                                "pair. Re-scan the pair you want to check.")
         self._design_tmpl = self.state["seq"]             # remember the template these candidates index (for PCR on-target)
         self.engine.submit("primers", {"sequence": self.state["seq"], "params": self._read_primer_params()}, key="primers")
 
@@ -2329,6 +2599,11 @@ class MainWindow(QMainWindow):
         self._set_body(self.primBody, BusyBar(f"Designing primers for {label}…"))  # in-flight, not empty (same cue as annotate/splice)
         self._pending_domain = label
         self._design_inflight = True
+        # Same invalidation as the toolbar design path. Deliberately at REQUEST time, not in _render_primers:
+        # that is also called by the theme toggle, so resetting there would wipe a valid scan on every
+        # light/dark switch. Over-eager here costs a re-scan prompt; under-eager leaves a stale verdict.
+        self._reset_genome_scan("Primers redesigned — the previous whole-genome scan described the earlier "
+                                "pair. Re-scan the pair you want to check.")
         self._design_tmpl = tmpl                          # candidates' left/right_pos index THIS template, not always panel-01
         self.engine.submit("primers", {"sequence": tmpl, "params": self._read_primer_params(),
                                         "included": inc}, key="primers")
@@ -3177,13 +3452,11 @@ class MainWindow(QMainWindow):
                 return
             self._banner("Genome annotation did not finish — " + msg, "warn")
             return
-
-    def _on_genome_annotate_reset(self, r):
-        if r.get("ok"):
-            self._banner("Previous annotation discarded. Open “Annotate TE landscape” to start again.",
-                         "success")
-        else:
-            self._banner(r.get("error") or "Could not clear the previous annotation.", "warn")
+        # SUCCESS. This block used to live in _on_genome_annotate_reset, so the app's most expensive
+        # operation — a multi-hour, uncancellable whole-genome run — finished with no banner and no results
+        # window, while DISCARDING an annotation announced "transposable elements cover None% of the
+        # assembly across None families" and opened a results window on the reset reply's empty fields.
+        # Each handler now reports its own outcome.
         self._annot_result = r
         self._refresh_genome_manager()
         if r.get("coverage_warning"):
@@ -3193,6 +3466,14 @@ class MainWindow(QMainWindow):
                          f"{r.get('te_percent')}% of the assembly across {r.get('te_family_count')} families.",
                          "success")
         self._show_annot_window(r)
+
+    def _on_genome_annotate_reset(self, r):
+        if r.get("ok"):
+            self._banner("Previous annotation discarded. Open “Annotate TE landscape” to start again.",
+                         "success")
+        else:
+            self._banner(r.get("error") or "Could not clear the previous annotation.", "warn")
+        self._refresh_genome_manager()
 
     _ANNOT_COLS = [("Family", "The repeat family RepeatMasker assigned (class/subfamily)"),
                    ("Kind", "TE = transposable element; tandem = simple/low-complexity/satellite; other = "
@@ -3262,11 +3543,17 @@ class MainWindow(QMainWindow):
                               "them alongside TEs, so TEagle counts them separately — they are included in the "
                               "all-repeat percentage but never in the transposable-element percentage.", "info")))
         else:
+            # Same field as the "Mean divergence %" column, so it must carry the same hedges. This text
+            # previously said "higher means older" and dropped the raw/uncorrected and saturation caveats
+            # the column tooltip states — two different claims about one number, and the looser one was the
+            # one a user reached by asking for an explanation.
             items.append(("What does mean divergence mean?",
                           lambda: self._banner(
-                              "Average percent difference between the placed copies and their family consensus, "
-                              "weighted by how long each copy is. Higher means older, more decayed copies; lower "
-                              "means recent or still-active ones. It is a homology measure, not an age in years.",
+                              "RepeatMasker's RAW percent mismatch between the placed copies and their family "
+                              "consensus, averaged weighted by hit length. It is NOT Kimura- or CpG-corrected, "
+                              "so it saturates for old copies and is inflated where CpG sites decay fast. "
+                              "Higher means more decayed, but it is a similarity measure — not an age, and not "
+                              "an age in years.",
                               "info")))
         return items
 
@@ -3409,8 +3696,28 @@ class MainWindow(QMainWindow):
         self.engine.submit("genome_remove", {"assemblyAccession": accession}, key="genome_remove")
 
     def _on_genome_remove(self, d):
+        # A refusal has to be visible. genome_remove can now decline (an annotation still holds the genome),
+        # and this handler previously discarded its reply entirely — so a declined delete looked exactly like
+        # a successful one: the list refreshed and the genome was simply still there.
+        if isinstance(d, dict) and not d.get("ok"):
+            self._banner(d.get("error") or "the genome could not be deleted", level="warn")
         # refresh BOTH the dropdown and the manager (if open); the split _on_genome_list self-selects what to update
         self.engine.submit("genome_list", {}, key="genome_list")
+
+    def _reset_genome_scan(self, why):
+        """Drop a rendered whole-genome scan once the primers it describes are gone.
+
+        The panel is only ever cleared by the scan paths themselves, so a verdict like "no off-target site
+        in this assembly" survived a primer redesign and a new specimen — sitting under panel 06 as though
+        it described whatever is on screen now. A stale specificity verdict is the worst kind of wrong
+        answer here, because it reads as a clean result. No-op when nothing has been scanned."""
+        if not self.state.get("lastGenomeScan"):
+            return
+        self.state["lastGenomeScan"] = None
+        if getattr(self, "_genome_inflight", False) or getattr(self, "_genome_prep_inflight", False):
+            return                                        # a running scan owns the panel; it will render its own result
+        _clear_layout(self.genomeBody)
+        self.genomeBody.addWidget(_empty(why))
 
     def _render_genome_status(self, msg, level="error"):
         # every caller reports an OUTCOME (failed / cancelled / downloaded / not-yet-downloaded), never an
@@ -3451,12 +3758,20 @@ class MainWindow(QMainWindow):
                 return
             self._render_genome_status("No genome scan result — " + d.get("error", "scan failed"))
             return self._banner(d.get("error", "genome scan failed"))
+        # WHICH pair this verdict describes, captured before _pending_scan is dropped. A scan result says
+        # things like "no off-target site in this assembly"; without the pair on the panel that sentence
+        # reads as a property of the specimen rather than of two specific oligos.
+        _ps = self._pending_scan or {}
+        _cand = _ps.get("cand") or {}
         self._pending_scan = None
         amps = [{**a, "pair": "genome", "remote": True} for a in d.get("amplicons", [])]
         summary = d.get("summary") or {}
         has_locus = bool(summary.get("has_locus"))        # gel: on/off colours with a locus; neutral 'priming site' colour without
         lanes = [{"label": "genome", "amplicons": d.get("amplicons", []), "has_locus": has_locus, "advisory": not has_locus}]
-        self.state["lastGenomeScan"] = {"lanes": lanes, "amplicons": amps, "summary": summary}
+        self.state["lastGenomeScan"] = {"lanes": lanes, "amplicons": amps, "summary": summary,
+                                        "pair": {"id": _cand.get("id", ""), "fwd": _cand.get("left_seq", ""),
+                                                 "rev": _cand.get("right_seq", "")},
+                                        "organism": _ps.get("org", "")}
         self.card_genome.expand()
         self._render_genome_scan(lanes, amps, summary)
         m = d.get("provenance", {})
@@ -3486,6 +3801,14 @@ class MainWindow(QMainWindow):
         self.runPcrBtn.setEnabled(True); self.runPcrBtn.setText("Run loaded pairs")
         self.card_pcr.expand()
         results = run["results"]
+        # A capped in-silico search is not an exhaustive one, and the difference is invisible in the
+        # product list. Say it before the user reads the gel, naming the pair, since "no other product"
+        # is precisely the conclusion a truncated run cannot support.
+        cut = [f"P{i+1}" for i, dd in enumerate(results) if isinstance(dd, dict) and dd.get("truncated")]
+        if cut:
+            self._banner(f"in-silico PCR stopped early on {', '.join(cut)} — the product list is a lower "
+                         "bound on priming, not an exhaustive off-target result. Repetitive templates hit "
+                         "the search cap.", level="warn")
         lanes, amps, provs = [], [], []
         for idx, dd in enumerate(results):
             lane = f"P{idx+1}"
@@ -3559,6 +3882,18 @@ class MainWindow(QMainWindow):
         gel = FigurePanel(lambda bg, L=lanes: figures.svg_gel({"lanes": L}, bg),
                           "TEagle_genome_gel", modes=("dark", "white", "uv", "mono"),
                           hit_regions=figures.gel_regions({"lanes": lanes}), on_menu=self._gel_menu)
+        # Name the pair and the assembly the verdict belongs to, ABOVE the verdict. Without it the panel
+        # states a specificity conclusion with no subject, and a user who redesigns primers can read the
+        # old sentence as describing the new ones.
+        _last = self.state.get("lastGenomeScan") or {}
+        _pair, _org = (_last.get("pair") or {}), _last.get("organism", "")
+        if _pair.get("fwd"):
+            _pid = _pair.get("id") or "pair"
+            _sub = QLabel(f"Scanned pair <b>{_pid}</b>"
+                          + (f" against <b>{_org}</b>" if _org else "")
+                          + f"<br>F 5′-{_pair['fwd']}-3′<br>R 5′-{_pair.get('rev','')}-3′")
+            _sub.setObjectName("orient"); _sub.setWordWrap(True); _sub.setTextFormat(Qt.RichText)
+            self.genomeBody.addWidget(_sub)
         gel.apply_app_theme(self.theme); gel.setMinimumHeight(round(420 * theme_mod.UI_SCALE))
         self.genomeBody.addWidget(gel)
         verdict = QLabel(summary.get("verdict", ""))
@@ -3998,7 +4333,7 @@ class MainWindow(QMainWindow):
         # a batch (multi-pair in-silico PCR) seals one manifest PER pair — export them all so the file
         # covers every lane shown, not just the first; a single run writes its one manifest as before.
         payload = {"runs": allm} if len(allm) > 1 else allm[0]
-        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        with widgets.atomic_write(path, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(payload, fh, indent=2, ensure_ascii=False, sort_keys=True)
         self._banner(f"Provenance manifest written to {os.path.basename(path)}.", level="success")
 

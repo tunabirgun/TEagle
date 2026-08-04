@@ -56,17 +56,31 @@ def validate_iupac(seq: str):
     bad = [(i, c) for i, c in enumerate(seq) if c not in IUPAC]
     return (len(bad) == 0, bad[:50])
 
+# The IUPAC degenerate symbols: every code that stands for more than one base, excluding N. N is kept
+# separate because it already has its own readout and means "unknown", whereas these mean "one of these
+# few" — a distinction a user reading a primer site needs.
+AMBIGUITY_CODES = "RYSWKMBDHV"
+
+
 def composition(seq: str):
     n = len(seq)
     if n == 0:
-        return {"length": 0, "gc": 0.0, "n": 0.0, "counts": {}}
+        return {"length": 0, "gc": 0.0, "n": 0.0, "ambiguous": 0.0, "ambiguous_counts": {}, "counts": {}}
     counts = {b: seq.count(b) for b in "ACGTN"}
     gc = counts["G"] + counts["C"]
     acgt = counts["A"] + counts["C"] + counts["G"] + counts["T"]
+    # Degenerate bases were counted nowhere: they are not ACGT, and `n` counts only a literal N. A sequence
+    # that is a third R/Y/W therefore reported "N content 0.0%" beside "IUPAC valid", which reads as "clean,
+    # unambiguous DNA". GC% is still taken over unambiguous bases only (acgt) — a W is genuinely neither
+    # GC nor AT — but the ambiguity now has to be visible rather than silently absorbed.
+    amb_counts = {b: c for b in AMBIGUITY_CODES if (c := seq.count(b))}
+    amb = sum(amb_counts.values())
     return {
         "length": n,
         "gc": round(100 * gc / acgt, 1) if acgt else 0.0,
         "n": round(100 * counts["N"] / n, 1),
+        "ambiguous": round(100 * amb / n, 1),
+        "ambiguous_counts": amb_counts,
         "counts": counts,
     }
 

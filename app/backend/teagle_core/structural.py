@@ -112,7 +112,14 @@ def _extend(seq: str, i: int, j: int, step: int, limit: int, x_drop: int = 30) -
 _LTR_SEED_WINDOW = 6000
 
 
-def find_ltr(seq: str, k: int = 13, min_ltr: int = 80, min_anchors: int = 4):
+MIN_LTR_IDENTITY = 80.0      # named so the panels that describe this detector can state the real floor
+# The TIR floor is the LTR floor's twin and gates every DNA-transposon call the same way, so it is named
+# for the same reason: a 79%-identity terminal inverted repeat is silently rejected by a number the user
+# cannot see on screen and a reviewer cannot recover from the sealed manifest.
+MIN_TIR_IDENTITY = 80
+
+
+def find_ltr(seq: str, k: int = 13, min_ltr: int = 80, min_anchors: int = 4, near_miss: list | None = None):
     """Detect a terminal DIRECT repeat pair (LTR candidate). Coords 0-based half-open.
     Anchors only SEED the repeat — its extent is measured by X-drop extension along the seeded
     diagonal over the whole sequence, so the reported length is not an artefact of the window."""
@@ -168,7 +175,27 @@ def find_ltr(seq: str, k: int = 13, min_ltr: int = 80, min_anchors: int = 4):
     bounded = (l5s == 0 or l3e == n
                or (ext_l > 0 and ext_l == lim_l) or (ext_r > 0 and ext_r == lim_r))
     ident = _identity(seq[l5s:l5e], seq[l3s:l3e])
-    if ident < 80 or _is_simple(seq[l5s:l5e]):       # identity now carries the weight the density floor used to
+    if ident < MIN_LTR_IDENTITY or _is_simple(seq[l5s:l5e]):   # identity carries the weight the density floor used to
+        # A candidate pair that fails ONLY the identity floor is not the same as no candidate at all, and the
+        # difference matters scientifically: LTR-LTR identity decays with insertion age, so a hard floor makes
+        # the detector silently blind to older elements and reports that blindness as absence. The measured
+        # identity is handed back as an advisory near-miss (same idiom as the PBS 55-72% reported-but-not-named
+        # band) so "below threshold" is visibly different from "nothing there". Simple/low-complexity repeats
+        # are NOT reported: those are a true negative, not a diverged element.
+        if near_miss is not None and not _is_simple(seq[l5s:l5e]):
+            near_miss.append({
+                # The type MUST NOT begin with "LTR". Four consumers dispatch on that prefix
+                # (classify.has_ltr, retroviral.py's ltr lookup, figures.py's band colour, main.py's
+                # evidence roll-up), so an advisory row named "LTR ..." was read as a CONFIRMED terminal
+                # repeat: a pair rejected for being below the identity floor came back as LTR/Copia at HIGH
+                # confidence — strictly worse than the silent discard this row was added to replace.
+                "type": "Sub-threshold terminal direct repeat (advisory)",
+                "ltr_len": L, "identity": ident, "threshold": MIN_LTR_IDENTITY,
+                "five_prime": [l5s, l5e], "three_prime": [l3s, l3e], "element_span": [l5s, l3e],
+                "advisory": True,
+                "method": ("k-mer seed (k=%d, %d bp window) + X-drop diagonal extension; reported because the "
+                           "pair fell below the %.0f%% identity floor, NOT accepted as an LTR" % (k, W, MIN_LTR_IDENTITY)),
+            })
         return None
     ev = {"type": "LTR (terminal direct repeat)", "ltr_len": L, "identity": ident,
           "five_prime": [l5s, l5e], "three_prime": [l3s, l3e],
@@ -182,7 +209,7 @@ def find_ltr(seq: str, k: int = 13, min_ltr: int = 80, min_anchors: int = 4):
     return ev
 
 
-def _terminal_tir(seq: str, min_tir: int, max_tir: int, min_ident: int = 80):
+def _terminal_tir(seq: str, min_tir: int, max_tir: int, min_ident: int = MIN_TIR_IDENTITY):
     """Direct scan for a terminal inverted repeat anchored at the true element ends [0,L)/[n-L,n).
     A real TIR is often imperfect, so the length is the LONGEST window whose identity stays above
     threshold before the identity 'cliff' where the match becomes random — not the shortest, most
@@ -315,7 +342,15 @@ def tsd_congruence(length, superfamily):
             "basis": "no attributable expected TSD length for this superfamily"}
 
 
-def find_tsd(seq: str, elem_start: int, elem_end: int, min_tsd: int = 2, max_tsd: int = 12, expect=None):
+# The searched TSD length window, named so the panels that DESCRIBE this detector can interpolate the
+# real bounds instead of restating them. They disagreed: the Methods disclosure and the Method column both
+# claimed "4–12 bp" while the search has run from 2 bp since 3.2.1, so the screen told the user the exact
+# Tc1/Mariner TA case this detector was tuned to catch could not be found. tests/test_docs_track_build.py
+# now fails if a panel string and these constants drift apart again.
+MIN_TSD, MAX_TSD = 2, 12
+
+
+def find_tsd(seq: str, elem_start: int, elem_end: int, min_tsd: int = MIN_TSD, max_tsd: int = MAX_TSD, expect=None):
     """Target-site duplication: a short direct repeat immediately flanking the element.
     Requires flanking sequence beyond [elem_start, elem_end]; else returns None (honest).
 
@@ -518,7 +553,12 @@ def _tsd_state(seq: str, start: int, end: int, found, min_tsd: int = 2) -> str:
 def detect_all(seq: str):
     """Run all structural detectors. Returns list of evidence dicts (empty if none)."""
     ev = []
-    ltr = find_ltr(seq)
+    near = []
+    ltr = find_ltr(seq, near_miss=near)
+    if not ltr and near:
+        # no accepted LTR, but a real diagonal pair was found and rejected on identity alone — say so rather
+        # than let the panel read "no terminal repeats detected"
+        ev.extend(near)
     if ltr:
         ev.append(ltr)
         tsd = find_tsd(seq, ltr["element_span"][0], ltr["element_span"][1])

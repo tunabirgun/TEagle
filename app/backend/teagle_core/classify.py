@@ -63,12 +63,21 @@ def _refine_tsd(tsd, superfamily, seq):
         tsd.update(refined)                              # correct length/motif/coords/matched_expected in place
 
 
-def classify(structural, domains, seq=None):
-    has_ltr = any(e["type"].startswith("LTR") for e in structural)
-    tir_ev = next((e for e in structural if e["type"].startswith("TIR")), None)
+def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, orfs=None):
+    """`domains_ok=False` means the protein-domain scan RAISED, so `domains` is empty because nothing ran —
+    not because nothing is there. Without that distinction every domain-derived negative ("not detected:
+    GAG, PR, RNaseH") is asserted from a scan that never happened, which is absence-of-evidence sold as
+    evidence-of-absence. The result is marked so the card can say "not assessed" instead of "not detected"."""
+    # Advisory rows are REPORTED evidence, never CREDITED evidence. A sub-threshold terminal repeat is
+    # shown to the user precisely because it did not qualify, so it must not satisfy any has_* test —
+    # otherwise the classifier treats a rejection as a confirmation. Belt and braces with the naming rule
+    # in structural.py: a future advisory type that happens to start with a credited prefix is caught here.
+    credited = [e for e in structural if not e.get("advisory")]
+    has_ltr = any(e["type"].startswith("LTR") for e in credited)
+    tir_ev = next((e for e in credited if e["type"].startswith("TIR")), None)
     has_tir = tir_ev is not None
-    has_tsd = any(e["type"].startswith("TSD") for e in structural)
-    has_polya = any(e["type"].startswith("poly") for e in structural)
+    has_tsd = any(e["type"].startswith("TSD") for e in credited)
+    has_polya = any(e["type"].startswith("poly") for e in credited)
     codes = [d["domain"] for d in domains]
     cset = set(codes)
     rt_d, int_d, tp_d = _rep(domains, "RT"), _rep(domains, "INT"), _rep(domains, "TPase")
@@ -94,6 +103,7 @@ def classify(structural, domains, seq=None):
     # on the strength of an absent integrase. Wicker 2007 order DIRS; PASTEC's YR-vs-DDE logic
     # (Hoede 2014 PLoS ONE 9:e91929) makes the same distinction.
     yr = "YR" in cset
+    hel = "HEL" in cset          # Helitron Rep/Helicase (PF14214) — bundled and advertised, so it must be consumed
     if rt and yr and not intg:
         klass = "Class I · retrotransposon"
         superfamily, te_class = "DIRS-group (tyrosine-recombinase retroelement)", "DIRS"
@@ -113,17 +123,29 @@ def classify(structural, domains, seq=None):
             i_nt, r_nt = (int_d.get("nt") or [0, 0]), (rt_d.get("nt") or [0, 0])
             order_resolvable = (int_d.get("strand", "+") == rt_d.get("strand", "+") and
                                 (i_nt[1] <= r_nt[0] or r_nt[1] <= i_nt[0]))
-            if _pos(int_d) < _pos(rt_d):
-                superfamily = "Copia (Ty1)"
+            if not order_resolvable:
+                # Do NOT name a superfamily from a comparison that cannot carry the answer. _pos negates the
+                # minus-strand coordinate to get translation order, which is coherent WITHIN one strand and
+                # meaningless ACROSS two: a minus-strand hit always yields a negative value, so the test
+                # reduces to "which of the two is on the minus strand" and returns the SAME answer whether
+                # INT sits upstream or downstream of RT (measured: INT-on-minus -> always Copia,
+                # RT-on-minus -> always Gypsy, at every coordinate). Naming a tentative superfamily from that
+                # puts a family in the card's headline on evidence containing no information about it, which
+                # AGENTS.md rule 1 forbids. The overlapping-span case is equally unreadable. Fall through to
+                # the same honest label the no-integrase path already uses.
+                superfamily, te_class = "LTR retrotransposon (superfamily undetermined)", "LTR/unclassified"
+                ev.append("integrase and RT are not in a readable arrangement (different strands, or "
+                          "overlapping spans), so the diagnostic integrase-vs-RT order cannot be determined — "
+                          "Copia/Gypsy is not called")
+            elif _pos(int_d) < _pos(rt_d):
+                superfamily, te_class = "Copia (Ty1)", "LTR/Copia"
                 ev.append("integrase N-terminal to RT + paired LTRs → Copia/Ty1 order")
             else:
                 superfamily = "Gypsy (Ty3)"
                 if "CHR" in cset:
                     superfamily += " · chromovirus"
+                te_class = "LTR/Gypsy"
                 ev.append("integrase C-terminal to RT + paired LTRs → Gypsy/Ty3 order")
-            if not order_resolvable:
-                ev.append("integrase/RT order not cleanly resolvable (different strands or overlapping spans) — superfamily call is tentative")
-            te_class = "LTR/" + superfamily.split(" ")[0]
             if "PR" in cset:                                  # cset holds emitted domain codes; domains.py maps RVP -> code "PR"
                 ev.append("aspartic-protease domain present")
             if "RNaseH" in cset:
@@ -237,6 +259,35 @@ def classify(structural, domains, seq=None):
                       "consistent with a 5′- or 3′-truncated (or internally deleted) copy, with a superfamily "
                       "that does not carry TIRs, or with termini too diverged for the scan")
         order = "–".join(_ordered(cset))     # coding architecture only — the TIR ends are structural, not domains
+    elif hel:
+        # Helitrons are Wicker Class II, SUBCLASS 2 — they move by rolling-circle replication, not by a
+        # cut-and-paste DDE transposase, so they legitimately have no TPase, no TIR and no TSD (they insert
+        # between an A and a T and duplicate nothing). Without a branch here the HEL hit fell through to the
+        # generic fragment arm and came out as te_class "retro/partial" — a Class II element filed under
+        # Class I retro — with the label "RT/transposase not detected", which reads as "nothing diagnostic
+        # found" on a record where the diagnostic domain WAS found. The profile is bundled (domains.py:70)
+        # and DOMAINS_TESTED advertises it, so the panel promised a call it could not make.
+        # DELIBERATELY NOT a Helitron superfamily call. tests/test_docs_track_build.py
+        # (test_doc_does_not_claim_a_helitron_superfamily_call) and both capability docs record a standing
+        # decision that naming a Helitron superfamily from the helicase domain alone would over-state the
+        # tool, and that decision is not this loop's to reverse. What IS fixed here is the misfiling: with
+        # no branch at all, a HEL hit fell through to the generic arm and came out as te_class
+        # "retro/partial" — a Class II rolling-circle element filed under Class I retro — labelled
+        # "RT/transposase not detected" on a record where the diagnostic domain WAS found. Declining to
+        # name the superfamily is honest; calling it a retroelement is simply wrong.
+        klass = "unclassified"
+        superfamily = "Helitron-family helicase present — superfamily not called"
+        te_class = "unclassified"
+        ev.append("Helitron-family Rep/Helicase domain (PF14214) present. Helitrons move by rolling-circle "
+                  "replication, so they carry no terminal inverted repeat and duplicate no target site — "
+                  "the absence of TIR/TSD here is expected and is not evidence against a Helitron")
+        # The structural signature that would confirm it — a 5' TC / 3' CTRR terminus and the ~11-20 nt
+        # hairpin upstream of the 3' end — is NOT among TEagle's detectors, so say so rather than let the
+        # domain hit alone read as a complete Helitron call.
+        ev.append("the diagnostic Helitron termini (5′ TC … CTRR 3′ and the subterminal hairpin) are not "
+                  "among the tested structural detectors, so TEagle does not assign a Helitron superfamily "
+                  "from the helicase domain alone — but this is NOT a retroelement, and the class is left "
+                  "unassigned rather than guessed")
     else:
         klass = "unclassified"
         if cset:                                          # coding domain(s) recovered but no RT and no transposase
@@ -299,7 +350,13 @@ def classify(structural, domains, seq=None):
         # an absence (no integrase, no LTRs), which DIRS and Penelope-like elements share. `ndom >= 1` was
         # always true on this branch (RT is a domain), so it never discriminated anything.
         confidence = "Moderate" if has_polya else "Candidate"
-    elif (rt or tpase) and (has_ltr or has_tir):
+    # The transposase arm gates on tir_ok, not raw has_tir. This function already refuses to credit a
+    # terminal repeat that does not enclose the transposase — the ledger drops the arms and the evidence
+    # says "the ends are not credited" — because the termini and the coding module may belong to different
+    # elements. Reading that same repeat as enough to lift the badge out of Candidate contradicted the
+    # refusal one screen above it: two records with an identical completeness ledger got different badges.
+    # A solo LTR fed alone trips the inverted-repeat scan (see the note below), so this is the common case.
+    elif (rt and (has_ltr or has_tir)) or (tpase and (has_ltr or tir_ok)):
         confidence = "Moderate"
     elif rt or tpase:
         confidence = "Moderate" if ndom >= 2 else "Candidate"
@@ -312,21 +369,129 @@ def classify(structural, domains, seq=None):
 
     completeness = _completeness(cset, rt, intg, tpase, has_ltr, has_tir, has_polya, is_erv, order_resolvable,
                                  gag_core, tir_ok, en_ok=en_ok, yr=yr)
+    # The coding axis rides ALONGSIDE the tier, never inside it. The tier value is benchmarked (moving it
+    # would move published rows), and the defect was never that the tier miscounted domains — it was that a
+    # domain-only ledger was the ONLY thing on screen, so "partial" was read as "decayed". Adding the axis
+    # answers the question the reader was actually asking without perturbing a benchmarked number.
+    coding = _coding_axis(domains, orfs)
+    if coding:
+        completeness["coding"] = coding
 
     dom_str = " · ".join(codes) or "none"
     struct_str = ", ".join(e["type"].split(" (")[0] for e in structural) or "none"
     explanation = (f"Classified as {te_class} ({confidence.lower()} confidence). "
                    f"Structural: {struct_str}. Domains: {dom_str}." + (" " + "; ".join(ev) + "." if ev else ""))
+    if orfs_unscanned and domains_ok:
+        # A partial version of the domains_ok problem: the search ran, but not over every ORF, so the
+        # not-detected list is scoped to what was searched rather than to the sequence.
+        ev.append(f"{orfs_unscanned} shorter ORF(s) were outside the profile search's ORF budget and were "
+                  "not searched — a domain listed as not detected was not tested on those")
+    if not domains_ok:
+        # The scan raised. Every domain-derived statement below is therefore uninformative, and the
+        # confidence tier — which counts domain evidence — cannot stand. Say so first, in the evidence the
+        # card renders, and cap the tier at the lowest rung rather than letting a structural-only record
+        # inherit a tier that domain hits were supposed to earn.
+        ev.insert(0, "the protein-domain scan did not run for this record, so no domain was tested — "
+                     "any domain named or not named below is unassessed, not absent")
+        confidence = "Candidate"
     return {"class": klass, "superfamily": superfamily, "te_class": te_class, "order": order,
             "confidence": confidence, "evidence": ev, "explanation": explanation, "n_domains": ndom,
-            "is_erv": is_erv, "completeness": completeness}
+            "is_erv": is_erv, "completeness": completeness, "domains_unavailable": not domains_ok,
+            "orfs_unscanned": int(orfs_unscanned or 0)}
 
 
 # Domain families TEagle can test (its bundled Pfam profile panel). A module absent from a result is only
 # meaningfully "missing" relative to THIS panel — a divergent or unmodelled domain reads as not-detected, not decay.
+def _tpase_groups():
+    """The DNA-transposon groups the bundled panel can actually name, DERIVED from domains.DOMAIN_INFO.
+
+    Hand-listing them let the sentence fall behind the panel: it named five groups while the panel also
+    bundles Pfam's generic DDE family (PF03184, class dna:DDE), which the superfamily logic below names
+    outright as "DDE transposon". A user reading the scope line was told a family that CAN be called is not
+    tested, which breaks the not-detected-vs-not-tested distinction the line exists to preserve. Helitron
+    is excluded here because it is a rolling-circle helicase, not a transposase, and is named separately.
+    Imported inside the function: domains imports sequtil/appdirs, and this keeps the dependency one-way."""
+    from . import domains as _dom
+    rename = {"Tc1-Mariner": "Tc1/Mariner", "DDE": "unclassified DDE"}
+    groups = []
+    for code, _label, cls, _pfam in _dom.DOMAIN_INFO.values():
+        if code != "TPase" or not cls.startswith("dna:"):
+            continue
+        g = cls.split(":", 1)[1]
+        g = rename.get(g, g)
+        if g not in groups:
+            groups.append(g)
+    # the catch-all reads last, however DOMAIN_INFO happens to be ordered
+    groups.sort(key=lambda g: (g == "unclassified DDE", g.lower()))
+    return groups
+
+
+def _tpase_group_phrase():
+    g = _tpase_groups()
+    return (", ".join(g[:-1]) + " and " + g[-1]) if len(g) > 1 else (g[0] if g else "")
+
+
 DOMAINS_TESTED = ("gag (matrix/capsid/nucleocapsid), protease, RT, RNase H, DDE integrase, envelope, "
                   "chromodomain, LINE ORF1p and apurinic-like endonuclease, tyrosine recombinase, "
-                  "Helitron helicase, and transposases of the Tc1/Mariner, hAT, CACTA, MULE and IS4 groups")
+                  "Helitron helicase, and transposases of the " + _tpase_group_phrase() + " groups")
+
+
+def _coding_axis(domains, orfs):
+    """Do the DETECTED domains sit in one uninterrupted reading frame?
+
+    A SECOND, independent axis, reported beside the domain ledger rather than folded into it. The two
+    answer different questions and the tier word conflated them: "partial" is emitted whenever an expected
+    Pfam module was not detected, and a reader takes that as "this copy is decayed". But a module can be
+    absent because it is divergent, unmodelled, or outside the bundled panel, in a copy whose reading frame
+    is completely intact — which is why the field's other tools ("intact", "Complete") disagree with this
+    one on the same element. Neither axis can substitute for the other, so both are shown.
+
+    Returns None when there is nothing to assess (no domains, or no ORFs), rather than a reassuring default."""
+    if not domains or not orfs:
+        return None
+    placed, unplaced, truncated = {}, 0, False
+    for d in domains:
+        # Attribute a domain to the ORF it was actually FOUND in, not to one that merely contains it.
+        # scan_domains records that as `orf` — the index into the same length-sorted find_orfs list. Geometry
+        # gets this wrong in exactly the case the axis exists to detect: ORFs overlap, find_orfs sorts
+        # longest-first, so a containment search returns the LONGEST enclosing ORF for every domain inside it.
+        # Two domains in genuinely different, frame-shifted ORFs both resolved to that one ORF and the axis
+        # reported "single reading frame" — reproduced, and the exact opposite of the truth.
+        idx = d.get("orf")
+        host = orfs[idx] if isinstance(idx, int) and 0 <= idx < len(orfs) else None
+        if host is None:
+            # no provenance (a synthetic hit, or a record from an older run): fall back to geometry, which is
+            # right whenever the ORFs do not overlap and is the best available guess when they do
+            nt = d.get("nt") or []
+            if len(nt) < 2:
+                unplaced += 1
+                continue
+            ds, de = min(nt[0], nt[1]), max(nt[0], nt[1])
+            host = next((o for o in orfs
+                         if o.get("strand") == d.get("strand") and o["start"] <= ds and de <= o["end"]), None)
+        if host is None:
+            unplaced += 1                       # a hit straddling an ORF boundary is itself informative
+            continue
+        placed.setdefault((host["start"], host["end"], host["strand"], host.get("frame")), []).append(d["domain"])
+        truncated = truncated or bool(host.get("open_end"))
+    if not placed:
+        return {"frames": 0, "unplaced": unplaced, "truncated_frame": False,
+                "state": "not assessed",
+                "note": "no detected domain could be placed inside a single called ORF"}
+    n = len(placed)
+    state = "single reading frame" if n == 1 and not unplaced else "split across reading frames"
+    if n == 1 and not unplaced:
+        note = (f"all {sum(len(v) for v in placed.values())} detected domain(s) lie in ONE uninterrupted ORF — "
+                "the coding structure of what was found is intact, whatever the domain ledger above lists as "
+                "not detected")
+    else:
+        note = (f"the detected domains fall in {n} separate reading frame(s)"
+                + (f", and {unplaced} could not be placed in any single ORF" if unplaced else "")
+                + " — consistent with an interrupted, rearranged or degenerate copy, though a genuine "
+                  "multi-ORF architecture (LINE ORF1/ORF2, some ERVs) also looks like this")
+    if truncated:
+        note += "; at least one hosting ORF runs to the end of the supplied sequence, so it may be truncated"
+    return {"frames": n, "unplaced": unplaced, "truncated_frame": truncated, "state": state, "note": note}
 
 
 def _completeness(cset, rt, intg, tpase, has_ltr, has_tir, has_polya, is_erv, order_resolvable, gag_core=False,

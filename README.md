@@ -4,7 +4,7 @@
   <img alt="TEagle" src="docs/img/teagle-banner-light.png" width="460">
 </picture>
 
-![Version](https://img.shields.io/badge/version-3.3.0-0A7259) ![Platform](https://img.shields.io/badge/platform-Windows%20x64-1FB89C) ![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-0A7259) ![Built with](https://img.shields.io/badge/built%20with-PySide6%20%C2%B7%20Primer3%20%C2%B7%20HMMER-2B3740)
+![Version](https://img.shields.io/badge/version-3.4.0-0A7259) ![Platform](https://img.shields.io/badge/platform-Windows%20x64-1FB89C) ![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-0A7259) ![Built with](https://img.shields.io/badge/built%20with-PySide6%20%C2%B7%20Primer3%20%C2%B7%20HMMER-2B3740)
 </div>
 
 **TEagle** takes one transposable element and tells you what it is, how it is built, and how to amplify it — in one window, without a command line, and with every result carrying the exact software and database versions that produced it.
@@ -40,6 +40,7 @@ Being clear about this saves time:
 
 1. Download **`TEagle-Setup-<version>.exe`** (≈ 40 MiB) from the [Releases](../../releases) page.
 2. Run it — per-user, no administrator rights — and launch **TEagle**.
+   *Windows will show a blue **“Windows protected your PC”** SmartScreen warning: the installer is not code-signed, so Windows has no publisher reputation for it. Click **More info → Run anyway**. On a managed or institutional laptop this prompt may be blocked outright, in which case your IT team has to approve the executable.*
 3. Click **Load example element** for a bundled, published TE (or paste a sequence, open a FASTA, or type an NCBI accession) and press **Run analysis**.
 
 That is the whole first run. Everything the core needs — Python, Qt, Primer3, HMMER and the CC0 Pfam TE-domain profiles — is inside the installer; there is nothing to `pip install`. The optional Linux backend (Dfam family naming, splice detection, whole-genome scans) installs from inside the app: click **BACKEND** in the window header (or the same button inside panel 03), one click per component, with repair and integrity checks. Components that are not there yet offer **Install**; each reports its download live in the window's log.
@@ -73,7 +74,7 @@ Short version — the manual explains each in full.
 
 **Reads an element.** Terminal repeats (LTR/TIR), target-site duplications, tails, ORFs, and protein domains from a 30-model Pfam panel spanning all four TE classes. For an LTR element it also reads the cis-elements: primer-binding site, polypurine tract, the terminal motif, and the polyadenylation-signal motif.
 
-**Calls a superfamily, with its reasons.** Copia versus Gypsy from strand-aware integrase-vs-RT order, LINE, DIRS, ERV, and the DNA-transposon superfamilies — under the Wicker 2007 scheme, with the domains that support the call listed beside it.
+**Calls a superfamily, with its reasons — and declines when it cannot.** Copia versus Gypsy from strand-aware integrase-vs-RT order, LINE, DIRS, ERV, and the DNA-transposon superfamilies — under the Wicker 2007 scheme, with the domains that support the call listed beside it. Where the evidence cannot carry a call the element is reported as undetermined rather than guessed: an integrase and RT on opposite strands, or on overlapping spans, leave the order unreadable, so no Copia/Gypsy call is made.
 
 **States how much to trust it.** A per-domain confidence from the HMMER E-value, and a categorical completeness tier (*intact / near-complete / partial / structural-only*) — always scoped to the models actually tested. An endogenous retrovirus is read as a retrovirus, with env from a spliced subgenomic mRNA rather than a misleading host gene model.
 
@@ -102,7 +103,7 @@ Short version — the manual explains each in full.
 ```powershell
 python app/teagle.py             # native window (first run auto-installs pinned deps)
 python app/teagle.py --selftest  # headless bundle self-test (imports + QtSvg + a real analysis)
-python -m pytest tests/ -q       # test suite (530 hermetic tests; @wsl/@network gated separately)
+python -m pytest tests/ -q       # hermetic test suite (@wsl / @network sets gated separately)
 powershell -File installer/build_installer.ps1   # freeze + bundle guard + self-test gate + Inno Setup
 ```
 
