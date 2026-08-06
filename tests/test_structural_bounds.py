@@ -142,14 +142,64 @@ def test_subthreshold_terminal_repeat_is_reported_but_never_credited():
 
     cl = classify.classify([near], doms)
     assert cl["te_class"] != "LTR/Copia", cl
-    assert "LTR" not in (cl["te_class"] or ""), cl["te_class"]
 
-    # guard 2: the advisory flag blocks it even under a colliding name
+    # guard 2: the advisory row must change NOTHING. This is stricter than asserting the absence of an
+    # "LTR" substring, and it stays correct now that RT + a DDE integrase name the LTR *order* on domain
+    # architecture alone: that call is reached with or without the rejected pair, so the pair is not what
+    # produced it. An earlier form of this test asserted `"LTR" not in te_class`, which conflated "the
+    # advisory repeat was credited" with "an LTR order was called by any route" and would have blocked a
+    # correct domain-based call.
+    without = classify.classify([], doms)
+    assert cl["te_class"] == without["te_class"], (cl["te_class"], without["te_class"])
+    assert cl["superfamily"] == without["superfamily"], (cl["superfamily"], without["superfamily"])
+    assert cl["confidence"] == without["confidence"], (cl["confidence"], without["confidence"])
+
+    # guard 3: the advisory flag blocks it even under a colliding name
     legacy = dict(near, type="LTR candidate below identity threshold")
     assert classify.classify([legacy], doms)["te_class"] != "LTR/Copia"
+    assert classify.classify([legacy], doms)["te_class"] == without["te_class"]
 
     # and a genuine accepted LTR is unaffected
     real = {"type": "LTR (terminal direct repeat)", "five_prime": [0, 300],
             "three_prime": [1500, 1800], "element_span": [0, 1800]}
     good = classify.classify([real], doms)
     assert good["te_class"] == "LTR/Copia" and good["confidence"] == "High", good
+
+
+def test_standalone_tir_floor_clears_chance_and_the_solo_ltr_case():
+    """MIN_TIR_STANDALONE must stay above what chance produces, and above the solo-LTR case it guards.
+
+    The floor decides whether a terminal inverted repeat may name a Class II element with NO transposase
+    to corroborate it. Both numbers behind it are re-derived here rather than restated, so a change to
+    find_tir that lengthens chance hits, or that changes what the copia LTR yields, fails the suite instead
+    of silently loosening the gate.
+
+    Kept deliberately cheap: 400 random sequences, enough to catch a floor that has fallen into the bulk of
+    the chance distribution (13-15 bp), not enough to resolve the extreme tail. The 4,500-trial measurement
+    that set the constant is recorded in structural.py.
+    """
+    import random
+    from teagle_core import structural
+
+    rng = random.Random(31337)
+    longest_chance = 0
+    for i in range(400):
+        seq = "".join(rng.choice("ACGT") for _ in range(4000))
+        hit = structural.find_tir(seq)
+        if hit:
+            longest_chance = max(longest_chance, hit["tir_len"])
+
+    assert longest_chance < structural.MIN_TIR_STANDALONE, (
+        f"chance inverted repeats reached {longest_chance} bp, at or above the standalone floor of "
+        f"{structural.MIN_TIR_STANDALONE} bp -- a bare repeat that long would name a DNA transposon on noise")
+
+    # The case the conservative branch was written for: a solo copia 5' LTR trips the TIR scan and was once
+    # filed as a DNA transposon. It must stay below the floor. Built here as a direct repeat pair whose ends
+    # happen to be weakly inverted, which is what a real LTR does.
+    rng2 = random.Random(4242)
+    ltr = "TGTTGGAATATAC" + "".join(rng2.choice("ACGT") for _ in range(250)) + "GTATATTCCAACA"
+    hit = structural.find_tir(ltr)
+    if hit:
+        assert hit["tir_len"] < structural.MIN_TIR_STANDALONE, (
+            f"a solo LTR yields a {hit['tir_len']} bp inverted repeat, at or above the standalone floor -- "
+            f"a Class I fragment would be called Class II")

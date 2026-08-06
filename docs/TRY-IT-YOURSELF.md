@@ -50,7 +50,7 @@ Accession: **`AY037928`**  (9,472 bp)
 |---|---|
 | Flagged as | **ERV** (env-bearing LTR retroelement) |
 | Domain architecture | **GAG–PR–RT–RNaseH–INT–ENV**, the complete retroviral set |
-| Completeness tier | *intact / autonomous-consistent* |
+| Domain completeness | *intact / autonomous-consistent* |
 | PBS | reported, but the priming tRNA **hedged as undetermined** — HERV-K113 matches the canonical tRNA-Lys3 template at only ~56 %, which is normal for an endogenised, diverged provirus |
 | Transcript view | *env* from a spliced subgenomic mRNA, with gag–pro–pol drawn as one frameshift-fused intron — **not** a host exon–intron model |
 

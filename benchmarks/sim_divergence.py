@@ -35,7 +35,10 @@ OUT = os.path.join(ROOT, "benchmarks", "raw", "sim_divergence.json")
 BASES = "ACGT"
 
 # Identity targets, dense across the two boundaries this panel exists to locate:
-#   the acceptance floor (structural.MIN_LTR_IDENTITY, 80%) and the k-mer seeding limit (~72%).
+#   the acceptance floor (structural.MIN_LTR_IDENTITY, 80%) and the lower limit of k-mer seeding.
+# The seeding limit is deliberately not given a number here. An earlier comment put it at ~72% from a
+# single rough test; this panel is what retracted that, finding candidates still reported at 65% and
+# the limit length-dependent rather than constant. Sampling stays dense through that region.
 TARGETS = [100, 99, 98, 96, 94, 92, 90, 88, 86, 85, 84, 83, 82, 81, 80.5, 80, 79.5, 79, 78,
            77, 76, 75, 74, 73, 72, 71, 70, 68, 65, 60]
 

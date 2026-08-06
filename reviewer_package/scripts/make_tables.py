@@ -115,7 +115,21 @@ def verdict(value: str) -> str:
 
 
 def compact(value: str, axis: str) -> str:
-    return verdict(value) if axis in VERDICT_AXES else re.split(r"\s*[—(]", str(value).strip(), 1)[0].strip()
+    """The short form of a cell: the leading clause, with the justification cut away.
+
+    A sentence end and a spaced hyphen are boundaries as much as an em dash or an opening parenthesis.
+    Splitting on only the latter two produced three different behaviours on one axis, because the
+    source cells do not punctuate alike: DANTE's read "both, but split by component. DANTE" — the
+    leading clause plus the first word of the sentence explaining it — while TEclass2's ran to its
+    full 142 characters because its separator is a hyphen. A cut cell is indistinguishable from a
+    whole one, so a reader has no way to see that anything was removed. The full text of every cell
+    is in Table S1 regardless.
+
+    The hyphen must be spaced on both sides: "whole-genome" is one word, " - " is punctuation.
+    """
+    if axis in VERDICT_AXES:
+        return verdict(value)
+    return re.split(r"\s*(?:[—(]|\.(?=\s)|(?<=\s)-\s)", str(value).strip(), 1)[0].strip()
 
 
 def write_csv(path, header, rows):

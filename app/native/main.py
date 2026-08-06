@@ -124,7 +124,7 @@ GLOSS = {
     "nt": "Nucleotide span of the domain in the sequence, 0-based.",
     "Score": "HMMER bit score — how strongly this region matches the domain profile; higher is stronger.",
     "E-value": "Expected number of matches this good by chance — lower is more significant (e.g. 1e-30 is highly significant).",
-    "Conf": "Per-domain call confidence from the HMMER i-Evalue (Eddy 2011): high (≤ 1e-10) or moderate. This is the per-tool reliability of THIS domain call — separate from the element-level structural-completeness tier.",
+    "Conf": "Per-domain call confidence from the HMMER i-Evalue (Eddy 2011): high (≤ 1e-10) or moderate. This is the per-tool reliability of THIS domain call — separate from the element-level domain completeness.",
     "ID": "Identifier of this designed primer pair.",
     "Forward (5'→3')": "Forward primer sequence, written 5′→3′.",
     "Reverse (5'→3')": "Reverse primer sequence, written 5′→3′.",
@@ -1775,7 +1775,7 @@ class MainWindow(QMainWindow):
             ex.setWordWrap(True); ex.setTextFormat(Qt.RichText)
             bl.addWidget(ex)
         # TIER 3 — SCOPE: reliability & completeness. An honest limitation → stays default-VISIBLE, grouped + labelled.
-        comp = cl.get("completeness")                         # scoped structural-completeness (Axis 2 of reliability)
+        comp = cl.get("completeness")                         # scoped domain completeness (Axis 2 of reliability)
         if comp:
             rl = QLabel("RELIABILITY & COMPLETENESS"); rl.setObjectName("sectionlabel"); bl.addWidget(rl)
             arch = cl.get("order") or " – ".join(comp.get("present", []))
@@ -1932,7 +1932,7 @@ class MainWindow(QMainWindow):
             t.export_notes = [
                 f"Protein domains from the bundled {len(domains_mod.DOMAIN_INFO)}-model Pfam panel via "
                 "HMMER/pyhmmer. Conf is the per-domain call confidence from the HMMER i-Evalue — the "
-                "reliability of THIS domain call, separate from the element-level completeness tier.",
+                "reliability of THIS domain call, separate from the element-level domain completeness.",
                 f"Only the {domains_mod.MAX_ORFS_SCANNED} longest ORFs are searched. A domain absent here was "
                 "not necessarily absent from the whole sequence.",
                 f"Domains tested: {classify.DOMAINS_TESTED}. 'Not detected' is relative to this panel — a "
@@ -2068,8 +2068,11 @@ class MainWindow(QMainWindow):
             "limit</b>: the two copies of an LTR are identical at insertion and diverge with time, so an older "
             "element falls below it and is NOT reported as an LTR. A pair that fails only that floor is now "
             "listed separately as an advisory candidate with its measured identity, so 'below threshold' is "
-            "distinguishable from 'nothing found'; below roughly 72% identity the k-mer seeding itself stops "
-            "finding the pair, which no threshold change would recover); TIR by a terminal inverted-repeat "
+            "distinguishable from 'nothing found'. Further down, the k-mer seeding itself stops finding the "
+            "pair at all, and no threshold change recovers that: where this happens depends on how long the "
+            "repeat is, because a longer repeat carries more exact seed k-mers at the same identity — "
+            "measured on a 574 bp LTR, candidates were still reported at 65% identity and none at 60%); "
+            "TIR by a terminal inverted-repeat "
             f"scan plus a k-mer-vs-reverse-complement search, accepted at ≥ {structural_mod.MIN_TIR_IDENTITY:g}% "
             "identity — the same kind of floor as the LTR one, gating every DNA-transposon call the same way; "
             f"poly-A/poly-T tail ≥ 8 bp; TSD as a "
@@ -2084,7 +2087,7 @@ class MainWindow(QMainWindow):
             "structural context; Copia vs Gypsy is called from the strand-aware integrase-vs-RT translation order, not "
             "ORF length; an env domain with paired LTRs flags an endogenous retrovirus (ERV).<br>"
             "<b>Reliability</b> — reported on two independent, citable axes rather than one fabricated number: (1) a "
-            "per-domain call confidence from the HMMER i-Evalue (Eddy 2011); (2) a categorical structural-completeness "
+            "per-domain call confidence from the HMMER i-Evalue (Eddy 2011); (2) a categorical domain-completeness "
             "tier — intact / near-complete / partial / structural-only — mapped to the autonomous/intact criteria of "
             "Wicker 2007, TEsorter and LTR_retriever, and always scoped to the domain models actually tested.<br>"
             "<b>Family naming</b> (optional, WSL backend) — RepeatMasker (RMBLAST) against the curated Dfam&nbsp;4.0" + dfam +

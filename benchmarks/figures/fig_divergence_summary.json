@@ -1,0 +1,20 @@
+{
+ "floor": 80.0,
+ "lowest_identity_fully_accepted": 80,
+ "highest_identity_never_accepted": 78,
+ "lowest_identity_any_advisory": 65,
+ "highest_identity_no_report_at_all": 60,
+ "replicates": 20,
+ "total_runs": 600,
+ "scaffold": "D83003",
+ "scaffold_ltr_len": 574,
+ "accepted_n": 329,
+ "whole_repeat_recovered_n": 150,
+ "whole_repeat_max_abs_error": 0.0,
+ "partly_recovered_n": 179,
+ "partly_recovered_mean_error": 0.3804,
+ "partly_recovered_max_error": 2.1,
+ "shortest_recovered_bp": 518,
+ "shortest_recovered_pct_of_true": 90.2,
+ "spearman_rho_len_vs_error": -0.9692
+}

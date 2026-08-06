@@ -5,7 +5,7 @@ it does that a hosted search does not — dissect a candidate, design the confir
 run. This is the interoperability half of that.
 
 Column 3 of GFF3 is an ASSERTION that downstream software trusts. It is therefore gated on the same
-completeness tier the report shows: a structural-only call exports as the generic `repeat_region`, never
+domain completeness the report shows: a structural-only call exports as the generic `repeat_region`, never
 as `LTR_retrotransposon`, because a specific subclass claims coding evidence that a structural-only call
 does not have. Wicker codes have no SO accession and go in LOWERCASE attributes — GFF3 reserves
 capitalised tags for its own predefined set, so the `TEID=` convention seen in the wild is non-compliant.
@@ -223,7 +223,7 @@ def to_gff3(rec, seqid="locus", sequence=None, source_note=None, offset: int = 0
                    "slice as if it were the whole sequence.")
     if source_note:
         out.append(f"#!source {source_note}")
-    out.append("#!provenance column 3 is gated on the completeness tier; a structural-only call exports "
+    out.append("#!provenance column 3 is gated on the domain completeness; a structural-only call exports "
                "as repeat_region, never a specific subclass")
     out += ["\t".join(str(c) for c in r) for r in rows]
     if sequence and not offset:

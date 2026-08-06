@@ -597,7 +597,7 @@ def _coding_axis(domains, orfs):
 
 def _completeness(cset, rt, intg, tpase, has_ltr, has_tir, has_polya, is_erv, order_resolvable, gag_core=False,
                   tir_ok=False, en_ok=False, yr=False):
-    """A CATEGORICAL structural-completeness call (never a fabricated numeric score), scoped to the models tested.
+    """A CATEGORICAL domain-completeness call (never a fabricated numeric score), scoped to the models tested.
     Tiers map to established terms: an element with its expected coding architecture + intact structural context is
     'intact / autonomous-consistent' (Wicker 2007 autonomous; TEsorter Complete; LTR_retriever intact); a core
     module missing is 'partial'; terminal repeats with no coding is 'structural-only'. Every branch derives its tier
