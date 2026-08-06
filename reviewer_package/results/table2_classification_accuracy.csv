@@ -1,0 +1,10 @@
+﻿Panel,n,Class: answered/gradable,Class accuracy,Class 95% CI,Class abstention,Order: answered/gradable,Order accuracy,Order 95% CI,Order abstention,Superfamily: answered/gradable,Superfamily accuracy,Superfamily 95% CI,Superfamily abstention
+LTR retrotransposons (Copia / Gypsy),35,34/35,1.000,0.898–1.000,0.029,33/35,1.000,0.896–1.000,0.057,22/35,0.909,0.722–0.975,0.371
+Endogenous retroviruses,20,16/20,1.000,0.806–1.000,0.200,14/20,1.000,0.785–1.000,0.300,0/0,—,—,—
+DNA transposons (TIR),15,13/15,1.000,0.772–1.000,0.133,13/15,1.000,0.772–1.000,0.133,11/15,1.000,0.741–1.000,0.267
+LINEs (non-LTR retrotransposons),11,10/11,1.000,0.723–1.000,0.091,6/11,1.000,0.610–1.000,0.455,0/8,—,—,—
+Negative controls (non-TE),11,2/11,0.000,0.000–0.658,0.818,1/11,0.000,0.000–0.793,0.909,0/0,—,—,—
+LTR divergence gradient,2,2/2,1.000,0.342–1.000,0.000,2/2,1.000,0.342–1.000,0.000,0/0,—,—,—
+Assay design,1,0/0,—,—,—,0/0,—,—,—,0/1,—,—,—
+Unreadable domain order,0,0/0,—,—,—,0/0,—,—,—,0/0,—,—,—
+All panels combined,95,77/94,0.974,0.910–0.993,0.181,69/94,0.986,0.922–0.997,0.266,33/59,0.939,0.804–0.983,0.441

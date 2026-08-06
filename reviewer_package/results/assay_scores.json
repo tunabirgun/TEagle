@@ -1,0 +1,760 @@
+{
+ "analysed": 17,
+ "blind": {
+  "cases": [
+   "mimp1/impala niaD excision assay - revertant (excised) product"
+  ],
+  "concordance": 1.0,
+  "concordant": 1,
+  "exact_matches": 1,
+  "max_abs_difference_bp": 0,
+  "median_abs_difference_bp": 0,
+  "n": 1
+ },
+ "by_ground_truth": {
+  "stated_in_source": {
+   "cases": [
+    "HERV-K113 pre-integration (empty) site PCR",
+    "HERV-K115 pre-integration (empty) site PCR",
+    "Alu Ye5AH1 insertion-site PCR (chrX q28)",
+    "Alu Ye5AH5 insertion-site PCR (chr8)",
+    "Alu Ye5AH11 insertion-site PCR (chr17)",
+    "Alu Ye5AH13 insertion-site PCR (chr12)",
+    "Alu Ye5AH17 insertion-site PCR (chr3)",
+    "mimp1/impala niaD excision assay - revertant (excised) product",
+    "Brucella AMOS-PCR, B. ovis product (IS711 insertion-site PCR)",
+    "Brucella AMOS-PCR, B. suis bv. 1 product (IS711 insertion-site PCR)",
+    "Brucella AMOS-PCR, B. melitensis product (IS711 insertion-site PCR)",
+    "Human ACE (DCP1) intron 16 Alu insertion/deletion polymorphism (the classic ACE I/D assay)",
+    "Chicory chloroplast ndhF (NADHD) reference-gene RT-qPCR assay",
+    "Chicory beta-tubulin (TUB) reference-gene RT-qPCR assay",
+    "Atlantic salmon GAPDH TaqMan reference-gene assay",
+    "Atlantic salmon elongation factor 1A-A (EF1AA) TaqMan reference-gene assay"
+   ],
+   "concordance": 1.0,
+   "concordant": 16,
+   "exact_matches": 14,
+   "max_abs_difference_bp": 10,
+   "median_abs_difference_bp": 0,
+   "n": 16
+  }
+ },
+ "cases": 17,
+ "concordance": 1.0,
+ "exact_matches": 14,
+ "failed": 0,
+ "failures": [],
+ "found_any_product": 17,
+ "generated": "2026-08-06T06:58:36",
+ "median_abs_difference_bp": 0,
+ "min_anneal_bound_verified": {
+  "applicable": true,
+  "bound": 24,
+  "cases_that_straddle_it": [
+   {
+    "above_bound": 0,
+    "at_bound": 1,
+    "name": "BARE1/BARE2 genomic amplification with LS1 + AP4",
+    "straddles": true
+   }
+  ],
+  "confirmed": true
+ },
+ "min_anneal_in_force": 18,
+ "min_anneal_invariant_up_to": 24,
+ "multilocus": {
+  "cases": [
+   "BARE1/BARE2 genomic amplification with LS1 + AP4"
+  ],
+  "concordance": 1.0,
+  "concordant": 1,
+  "exact_matches": 0,
+  "max_abs_difference_bp": 28,
+  "median_abs_difference_bp": 28,
+  "n": 1
+ },
+ "preworked": {
+  "cases": [
+   "HERV-K113 pre-integration (empty) site PCR",
+   "HERV-K115 pre-integration (empty) site PCR",
+   "Alu Ye5AH1 insertion-site PCR (chrX q28)",
+   "Alu Ye5AH5 insertion-site PCR (chr8)",
+   "Alu Ye5AH11 insertion-site PCR (chr17)",
+   "Alu Ye5AH13 insertion-site PCR (chr12)",
+   "Alu Ye5AH17 insertion-site PCR (chr3)",
+   "Brucella AMOS-PCR, B. ovis product (IS711 insertion-site PCR)",
+   "Brucella AMOS-PCR, B. suis bv. 1 product (IS711 insertion-site PCR)",
+   "Brucella AMOS-PCR, B. melitensis product (IS711 insertion-site PCR)",
+   "Human ACE (DCP1) intron 16 Alu insertion/deletion polymorphism (the classic ACE I/D assay)",
+   "Chicory chloroplast ndhF (NADHD) reference-gene RT-qPCR assay",
+   "Chicory beta-tubulin (TUB) reference-gene RT-qPCR assay",
+   "Atlantic salmon GAPDH TaqMan reference-gene assay",
+   "Atlantic salmon elongation factor 1A-A (EF1AA) TaqMan reference-gene assay"
+  ],
+  "concordance": 1.0,
+  "concordant": 15,
+  "exact_matches": 13,
+  "max_abs_difference_bp": 10,
+  "median_abs_difference_bp": 0,
+  "n": 15
+ },
+ "rows": [
+  {
+   "accession": "CM000681.2",
+   "caveats": "303 bp is the NULL (unoccupied) allele, not a provirus amplicon - the paper is explicit that homozygous-insertion individuals give no band, because the occupied allele adds ~9.5 kb. GRCh38 lacks K113, so the reference chromosome carries the empty site and the assay is contained. On the plus strand of CM000681.2 the primer listed as 'reverse' (K113-r) reads forward; orientation must be handled. Both 20-mers are unique in the GRCh38 primary assembly (BLAT: one primary hit each, plus one alt contig chr19_GL383575v2_alt). Template is a whole chromosome (58.6 Mb).",
+   "citation": "Jha AR, Pillai SK, York VA, Sharp ER, Storm EC, Wachter DJ, Martin JN, Deeks SG, Rosenberg MG, Nixon DF, Garrison KE. Cross-sectional dating of novel haplotypes of HERV-K 113 and HERV-K 115 indicate these proviruses originated in Africa before Homo sapiens. Mol Biol Evol. 2009;26(11):2617-2626. doi:10.1093/molbev/msp180. PMID 19666991; PMCID PMC2760466.",
+   "closest_bp": 303,
+   "difference_bp": 0,
+   "elapsed_s": 153.608,
+   "element": "HERV-K(HML-2) provirus K113 - LTR retroelement (betaretrovirus-like ERV); insertion-site / empty-allele PCR at 19p13.11",
+   "expected_bp": 303,
+   "found": true,
+   "ground_truth": "stated_in_source",
+   "loci_on_template": "single",
+   "multilocus_by_design": false,
+   "n_products": 1,
+   "name": "HERV-K113 pre-integration (empty) site PCR",
+   "organism": "Homo sapiens",
+   "panel": "ltr-assays",
+   "preworked_in_corpus": true,
+   "primer_degenerate": false,
+   "primer_fwd_as_published": "GCATGGGGAGATTCAGAACC",
+   "primer_rev_as_published": "CATGTTTCCTGTCTGCCCAC",
+   "product_sizes": [
+    303
+   ],
+   "scored_product_anneal_bp": [
+    20,
+    20
+   ],
+   "scored_product_tail_bp": 0,
+   "search_window_bp": [
+    28,
+    3825
+   ],
+   "source_confidence": "high",
+   "template_sha256": "24c53dd48e5a2920",
+   "tolerance_bp": 30.3,
+   "within_tolerance": true
+  },
+  {
+   "accession": "CM000670.2",
+   "caveats": "557 bp is the NULL allele; the K115-bearing allele gives no standard product. MULTI-PRODUCT BY REFERENCE STRUCTURE, not by permissive search: 8p23.1 is a segmental duplication, and BLAT shows a second genuine binding-site pair in the same accession at CM000670.2 ~7,497,583-7,507,604, where the identical primer pair spans a ~10 kb HERV-K insertion (the filled allele at a paralogous beta-defensin copy). A whole-chromosome run should legitimately report two products; the ~10 kb one is not a false positive. Independently corroborated by JQ966588.1 (554 bp, 'Homo sapiens DEFB107B gene, intron, partial sequence; and HERV-K115 insertion site'), which is exactly this amplicon minus its first 3 nt - useful as a short secondary template, but note it truncates the forward primer and so will NOT give a hit on its own.",
+   "citation": "Jha AR, Pillai SK, York VA, Sharp ER, Storm EC, Wachter DJ, Martin JN, Deeks SG, Rosenberg MG, Nixon DF, Garrison KE. Cross-sectional dating of novel haplotypes of HERV-K 113 and HERV-K 115 indicate these proviruses originated in Africa before Homo sapiens. Mol Biol Evol. 2009;26(11):2617-2626. doi:10.1093/molbev/msp180. PMID 19666991; PMCID PMC2760466.",
+   "closest_bp": 557,
+   "difference_bp": 0,
+   "elapsed_s": 353.704,
+   "element": "HERV-K(HML-2) provirus K115 - LTR retroelement; insertion-site / empty-allele PCR in a DEFB107B intron, 8p23.1",
+   "expected_bp": 557,
+   "found": true,
+   "ground_truth": "stated_in_source",
+   "loci_on_template": "single",
+   "multilocus_by_design": false,
+   "n_products": 1,
+   "name": "HERV-K115 pre-integration (empty) site PCR",
+   "organism": "Homo sapiens",
+   "panel": "ltr-assays",
+   "preworked_in_corpus": true,
+   "primer_degenerate": false,
+   "primer_fwd_as_published": "CCGCACCTAGTCAACTTAGC",
+   "primer_rev_as_published": "TCAGTTCCCGATTTTCTGCC",
+   "product_sizes": [
+    557
+   ],
+   "scored_product_anneal_bp": [
+    20,
+    20
+   ],
+   "scored_product_tail_bp": 0,
+   "search_window_bp": [
+    28,
+    3825
+   ],
+   "source_confidence": "high",
+   "template_sha256": "25f34de04df95f6e",
+   "tolerance_bp": 55.7,
+   "within_tolerance": true
+  },
+  {
+   "accession": "Z17327.1",
+   "caveats": "(1) 5' TAILS: neither primer anneals over its full length. LS1's templated core is the 25-nt ACCGGACTTGAGCTAGTGGAATTGG (matches Z17327 3234-3258 exactly, as the table states); AP4's is the 22-nt ATATAATGTTCATGCTYAACGC (matches 4487-4508). A full-length exact-match search returns NO product - this case is specifically useful for testing 3'-anchored / tailed-primer handling. (2) The table's AP4 coordinate 4486 is off by one: a 23-nt core was tested and fails because Z17327 position 4486 is T, not C. (3) DEGENERATE: AP4 carries (TC) = Y at one position. (4) MULTI-LOCUS BY DESIGN: BARE1 is present at ~10^4 copies in barley, and the paper states the pair amplifies BARE2 equally well - but no exact core site exists in the BARE2 accession AJ279072, so exact matching finds the amplicon only in Z17327. (5) Size is an approximate gel estimate, hence medium confidence.",
+   "citation": "Chang W, Jääskeläinen M, Li S-P, Schulman AH. BARE retrotransposons are translated and replicated via distinct RNA pools. PLoS One. 2013;8(8):e72270. doi:10.1371/journal.pone.0072270. PMID 23940808; PMCID PMC3735527.",
+   "closest_bp": 1303,
+   "difference_bp": 28,
+   "elapsed_s": 0.031,
+   "element": "BARE1 (BARE-1) Ty1/copia-group LTR retrotransposon; gag-PR region, element-internal",
+   "expected_bp": 1275,
+   "found": true,
+   "ground_truth": "derived_from_source",
+   "loci_on_template": "multiple",
+   "multilocus_by_design": true,
+   "n_products": 1,
+   "name": "BARE1/BARE2 genomic amplification with LS1 + AP4",
+   "organism": "Hordeum vulgare (barley)",
+   "panel": "ltr-assays",
+   "preworked_in_corpus": true,
+   "primer_degenerate": true,
+   "primer_fwd_as_published": "CTGCCTCGCCCACCGGACTTGAGCTAGTGGAATTGG",
+   "primer_rev_as_published": "CTGGTTCGGCCCACCAGATATAATGTTCATGCT(TC)AACGC",
+   "product_sizes": [
+    1303
+   ],
+   "scored_product_anneal_bp": [
+    27,
+    24
+   ],
+   "scored_product_tail_bp": 24,
+   "search_window_bp": [
+    28,
+    3825
+   ],
+   "source_confidence": "medium",
+   "template_sha256": "b0dfe6aa26d5216d",
+   "tolerance_bp": 127.5,
+   "within_tolerance": true
+  },
+  {
+   "accession": "AC109993.3",
+   "caveats": "Dimorphic locus, so the paper prints two sizes; the cited accession (BAC RP11-115M6, Xq28, 178,516 bp) carries the FILLED (Alu-present) allele, so 495 bp is the size to expect in this template. The 242 bp empty-site allele is NOT present in this accession. No degenerate bases; neither primer spans a junction. Verified by exact-string in-silico PCR against AC109993.3: exactly one product, plus strand, length 495 bp, and the Ye-lineage diagnostic 25-mer (5'-GAACCCCGGGGGGCGGAGCCTGCAG-3', the paper's own subfamily-diagnostic oligo) lies inside the amplicon, confirming it genuinely spans an Alu Ye element. Product uniqueness was confirmed within the cited accession only, not genome-wide. Annealing temperature 55 C.",
+   "citation": "Salem AH, Ray DA, Hedges DJ, Jurka J, Batzer MA. Analysis of the human Alu Ye lineage. BMC Evolutionary Biology 2005;5:18. doi:10.1186/1471-2148-5-18. PMID 15725352; PMCID PMC554112.",
+   "closest_bp": 495,
+   "difference_bp": 0,
+   "elapsed_s": 0.448,
+   "element": "Alu Ye5 (SINE, non-LTR); Alu Ye lineage insertion polymorphism",
+   "expected_bp": 495,
+   "found": true,
+   "ground_truth": "stated_in_source",
+   "loci_on_template": "single",
+   "multilocus_by_design": false,
+   "n_products": 1,
+   "name": "Alu Ye5AH1 insertion-site PCR (chrX q28)",
+   "organism": "Homo sapiens",
+   "panel": "line-sine",
+   "preworked_in_corpus": true,
+   "primer_degenerate": false,
+   "primer_fwd_as_published": "AAGTACACCCTGTGATGTTTG",
+   "primer_rev_as_published": "TGCTTGATTCTTCCCTTTTA",
+   "product_sizes": [
+    495
+   ],
+   "scored_product_anneal_bp": [
+    21,
+    20
+   ],
+   "scored_product_tail_bp": 0,
+   "search_window_bp": [
+    28,
+    3825
+   ],
+   "source_confidence": "high",
+   "template_sha256": "8bcb9e8f4fed0b09",
+   "tolerance_bp": 49.5,
+   "within_tolerance": true
+  },
+  {
+   "accession": "AC103830.2",
+   "caveats": "Dimorphic locus. Cited accession (clone CTD-2563K22, chromosome 8, 191,525 bp) carries the FILLED (Alu-present) allele; expect 834 bp. The 528 bp empty allele is not in this accession. No degenerate bases; no junction-spanning primer. Verified by exact-string in-silico PCR: exactly one product, plus strand, 834 bp; amplicon contains the Ye-diagnostic 25-mer and canonical Alu motifs (TGTAATCCCAGCACTTTGGGAGG, GGGATTACAGGCGTGAGCCA) plus the oligo-dA tail. This is the longest amplicon in the set, useful for exercising product-length handling. Uniqueness checked within the cited accession only. Annealing temperature 55 C.",
+   "citation": "Salem AH, Ray DA, Hedges DJ, Jurka J, Batzer MA. Analysis of the human Alu Ye lineage. BMC Evolutionary Biology 2005;5:18. doi:10.1186/1471-2148-5-18. PMID 15725352; PMCID PMC554112.",
+   "closest_bp": 834,
+   "difference_bp": 0,
+   "elapsed_s": 0.525,
+   "element": "Alu Ye5 (SINE, non-LTR); Alu Ye lineage insertion polymorphism",
+   "expected_bp": 834,
+   "found": true,
+   "ground_truth": "stated_in_source",
+   "loci_on_template": "single",
+   "multilocus_by_design": false,
+   "n_products": 1,
+   "name": "Alu Ye5AH5 insertion-site PCR (chr8)",
+   "organism": "Homo sapiens",
+   "panel": "line-sine",
+   "preworked_in_corpus": true,
+   "primer_degenerate": false,
+   "primer_fwd_as_published": "CTCTGACTACTGGGGTTGAA",
+   "primer_rev_as_published": "ATAAAATTTCCGTTCCCTTG",
+   "product_sizes": [
+    834
+   ],
+   "scored_product_anneal_bp": [
+    20,
+    20
+   ],
+   "scored_product_tail_bp": 0,
+   "search_window_bp": [
+    28,
+    3825
+   ],
+   "source_confidence": "high",
+   "template_sha256": "394d3b45393109fa",
+   "tolerance_bp": 83.4,
+   "within_tolerance": true
+  },
+  {
+   "accession": "AC087297.13",
+   "caveats": "Dimorphic locus. Cited accession (clone RP11-362P24, chromosome 17, 179,026 bp) carries the FILLED allele; expect 723 bp. The 408 bp empty allele is not in this accession. No degenerate bases; no junction-spanning primer. Verified by exact-string in-silico PCR: exactly one product, plus strand, 723 bp, containing the Ye-diagnostic 25-mer and canonical Alu motifs. The paper records this locus's human population diversity as NA (it was not scored polymorphic in the panel), which affects its use as a population marker but not the expected product from this template. Uniqueness checked within the cited accession only. Annealing temperature 55 C.",
+   "citation": "Salem AH, Ray DA, Hedges DJ, Jurka J, Batzer MA. Analysis of the human Alu Ye lineage. BMC Evolutionary Biology 2005;5:18. doi:10.1186/1471-2148-5-18. PMID 15725352; PMCID PMC554112.",
+   "closest_bp": 723,
+   "difference_bp": 0,
+   "elapsed_s": 0.451,
+   "element": "Alu Ye5 (SINE, non-LTR); Alu Ye lineage insertion polymorphism",
+   "expected_bp": 723,
+   "found": true,
+   "ground_truth": "stated_in_source",
+   "loci_on_template": "single",
+   "multilocus_by_design": false,
+   "n_products": 1,
+   "name": "Alu Ye5AH11 insertion-site PCR (chr17)",
+   "organism": "Homo sapiens",
+   "panel": "line-sine",
+   "preworked_in_corpus": true,
+   "primer_degenerate": false,
+   "primer_fwd_as_published": "GTTTTCTCTGTGGGAAGGAT",
+   "primer_rev_as_published": "TTTACCCTTAATGGAGCTTG",
+   "product_sizes": [
+    723
+   ],
+   "scored_product_anneal_bp": [
+    20,
+    20
+   ],
+   "scored_product_tail_bp": 0,
+   "search_window_bp": [
+    28,
+    3825
+   ],
+   "source_confidence": "high",
+   "template_sha256": "cd187d6874e59425",
+   "tolerance_bp": 72.3,
+   "within_tolerance": true
+  },
+  {
+   "accession": "AC121336.3",
+   "caveats": "Dimorphic locus. Cited accession (BAC RP11-134P3, chromosome 12, 171,437 bp) carries the FILLED allele; expect 432 bp. The 134 bp empty allele is not in this accession. No degenerate bases; no junction-spanning primer. Verified by exact-string in-silico PCR: exactly one product, plus strand, 432 bp, containing the Ye-diagnostic 25-mer and canonical Alu motifs. Smallest filled product in the set. Uniqueness checked within the cited accession only. Annealing temperature 55 C.",
+   "citation": "Salem AH, Ray DA, Hedges DJ, Jurka J, Batzer MA. Analysis of the human Alu Ye lineage. BMC Evolutionary Biology 2005;5:18. doi:10.1186/1471-2148-5-18. PMID 15725352; PMCID PMC554112.",
+   "closest_bp": 432,
+   "difference_bp": 0,
+   "elapsed_s": 0.472,
+   "element": "Alu Ye5 (SINE, non-LTR); Alu Ye lineage insertion polymorphism",
+   "expected_bp": 432,
+   "found": true,
+   "ground_truth": "stated_in_source",
+   "loci_on_template": "single",
+   "multilocus_by_design": false,
+   "n_products": 1,
+   "name": "Alu Ye5AH13 insertion-site PCR (chr12)",
+   "organism": "Homo sapiens",
+   "panel": "line-sine",
+   "preworked_in_corpus": true,
+   "primer_degenerate": false,
+   "primer_fwd_as_published": "GTTATTTTGAAGGCTTGCTG",
+   "primer_rev_as_published": "TACGGGCTTACAGTGAATTT",
+   "product_sizes": [
+    432
+   ],
+   "scored_product_anneal_bp": [
+    20,
+    20
+   ],
+   "scored_product_tail_bp": 0,
+   "search_window_bp": [
+    28,
+    3825
+   ],
+   "source_confidence": "high",
+   "template_sha256": "2660f635e7c96e9e",
+   "tolerance_bp": 43.2,
+   "within_tolerance": true
+  },
+  {
+   "accession": "AC108730.7",
+   "caveats": "Dimorphic locus. Cited accession (BAC RP11-892D12, chromosome 3, 85,234 bp) carries the FILLED allele; expect 494 bp. The 175 bp empty allele is not in this accession. No degenerate bases; no junction-spanning primer. Verified by exact-string in-silico PCR: exactly one product, plus strand, 494 bp, containing the Ye-diagnostic 25-mer and canonical Alu motifs. Uniqueness checked within the cited accession only. Annealing temperature 55 C.",
+   "citation": "Salem AH, Ray DA, Hedges DJ, Jurka J, Batzer MA. Analysis of the human Alu Ye lineage. BMC Evolutionary Biology 2005;5:18. doi:10.1186/1471-2148-5-18. PMID 15725352; PMCID PMC554112.",
+   "closest_bp": 494,
+   "difference_bp": 0,
+   "elapsed_s": 0.215,
+   "element": "Alu Ye5 (SINE, non-LTR); Alu Ye lineage insertion polymorphism",
+   "expected_bp": 494,
+   "found": true,
+   "ground_truth": "stated_in_source",
+   "loci_on_template": "single",
+   "multilocus_by_design": false,
+   "n_products": 1,
+   "name": "Alu Ye5AH17 insertion-site PCR (chr3)",
+   "organism": "Homo sapiens",
+   "panel": "line-sine",
+   "preworked_in_corpus": true,
+   "primer_degenerate": false,
+   "primer_fwd_as_published": "GTATCTATTTGGAGCTCTCAGG",
+   "primer_rev_as_published": "CTTCCCTGCCTAGCTCTATT",
+   "product_sizes": [
+    494
+   ],
+   "scored_product_anneal_bp": [
+    22,
+    20
+   ],
+   "scored_product_tail_bp": 0,
+   "search_window_bp": [
+    28,
+    3825
+   ],
+   "source_confidence": "high",
+   "template_sha256": "c9b3f215a96345b6",
+   "tolerance_bp": 49.4,
+   "within_tolerance": true
+  },
+  {
+   "accession": "M58291.1",
+   "caveats": "1) The 485 bp figure is the REVERTANT (post-excision) product. The 717 bp transformant allele carries the mimp1 copy in niaD intron 1 inside engineered plasmid pNm1H18/pAN301 and is NOT represented in any public accession - do not expect 717 bp from M58291.1. 2) The reporter is an A. nidulans niaD gene deployed heterologously; the transposition experiment itself was run in Fusarium oxysporum, so the experimental host organism differs from the amplicon's template organism. 3) The paper reports 485 bp for a revertant, and excision footprints can in principle differ from wild type by a few bp; the exact, zero-mismatch 485 bp match against wild-type niaD is what makes this case externally verifiable. 4) No degenerate bases; neither primer spans a junction; single-locus, non-nested assay.",
+   "citation": "Dufresne M, Hua-Van A, Abd El Wahab H, Ben M'Barek S, Vasnier C, Teysset L, Kema GHJ, Daboussi M-J. Transposition of a fungal miniature inverted-repeat transposable element through the action of a Tc1-like transposase. Genetics. 2007;175(1):441-452. doi:10.1534/genetics.106.064360. PMID 17179071; PMCID PMC1775018.",
+   "closest_bp": 485,
+   "difference_bp": 0,
+   "elapsed_s": 0.014,
+   "element": "mimp1 (miniature inverted-repeat transposable element, MITE) mobilised in trans by the impala Tc1/mariner-family transposase",
+   "expected_bp": 485,
+   "found": true,
+   "ground_truth": "stated_in_source",
+   "loci_on_template": "single",
+   "multilocus_by_design": false,
+   "n_products": 1,
+   "name": "mimp1/impala niaD excision assay - revertant (excised) product",
+   "organism": "Aspergillus nidulans (organism of the amplicon's template, the niaD reporter gene)",
+   "panel": "tir-assays",
+   "preworked_in_corpus": false,
+   "primer_degenerate": false,
+   "primer_fwd_as_published": "GTTCATGCCGTGGTCGCTGC",
+   "primer_rev_as_published": "AGTTGGGAATGTCCTCGTCG",
+   "product_sizes": [
+    485
+   ],
+   "scored_product_anneal_bp": [
+    20,
+    20
+   ],
+   "scored_product_tail_bp": 0,
+   "search_window_bp": [
+    28,
+    3825
+   ],
+   "source_confidence": "high",
+   "template_sha256": "3f600cd61c0df7db",
+   "tolerance_bp": 48.5,
+   "within_tolerance": true
+  },
+  {
+   "accession": "CP000708.1",
+   "caveats": "Five-primer multiplex cocktail (AMOS-PCR): one IS711 primer at 1 uM plus four species-specific primers at 0.2 uM each, so the intended reaction is multi-primer, not a simple pair. The IS711 primer matches 17 sites on CP000708.1 (multi-locus by design); only one pairs productively with the B. ovis primer, which lies in the bcsp31/BCSP31K gene upstream of the B. ovis IS711 copy. Correct orientation is IS711 primer forward / B. ovis primer reverse. A second in-silico pair of 13,980 bp also exists on this template and would not amplify under the paper's 2-min extension. Independently verified: exact 976-bp product at 1175240..1176215 on CP000708.1, against a size the paper read from a 1.5% agarose gel versus a 100-bp ladder.",
+   "citation": "Bricker BJ, Halling SM. Differentiation of Brucella abortus bv. 1, 2, and 4, Brucella melitensis, Brucella ovis, and Brucella suis bv. 1 by PCR. J Clin Microbiol. 1994;32(11):2660-2666. doi:10.1128/jcm.32.11.2660-2666.1994. PMID 7852552.",
+   "closest_bp": 976,
+   "difference_bp": 0,
+   "elapsed_s": 5.197,
+   "element": "IS711 (IS711/IS6501 insertion sequence) - species-specific IS711 insertion-site PCR",
+   "expected_bp": 976,
+   "found": true,
+   "ground_truth": "stated_in_source",
+   "loci_on_template": "single",
+   "multilocus_by_design": false,
+   "n_products": 1,
+   "name": "Brucella AMOS-PCR, B. ovis product (IS711 insertion-site PCR)",
+   "organism": "Brucella ovis (type strain ATCC 25840, listed in Table 1 of the paper)",
+   "panel": "irap-remap",
+   "preworked_in_corpus": true,
+   "primer_degenerate": false,
+   "primer_fwd_as_published": "TGCCGATCACTTAAGGGCCTTCAT",
+   "primer_rev_as_published": "CGGGTTCTGGCACCATCGTCG",
+   "product_sizes": [
+    976
+   ],
+   "scored_product_anneal_bp": [
+    24,
+    21
+   ],
+   "scored_product_tail_bp": 0,
+   "search_window_bp": [
+    28,
+    3825
+   ],
+   "source_confidence": "high",
+   "template_sha256": "5862d88b072e74b5",
+   "tolerance_bp": 97.6,
+   "within_tolerance": true
+  },
+  {
+   "accession": "AE014291.4",
+   "caveats": "Same five-primer AMOS cocktail. The IS711 primer matches 5 sites on AE014291.4; only one pairs with the B. suis-specific primer. Orientation is IS711 primer forward / B. suis primer reverse; the product lies on chromosome I. This is the shortest product of the assay and the paper notes primer-dimer complexes below 100 bp under some conditions. Independently verified: exact 285-bp product at 1618671..1618955.",
+   "citation": "Bricker BJ, Halling SM. Differentiation of Brucella abortus bv. 1, 2, and 4, Brucella melitensis, Brucella ovis, and Brucella suis bv. 1 by PCR. J Clin Microbiol. 1994;32(11):2660-2666. doi:10.1128/jcm.32.11.2660-2666.1994. PMID 7852552.",
+   "closest_bp": 285,
+   "difference_bp": 0,
+   "elapsed_s": 5.333,
+   "element": "IS711 - species-specific IS711 insertion-site PCR",
+   "expected_bp": 285,
+   "found": true,
+   "ground_truth": "stated_in_source",
+   "loci_on_template": "single",
+   "multilocus_by_design": false,
+   "n_products": 1,
+   "name": "Brucella AMOS-PCR, B. suis bv. 1 product (IS711 insertion-site PCR)",
+   "organism": "Brucella suis biovar 1 (strain 1330, listed in Table 1 of the paper)",
+   "panel": "irap-remap",
+   "preworked_in_corpus": true,
+   "primer_degenerate": false,
+   "primer_fwd_as_published": "TGCCGATCACTTAAGGGCCTTCAT",
+   "primer_rev_as_published": "GCGCGGTTTTCTGAAGGTTCAGG",
+   "product_sizes": [
+    285
+   ],
+   "scored_product_anneal_bp": [
+    24,
+    23
+   ],
+   "scored_product_tail_bp": 0,
+   "search_window_bp": [
+    28,
+    3825
+   ],
+   "source_confidence": "high",
+   "template_sha256": "4a53c7288d6c4958",
+   "tolerance_bp": 28.5,
+   "within_tolerance": true
+  },
+  {
+   "accession": "AE008917.1",
+   "caveats": "Same five-primer AMOS cocktail. Here the productive orientation is the reverse of the B. ovis and B. suis cases: the B. melitensis-specific primer is the forward primer and the IS711 primer is the reverse. Measured in silico as 733 bp at 1209132..1209864 on AE008917.1, i.e. 2 bp above the paper's gel estimate of 731 bp - agarose-gel resolution, not a mismatch, since strain 16M is the exact strain the paper tested. Useful precisely because the expected value is gel-derived and therefore genuinely independent of the template sequence. The IS711 primer matches 5 sites on AE008917.1; only one pairs with the B. melitensis primer.",
+   "citation": "Bricker BJ, Halling SM. Differentiation of Brucella abortus bv. 1, 2, and 4, Brucella melitensis, Brucella ovis, and Brucella suis bv. 1 by PCR. J Clin Microbiol. 1994;32(11):2660-2666. doi:10.1128/jcm.32.11.2660-2666.1994. PMID 7852552.",
+   "closest_bp": 733,
+   "difference_bp": 2,
+   "elapsed_s": 5.368,
+   "element": "IS711 - species-specific IS711 insertion-site PCR",
+   "expected_bp": 731,
+   "found": true,
+   "ground_truth": "stated_in_source",
+   "loci_on_template": "single",
+   "multilocus_by_design": false,
+   "n_products": 1,
+   "name": "Brucella AMOS-PCR, B. melitensis product (IS711 insertion-site PCR)",
+   "organism": "Brucella melitensis biovar 1 (strain 16M, listed in Table 1 of the paper)",
+   "panel": "irap-remap",
+   "preworked_in_corpus": true,
+   "primer_degenerate": false,
+   "primer_fwd_as_published": "AAATCGCGTCCTTGCTGGTCTGA",
+   "primer_rev_as_published": "TGCCGATCACTTAAGGGCCTTCAT",
+   "product_sizes": [
+    733
+   ],
+   "scored_product_anneal_bp": [
+    23,
+    24
+   ],
+   "scored_product_tail_bp": 0,
+   "search_window_bp": [
+    28,
+    3825
+   ],
+   "source_confidence": "high",
+   "template_sha256": "f01723313e6a2c09",
+   "tolerance_bp": 73.1,
+   "within_tolerance": true
+  },
+  {
+   "accession": "AF118569.1",
+   "caveats": "Template substitution: the paper cites EMBL X62855 as the sequence it worked from, but X62855.1 is only 1856 bp and stops 36 bp short of the reverse-primer site (the forward primer matches at 1403 and the I-allele amplicon would run 1403..1892), so X62855 cannot serve as the template. AF118569.1 was substituted and does carry the insertion allele. Size discrepancy: 490/190 are gel estimates and are internally inconsistent with the paper's own 287-bp Alu; the sequence-derived lengths on AF118569.1 are 480 bp (filled, at 14044..14523) and 193 bp (empty). expected_amplicon_bp is reported as the paper's 490, not the measured 480. Text-layer note: the PDF renders the sense oligo as 'CTGGAGACCACTCCCATCC1TT-CT'; the '1' is an OCR artifact for T, confirmed by the exact single-site genomic match at the ACE intron 16 locus. Both primers have exactly one site on AF118569.1.",
+   "citation": "Rigat B, Hubert C, Corvol P, Soubrier F. PCR detection of the insertion/deletion polymorphism of the human angiotensin converting enzyme gene (DCP1) (dipeptidyl carboxypeptidase 1). Nucleic Acids Res. 1992;20(6):1433. doi:10.1093/nar/20.6.1433-a. PMID 1313972; PMCID PMC312213.",
+   "closest_bp": 480,
+   "difference_bp": -10,
+   "elapsed_s": 0.062,
+   "element": "Alu element (SINE), 287 bp, inserted in intron 16 of the ACE/DCP1 gene at 17q23",
+   "expected_bp": 490,
+   "found": true,
+   "ground_truth": "stated_in_source",
+   "loci_on_template": "single",
+   "multilocus_by_design": false,
+   "n_products": 1,
+   "name": "Human ACE (DCP1) intron 16 Alu insertion/deletion polymorphism (the classic ACE I/D assay)",
+   "organism": "Homo sapiens",
+   "panel": "irap-remap",
+   "preworked_in_corpus": true,
+   "primer_degenerate": false,
+   "primer_fwd_as_published": "CTGGAGACCACTCCCATCCTTTCT",
+   "primer_rev_as_published": "GATGTGGCCATCACATTCGTCAGAT",
+   "product_sizes": [
+    480
+   ],
+   "scored_product_anneal_bp": [
+    24,
+    25
+   ],
+   "scored_product_tail_bp": 0,
+   "search_window_bp": [
+    28,
+    3825
+   ],
+   "source_confidence": "medium",
+   "template_sha256": "815dbcb87ac9fb3d",
+   "tolerance_bp": 49.0,
+   "within_tolerance": true
+  },
+  {
+   "accession": "L39390.1",
+   "caveats": "VERBATIM NOTE: the forward and reverse primers are printed inside a SINGLE Table 1 cell as two lines (forward above reverse, separated by a line break in the published layout / a <break/> element in the JATS full text). The split was taken at that printed line break; the in-silico product landing at exactly the printed 102 bp independently confirms the split is correct. TEMPLATE: L39390 flat file records mol_type=\"genomic DNA\", organelle=\"plastid:chloroplast\", with ndhF annotated as a single uninterrupted CDS 1..2226 - so there is no splicing consideration at all and the assay behaves identically on cDNA and on chloroplast DNA. This is the cleanest case in the set. In-silico check: forward matches once at position 510, reverse-complement of the reverse primer matches once ending at 611; product 510..611 = 102 bp, exact match, no alternative products. The paper states all primer pairs amplified a single PCR product of the expected size and that cloned amplicons were sequenced; NADHD was NOT among the genes flagged as differing from the GenBank design sequence (only ACT/EF at 1 bp and H3 at 18 bp were). Chloroplast is high-copy in vivo, but the locus is single-copy within this accession.",
+   "citation": "Maroufi A, Van Bockstaele E, De Loose M. Validation of reference genes for gene expression analysis in chicory (Cichorium intybus) using quantitative real-time PCR. BMC Mol Biol. 2010;11:15. doi:10.1186/1471-2199-11-15. PMID 20156357; PMCID PMC2830926.",
+   "closest_bp": 102,
+   "difference_bp": 0,
+   "elapsed_s": 0.007,
+   "element": "Non-TE control assay. Chloroplast ndhF (NADH dehydrogenase subunit F) used as a candidate RT-qPCR reference gene.",
+   "expected_bp": 102,
+   "found": true,
+   "ground_truth": "stated_in_source",
+   "loci_on_template": "single",
+   "multilocus_by_design": false,
+   "n_products": 1,
+   "name": "Chicory chloroplast ndhF (NADHD) reference-gene RT-qPCR assay",
+   "organism": "Cichorium intybus (chicory), chloroplast genome",
+   "panel": "controls",
+   "preworked_in_corpus": true,
+   "primer_degenerate": false,
+   "primer_fwd_as_published": "TGCAGCAAAGGCTTGTCAAA",
+   "primer_rev_as_published": "TCGAAACTTCCCGTTATCCAA",
+   "product_sizes": [
+    102
+   ],
+   "scored_product_anneal_bp": [
+    20,
+    21
+   ],
+   "scored_product_tail_bp": 0,
+   "search_window_bp": [
+    28,
+    3825
+   ],
+   "source_confidence": "high",
+   "template_sha256": "f3f453ca24d909e0",
+   "tolerance_bp": 20.0,
+   "within_tolerance": true
+  },
+  {
+   "accession": "AF101419.1",
+   "caveats": "VERBATIM NOTE: same Table 1 layout as the ndhF case - forward and reverse are two lines inside one cell, split taken at the printed line break; confirmed by the exact 101 bp in-silico match. TEMPLATE: AF101419.1 is \"Cichorium intybus beta-tubulin mRNA, partial cds\" - an mRNA/cDNA record, so this assay is cDNA-only; the paper does not establish genomic behaviour and any intron position in the chicory TUB gene is unknown. In-silico check: forward matches once at 118, reverse site once ending at 218; product 118..218 = 101 bp, exact, no alternative products. TUB was not among the genes the paper flagged as differing from its GenBank design sequence.",
+   "citation": "Maroufi A, Van Bockstaele E, De Loose M. Validation of reference genes for gene expression analysis in chicory (Cichorium intybus) using quantitative real-time PCR. BMC Mol Biol. 2010;11:15. doi:10.1186/1471-2199-11-15. PMID 20156357; PMCID PMC2830926.",
+   "closest_bp": 101,
+   "difference_bp": 0,
+   "elapsed_s": 0.0,
+   "element": "Non-TE control assay. Nuclear beta-tubulin used as a candidate RT-qPCR reference gene.",
+   "expected_bp": 101,
+   "found": true,
+   "ground_truth": "stated_in_source",
+   "loci_on_template": "single",
+   "multilocus_by_design": false,
+   "n_products": 1,
+   "name": "Chicory beta-tubulin (TUB) reference-gene RT-qPCR assay",
+   "organism": "Cichorium intybus (chicory)",
+   "panel": "controls",
+   "preworked_in_corpus": true,
+   "primer_degenerate": false,
+   "primer_fwd_as_published": "GCACGGCATTGATGTGACC",
+   "primer_rev_as_published": "GAACAAACCTCCCGCCACT",
+   "product_sizes": [
+    101
+   ],
+   "scored_product_anneal_bp": [
+    19,
+    19
+   ],
+   "scored_product_tail_bp": 0,
+   "search_window_bp": [
+    28,
+    3825
+   ],
+   "source_confidence": "high",
+   "template_sha256": "b7f11bbc7fd775a2",
+   "tolerance_bp": 20.0,
+   "within_tolerance": true
+  },
+  {
+   "accession": "BU693999.1",
+   "caveats": "ASSAY FORMAT: this is a TaqMan assay; the internal MGB probe (CTGATCATTGGAAACCT, Table 1) sits inside the amplicon and does not affect the 96 bp primer-to-primer product. SPLICING: the paper explicitly states exon-exon borders \"were not considered\" when designing the S20 and GAPDH assays, so 96 bp is established on this cDNA/EST template only - whether the primers also amplify from genomic DNA, and at what size, is simply NOT established by the paper (this is different from a known intron-spanning assay). TEMPLATE: BU693999.1 is an Atlantic salmon eye cDNA library EST (796 bp), i.e. cDNA, not genomic. In-silico check: forward matches once at 230, reverse site once ending at 325; product 230..325 = 96 bp, exact, no alternative products.",
+   "citation": "Olsvik PA, Lie KK, Jordal AEO, Nilsen TO, Hordvik I. Evaluation of potential reference genes in real-time RT-PCR studies of Atlantic salmon. BMC Mol Biol. 2005;6:21. doi:10.1186/1471-2199-6-21. PMID 16293192; PMCID PMC1314898.",
+   "closest_bp": 96,
+   "difference_bp": 0,
+   "elapsed_s": 0.007,
+   "element": "Non-TE control assay. Glyceraldehyde-3-phosphate dehydrogenase (GAPDH) evaluated as a real-time RT-PCR reference gene.",
+   "expected_bp": 96,
+   "found": true,
+   "ground_truth": "stated_in_source",
+   "loci_on_template": "single",
+   "multilocus_by_design": false,
+   "n_products": 1,
+   "name": "Atlantic salmon GAPDH TaqMan reference-gene assay",
+   "organism": "Salmo salar (Atlantic salmon)",
+   "panel": "controls",
+   "preworked_in_corpus": true,
+   "primer_degenerate": false,
+   "primer_fwd_as_published": "AAGTGAAGCAGGAGGGTGGAA",
+   "primer_rev_as_published": "CAGCCTCACCCCATTTGATG",
+   "product_sizes": [
+    96
+   ],
+   "scored_product_anneal_bp": [
+    21,
+    20
+   ],
+   "scored_product_tail_bp": 0,
+   "search_window_bp": [
+    28,
+    3825
+   ],
+   "source_confidence": "high",
+   "template_sha256": "f82e6498a1ca1f66",
+   "tolerance_bp": 20.0,
+   "within_tolerance": true
+  },
+  {
+   "accession": "AF321836.1",
+   "caveats": "ASSAY FORMAT: TaqMan; internal MGB probe ATCGGTGGTATTGGAAC lies inside the amplicon and does not change the 57 bp primer-to-primer product. SPLICING - IMPORTANT AND DIFFERENT FROM THE GAPDH CASE: these primers FLANK an intron. The paper states the exon-exon borders were deduced by alignment with zebrafish and that \"The chosen primers were subsequently used to confirm that the salmon genes contained an intron between the same sites... The PCR products containing the introns were cloned into TOPO vector and sequenced.\" So on genomic DNA this pair yields 57 bp PLUS the intron; the 57 bp ground truth applies to cDNA/mRNA template (AF321836.1, \"Salmo salar elongation factor 1 alpha mRNA, complete cds\", 1445 bp). SIZE: at 57 bp this is the short-amplicon end of the set. In-silico check: forward matches once at 800, reverse site once ending at 856; product 800..856 = 57 bp, exact, no alternative products. EF1A is a two-paralogue system in salmon (EF1AA/EF1AB); the EF1AB assay in the same table uses a different, overlapping primer pair, so cross-paralogue priming should be considered if the engine is run against a whole-transcriptome target rather than this single accession.",
+   "citation": "Olsvik PA, Lie KK, Jordal AEO, Nilsen TO, Hordvik I. Evaluation of potential reference genes in real-time RT-PCR studies of Atlantic salmon. BMC Mol Biol. 2005;6:21. doi:10.1186/1471-2199-6-21. PMID 16293192; PMCID PMC1314898.",
+   "closest_bp": 57,
+   "difference_bp": 0,
+   "elapsed_s": 0.004,
+   "element": "Non-TE control assay. Elongation factor 1 alpha paralogue A (EF1AA) evaluated as a real-time RT-PCR reference gene.",
+   "expected_bp": 57,
+   "found": true,
+   "ground_truth": "stated_in_source",
+   "loci_on_template": "single",
+   "multilocus_by_design": false,
+   "n_products": 1,
+   "name": "Atlantic salmon elongation factor 1A-A (EF1AA) TaqMan reference-gene assay",
+   "organism": "Salmo salar (Atlantic salmon)",
+   "panel": "controls",
+   "preworked_in_corpus": true,
+   "primer_degenerate": false,
+   "primer_fwd_as_published": "CCCCTCCAGGACGTTTACAAA",
+   "primer_rev_as_published": "CACACGGCCCACAGGTACA",
+   "product_sizes": [
+    57
+   ],
+   "scored_product_anneal_bp": [
+    21,
+    19
+   ],
+   "scored_product_tail_bp": 0,
+   "search_window_bp": [
+    28,
+    3825
+   ],
+   "source_confidence": "high",
+   "template_sha256": "bfb0d630b1dfcc73",
+   "tolerance_bp": 20.0,
+   "within_tolerance": true
+  }
+ ],
+ "search_window_bp": [
+  28,
+  3825
+ ],
+ "shortest_trimmed_core_bp": 24,
+ "single_locus_cases": 16,
+ "single_locus_concordant": 16,
+ "teagle_version": "3.6.0",
+ "trimmed_cases": [
+  "BARE1/BARE2 genomic amplification with LS1 + AP4"
+ ]
+}

@@ -1,0 +1,17 @@
+﻿Tool,Version,Input,Structural,Domains,Family,Wicker,Abstains,Confidence,Primers,isPCR,Off-target,Provenance,GUI,Offline
+TEagle,3.6.0,single element,yes,yes,partial,yes,yes,yes,yes,yes,yes,yes,yes,yes
+RepeatMasker,4.2.4,both,no,partial,yes,partial,no,partial,n.a.,n.a.,n.a.,no,partial,yes
+RepeatModeler2,2.0.9,whole genome,partial,partial,yes,partial,no,no,n.a.,n.a.,n.a.,no,no,yes
+EDTA,v2.3.0,whole genome,yes,partial,yes,yes,no,partial,n.a.,n.a.,n.a.,no,no,yes
+Earl Grey,v7.3.0,whole genome,yes,n.d.,yes,partial,no,partial,n.a.,n.a.,n.a.,no,no,partial
+TEsorter,v1.5.1,both - ELEMENT mode,no,yes,no,yes,no,partial,n.a.,n.a.,n.a.,partial,no,yes
+DANTE (and DANTE_LTR),"Paper-cited: DANTE v0.1.9, DANTE_LTR v0.3.5","both, but split by component. DANTE",partial,yes,yes,yes,partial,yes,n.a.,n.a.,n.a.,partial,partial,yes
+TEclass2,no versioned release tag found on GitHub,single element/locus only - operates on individual FASTA-formatted TE consensus sequences/models; not designed to scan a whole genome assembly,no,no,no,partial,no,yes,n.a.,n.a.,n.a.,n.d.,yes,yes
+PASTEC (REPET package),REPET 2.2 standalone package,single element/locus only - classifies TE consensus sequences,partial,yes,yes,yes,partial,yes,n.a.,n.a.,n.a.,n.d.,no,yes
+LTR_retriever,v3.0.5,both,partial,yes,no,yes,no,no,n.a.,n.a.,n.a.,no,no,yes
+LTRharvest (GenomeTools),GenomeTools v1.6.6,whole genome or any multi-FASTA sequence set,yes,no,no,n.a.,no,partial,n.a.,n.a.,n.a.,no,no,yes
+LTR_FINDER,"binary v1.0.7, as bundled by third-party wrappers",both,yes,yes,partial,n.d.,no,yes,n.a.,n.a.,n.a.,n.d.,partial,yes
+HelitronScanner,V1.0,both,partial,no,no,partial,no,yes,n.a.,n.a.,n.a.,n.d.,no,yes
+MITE-Hunter,201111,whole genome,yes,no,no,partial,no,no,n.a.,n.a.,n.a.,n.d.,no,yes
+Primer3,v2.6.1,single element/locus,n.a.,n.a.,n.a.,n.a.,yes,yes,yes,no,partial,partial,partial,yes
+NCBI Primer-BLAST,continuously-updated web service; no discrete version number is published. Consulted Aug 2026.,single locus for the primer-design input; whole-genome/whole-database scope for the specificity check,n.a.,n.a.,n.a.,n.a.,n.d.,partial,yes,yes,yes,n.d.,yes,no

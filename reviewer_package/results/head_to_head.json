@@ -1,0 +1,5394 @@
+{
+ "modes": {
+  "default": {
+   "n_considered": 115,
+   "n_paired": 82,
+   "n_excluded": 33,
+   "input_identity": {
+    "method": "SHA-256 over the residues of the FASTA run_tesorter.py handed to TEsorter (raw/tesorter/_work/<accession>.fa, re-read from disk) compared with SHA-256 over the sequence TEagle analysed (raw/teagle/*.json -> result.records[0].seq)",
+    "n_checked": 115,
+    "n_input_residues_verified_identical": 115,
+    "n_input_residues_mismatched": 0,
+    "n_unverifiable": 0,
+    "unverifiable_reasons": {},
+    "recorded_fetch_sha256_agrees": 115,
+    "recorded_fetch_sha256_differs": 0,
+    "recorded_fetch_sha256_unavailable": 0,
+    "n_accessions_with_multiple_distinct_inputs": 0,
+    "per_case": [
+     {
+      "accession": "AB014676",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "652e206e3d6460fb944e7bac2a9028c068d9f5fd2b381ff80fda0a17545bf4a6",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AB076841",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "66fe71830d12da6697d0274be5802d61e3981b7e20bcddc98d34d344a616aea8",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AB087615.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "a5b9deca6107cd01f057d59f6b443608a9c845c2bae1b2f550f623687882c5f8",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AB111101",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "47bf4d9be6e1bf2f070efb8aa1aa9c78e32e51a7f82174156bf1198d0bc52595",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AB305073",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "455aacb3b8f8d2d9fddd45ffbb54b51af8915af87851571cd6a129b5111283a4",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AB705392",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "07505c471152cf270706b251a2c4c2467bf50a878d29f7658ead146ccf32c454",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AB705393",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "164a58b2b9dd6bb004add624448f75729840ce049db87e88573ae6f8285ac8bb",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AC002474",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "eaac7cf70bbc24fd70a083c0090a07463fbc2f249b180f2db643001d98ebfdc2",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AC005333",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "769a02ef0e8224ef4676ff479461bfb812ff5a2f9bb2901105c2aed7e35d9c9e",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AC005847",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "70dee8dc984e6cd1101464b4011b6e88edfcd67a1c43edae2b070cec891e4053",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AC005860",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "bfc2452116f1ae14dcd314c93aa78be103dc2e3128395983166dbb7bb43fe229",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AC006303",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "4777a72c2bfae8a30839e8de50fc280cf1cfbbaad029295093d439910cdc876e",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AC007146",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "b90ffecb60661cd8aa618d3daa3fa7a61895f88046201a77ce6787f808285603",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AE003082",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "ba71f72b170a414e163c703d32afb263b872b9b96fc84341113feb2124409a82",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AE003419",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "9ea4ee07506fb0aad54b5aa9f9eae37618dc14dd9a28b39d56fd20c030f3d457",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AE003599",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "3f1251908995784ac953dbe8bb522695f17abc8956abb8c5ab2f848f45533855",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AE003638",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "68c561e1735a516e86d19aa7abe3027bf0d883b46bd3e3523fcf3c5176345879",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AE003778",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "b6a7dca40a809ce8f9114bec50b45a49fa7d8bca9d3759fe4613d5f3ee2d4759",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AF016099",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "514aa9af8ff852da716ef192a49dd34a2ec1804cd26b57a3588229e4faa847af",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AF018167",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "860e26ae3d29266b8d214a91c31be56f0ad0d91477997213da8fc2ee7f78eabd",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AF049110",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "3e7ffeabe6bcb2b28cd0e0326da2052a958cf32159a2093ce1efbfe4c93db0de",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AF050455",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "4beb48096ed652222baef61931526c3288f5791f5c08da77ae7f5d20374c73f4",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AF051915",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "2d705bdbc445968d3ab4fbd2f97ad1b58bf9ec14be736b95fb13dbce1d530f0e",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AF053008",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "912fe34e54c2f41463e014db7ff8ec4a45c297d76a15a64d8b5a32f3cc0e4da4",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AF054983",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "1d765270c28605a64cd7ef8f36584b846d336426ea5a25c06f03ca1daed22e0f",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AF104899",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "946cb7b1fdd56d754d9ed50a3ed5d105359dad9b984e69e83d20aebb07698f6b",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AF116598",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "167ec1d5034776c5c214a2c27a76f710f888792da94017793bf33a917aea29cb",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AF123535",
+      "teagle_records": 6,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "2195c901e41a6a70fc921a0ba13d2cdf8bcbc383a48c73072cca1b8b2b5c6e8f",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AF148856",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "7a9e70d46d32d959e6232d5d7956d0a23a8c5b02aae8c54d4dc0aa54a58ef17d",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AF151794",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "72ed52347acc02024a8a73c0f8c9b15d094991d4f333a0c1947e9f0d8e91e723",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AF164611",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "106608f2c0c9c6725848ca7674f74ac2192c844b0fafdbb8df05611820301b09",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AF228550",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "b40bb6fc28ad94b9ceae63dc728f432af80f65ea591583531d3c5ff1bc2e320e",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AF247646.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "21c0470c8338a239b98702a04770c09ce9709db5bce1d9526bd9b52494d0d7f7",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AF387862",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "3fe29c682fd681de9e52de0b56bcf27304c019c415c105df75d867267ed10dc4",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AF391808",
+      "teagle_records": 8,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "651253040441eeeea1e2934832bb0c0749be15a306e843c97836574f10de7fce",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AJ000387",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "8baea349bb4766f7f1bea2db834d3d259bde50a129c5380b9b21b46c329fddbc",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AJ004945",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "f20756834607cf20f8a9ea185c064a524f9453747e3f25eb6598e28e7ffbbcaa",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AJ009736",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "c36ae310c94aa92d2c36c60d2cba7b98ff82a1b6035e73ef3ab331bebf44b0de",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AJ133521",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "c8c6d5c5a5fe498b3a38632b6bebe14c4c261505df97f1dd4e8c6d53615b3dbd",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AJ291355",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "c9e0746c6fbc46ed0618a61f756e5c45b4a8b67a3fde7e92b9341b281ffd6b0f",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AM493772.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "953f684169088d6ae1a5041f3d91bd295aba055d26317626f44769b4db0e99af",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AY032740",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "67dec25ebfc8ac6545d5c76d12b20532c1ea0bdaeca1598c7a21121556879cb1",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AY037928",
+      "teagle_records": 2,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "cc0723e25430a9f93d50bce581f5a59eb566a1c0c3fcdec6c2fe15c535be9db4",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AY037929",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "299e38d9d453b1fcc52ad70fa340710beb92f045030d9733a3f15d93473be0d2",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AY101584",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "187efb59029d96da2d6db7185571bf6f2c5c0da0038a4bd071b82a5c19aa8d1e",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AY101587",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "796782e904943956ce3b5df145e4e103552b70d171004ad7a439d46fa1f6e341",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AY884861",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "68d611b0b7c51a6badac882eabded1caba6df6995bc25a56fee492c74ce01fe8",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "AY884862",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "a3df7f39e07ea1af0c2c6970638472b20dbda50ed7d0bad15ef2725471ff8b8f",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "D10032",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "9d7f5f46927041357686a6d0bfea0b86fc279fe2e911689dfe56553d884c832f",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "D76434",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "61f8a719e6dacae46a01d92853a50657277bfd17d0c406cde0447f9caa39d438",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "DQ394069",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "042c1278de3eba3ec7cc6a57135ed49b13e78457b093001a19c197d8e5863bd9",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "DQ838493",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "6d68f35907a64ca51c18b6afb3d8fe1365cd3da06873d4adfdf900282bd99186",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "EU190440.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "d1fe4991e05d9b43f03d3df84bcc15b5db4b30820204d33413ee7fd3e45976b3",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "EU812120",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "0a05f8436805b4ddfa67a90e9d678993788c17d5a33f00ebc8d6edd7f057b76d",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "EU862277",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "560a783c2a45b3aaf0ec000814ba0cf9070a66962ab446189d4f45619afc2cf3",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "FJ173819",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "c6ebdbd511285e3b3e8af48cb7ac508f463102b449acc3ba39b326c28ad9378a",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "GU817319",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "a7e245281416ce7d8a3a34071d3f3df412fb60b4fc3475362e2a0acf74a7682a",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "HM159246",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "9da5d40085c178c850775c36d8fdca27d46c498d663bd2f3136beb32f52b9496",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "J01050",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "3a2390295b9a058cfd2fcc4ec9dd77a6e048a142191850cebee9880ccf942b0d",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "J01998",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "cf55f07d1f18b5ce4b61a001480a623e775e1ceff97be002cfd23fc0f36e58ee",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "J04364.2",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "e436117a49aee773ef42240464e8fffc8d039203c2cd26c7f76ebf4abcf8ee86",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "JX294476.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "b7bade3d640e88a2645d63f0467a79226da8a6738b3b00c1facb5b9a73c69b22",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "KF287636.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "0c1ef6c88d6fe9ca5441e1b9059333f3a70d54108336f06cba6189f7dd229aed",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "L34658",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "c64ce56a4af2c9ec93679b6e3d21dfa8617c4cc893e0f1e7325e383f73200c18",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "L34807.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "f1fbebf5ace80ba92cd451359a7cf88f7cc59c92f76e2011a2d95cbd7d987574",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "L35053",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "12019cab8817e680b642af846878a12e6a5610dce7bb0709b0624d156b9445c8",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "M14123",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "9b18022cf7dcdeb96a89d464a8ce490e0ed16f05f237c8881c05a8396ad28eec",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "M14954",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "c9547d4bbc35e4b7e514dcce795c13dd373f9696987f5ce493800fcde9ade394",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "M17551",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "2d93e5a74cd2f99699ad85dd9ca431bf31e17241789d05a80cb4fd70e66f5ce1",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "M18706",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "c69db21d2bd6fe077a5e1d053306e4c21a8894bdf5390ce3268787da64f9f5e8",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "M22333",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "de6d5bede6f8534ba8307506068d2f155634ff57b77f370570764bf7adc733b9",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "M22334",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "2919c2b9cbe2e7846ecadaf2aaa0f3740def02572fa1c3fc71ce47beafc0ce50",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "M22874",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "12f73a4b1b6423c5b823bff9fcd87519c04af2b86264a2a10b8b3ea8fd9bdddb",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "M77661",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "53bfe983a3c849df0250a248af89694661aad1e802044228d43a928f0ec125f8",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "M94164",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "68a246aa0a90353139c0448302d29d34d4b15b3c20cc42ad2bb36dbcd8f35981",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "MH626576",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "b83e865d7a815a597610e85c18a7284135a18c838d15bb87678e079a37cda206",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "NC_000003.11",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "a51b7cef8b066512d465510b1b68fd5989955b666eed8ed9d4821d8bfa5c1529",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "NC_000005.9",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "346d745c0681a9382679b4579630502b5f247e149a14e4f41b78183947ffcb86",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "NC_000008.10",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "851a7407b3a5b86d040163cd69da2c25205f31b9dff92a71316fd57890d0e60b",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "NC_000913.3",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "5b59ab3503bbd2606c20ea1e1d2397fd81779d1b291a3791d4d2bf36c82a352e",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "NC_001138.5",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "03dc67661cc10cd1c4afcf19601a13c7289942e1c9456db4d688d8471d3b7fd6",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "NC_001140.6",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "b4cf302d2f8c6520d2a7b19a39b7eec0eaaebe39b4e87b624ccd9dcdb7fb8f8a",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "NG_008718",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "2a5cc1d9a04e723b1e8422da8640aaebf7e5db352f66a29fe3fe4450901c9156",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "OR000399",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "0a5a5b860c239f0e7d61b509c5e530ace129b1c1c31dbd345d9758530e5a88bd",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "U01317",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "94d2f095f465554346e77a6e601e526a7eda95d2df071401024241ce3eff1338",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "U11059",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "9c82fc981d64edae7b40fc460769625e1f3e9007301d51e504debcd03b87f729",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "U15406",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "ffeb966f1f74177c2c1cbb9077a2187d8fc5b69dfe596263113d924e11ec5d33",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "U29445",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "2154fe742d31b17ac002dc096cb630303f797aaf10ed0680e6ea86d164fe7c66",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "U41998",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "f8a52cb2e95ba9b0710edd7b381b956d9391d39e3526990960a5670f97465514",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "U50902",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "12238c50c572cb0048167c9d0b073cc9c4bb1e1b677632cce8d7a96952e090a4",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "U68408",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "959593eb96dcc3052247ddc2787ca0aebaa8fe4b3091bfe8806b34c003505b4b",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "U69258",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "c35b6c40ea5dae00c2961db2cf3c0de97350768d042bfdb18abfd5048f8143a2",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "U85505",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "a061cd835402b4167bb74620892d716f3efaea9532284703c149f71bca0da588",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "X02599",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "eb05bf5db78cd2f757fec4aae3a425a49f20f118c0171bc1a76d4b6c3b950e97",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "X03431",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "0865c1aad869e7c62657e10f948bc372354f9c6e14c3a9a5106890a4848e01de",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "X04705.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "b1d2536aa0da1f9f7fff1e32960c54eef3b9028a6305cc9e70de988e7ade8bc7",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "X06590.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "e4093603bb230b9103683788d1a61ed0a8c26fd15261b0689c1c5aec89aa2233",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "X06779.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "6f952becb481c6061115ffd7a3c7f3fddeed05de7175c4a22c792b6a169052fe",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "X07656",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "ebad1b4e61ce7d58ee99b9db0b10ab6d05b9042bfb9e0a5484f2b985359ac369",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "X07685",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "8414fcf8888ebd79006cf260b1a577f5ab6b8f3df8e720d17886e1508ab9a967",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "X13291",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "f80b846ad93e38839a03be477ba02739174fde6a316e7e24e367f7ba91c098c0",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "X13777",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "343fc3d51093104bd17ef041da8f0ab5371e16897bc5152854fc784d09a8b804",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "X51968",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "3ebdfeff69cb82fe23f9ce04efa8174319c23e967f342596eaffa19f0d985b94",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "X52387",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "6cf63cee7e9d1cff69763bf46bc4775197fb702dae6fe4dde2f6133900d676ba",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "X55078.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "0a00d2a8305463cf7a253c88a8e9dde390518d53d564168c4c435827bb7c82cb",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "X57168",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "469f99916b52b319982b5a51167d446f9a0e956fa9d0fb05474c49e30a3c8608",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "X57297.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "ebd33b2f6c2f46514d67b47c16f7875191bcd5743cd3364f1189e8ebd0ca8fbc",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "X59545",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "7313c8a8452b1e1d545077567f514764d1b066b993a960b68bd7c0b33a319196",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "X61378",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "4b1325db7f88b60198a01e7628145096de6cd66afc27c5b649532fa5661e7d5c",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "X61695.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "5a6aae4ceca5aa6ba48301f84a7a633d9d06be0c23ab6809678397028157dacb",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "X74338",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "96cd5cd984a47122286185cc2ad0d7a3fd4ceb66a003015914dd5fd601e6c059",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "X78906.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "e6cdb52c5433044e3301e4c8ccc7724be1f5ae5553c50d3b62a18c47e4718b8c",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "X81801",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "fa8f8f4173003bc123db67989c37c4dd0d5bf3f638d5b302e21b0659885347bf",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "X93507",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "6ba15d65f5b4ecd6aae82b8190b02ec6490eadb5f39cd9f1b5a03e6cf9617c68",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     },
+     {
+      "accession": "Z17327",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "9c4012b471439096cc22d2eb894a4c4a5522d72c76ea3a1e347bc57ef6c7fa1c",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "default"
+     }
+    ]
+   },
+   "input_sha_mismatches_excluded": 0,
+   "excluded": {
+    "n_excluded": 33,
+    "by_reason": {
+     "not_scored_as_single_element": 21,
+     "negative_control": 11,
+     "expected_order_outside_vocabulary": 1
+    },
+    "negative_controls": {
+     "n": 11,
+     "teagle_incorrect_order_calls": [
+      {
+       "accession": "AF018167",
+       "called": "LINE",
+       "te_class": "LINE",
+       "confidence": "Moderate"
+      }
+     ],
+     "tesorter_incorrect_order_calls": [
+      {
+       "accession": "U50902",
+       "called": "LINE",
+       "database": "rexdb"
+      }
+     ],
+     "n_teagle_incorrect": 1,
+     "n_tesorter_incorrect": 1
+    },
+    "expected_order_outside_vocabulary": {
+     "n": 1,
+     "ungradable_order_calls": [
+      {
+       "accession": "EU812120",
+       "teagle": "NO_CALL",
+       "tesorter": "LTR"
+      }
+     ]
+    },
+    "not_scored_as_single_element": {
+     "n": 21,
+     "cases": [
+      {
+       "accession": "AB111101",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 13497 bp record was analysed",
+       "tesorter": "NO_CALL"
+      },
+      {
+       "accession": "AC002474",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 44834 bp record was analysed",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AC005333",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 94797 bp record was analysed",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AC005847",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 268369 bp record was analysed",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AC005860",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 83099 bp record was analysed",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AC006303",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 49804 bp record was analysed",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AC007146",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 164907 bp record was analysed",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AE003082",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 20167 bp record was analysed",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AE003419",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 306598 bp record was analysed",
+       "tesorter": "NO_CALL"
+      },
+      {
+       "accession": "AE003599",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 250029 bp record was analysed",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AE003638",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 254309 bp record was analysed",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AE003778",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 225974 bp record was analysed",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AF016099",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 9278 bp record was analysed",
+       "tesorter": "LINE"
+      },
+      {
+       "accession": "AF123535",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 160480 bp record was analysed (NOT APPLICABLE without an assembly (huck_334B07-2: complement(50734..63094) within AF123535) - whole record used)",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AF391808",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 225984 bp record was analysed",
+       "tesorter": "NO_CALL"
+      },
+      {
+       "accession": "FJ173819",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 17652 bp record was analysed (NOT APPLICABLE without an assembly (complement(3902..12543) within FJ173819 [3' LTR complement(3) - whole record used)",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "GU817319",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 113605 bp record was analysed (NOT APPLICABLE without an assembly (RLG_Fatima_2383A24-3: 102723..112683 within GU817319 (5' LTR) - whole record used)",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "NC_000003.11",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 198022430 bp record was analysed (NOT APPLICABLE without an assembly (chr3:9,889,346-9,896,236 (GRCh37/hg19)) - whole record used)",
+       "tesorter": "NO_CALL"
+      },
+      {
+       "accession": "NC_000005.9",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 180915260 bp record was analysed (NOT APPLICABLE without an assembly (chr5:30,487,114-30,496,205 (GRCh37/hg19)) - whole record used)",
+       "tesorter": "NO_CALL"
+      },
+      {
+       "accession": "NC_000008.10",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 146364022 bp record was analysed (NOT APPLICABLE without an assembly (chr8:47,175,650-47,183,661 (GRCh37/hg19)) - whole record used)",
+       "tesorter": "NO_CALL"
+      },
+      {
+       "accession": "OR000399",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 5418 bp record was analysed",
+       "tesorter": "LINE"
+      }
+     ]
+    },
+    "cases": [
+     {
+      "accession": "AB111101",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 13497 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "NO_CALL",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AC002474",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 44834 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AC005333",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 94797 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AC005847",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 268369 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AC005860",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 83099 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AC006303",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 49804 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AC007146",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 164907 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AE003082",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 20167 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AE003419",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 306598 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "NO_CALL",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AE003599",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 250029 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AE003638",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 254309 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AE003778",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 225974 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AF016099",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 9278 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LINE",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AF018167",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "LINE",
+      "teagle_te_class": "LINE",
+      "teagle_confidence": "Moderate",
+      "teagle_abstained": false,
+      "tesorter": "NO_CALL",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": true,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AF123535",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 160480 bp record was analysed (NOT APPLICABLE without an assembly (huck_334B07-2: complement(50734..63094) within AF123535) - whole record used)",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AF391808",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 225984 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "NO_CALL",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "EU812120",
+      "reason": "expected_order_outside_vocabulary",
+      "stratification_note": null,
+      "expected_order": "OTHER",
+      "teagle": "NO_CALL",
+      "teagle_te_class": "none",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "LTR",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "FJ173819",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 17652 bp record was analysed (NOT APPLICABLE without an assembly (complement(3902..12543) within FJ173819 [3' LTR complement(3) - whole record used)",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "GU817319",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 113605 bp record was analysed (NOT APPLICABLE without an assembly (RLG_Fatima_2383A24-3: 102723..112683 within GU817319 (5' LTR) - whole record used)",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "J01050",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "NO_CALL",
+      "teagle_te_class": "none",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "NO_CALL",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "NC_000003.11",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 198022430 bp record was analysed (NOT APPLICABLE without an assembly (chr3:9,889,346-9,896,236 (GRCh37/hg19)) - whole record used)",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "NO_CALL",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "NC_000005.9",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 180915260 bp record was analysed (NOT APPLICABLE without an assembly (chr5:30,487,114-30,496,205 (GRCh37/hg19)) - whole record used)",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "NO_CALL",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "NC_000008.10",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 146364022 bp record was analysed (NOT APPLICABLE without an assembly (chr8:47,175,650-47,183,661 (GRCh37/hg19)) - whole record used)",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "NO_CALL",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "NC_000913.3",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "NO_CALL",
+      "teagle_te_class": "unclassified",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "NO_CALL",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "NC_001138.5",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "NO_CALL",
+      "teagle_te_class": "none",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "NO_CALL",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "NC_001140.6",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "NO_CALL",
+      "teagle_te_class": "none",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "NO_CALL",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "NG_008718",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "NO_CALL",
+      "teagle_te_class": "none",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "NO_CALL",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "OR000399",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 5418 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LINE",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "U01317",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "NO_CALL",
+      "teagle_te_class": "repeat/structural-only",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "NO_CALL",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "U41998",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "NO_CALL",
+      "teagle_te_class": "none",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "NO_CALL",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "U50902",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "ABSTAIN",
+      "teagle_te_class": "retro/partial",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "LINE",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": true
+     },
+     {
+      "accession": "X07685",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "NO_CALL",
+      "teagle_te_class": "none",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "NO_CALL",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "X61378",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "NO_CALL",
+      "teagle_te_class": "none",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "NO_CALL",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     }
+    ]
+   },
+   "order_errors": {
+    "paired_denominator": 82,
+    "teagle_paired": 0,
+    "tesorter_paired": 0,
+    "with_negative_controls_denominator": 93,
+    "teagle_with_negative_controls": 1,
+    "tesorter_with_negative_controls": 1,
+    "n_out_of_vocabulary_order_calls": {
+     "teagle": 0,
+     "tesorter": 0
+    },
+    "teagle_cases": [
+     "AF018167"
+    ],
+    "tesorter_cases": [
+     "U50902"
+    ]
+   },
+   "both_correct": 65,
+   "teagle_only": 2,
+   "tesorter_only": 8,
+   "neither": 7,
+   "teagle_accuracy": 0.8171,
+   "tesorter_accuracy": 0.8902,
+   "mcnemar_discordant": 10,
+   "mcnemar_p_two_sided_exact": 0.109,
+   "abstention_cost_teagle_silent_tesorter_right": 8,
+   "abstention_vindicated_teagle_silent_tesorter_wrong": 0,
+   "cost_cases": [
+    "AB076841",
+    "AY101584",
+    "AY101587",
+    "EU190440.1",
+    "M22334",
+    "U29445",
+    "X51968",
+    "X74338"
+   ],
+   "tesorter_no_call": 9,
+   "pairs": [
+    {
+     "accession": "AB014676",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AB076841",
+     "expected": "LINE",
+     "teagle": "ABSTAIN",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "LINE",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AB087615.1",
+     "expected": "TIR",
+     "teagle": "NO_CALL",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "NO_CALL",
+     "tesorter_correct": false,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": null
+    },
+    {
+     "accession": "AB305073",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AB705392",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AB705393",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF049110",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF050455",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF051915",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF053008",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF054983",
+     "expected": "LINE",
+     "teagle": "LINE",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LINE",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF104899",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF116598",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF148856",
+     "expected": "LINE",
+     "teagle": "LINE",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LINE",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF151794",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF164611",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF228550",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF247646.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "TIR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF387862",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AJ000387",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AJ004945",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AJ009736",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AJ133521",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AJ291355",
+     "expected": "LTR",
+     "teagle": "NO_CALL",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "NO_CALL",
+     "tesorter_correct": false,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": null
+    },
+    {
+     "accession": "AM493772.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "NO_CALL",
+     "tesorter_correct": false,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": null
+    },
+    {
+     "accession": "AY032740",
+     "expected": "LINE",
+     "teagle": "LINE",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LINE",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AY037928",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AY037929",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AY101584",
+     "expected": "LTR",
+     "teagle": "ABSTAIN",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AY101587",
+     "expected": "LTR",
+     "teagle": "ABSTAIN",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AY884861",
+     "expected": "LTR",
+     "teagle": "NO_CALL",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "NO_CALL",
+     "tesorter_correct": false,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": null
+    },
+    {
+     "accession": "AY884862",
+     "expected": "LTR",
+     "teagle": "NO_CALL",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "NO_CALL",
+     "tesorter_correct": false,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": null
+    },
+    {
+     "accession": "D10032",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "D76434",
+     "expected": "LINE",
+     "teagle": "NO_CALL",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "NO_CALL",
+     "tesorter_correct": false,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": null
+    },
+    {
+     "accession": "DQ394069",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "DQ838493",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "EU190440.1",
+     "expected": "TIR",
+     "teagle": "NO_CALL",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "TIR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "EU862277",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "HM159246",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "J01998",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "J04364.2",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "TIR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "JX294476.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "TIR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "KF287636.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "TIR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "L34658",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "L34807.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "TIR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "L35053",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "M14123",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "M14954",
+     "expected": "LINE",
+     "teagle": "LINE",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LINE",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "M17551",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "M18706",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "M22333",
+     "expected": "LINE",
+     "teagle": "LINE",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LINE",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "M22334",
+     "expected": "LINE",
+     "teagle": "ABSTAIN",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "LINE",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "M22874",
+     "expected": "LINE",
+     "teagle": "LINE",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LINE",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "M77661",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "M94164",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "MH626576",
+     "expected": "LTR",
+     "teagle": "NO_CALL",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "NO_CALL",
+     "tesorter_correct": false,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": null
+    },
+    {
+     "accession": "U11059",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "U15406",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "U29445",
+     "expected": "LINE",
+     "teagle": "ABSTAIN",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "LINE",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "U68408",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "U69258",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "U85505",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X02599",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X03431",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X04705.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "TIR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X06590.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "NO_CALL",
+     "tesorter_correct": false,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": null
+    },
+    {
+     "accession": "X06779.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "TIR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X07656",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X13291",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X13777",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X51968",
+     "expected": "LINE",
+     "teagle": "ABSTAIN",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "LINE",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X52387",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X55078.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "TIR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X57168",
+     "expected": "LTR",
+     "teagle": "NO_CALL",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "NO_CALL",
+     "tesorter_correct": false,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": null
+    },
+    {
+     "accession": "X57297.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "TIR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X59545",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X61695.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "TIR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X74338",
+     "expected": "LTR",
+     "teagle": "ABSTAIN",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X78906.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "TIR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X81801",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X93507",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "Z17327",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    }
+   ]
+  },
+  "matched": {
+   "n_considered": 115,
+   "n_paired": 82,
+   "n_excluded": 33,
+   "input_identity": {
+    "method": "SHA-256 over the residues of the FASTA run_tesorter.py handed to TEsorter (raw/tesorter/_work/<accession>.fa, re-read from disk) compared with SHA-256 over the sequence TEagle analysed (raw/teagle/*.json -> result.records[0].seq)",
+    "n_checked": 115,
+    "n_input_residues_verified_identical": 115,
+    "n_input_residues_mismatched": 0,
+    "n_unverifiable": 0,
+    "unverifiable_reasons": {},
+    "recorded_fetch_sha256_agrees": 115,
+    "recorded_fetch_sha256_differs": 0,
+    "recorded_fetch_sha256_unavailable": 0,
+    "n_accessions_with_multiple_distinct_inputs": 0,
+    "per_case": [
+     {
+      "accession": "AB014676",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "652e206e3d6460fb944e7bac2a9028c068d9f5fd2b381ff80fda0a17545bf4a6",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AB076841",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "66fe71830d12da6697d0274be5802d61e3981b7e20bcddc98d34d344a616aea8",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AB087615.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "a5b9deca6107cd01f057d59f6b443608a9c845c2bae1b2f550f623687882c5f8",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AB111101",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "47bf4d9be6e1bf2f070efb8aa1aa9c78e32e51a7f82174156bf1198d0bc52595",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AB305073",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "455aacb3b8f8d2d9fddd45ffbb54b51af8915af87851571cd6a129b5111283a4",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AB705392",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "07505c471152cf270706b251a2c4c2467bf50a878d29f7658ead146ccf32c454",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AB705393",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "164a58b2b9dd6bb004add624448f75729840ce049db87e88573ae6f8285ac8bb",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AC002474",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "eaac7cf70bbc24fd70a083c0090a07463fbc2f249b180f2db643001d98ebfdc2",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AC005333",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "769a02ef0e8224ef4676ff479461bfb812ff5a2f9bb2901105c2aed7e35d9c9e",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AC005847",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "70dee8dc984e6cd1101464b4011b6e88edfcd67a1c43edae2b070cec891e4053",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AC005860",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "bfc2452116f1ae14dcd314c93aa78be103dc2e3128395983166dbb7bb43fe229",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AC006303",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "4777a72c2bfae8a30839e8de50fc280cf1cfbbaad029295093d439910cdc876e",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AC007146",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "b90ffecb60661cd8aa618d3daa3fa7a61895f88046201a77ce6787f808285603",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AE003082",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "ba71f72b170a414e163c703d32afb263b872b9b96fc84341113feb2124409a82",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AE003419",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "9ea4ee07506fb0aad54b5aa9f9eae37618dc14dd9a28b39d56fd20c030f3d457",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AE003599",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "3f1251908995784ac953dbe8bb522695f17abc8956abb8c5ab2f848f45533855",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AE003638",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "68c561e1735a516e86d19aa7abe3027bf0d883b46bd3e3523fcf3c5176345879",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AE003778",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "b6a7dca40a809ce8f9114bec50b45a49fa7d8bca9d3759fe4613d5f3ee2d4759",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AF016099",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "514aa9af8ff852da716ef192a49dd34a2ec1804cd26b57a3588229e4faa847af",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AF018167",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "860e26ae3d29266b8d214a91c31be56f0ad0d91477997213da8fc2ee7f78eabd",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AF049110",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "3e7ffeabe6bcb2b28cd0e0326da2052a958cf32159a2093ce1efbfe4c93db0de",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AF050455",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "4beb48096ed652222baef61931526c3288f5791f5c08da77ae7f5d20374c73f4",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AF051915",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "2d705bdbc445968d3ab4fbd2f97ad1b58bf9ec14be736b95fb13dbce1d530f0e",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AF053008",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "912fe34e54c2f41463e014db7ff8ec4a45c297d76a15a64d8b5a32f3cc0e4da4",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AF054983",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "1d765270c28605a64cd7ef8f36584b846d336426ea5a25c06f03ca1daed22e0f",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AF104899",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "946cb7b1fdd56d754d9ed50a3ed5d105359dad9b984e69e83d20aebb07698f6b",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AF116598",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "167ec1d5034776c5c214a2c27a76f710f888792da94017793bf33a917aea29cb",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AF123535",
+      "teagle_records": 6,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "2195c901e41a6a70fc921a0ba13d2cdf8bcbc383a48c73072cca1b8b2b5c6e8f",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AF148856",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "7a9e70d46d32d959e6232d5d7956d0a23a8c5b02aae8c54d4dc0aa54a58ef17d",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AF151794",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "72ed52347acc02024a8a73c0f8c9b15d094991d4f333a0c1947e9f0d8e91e723",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AF164611",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "106608f2c0c9c6725848ca7674f74ac2192c844b0fafdbb8df05611820301b09",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AF228550",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "b40bb6fc28ad94b9ceae63dc728f432af80f65ea591583531d3c5ff1bc2e320e",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AF247646.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "21c0470c8338a239b98702a04770c09ce9709db5bce1d9526bd9b52494d0d7f7",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AF387862",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "3fe29c682fd681de9e52de0b56bcf27304c019c415c105df75d867267ed10dc4",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AF391808",
+      "teagle_records": 8,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "651253040441eeeea1e2934832bb0c0749be15a306e843c97836574f10de7fce",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AJ000387",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "8baea349bb4766f7f1bea2db834d3d259bde50a129c5380b9b21b46c329fddbc",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AJ004945",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "f20756834607cf20f8a9ea185c064a524f9453747e3f25eb6598e28e7ffbbcaa",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AJ009736",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "c36ae310c94aa92d2c36c60d2cba7b98ff82a1b6035e73ef3ab331bebf44b0de",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AJ133521",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "c8c6d5c5a5fe498b3a38632b6bebe14c4c261505df97f1dd4e8c6d53615b3dbd",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AJ291355",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "c9e0746c6fbc46ed0618a61f756e5c45b4a8b67a3fde7e92b9341b281ffd6b0f",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AM493772.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "953f684169088d6ae1a5041f3d91bd295aba055d26317626f44769b4db0e99af",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AY032740",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "67dec25ebfc8ac6545d5c76d12b20532c1ea0bdaeca1598c7a21121556879cb1",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AY037928",
+      "teagle_records": 2,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "cc0723e25430a9f93d50bce581f5a59eb566a1c0c3fcdec6c2fe15c535be9db4",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AY037929",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "299e38d9d453b1fcc52ad70fa340710beb92f045030d9733a3f15d93473be0d2",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AY101584",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "187efb59029d96da2d6db7185571bf6f2c5c0da0038a4bd071b82a5c19aa8d1e",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AY101587",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "796782e904943956ce3b5df145e4e103552b70d171004ad7a439d46fa1f6e341",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AY884861",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "68d611b0b7c51a6badac882eabded1caba6df6995bc25a56fee492c74ce01fe8",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "AY884862",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "a3df7f39e07ea1af0c2c6970638472b20dbda50ed7d0bad15ef2725471ff8b8f",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "D10032",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "9d7f5f46927041357686a6d0bfea0b86fc279fe2e911689dfe56553d884c832f",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "D76434",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "61f8a719e6dacae46a01d92853a50657277bfd17d0c406cde0447f9caa39d438",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "DQ394069",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "042c1278de3eba3ec7cc6a57135ed49b13e78457b093001a19c197d8e5863bd9",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "DQ838493",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "6d68f35907a64ca51c18b6afb3d8fe1365cd3da06873d4adfdf900282bd99186",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "EU190440.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "d1fe4991e05d9b43f03d3df84bcc15b5db4b30820204d33413ee7fd3e45976b3",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "EU812120",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "0a05f8436805b4ddfa67a90e9d678993788c17d5a33f00ebc8d6edd7f057b76d",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "EU862277",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "560a783c2a45b3aaf0ec000814ba0cf9070a66962ab446189d4f45619afc2cf3",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "FJ173819",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "c6ebdbd511285e3b3e8af48cb7ac508f463102b449acc3ba39b326c28ad9378a",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "GU817319",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "a7e245281416ce7d8a3a34071d3f3df412fb60b4fc3475362e2a0acf74a7682a",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "HM159246",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "9da5d40085c178c850775c36d8fdca27d46c498d663bd2f3136beb32f52b9496",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "J01050",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "3a2390295b9a058cfd2fcc4ec9dd77a6e048a142191850cebee9880ccf942b0d",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "J01998",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "cf55f07d1f18b5ce4b61a001480a623e775e1ceff97be002cfd23fc0f36e58ee",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "J04364.2",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "e436117a49aee773ef42240464e8fffc8d039203c2cd26c7f76ebf4abcf8ee86",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "JX294476.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "b7bade3d640e88a2645d63f0467a79226da8a6738b3b00c1facb5b9a73c69b22",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "KF287636.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "0c1ef6c88d6fe9ca5441e1b9059333f3a70d54108336f06cba6189f7dd229aed",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "L34658",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "c64ce56a4af2c9ec93679b6e3d21dfa8617c4cc893e0f1e7325e383f73200c18",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "L34807.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "f1fbebf5ace80ba92cd451359a7cf88f7cc59c92f76e2011a2d95cbd7d987574",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "L35053",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "12019cab8817e680b642af846878a12e6a5610dce7bb0709b0624d156b9445c8",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "M14123",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "9b18022cf7dcdeb96a89d464a8ce490e0ed16f05f237c8881c05a8396ad28eec",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "M14954",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "c9547d4bbc35e4b7e514dcce795c13dd373f9696987f5ce493800fcde9ade394",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "M17551",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "2d93e5a74cd2f99699ad85dd9ca431bf31e17241789d05a80cb4fd70e66f5ce1",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "M18706",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "c69db21d2bd6fe077a5e1d053306e4c21a8894bdf5390ce3268787da64f9f5e8",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "M22333",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "de6d5bede6f8534ba8307506068d2f155634ff57b77f370570764bf7adc733b9",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "M22334",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "2919c2b9cbe2e7846ecadaf2aaa0f3740def02572fa1c3fc71ce47beafc0ce50",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "M22874",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "12f73a4b1b6423c5b823bff9fcd87519c04af2b86264a2a10b8b3ea8fd9bdddb",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "M77661",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "53bfe983a3c849df0250a248af89694661aad1e802044228d43a928f0ec125f8",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "M94164",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "68a246aa0a90353139c0448302d29d34d4b15b3c20cc42ad2bb36dbcd8f35981",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "MH626576",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "b83e865d7a815a597610e85c18a7284135a18c838d15bb87678e079a37cda206",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "NC_000003.11",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "a51b7cef8b066512d465510b1b68fd5989955b666eed8ed9d4821d8bfa5c1529",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "NC_000005.9",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "346d745c0681a9382679b4579630502b5f247e149a14e4f41b78183947ffcb86",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "NC_000008.10",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "851a7407b3a5b86d040163cd69da2c25205f31b9dff92a71316fd57890d0e60b",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "NC_000913.3",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "5b59ab3503bbd2606c20ea1e1d2397fd81779d1b291a3791d4d2bf36c82a352e",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "NC_001138.5",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "03dc67661cc10cd1c4afcf19601a13c7289942e1c9456db4d688d8471d3b7fd6",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "NC_001140.6",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "b4cf302d2f8c6520d2a7b19a39b7eec0eaaebe39b4e87b624ccd9dcdb7fb8f8a",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "NG_008718",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "2a5cc1d9a04e723b1e8422da8640aaebf7e5db352f66a29fe3fe4450901c9156",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "OR000399",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "0a5a5b860c239f0e7d61b509c5e530ace129b1c1c31dbd345d9758530e5a88bd",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "U01317",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "94d2f095f465554346e77a6e601e526a7eda95d2df071401024241ce3eff1338",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "U11059",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "9c82fc981d64edae7b40fc460769625e1f3e9007301d51e504debcd03b87f729",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "U15406",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "ffeb966f1f74177c2c1cbb9077a2187d8fc5b69dfe596263113d924e11ec5d33",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "U29445",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "2154fe742d31b17ac002dc096cb630303f797aaf10ed0680e6ea86d164fe7c66",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "U41998",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "f8a52cb2e95ba9b0710edd7b381b956d9391d39e3526990960a5670f97465514",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "U50902",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "12238c50c572cb0048167c9d0b073cc9c4bb1e1b677632cce8d7a96952e090a4",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "U68408",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "959593eb96dcc3052247ddc2787ca0aebaa8fe4b3091bfe8806b34c003505b4b",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "U69258",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "c35b6c40ea5dae00c2961db2cf3c0de97350768d042bfdb18abfd5048f8143a2",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "U85505",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "a061cd835402b4167bb74620892d716f3efaea9532284703c149f71bca0da588",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "X02599",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "eb05bf5db78cd2f757fec4aae3a425a49f20f118c0171bc1a76d4b6c3b950e97",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "X03431",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "0865c1aad869e7c62657e10f948bc372354f9c6e14c3a9a5106890a4848e01de",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "X04705.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "b1d2536aa0da1f9f7fff1e32960c54eef3b9028a6305cc9e70de988e7ade8bc7",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "X06590.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "e4093603bb230b9103683788d1a61ed0a8c26fd15261b0689c1c5aec89aa2233",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "X06779.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "6f952becb481c6061115ffd7a3c7f3fddeed05de7175c4a22c792b6a169052fe",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "X07656",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "ebad1b4e61ce7d58ee99b9db0b10ab6d05b9042bfb9e0a5484f2b985359ac369",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "X07685",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "8414fcf8888ebd79006cf260b1a577f5ab6b8f3df8e720d17886e1508ab9a967",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "X13291",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "f80b846ad93e38839a03be477ba02739174fde6a316e7e24e367f7ba91c098c0",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "X13777",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "343fc3d51093104bd17ef041da8f0ab5371e16897bc5152854fc784d09a8b804",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "X51968",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "3ebdfeff69cb82fe23f9ce04efa8174319c23e967f342596eaffa19f0d985b94",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "X52387",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "6cf63cee7e9d1cff69763bf46bc4775197fb702dae6fe4dde2f6133900d676ba",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "X55078.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "0a00d2a8305463cf7a253c88a8e9dde390518d53d564168c4c435827bb7c82cb",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "X57168",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "469f99916b52b319982b5a51167d446f9a0e956fa9d0fb05474c49e30a3c8608",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "X57297.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "ebd33b2f6c2f46514d67b47c16f7875191bcd5743cd3364f1189e8ebd0ca8fbc",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "X59545",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "7313c8a8452b1e1d545077567f514764d1b066b993a960b68bd7c0b33a319196",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "X61378",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "4b1325db7f88b60198a01e7628145096de6cd66afc27c5b649532fa5661e7d5c",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "X61695.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "5a6aae4ceca5aa6ba48301f84a7a633d9d06be0c23ab6809678397028157dacb",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "X74338",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "96cd5cd984a47122286185cc2ad0d7a3fd4ceb66a003015914dd5fd601e6c059",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "X78906.1",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "e6cdb52c5433044e3301e4c8ccc7724be1f5ae5553c50d3b62a18c47e4718b8c",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "X81801",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "fa8f8f4173003bc123db67989c37c4dd0d5bf3f638d5b302e21b0659885347bf",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "X93507",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "6ba15d65f5b4ecd6aae82b8190b02ec6490eadb5f39cd9f1b5a03e6cf9617c68",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     },
+     {
+      "accession": "Z17327",
+      "teagle_records": 1,
+      "teagle_distinct_input_residue_sha256": 1,
+      "tesorter_input_residue_sha256": "9c4012b471439096cc22d2eb894a4c4a5522d72c76ea3a1e347bc57ef6c7fa1c",
+      "verdict": "verified",
+      "recorded_fetch_sha256": "agrees",
+      "mode": "matched"
+     }
+    ]
+   },
+   "input_sha_mismatches_excluded": 0,
+   "excluded": {
+    "n_excluded": 33,
+    "by_reason": {
+     "not_scored_as_single_element": 21,
+     "negative_control": 11,
+     "expected_order_outside_vocabulary": 1
+    },
+    "negative_controls": {
+     "n": 11,
+     "teagle_incorrect_order_calls": [
+      {
+       "accession": "AF018167",
+       "called": "LINE",
+       "te_class": "LINE",
+       "confidence": "Moderate"
+      }
+     ],
+     "tesorter_incorrect_order_calls": [
+      {
+       "accession": "NG_008718",
+       "called": "LINE",
+       "database": "rexdb-metazoa"
+      },
+      {
+       "accession": "U50902",
+       "called": "LINE",
+       "database": "rexdb"
+      }
+     ],
+     "n_teagle_incorrect": 1,
+     "n_tesorter_incorrect": 2
+    },
+    "expected_order_outside_vocabulary": {
+     "n": 1,
+     "ungradable_order_calls": [
+      {
+       "accession": "EU812120",
+       "teagle": "NO_CALL",
+       "tesorter": "LTR"
+      }
+     ]
+    },
+    "not_scored_as_single_element": {
+     "n": 21,
+     "cases": [
+      {
+       "accession": "AB111101",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 13497 bp record was analysed",
+       "tesorter": "NO_CALL"
+      },
+      {
+       "accession": "AC002474",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 44834 bp record was analysed",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AC005333",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 94797 bp record was analysed",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AC005847",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 268369 bp record was analysed",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AC005860",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 83099 bp record was analysed",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AC006303",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 49804 bp record was analysed",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AC007146",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 164907 bp record was analysed",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AE003082",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 20167 bp record was analysed",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AE003419",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 306598 bp record was analysed",
+       "tesorter": "NO_CALL"
+      },
+      {
+       "accession": "AE003599",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 250029 bp record was analysed",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AE003638",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 254309 bp record was analysed",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AE003778",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 225974 bp record was analysed",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AF016099",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 9278 bp record was analysed",
+       "tesorter": "LINE"
+      },
+      {
+       "accession": "AF123535",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 160480 bp record was analysed (NOT APPLICABLE without an assembly (huck_334B07-2: complement(50734..63094) within AF123535) - whole record used)",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "AF391808",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 225984 bp record was analysed",
+       "tesorter": "NO_CALL"
+      },
+      {
+       "accession": "FJ173819",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 17652 bp record was analysed (NOT APPLICABLE without an assembly (complement(3902..12543) within FJ173819 [3' LTR complement(3) - whole record used)",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "GU817319",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 113605 bp record was analysed (NOT APPLICABLE without an assembly (RLG_Fatima_2383A24-3: 102723..112683 within GU817319 (5' LTR) - whole record used)",
+       "tesorter": "LTR"
+      },
+      {
+       "accession": "NC_000003.11",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 198022430 bp record was analysed (NOT APPLICABLE without an assembly (chr3:9,889,346-9,896,236 (GRCh37/hg19)) - whole record used)",
+       "tesorter": "NO_CALL"
+      },
+      {
+       "accession": "NC_000005.9",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 180915260 bp record was analysed (NOT APPLICABLE without an assembly (chr5:30,487,114-30,496,205 (GRCh37/hg19)) - whole record used)",
+       "tesorter": "NO_CALL"
+      },
+      {
+       "accession": "NC_000008.10",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 146364022 bp record was analysed (NOT APPLICABLE without an assembly (chr8:47,175,650-47,183,661 (GRCh37/hg19)) - whole record used)",
+       "tesorter": "NO_CALL"
+      },
+      {
+       "accession": "OR000399",
+       "note": "deposit is a containing record and no coordinate was applied, so the whole 5418 bp record was analysed",
+       "tesorter": "LINE"
+      }
+     ]
+    },
+    "cases": [
+     {
+      "accession": "AB111101",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 13497 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "NO_CALL",
+      "database": "rexdb-plant",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AC002474",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 44834 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AC005333",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 94797 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AC005847",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 268369 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AC005860",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 83099 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AC006303",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 49804 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AC007146",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 164907 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AE003082",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 20167 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AE003419",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 306598 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "NO_CALL",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AE003599",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 250029 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AE003638",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 254309 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AE003778",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 225974 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AF016099",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 9278 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LINE",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AF018167",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "LINE",
+      "teagle_te_class": "LINE",
+      "teagle_confidence": "Moderate",
+      "teagle_abstained": false,
+      "tesorter": "NO_CALL",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": true,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AF123535",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 160480 bp record was analysed (NOT APPLICABLE without an assembly (huck_334B07-2: complement(50734..63094) within AF123535) - whole record used)",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb-plant",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "AF391808",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 225984 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "NO_CALL",
+      "database": "rexdb-plant",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "EU812120",
+      "reason": "expected_order_outside_vocabulary",
+      "stratification_note": null,
+      "expected_order": "OTHER",
+      "teagle": "NO_CALL",
+      "teagle_te_class": "none",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "LTR",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "FJ173819",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 17652 bp record was analysed (NOT APPLICABLE without an assembly (complement(3902..12543) within FJ173819 [3' LTR complement(3) - whole record used)",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb-plant",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "GU817319",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 113605 bp record was analysed (NOT APPLICABLE without an assembly (RLG_Fatima_2383A24-3: 102723..112683 within GU817319 (5' LTR) - whole record used)",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LTR",
+      "database": "rexdb-plant",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "J01050",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "NO_CALL",
+      "teagle_te_class": "none",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "NO_CALL",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "NC_000003.11",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 198022430 bp record was analysed (NOT APPLICABLE without an assembly (chr3:9,889,346-9,896,236 (GRCh37/hg19)) - whole record used)",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "NO_CALL",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "NC_000005.9",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 180915260 bp record was analysed (NOT APPLICABLE without an assembly (chr5:30,487,114-30,496,205 (GRCh37/hg19)) - whole record used)",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "NO_CALL",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "NC_000008.10",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 146364022 bp record was analysed (NOT APPLICABLE without an assembly (chr8:47,175,650-47,183,661 (GRCh37/hg19)) - whole record used)",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "NO_CALL",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "NC_000913.3",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "NO_CALL",
+      "teagle_te_class": "unclassified",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "NO_CALL",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "NC_001138.5",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "NO_CALL",
+      "teagle_te_class": "none",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "NO_CALL",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "NC_001140.6",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "NO_CALL",
+      "teagle_te_class": "none",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "NO_CALL",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "NG_008718",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "NO_CALL",
+      "teagle_te_class": "none",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "LINE",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": true
+     },
+     {
+      "accession": "OR000399",
+      "reason": "not_scored_as_single_element",
+      "stratification_note": "deposit is a containing record and no coordinate was applied, so the whole 5418 bp record was analysed",
+      "expected_order": null,
+      "teagle": null,
+      "teagle_te_class": null,
+      "teagle_confidence": null,
+      "teagle_abstained": null,
+      "tesorter": "LINE",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "U01317",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "NO_CALL",
+      "teagle_te_class": "repeat/structural-only",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "NO_CALL",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "U41998",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "NO_CALL",
+      "teagle_te_class": "none",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "NO_CALL",
+      "database": "rexdb-plant",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "U50902",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "ABSTAIN",
+      "teagle_te_class": "retro/partial",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "LINE",
+      "database": "rexdb",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": true
+     },
+     {
+      "accession": "X07685",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "NO_CALL",
+      "teagle_te_class": "none",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "NO_CALL",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     },
+     {
+      "accession": "X61378",
+      "reason": "negative_control",
+      "stratification_note": null,
+      "expected_order": "NOT_TE",
+      "teagle": "NO_CALL",
+      "teagle_te_class": "none",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
+      "tesorter": "NO_CALL",
+      "database": "rexdb-metazoa",
+      "teagle_order_call_incorrect": null,
+      "tesorter_order_call_incorrect": null
+     }
+    ]
+   },
+   "order_errors": {
+    "paired_denominator": 82,
+    "teagle_paired": 0,
+    "tesorter_paired": 0,
+    "with_negative_controls_denominator": 93,
+    "teagle_with_negative_controls": 1,
+    "tesorter_with_negative_controls": 2,
+    "n_out_of_vocabulary_order_calls": {
+     "teagle": 0,
+     "tesorter": 0
+    },
+    "teagle_cases": [
+     "AF018167"
+    ],
+    "tesorter_cases": [
+     "NG_008718",
+     "U50902"
+    ]
+   },
+   "both_correct": 62,
+   "teagle_only": 5,
+   "tesorter_only": 8,
+   "neither": 7,
+   "teagle_accuracy": 0.8171,
+   "tesorter_accuracy": 0.8537,
+   "mcnemar_discordant": 13,
+   "mcnemar_p_two_sided_exact": 0.581,
+   "abstention_cost_teagle_silent_tesorter_right": 8,
+   "abstention_vindicated_teagle_silent_tesorter_wrong": 0,
+   "cost_cases": [
+    "AB076841",
+    "AY101584",
+    "AY101587",
+    "EU190440.1",
+    "M22334",
+    "U29445",
+    "X51968",
+    "X74338"
+   ],
+   "tesorter_no_call": 12,
+   "pairs": [
+    {
+     "accession": "AB014676",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AB076841",
+     "expected": "LINE",
+     "teagle": "ABSTAIN",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "LINE",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AB087615.1",
+     "expected": "TIR",
+     "teagle": "NO_CALL",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "NO_CALL",
+     "tesorter_correct": false,
+     "database": "rexdb-plant",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": null
+    },
+    {
+     "accession": "AB305073",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AB705392",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AB705393",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF049110",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-plant",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF050455",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-plant",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF051915",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF053008",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-plant",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF054983",
+     "expected": "LINE",
+     "teagle": "LINE",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LINE",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF104899",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF116598",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-plant",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF148856",
+     "expected": "LINE",
+     "teagle": "LINE",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LINE",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF151794",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF164611",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF228550",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF247646.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "TIR",
+     "tesorter_correct": true,
+     "database": "rexdb-plant",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AF387862",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AJ000387",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AJ004945",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AJ009736",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AJ133521",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AJ291355",
+     "expected": "LTR",
+     "teagle": "NO_CALL",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "NO_CALL",
+     "tesorter_correct": false,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": null
+    },
+    {
+     "accession": "AM493772.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "NO_CALL",
+     "tesorter_correct": false,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": null
+    },
+    {
+     "accession": "AY032740",
+     "expected": "LINE",
+     "teagle": "LINE",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LINE",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AY037928",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AY037929",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AY101584",
+     "expected": "LTR",
+     "teagle": "ABSTAIN",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AY101587",
+     "expected": "LTR",
+     "teagle": "ABSTAIN",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "AY884861",
+     "expected": "LTR",
+     "teagle": "NO_CALL",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "NO_CALL",
+     "tesorter_correct": false,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": null
+    },
+    {
+     "accession": "AY884862",
+     "expected": "LTR",
+     "teagle": "NO_CALL",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "NO_CALL",
+     "tesorter_correct": false,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": null
+    },
+    {
+     "accession": "D10032",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "D76434",
+     "expected": "LINE",
+     "teagle": "NO_CALL",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "NO_CALL",
+     "tesorter_correct": false,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": null
+    },
+    {
+     "accession": "DQ394069",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "DQ838493",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "EU190440.1",
+     "expected": "TIR",
+     "teagle": "NO_CALL",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "TIR",
+     "tesorter_correct": true,
+     "database": "rexdb-plant",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "EU862277",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "HM159246",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "J01998",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "J04364.2",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "TIR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "JX294476.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "TIR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "KF287636.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "TIR",
+     "tesorter_correct": true,
+     "database": "rexdb-plant",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "L34658",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "L34807.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "TIR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "L35053",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "M14123",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "M14954",
+     "expected": "LINE",
+     "teagle": "LINE",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LINE",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "M17551",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "M18706",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "M22333",
+     "expected": "LINE",
+     "teagle": "LINE",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LINE",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "M22334",
+     "expected": "LINE",
+     "teagle": "ABSTAIN",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "LINE",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "M22874",
+     "expected": "LINE",
+     "teagle": "LINE",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LINE",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "M77661",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "M94164",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "MH626576",
+     "expected": "LTR",
+     "teagle": "NO_CALL",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "NO_CALL",
+     "tesorter_correct": false,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": null
+    },
+    {
+     "accession": "U11059",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-plant",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "U15406",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "U29445",
+     "expected": "LINE",
+     "teagle": "ABSTAIN",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "LINE",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "U68408",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-plant",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "U69258",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-plant",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "U85505",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X02599",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X03431",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X04705.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "NO_CALL",
+     "tesorter_correct": false,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": null
+    },
+    {
+     "accession": "X06590.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "NO_CALL",
+     "tesorter_correct": false,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": null
+    },
+    {
+     "accession": "X06779.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "TIR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X07656",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X13291",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-plant",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X13777",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-plant",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X51968",
+     "expected": "LINE",
+     "teagle": "ABSTAIN",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "LINE",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X52387",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-plant",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X55078.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "TIR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X57168",
+     "expected": "LTR",
+     "teagle": "NO_CALL",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "NO_CALL",
+     "tesorter_correct": false,
+     "database": "rexdb-plant",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": null
+    },
+    {
+     "accession": "X57297.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "TIR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X59545",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X61695.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "NO_CALL",
+     "tesorter_correct": false,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": null
+    },
+    {
+     "accession": "X74338",
+     "expected": "LTR",
+     "teagle": "ABSTAIN",
+     "teagle_correct": false,
+     "teagle_abstained": true,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb",
+     "teagle_order_call_incorrect": null,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X78906.1",
+     "expected": "TIR",
+     "teagle": "TIR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "NO_CALL",
+     "tesorter_correct": false,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": null
+    },
+    {
+     "accession": "X81801",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-plant",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "X93507",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-metazoa",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    },
+    {
+     "accession": "Z17327",
+     "expected": "LTR",
+     "teagle": "LTR",
+     "teagle_correct": true,
+     "teagle_abstained": false,
+     "tesorter": "LTR",
+     "tesorter_correct": true,
+     "database": "rexdb-plant",
+     "teagle_order_call_incorrect": false,
+     "tesorter_order_call_incorrect": false
+    }
+   ]
+  }
+ }
+}
