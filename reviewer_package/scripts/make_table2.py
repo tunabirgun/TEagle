@@ -32,10 +32,13 @@ PANEL_LABEL = {
 
 
 def fmt(a):
-    if a.get("accuracy") is None:
-        return "—", "—", "—"
-    return (f"{a['accuracy']:.3f}", f"{a['ci95_low']:.3f}–{a['ci95_high']:.3f}",
-            f"{a['abstention_rate']:.3f}")
+    # Abstention is reported even when accuracy is not. Blanking it alongside accuracy emptied the
+    # column at exactly the rows where the tool abstained on everything — the column the paper spends a
+    # paragraph justifying. "n/a" means no gradable case; a number means the rate was computed.
+    acc = ("n/a", "n/a") if a.get("accuracy") is None else (
+        f"{a['accuracy']:.3f}", f"{a['ci95_low']:.3f}–{a['ci95_high']:.3f}")
+    ab = "n/a" if a.get("abstention_rate") is None else f"{a['abstention_rate']:.3f}"
+    return acc[0], acc[1], ab
 
 
 def main():
@@ -83,7 +86,7 @@ def main():
     wrong = "; ".join(f"{w['accession']} ({w['organism']}), labelled {w['expected']}, called "
                       f"{w['observed']}" for w in d["superfamily_incorrect"])
     caption = (f"Table 2. Classification accuracy by panel. A class call distinguishes Class I from "
-               f"Class II from not-a-transposable-element; an order call names LTR, LINE, SINE or TIR; "
+               f"Class II from not-a-transposable-element; an order call names LTR, LINE or TIR; "
                f"a superfamily call names Copia, Gypsy, hAT, Tc1/Mariner, CACTA, MULE or piggyBac. "
                f"Abstentions are counted in their own column, not scored as errors, so accuracy and "
                f"abstention must be read together; naming the order while withholding the superfamily "

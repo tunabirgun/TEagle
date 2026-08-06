@@ -6,10 +6,10 @@
   "skipped": 1,
   "tests": 595
  },
- "elapsed_s": 507.9,
+ "elapsed_s": 955.0,
  "exit_code": 0,
  "failed": 0,
- "generated": "2026-08-06T08:18:47",
+ "generated": "2026-08-06T08:53:38",
  "green": true,
  "passed": 594,
  "python": "3.12.10",

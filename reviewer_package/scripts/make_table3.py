@@ -58,7 +58,9 @@ def main():
     for r in sorted(d["rows"], key=lambda x: (x["panel"] or "", x["name"])):
         diff = r["difference_bp"]
         rows.append([
-            r["name"], (r["element"] or "").split(".")[0][:60], r["organism"],
+            # The target is not truncated: a cut cell is indistinguishable from a whole one, and eight
+            # of these seventeen ended mid-word at the previous 60-character limit.
+            r["name"], (r["element"] or "").split(".")[0], r["organism"],
             r["accession"], r["expected_bp"],
             r["closest_bp"] if r["closest_bp"] is not None else "no product",
             f"{diff:+d}" if diff is not None else "—",

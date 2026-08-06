@@ -15,11 +15,14 @@ Benchmarking against an external classifier located four defects in how the clas
 and this release corrects them. **Results change for elements whose diagnostic structure was not detected**;
 no element loses a call, and no superfamily assignment changes.
 
-Measured over the benchmark corpus: order-level accuracy rose from 0.855 to 0.980 (Wilson 95% CI
-0.930–0.995), every panel is now correct on every case it answers except the divergence gradient (0.952),
-the negative-control abstention rate rose from 72.7% to 90.9%, and in a paired comparison against
-TEsorter 1.5.1 on byte-identical input TEagle moved from significantly less accurate to statistically
-indistinguishable (0.867 against 0.878, McNemar exact *p* = 1.0; and 0.867 against 0.847, *p* = 0.77).
+Measured over the benchmark corpus at the time of this release: order-level accuracy rose from 0.855 to
+0.980, and the negative-control abstention rate from 72.7% to 90.9%.
+
+**Superseded figures.** The accuracy and comparison numbers first recorded here were computed before the
+corpus was restratified — see the entry below for `record_scope` — and the paired comparison then ran over
+98 cases rather than the 82 that survive stratification. The current values are order 0.986 (0.922–0.997)
+over 94 gradable cases and McNemar *p* = 0.109 and 0.581; `benchmarks/raw/scores.json` and
+`head_to_head.json` are the authority. Only the negative-control abstention figure above is unchanged.
 
 ### Fixed
 - **The LTR order was gated on structural evidence it did not need.** Naming an element an LTR
@@ -35,7 +38,10 @@ indistinguishable (0.867 against 0.878, McNemar exact *p* = 1.0; and 0.867 again
 - **A lone reverse transcriptase is no longer called a LINE.** The LINE branch read an absent integrase as
   positive evidence for a non-LTR element, which holds only when something else about the record is
   LINE-like. A record shorter than 2 kb (`_MIN_LINE_RECORD_BP`; below any autonomous LINE, L1 ~6 kb,
-  R2Bm 3.6 kb) carrying nothing but an RT hit is a fragment and is now reported as such. This also stopped
+  R2Bm 3.6 kb) was considered as a gate and deliberately NOT adopted: a multi-kilobase record whose sole
+  detected domain is a reverse transcriptase is equally consistent with a host telomerase, so length does
+  not license the call. `_MIN_LINE_RECORD_BP` remains defined for reference and is not read; the order is
+  withheld instead. This also stopped
   a bacterial group II intron maturase, a non-TE control, being called a LINE. Note for anyone extending
   this: requiring a positive LINE feature instead (poly-A, ORF1p, ORF2p EN–RT, RNase H) is too strict,
   because the R2 clade carries a C-terminal restriction-like endonuclease rather than an N-terminal APE.

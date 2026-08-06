@@ -121,10 +121,11 @@ typed into a plotting script.
 
 Measured on an independent validation corpus of 44 records from 36 species, each labelled from the
 publication that described it: TEagle named the Wicker order for 35 of the 36 transposable elements and was
-correct on all 35, and declined to name an order on all 8 negative controls. Across a broader corpus of 136
-entries from 122 accessions, order-level accuracy was 0.990 (Wilson 95% CI 0.943–0.998). Compared against
-TEsorter 1.5.1 on byte-identical input, neither tool made an incorrect order call on any of 98 shared
-cases; they differ only in how often they commit.
+correct on all 35, and declined to name an order on all 8 negative controls. Across a broader corpus of 135
+entries from 122 accessions, order-level accuracy was 0.986 (Wilson 95% CI 0.922–0.997) over the 94
+gradable cases, and superfamily accuracy 0.939 (0.804–0.983) over 59. Compared against TEsorter 1.5.1
+on byte-identical input, neither tool made an incorrect order call on any of the 82 paired cases; they
+differ only in how often they commit.
 
 The assay half is measured the same way, against 17 published assays from 8 sources whose product sizes
 were determined at the bench. Every one returned a product on its cited template; of the 16 targeting a

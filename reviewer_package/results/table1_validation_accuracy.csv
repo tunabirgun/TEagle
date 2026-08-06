@@ -1,9 +1,9 @@
 ﻿Panel,n,Class: answered/gradable,Class accuracy,Class 95% CI,Class abstention,Order: answered/gradable,Order accuracy,Order 95% CI,Order abstention,Superfamily: answered/gradable,Superfamily accuracy,Superfamily 95% CI,Superfamily abstention
 LTR retrotransposons (Ty3/Gypsy),9,9/9,1.000,0.701–1.000,0.000,9/9,1.000,0.701–1.000,0.000,8/9,1.000,0.676–1.000,0.111
-Negative controls (non-TE),8,1/8,0.000,0.000–0.793,0.875,0/8,—,—,—,0/0,—,—,—
+Negative controls (non-TE),8,1/8,0.000,0.000–0.793,0.875,0/8,n/a,n/a,1.000,0/0,n/a,n/a,n/a
 DNA transposons (TIR),8,7/8,1.000,0.646–1.000,0.125,7/8,1.000,0.646–1.000,0.125,7/8,1.000,0.646–1.000,0.125
 LTR retrotransposons (Ty1/Copia),7,7/7,1.000,0.646–1.000,0.000,7/7,1.000,0.646–1.000,0.000,5/7,1.000,0.566–1.000,0.286
-Endogenous retroviruses,6,6/6,1.000,0.610–1.000,0.000,6/6,1.000,0.610–1.000,0.000,0/0,—,—,—
-LINEs (non-LTR retrotransposons),6,6/6,1.000,0.610–1.000,0.000,6/6,1.000,0.610–1.000,0.000,0/6,—,—,—
+Endogenous retroviruses,6,6/6,1.000,0.610–1.000,0.000,6/6,1.000,0.610–1.000,0.000,0/0,n/a,n/a,n/a
+LINEs (non-LTR retrotransposons),6,6/6,1.000,0.610–1.000,0.000,6/6,1.000,0.610–1.000,0.000,0/6,n/a,n/a,1.000
 Transposable elements only,36,—,—,—,—,35/36,1.000,—,0.028,20/30,1.000,—,0.333
 All panels combined,44,36/44,0.972,0.858–0.995,0.182,35/44,1.000,0.901–1.000,0.204,20/30,1.000,0.839–1.000,0.333

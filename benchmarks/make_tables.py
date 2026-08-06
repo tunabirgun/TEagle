@@ -200,7 +200,10 @@ def main():
     # ---- Table 4: compact verdicts -----------------------------------------------------------------
     keep = [(k, _l, s) for k, _l, s in AXES if k not in ("export_formats", "license", "platform")]
     h1 = ["Tool", "Version"] + [s for _, _, s in keep]
-    r1 = [[t["name"], t["current_version"].split("(")[0].strip()[:22]]
+    # No character truncation. Cutting a version string at a fixed width produced cells like
+    # "REPET 2.2 standalone p" and "binary v1.0.7, as bund" in the exported table — a reader cannot tell
+    # a truncated cell from a complete one, and the .csv/.xlsx/.docx all handle the full string.
+    r1 = [[t["name"], t["current_version"].split("(")[0].strip()]
           + [compact(t[k], k) for k, _, _ in keep] for t in tools]
     cap1 = ("Table 4. Functional comparison of TEagle with fifteen widely used transposable-element and "
             "primer-design tools. Verdicts: yes; partial; no; n.a. where the capability lies outside the "

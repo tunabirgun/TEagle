@@ -31,10 +31,13 @@ PANEL_LABEL = {
 
 
 def fmt(a):
-    if a.get("accuracy") is None:
-        return "—", "—", "—"
-    return (f"{a['accuracy']:.3f}", f"{a['ci95_low']:.3f}–{a['ci95_high']:.3f}",
-            f"{a['abstention_rate']:.3f}")
+    # Abstention is reported even when accuracy is not. Blanking it alongside accuracy emptied the
+    # column at exactly the rows where the tool abstained on everything — the column the paper spends a
+    # paragraph justifying. "n/a" means no gradable case; a number means the rate was computed.
+    acc = ("n/a", "n/a") if a.get("accuracy") is None else (
+        f"{a['accuracy']:.3f}", f"{a['ci95_low']:.3f}–{a['ci95_high']:.3f}")
+    ab = "n/a" if a.get("abstention_rate") is None else f"{a['abstention_rate']:.3f}"
+    return acc[0], acc[1], ab
 
 
 def main():
