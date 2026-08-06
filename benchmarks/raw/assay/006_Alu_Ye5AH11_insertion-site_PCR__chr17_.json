@@ -1,0 +1,149 @@
+{
+ "case": {
+  "amplicon_range_bp": "empty site 408 bp / filled site 723 bp (delta 315 bp)",
+  "caveats": "Dimorphic locus. Cited accession (clone RP11-362P24, chromosome 17, 179,026 bp) carries the FILLED allele; expect 723 bp. The 408 bp empty allele is not in this accession. No degenerate bases; no junction-spanning primer. Verified by exact-string in-silico PCR: exactly one product, plus strand, 723 bp, containing the Ye-diagnostic 25-mer and canonical Alu motifs. The paper records this locus's human population diversity as NA (it was not scored polymorphic in the panel), which affects its use as a population marker but not the expected product from this template. Uniqueness checked within the cited accession only. Annealing temperature 55 C.",
+  "citation": "Salem AH, Ray DA, Hedges DJ, Jurka J, Batzer MA. Analysis of the human Alu Ye lineage. BMC Evolutionary Biology 2005;5:18. doi:10.1186/1471-2148-5-18. PMID 15725352; PMCID PMC554112.",
+  "confidence": "high",
+  "element": "Alu Ye5 (SINE, non-LTR); Alu Ye lineage insertion polymorphism",
+  "expected_amplicon_bp": 723,
+  "expected_bp_provenance": "stated_in_source",
+  "forward_primer": "GTTTTCTCTGTGGGAAGGAT",
+  "loci_justification": "The pair flanks one locus on the cited template: a single insertion site, a single excision site, or a single transcript. A second product on this template would be an off-target prediction.",
+  "loci_on_template": "single",
+  "name": "Alu Ye5AH11 insertion-site PCR (chr17)",
+  "organism": "Homo sapiens",
+  "panel": "line-sine",
+  "reverse_primer": "TTTACCCTTAATGGAGCTTG",
+  "template_accession": "AC087297.13",
+  "where_in_paper": "Additional File 2, captioned \"Supplemental Table. Alu Ye elements, Genbank numbers, PCR primers, annealing temperature, primate diversity, location and amplicon sizes.\" Ye5AH11 row; the table's own Chr. Loc. value (17) agrees with the accession header.",
+  "worked_prediction_in_entry": true,
+  "worked_prediction_note": "The entry records a worked prediction — a coordinate range, an in-silico check, or a sequence-derived length — so the expected answer was written down before the engine ran. The published size remains external, but this case was not scored blind."
+ },
+ "result": {
+  "amplicons": [
+   {
+    "amplicon_5p": "GTTTTCTCTGTGGGAAGGATTTTGAACTTC…",
+    "end": 754,
+    "fwd_anneal_len": 20,
+    "fwd_mm": 0,
+    "fwd_primer": "F",
+    "fwd_tail5": 0,
+    "length": 723,
+    "on_target": false,
+    "product_length": 723,
+    "rev_anneal_len": 20,
+    "rev_mm": 0,
+    "rev_primer": "R",
+    "rev_tail5": 0,
+    "seq": "GTTTTCTCTGTGGGAAGGATTTTGAACTTCAGATTCTATTTCTTTTTTCTTTTTTTTTTTTTTTGAGACGGAGTCTTGCTGTCGCCCAGGCTGGAGTGCAGTGGCACAATCTCGGCTCACTGCAGGCTCCGCCCCCCGGGGTTCACACCATTCTCCTGCCTCAGCCTCCTGAGTAGCTGGGACTACAGGCGCCCGCTACCTCGCCTGGCTAATTTTTTGTATTTTTAGTAGAGACGGGGTTTCACTGTGTTAGCCAGGATGGTCTCGATCTCCTGACCTCGTGATCCGCCCGCCTCGGCCTCCCAAAGTGCTGGGATTACAGGCGTGAGCCACCGCGCCTGGCCAATTGTCTATTTCTTTAATAGATACAAGACTACTCAGATTATCTATTTTTTTCTTTTCCTTTTTTTTTTTTTTTTTTTTTTTTTTTGAGACAGAGTTTTGCTCTGTCTCCTAGGCTGGACTGCAGTGGCACGATCTTTGCTCACCACAACCTCCACCTCCCAGGTTCAAGCAATTCTCCTGCCTCAGCCGTTCAAGTATCTGGGATTACGGGCACCCGCCACCATGCCCAACTAATTTTTTTTTTTATTTTTAGTAGAGACAGGGTTTCACCATGTTGGTCAGGCTGGTCTCGAATTCCTGACCTCAGGTGATCCACTTGCCTTGGCCTCCCAGAGTACTGGGATTACTTCCAGTCCTGCAAGCTCCATTAAGGGTAAA",
+    "single_primer": false,
+    "source": "AC087297.13 Homo sapiens chromosome 17, clone RP11-362P24, complete sequence (input)",
+    "start": 31
+   }
+  ],
+  "backgroundsSearched": [
+   "AC087297.13 Homo sapiens chromosome 17, clone RP11-362P24, complete sequence (input)"
+  ],
+  "criteria": {
+   "max_mismatch": 2,
+   "min_anneal": 18,
+   "product_size": [
+    28,
+    3825
+   ],
+   "three_prime_strict": 5
+  },
+  "notSearched": [
+   "Reference assembly (needs WSL/NCBI)",
+   "External NCBI Primer-BLAST",
+   "IUPAC-ambiguous template bases"
+  ],
+  "provenance": {
+   "createdUtc": "2026-08-06T03:58:20+00:00",
+   "databases": [],
+   "environment": {
+    "machine": "AMD64",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10"
+   },
+   "input": {
+    "id": "AC087297.13 Homo sapiens chromosome 17, clone RP11-362P24, complete sequence",
+    "length": 179026,
+    "sha256": "f397884636111cf83aa47162ebab398238f276bcafa23099a0263e1e333a5a9c"
+   },
+   "manifestSha256": "a06c08dfb5adf32a9a825edebfe076896ab78d1035a5bbf7879cf6e84fab6aee",
+   "notRun": [
+    "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
+    "External NCBI Primer-BLAST",
+    "De novo family discovery"
+   ],
+   "parameters": {
+    "background_sha256": null,
+    "fwd": "GTTTTCTCTGTGGGAAGGAT",
+    "max_mm": 2,
+    "min_anneal": 18,
+    "prod_max": 3825,
+    "prod_min": 28,
+    "rev": "TTTACCCTTAATGGAGCTTG",
+    "target_span": null,
+    "tp": 5
+   },
+   "references": [],
+   "runType": "in-silico-pcr",
+   "schemaVersion": "0.1",
+   "software": [
+    {
+     "name": "python",
+     "version": "3.12.10"
+    },
+    {
+     "name": "TEagle core",
+     "version": "3.6.0"
+    }
+   ],
+   "teagleVersion": "3.6.0"
+  },
+  "references": [],
+  "truncated": false,
+  "truncatedOn": [],
+  "warning": null
+ },
+ "scored": {
+  "accession": "AC087297.13",
+  "caveats": "Dimorphic locus. Cited accession (clone RP11-362P24, chromosome 17, 179,026 bp) carries the FILLED allele; expect 723 bp. The 408 bp empty allele is not in this accession. No degenerate bases; no junction-spanning primer. Verified by exact-string in-silico PCR: exactly one product, plus strand, 723 bp, containing the Ye-diagnostic 25-mer and canonical Alu motifs. The paper records this locus's human population diversity as NA (it was not scored polymorphic in the panel), which affects its use as a population marker but not the expected product from this template. Uniqueness checked within the cited accession only. Annealing temperature 55 C.",
+  "citation": "Salem AH, Ray DA, Hedges DJ, Jurka J, Batzer MA. Analysis of the human Alu Ye lineage. BMC Evolutionary Biology 2005;5:18. doi:10.1186/1471-2148-5-18. PMID 15725352; PMCID PMC554112.",
+  "closest_bp": 723,
+  "difference_bp": 0,
+  "elapsed_s": 0.451,
+  "element": "Alu Ye5 (SINE, non-LTR); Alu Ye lineage insertion polymorphism",
+  "expected_bp": 723,
+  "found": true,
+  "ground_truth": "stated_in_source",
+  "loci_on_template": "single",
+  "multilocus_by_design": false,
+  "n_products": 1,
+  "name": "Alu Ye5AH11 insertion-site PCR (chr17)",
+  "organism": "Homo sapiens",
+  "panel": "line-sine",
+  "preworked_in_corpus": true,
+  "primer_degenerate": false,
+  "primer_fwd_as_published": "GTTTTCTCTGTGGGAAGGAT",
+  "primer_rev_as_published": "TTTACCCTTAATGGAGCTTG",
+  "product_sizes": [
+   723
+  ],
+  "scored_product_anneal_bp": [
+   20,
+   20
+  ],
+  "scored_product_tail_bp": 0,
+  "search_window_bp": [
+   28,
+   3825
+  ],
+  "source_confidence": "high",
+  "template_sha256": "cd187d6874e59425",
+  "tolerance_bp": 72.3,
+  "within_tolerance": true
+ }
+}

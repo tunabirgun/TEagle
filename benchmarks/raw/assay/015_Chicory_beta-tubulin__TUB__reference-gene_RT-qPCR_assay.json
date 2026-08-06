@@ -1,0 +1,148 @@
+{
+ "case": {
+  "caveats": "VERBATIM NOTE: same Table 1 layout as the ndhF case - forward and reverse are two lines inside one cell, split taken at the printed line break; confirmed by the exact 101 bp in-silico match. TEMPLATE: AF101419.1 is \"Cichorium intybus beta-tubulin mRNA, partial cds\" - an mRNA/cDNA record, so this assay is cDNA-only; the paper does not establish genomic behaviour and any intron position in the chicory TUB gene is unknown. In-silico check: forward matches once at 118, reverse site once ending at 218; product 118..218 = 101 bp, exact, no alternative products. TUB was not among the genes the paper flagged as differing from its GenBank design sequence.",
+  "citation": "Maroufi A, Van Bockstaele E, De Loose M. Validation of reference genes for gene expression analysis in chicory (Cichorium intybus) using quantitative real-time PCR. BMC Mol Biol. 2010;11:15. doi:10.1186/1471-2199-11-15. PMID 20156357; PMCID PMC2830926.",
+  "confidence": "high",
+  "element": "Non-TE control assay. Nuclear beta-tubulin used as a candidate RT-qPCR reference gene.",
+  "expected_amplicon_bp": 101,
+  "expected_bp_provenance": "stated_in_source",
+  "forward_primer": "GCACGGCATTGATGTGACC",
+  "loci_justification": "The pair flanks one locus on the cited template: a single insertion site, a single excision site, or a single transcript. A second product on this template would be an off-target prediction.",
+  "loci_on_template": "single",
+  "name": "Chicory beta-tubulin (TUB) reference-gene RT-qPCR assay",
+  "organism": "Cichorium intybus (chicory)",
+  "panel": "controls",
+  "reverse_primer": "GAACAAACCTCCCGCCACT",
+  "template_accession": "AF101419.1",
+  "where_in_paper": "Table 1, row TUB: primers in the \"Primer sequences (forward/reverse)\" column, accession AF101419 in the \"GenBank accession number\" column, 101 in the \"Amplicon length (bp)\" column. Single-product confirmation in the \"Verification of amplicons...\" section (Figure 1a, Figure 1b).",
+  "worked_prediction_in_entry": true,
+  "worked_prediction_note": "The entry records a worked prediction — a coordinate range, an in-silico check, or a sequence-derived length — so the expected answer was written down before the engine ran. The published size remains external, but this case was not scored blind."
+ },
+ "result": {
+  "amplicons": [
+   {
+    "amplicon_5p": "GCACGGCATTGATGTGACCGGAAAGTACAC…",
+    "end": 218,
+    "fwd_anneal_len": 19,
+    "fwd_mm": 0,
+    "fwd_primer": "F",
+    "fwd_tail5": 0,
+    "length": 101,
+    "on_target": false,
+    "product_length": 101,
+    "rev_anneal_len": 19,
+    "rev_mm": 0,
+    "rev_primer": "R",
+    "rev_tail5": 0,
+    "seq": "GCACGGCATTGATGTGACCGGAAAGTACACCGGAGACTCCGAGCTCCAGCTTGAGAGGATCAATGTCTATTACAACGAGGCCAGTGGCGGGAGGTTTGTTC",
+    "single_primer": false,
+    "source": "AF101419.1 Cichorium intybus beta-tubulin mRNA, partial cds (input)",
+    "start": 117
+   }
+  ],
+  "backgroundsSearched": [
+   "AF101419.1 Cichorium intybus beta-tubulin mRNA, partial cds (input)"
+  ],
+  "criteria": {
+   "max_mismatch": 2,
+   "min_anneal": 18,
+   "product_size": [
+    28,
+    3825
+   ],
+   "three_prime_strict": 5
+  },
+  "notSearched": [
+   "Reference assembly (needs WSL/NCBI)",
+   "External NCBI Primer-BLAST",
+   "IUPAC-ambiguous template bases"
+  ],
+  "provenance": {
+   "createdUtc": "2026-08-06T03:58:36+00:00",
+   "databases": [],
+   "environment": {
+    "machine": "AMD64",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10"
+   },
+   "input": {
+    "id": "AF101419.1 Cichorium intybus beta-tubulin mRNA, partial cds",
+    "length": 556,
+    "sha256": "9bc1dce8058a7d6e922f6fe8ee01b01ca068a2180949f5e2e625252df76228da"
+   },
+   "manifestSha256": "6820f398ea18b896962a4c8e666ac1818fe2b547a49ce4a579f40e85dfaf1569",
+   "notRun": [
+    "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
+    "External NCBI Primer-BLAST",
+    "De novo family discovery"
+   ],
+   "parameters": {
+    "background_sha256": null,
+    "fwd": "GCACGGCATTGATGTGACC",
+    "max_mm": 2,
+    "min_anneal": 18,
+    "prod_max": 3825,
+    "prod_min": 28,
+    "rev": "GAACAAACCTCCCGCCACT",
+    "target_span": null,
+    "tp": 5
+   },
+   "references": [],
+   "runType": "in-silico-pcr",
+   "schemaVersion": "0.1",
+   "software": [
+    {
+     "name": "python",
+     "version": "3.12.10"
+    },
+    {
+     "name": "TEagle core",
+     "version": "3.6.0"
+    }
+   ],
+   "teagleVersion": "3.6.0"
+  },
+  "references": [],
+  "truncated": false,
+  "truncatedOn": [],
+  "warning": null
+ },
+ "scored": {
+  "accession": "AF101419.1",
+  "caveats": "VERBATIM NOTE: same Table 1 layout as the ndhF case - forward and reverse are two lines inside one cell, split taken at the printed line break; confirmed by the exact 101 bp in-silico match. TEMPLATE: AF101419.1 is \"Cichorium intybus beta-tubulin mRNA, partial cds\" - an mRNA/cDNA record, so this assay is cDNA-only; the paper does not establish genomic behaviour and any intron position in the chicory TUB gene is unknown. In-silico check: forward matches once at 118, reverse site once ending at 218; product 118..218 = 101 bp, exact, no alternative products. TUB was not among the genes the paper flagged as differing from its GenBank design sequence.",
+  "citation": "Maroufi A, Van Bockstaele E, De Loose M. Validation of reference genes for gene expression analysis in chicory (Cichorium intybus) using quantitative real-time PCR. BMC Mol Biol. 2010;11:15. doi:10.1186/1471-2199-11-15. PMID 20156357; PMCID PMC2830926.",
+  "closest_bp": 101,
+  "difference_bp": 0,
+  "elapsed_s": 0.0,
+  "element": "Non-TE control assay. Nuclear beta-tubulin used as a candidate RT-qPCR reference gene.",
+  "expected_bp": 101,
+  "found": true,
+  "ground_truth": "stated_in_source",
+  "loci_on_template": "single",
+  "multilocus_by_design": false,
+  "n_products": 1,
+  "name": "Chicory beta-tubulin (TUB) reference-gene RT-qPCR assay",
+  "organism": "Cichorium intybus (chicory)",
+  "panel": "controls",
+  "preworked_in_corpus": true,
+  "primer_degenerate": false,
+  "primer_fwd_as_published": "GCACGGCATTGATGTGACC",
+  "primer_rev_as_published": "GAACAAACCTCCCGCCACT",
+  "product_sizes": [
+   101
+  ],
+  "scored_product_anneal_bp": [
+   19,
+   19
+  ],
+  "scored_product_tail_bp": 0,
+  "search_window_bp": [
+   28,
+   3825
+  ],
+  "source_confidence": "high",
+  "template_sha256": "b7f11bbc7fd775a2",
+  "tolerance_bp": 20.0,
+  "within_tolerance": true
+ }
+}

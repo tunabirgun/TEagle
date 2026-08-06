@@ -9,7 +9,106 @@ and propagates to the backend health endpoint, the UI header badge, every run
 provenance manifest, the packaged executable's Windows file-version metadata, and
 the LaTeX report title page.
 
-## [Unreleased]
+## [3.6.0] — 2026-08-05
+
+Benchmarking against an external classifier located four defects in how the classifier decides an *order*,
+and this release corrects them. **Results change for elements whose diagnostic structure was not detected**;
+no element loses a call, and no superfamily assignment changes.
+
+Measured over the benchmark corpus: order-level accuracy rose from 0.855 to 0.980 (Wilson 95% CI
+0.930–0.995), every panel is now correct on every case it answers except the divergence gradient (0.952),
+the negative-control abstention rate rose from 72.7% to 90.9%, and in a paired comparison against
+TEsorter 1.5.1 on byte-identical input TEagle moved from significantly less accurate to statistically
+indistinguishable (0.867 against 0.878, McNemar exact *p* = 1.0; and 0.867 against 0.847, *p* = 0.77).
+
+### Fixed
+- **The LTR order was gated on structural evidence it did not need.** Naming an element an LTR
+  retrotransposon required a detected terminal repeat. Without one — on a long deposit, a truncated one, or
+  an element diverged past the 80% identity floor — an element carrying both a reverse transcriptase and a
+  DDE integrase fell back to *retrotransposon (partial)*, withholding an order the domain architecture
+  already determined. A DDE integrase is diagnostic of the LTR order and is not carried by non-LTR
+  elements; the classifier already relied on that fact in its negative form. 31 corpus elements moved to
+  *LTR retrotransposon (superfamily undetermined)*.
+- **A chromodomain now names the LTR order.** Chromoviruses are a Ty3/Gypsy lineage and non-LTR elements do
+  not carry a chromodomain, so reaching the LINE branch on an absent integrase alone filed chromovirus
+  fragments as LINEs — an order error from evidence that positively excluded it.
+- **A lone reverse transcriptase is no longer called a LINE.** The LINE branch read an absent integrase as
+  positive evidence for a non-LTR element, which holds only when something else about the record is
+  LINE-like. A record shorter than 2 kb (`_MIN_LINE_RECORD_BP`; below any autonomous LINE, L1 ~6 kb,
+  R2Bm 3.6 kb) carrying nothing but an RT hit is a fragment and is now reported as such. This also stopped
+  a bacterial group II intron maturase, a non-TE control, being called a LINE. Note for anyone extending
+  this: requiring a positive LINE feature instead (poly-A, ORF1p, ORF2p EN–RT, RNase H) is too strict,
+  because the R2 clade carries a C-terminal restriction-like endonuclease rather than an N-terminal APE.
+- **A terminal inverted repeat can now name a non-autonomous Class II element.** Requiring a transposase
+  excluded the whole category by construction: a MITE has no transposase by definition. The floor is
+  derived rather than chosen — chance inverted repeats on random sequence reach at most 17 bp over 4,500
+  trials, so `structural.MIN_TIR_STANDALONE` is 20 bp, above that ceiling and below the 31 bp repeats of the
+  real non-autonomous elements. It also rejects the solo copia 5′ LTR (12 bp) that motivated the
+  conservative branch. `tests/test_structural_bounds.py` re-derives both numbers.
+
+- **A primer carrying a non-templated 5′ tail could never bind.** The matcher required the whole oligo to
+  match within the mismatch budget, so a pair with a restriction site, adapter, barcode or promoter added
+  at the 5′ end returned no product at all — a large and ordinary class of assay. Binding is now anchored
+  at the 3′ end: the longest 3′-proximal core that anneals is used, down to `primers.MIN_PRIMER_SIZE`
+  (the same constant Primer3 is given as its minimum primer length, so the tool will not report a product
+  from a footprint shorter than an oligo it would design), and the unmatched 5′ remainder is reported as a
+  tail rather than discarded. Amplicons now carry `product_length` — templated span plus both incorporated
+  tails, the band a gel shows — alongside `length`, and the product-size window is applied to the former.
+  For an untailed pair the two are identical and nothing changes. The search is single-pass: the shortest
+  permitted core is scanned once and each hit extended 5′, which returns the same sites as the obvious
+  descending scan at a fraction of the cost, verified against it on 6,000 randomised inputs.
+- **In-silico PCR sealed only the parameters the caller typed.** A run left entirely at defaults therefore
+  sealed none of the numbers that selected its products — the same defect `_detector_parameters()` was
+  written to remove from the analysis path, still present on the assay path. The manifest now records the
+  resolved values of `max_mm`, `tp`, `min_anneal`, `prod_min` and `prod_max` whether or not the caller
+  supplied them, and `benchmarks/reproducibility.py` audits that coverage at defaults, which is the case
+  in which an under-specified manifest is invisible.
+
+### Added
+- **An assay-validation benchmark** (`benchmarks/run_assay.py`) that runs published primer pairs on the
+  templates their papers name and compares predicted against wet-lab-determined product sizes. Each case
+  records where in its source the primers and the size appear, whether the source prints the size as an
+  integer or gives only a gel estimate, whether the pair targets one locus or many, and whether the entry
+  was written with a worked prediction already in it — all as explicit fields, because each selects a
+  stratum that is reported and an inference would decide it silently.
+- `benchmarks/testsuite.py`, which runs the test suite and records its counts alongside every other
+  benchmark result, so a claim about coverage is derived rather than remembered.
+- **A paired comparison benchmark** (`benchmarks/run_tesorter.py`, `benchmarks/head_to_head.py`) that runs
+  an external classifier on byte-identical input, verifies both tools saw the same bytes by SHA-256, and
+  compares discordant calls with McNemar's exact test. It reports separately the cases where TEagle
+  abstained and the comparator was right — the number an abstention mechanism has to justify.
+- `benchmarks/reanalyse.py`, which re-scores the corpus from stored sequences so a classifier change is
+  measured on the same bytes rather than on a fresh set of downloads. It takes a lock, because two
+  concurrent passes leave the corpus half at one code version and half at another — a state that still
+  scores, and scores wrong.
+
+## [3.5.0] — 2026-08-05
+
+A benchmarking pass. Building the evidence for a methods paper meant auditing the provenance seal against
+the code it claims to describe, and the audit found a gap. **Every provenance manifest hash changes in this
+release**, because the sealed parameter set grew by one — the same kind of deliberate break as 3.3.0 → 3.4.0.
+No detection, classification or primer result changes.
+
+### Fixed
+- **The provenance seal recorded twenty of the twenty-one thresholds that decide a call.** The upper bound
+  on terminal inverted-repeat length (`find_tir(max_tir)`) was applied by the detector but never written
+  into the manifest, so a run could not be fully reconstructed from its own seal. It is now sealed, and a
+  benchmark (`benchmarks/reproducibility.py`) enumerates every numeric default across the seven detectors
+  the seal draws from and fails if any is unaccounted for, so the omission cannot recur silently.
+- **The stated lower limit of terminal-repeat detection was wrong.** The classification card said k-mer
+  seeding stops finding a repeat pair "below roughly 72% identity". That figure came from a single rough
+  test and is not a constant: the limit depends on repeat length, because a longer repeat carries more
+  exact seed k-mers at the same identity. Measured over 600 controlled runs on a 574 bp LTR, candidates
+  were still reported at 65% identity and none at 60%. The card now says so, and says that the limit is
+  length-dependent.
+
+### Added
+- **A reproducible benchmark suite** under `benchmarks/`, covering the divergence-detection boundary
+  (600 runs), the provenance seal's stability, sensitivity and coverage (30 runs), and a sixteen-tool
+  capability comparison in which every cell is sourced to a publication or to the module implementing it.
+  Every figure and table regenerates from raw output with a single command; no value is typed in by hand.
+
+## [3.4.0] — 2026-08-04
 
 A review-and-fix pass over scientific validity and the interface. **Results may differ from 3.3.0** for
 three classes of element — see *Fixed* — in every case because a call that the evidence did not support is

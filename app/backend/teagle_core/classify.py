@@ -37,6 +37,13 @@ _GAG_CORE = {"Gag_p24", "Gag_p24_C", "Gag_p10", "PEG10_N-capsid"}
 
 _CODE_ORDER = ["ORF1", "GAG", "PR", "EN", "RT", "RNaseH", "INT", "YR", "CHR", "ENV", "TPase", "HEL"]
 
+# Retained for reference: the shortest record that could plausibly hold an autonomous non-LTR element.
+# Autonomous LINEs run 3-6 kb (L1 ~6 kb, R2Bm 3.6 kb). Length is NOT used to license a LINE call - a
+# multi-kilobase record whose sole detected domain is a reverse transcriptase is equally consistent with a
+# host telomerase, and the bundled panel carries one RT model rather than a clade-resolved set, so the two
+# cannot be separated on that evidence. The order is withheld instead.
+_MIN_LINE_RECORD_BP = 2000
+
 
 def _ordered(cset):
     # detected domain codes in canonical retroviral order, unknown codes appended alphabetically
@@ -166,6 +173,37 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
                 elif _lcong["verdict"] == "congruent":
                     ev.append(f"a {_lcong['observed']} bp target-site duplication flanks the element — congruent "
                               f"with the {superfamily.split(' ')[0]} target-site length ({_lcong['basis']})")
+        elif not has_ltr and not intg and "CHR" in cset:
+            # A chromodomain is carried by the chromoviruses, a Ty3/Gypsy lineage, and is not carried by
+            # non-LTR elements. Reaching the LINE branch on an absent integrase alone therefore filed
+            # chromovirus fragments as LINEs whenever the integrase went undetected — a Class I order error
+            # from evidence that positively excluded it. The integrase is what resolves Copia from Gypsy, so
+            # without it the superfamily is still withheld; only the order is named here.
+            klass = "Class I · retrotransposon"
+            superfamily = "LTR retrotransposon (superfamily undetermined)"
+            te_class = "LTR/unclassified"
+            ev.append("chromodomain present with reverse transcriptase — the chromoviruses are a Ty3/Gypsy "
+                      "lineage and non-LTR elements do not carry a chromodomain, so this is an LTR "
+                      "retrotransposon even though no integrase was detected and no terminal repeat was "
+                      "accepted")
+            ev.append("the superfamily is not called: Copia versus Gypsy needs the integrase-versus-RT "
+                      "translation order, and no integrase was detected")
+        elif (not has_ltr and not intg
+              and not (has_polya or "ORF1" in cset or "EN" in cset or "RNaseH" in cset)):
+            # A LONE reverse transcriptase is not a LINE. The branch below reads an absent integrase as
+            # positive evidence for a non-LTR element, which holds only when something else about the record
+            # is LINE-like: a poly-A tail from target-primed reverse transcription, an ORF1p, an
+            # endonuclease, or an RNase H. With none of those the only fact in evidence is "a reverse
+            # transcriptase is present", which every retroelement order satisfies — and which host genes
+            # satisfy too. A telomerase reverse transcriptase presents exactly this way, as a multi-kilobase
+            # record whose sole detected domain is RT, and cannot be separated from an R2-clade element on
+            # that evidence: both are reverse transcriptases and the panel carries one RT model, not a
+            # clade-resolved set. The order is therefore withheld rather than defaulted to LINE.
+            superfamily, te_class = "retrotransposon (partial)", "retro/partial"
+            ev.append("a reverse transcriptase was detected with no integrase, no terminal repeat, and none "
+                      "of the features that distinguish a non-LTR element — no poly-A tail, no ORF1p, no "
+                      "ORF2p endonuclease–RT arrangement, no RNase H. Every retrotransposon order carries a "
+                      "reverse transcriptase, so the order is left unassigned rather than defaulted to LINE")
         elif not has_ltr and not intg:
             superfamily, te_class = "LINE (non-LTR)", "LINE"
             ev.append("RT without a DDE integrase and without LTRs → non-LTR retrotransposon (LINE)")
@@ -190,7 +228,23 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
             superfamily, te_class = "LTR retrotransposon (superfamily undetermined)", "LTR/unclassified"
             ev.append("LTRs + RT present but integrase/order not resolved")
         else:
-            superfamily, te_class = "retrotransposon (partial)", "retro/partial"
+            # RT + a DDE integrase, but no terminal repeat was accepted. The order is still determined:
+            # a DDE integrase is diagnostic of the LTR order and is not carried by non-LTR elements, which
+            # is the same discriminator the LINE branch above relies on in its negative form. Refusing to
+            # name the order here treated "the repeat was not recovered" as "the order is unknown", which
+            # are different statements — a repeat goes unrecovered on a long deposit, on a truncated one,
+            # or on an element old enough for its copies to have diverged past the identity floor.
+            #
+            # Measured: on the benchmark corpus this branch fired on 16 elements whose literature label is
+            # LTR, all of them carrying RT + INT, and a domain-architecture classifier (TEsorter) named
+            # every one of them correctly from the same sequence. The superfamily is still withheld —
+            # that needs the INT-vs-RT translation order, which is a separate question from the order.
+            superfamily, te_class = "LTR retrotransposon (superfamily undetermined)", "LTR/unclassified"
+            ev.append("RT + DDE integrase present → LTR order, from domain architecture; no terminal "
+                      "repeat was accepted, so the assignment does not rest on structural evidence")
+            if "ENV" in cset:                     # has_env is not bound until later in this function
+                ev.append("envelope glycoprotein present — carried by LTR elements and never by non-LTR "
+                          "retrotransposons, corroborating the order")
     elif tpase:
         klass = "Class II · DNA transposon"
         tp_hits = [d for d in domains if d["domain"] == "TPase"]
@@ -292,23 +346,67 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
         klass = "unclassified"
         if cset:                                          # coding domain(s) recovered but no RT and no transposase
             _cs = "–".join(_ordered(cset))                # e.g. an ERV relic that kept env/capsid but lost pol
+            # A domain shared with host enzymes is not, on its own, evidence of a transposable element.
+            # The endonuclease model (Pfam Exo_endo_phos) also matches host AP endonucleases and DNase I;
+            # the tyrosine-recombinase model matches phage and plasmid integrases and host site-specific
+            # recombinases; RNase H and the chromodomain are likewise carried by host proteins. Asserting
+            # Class I from any of those alone reported host DNA-repair and recombinase genes as
+            # retroelement fragments. A retro call now requires a domain that non-mobile host genes do not
+            # carry: a capsid, an envelope glycoprotein, or a DDE integrase.
+            _RETRO_SPECIFIC = {"GAG", "ENV", "INT", "ORF1"}
             if has_ltr:
                 superfamily, te_class = f"LTR retroelement fragment ({_cs}; RT/pol not detected)", "LTR/partial"
-            else:
+                ev.append(f"coding domain(s) recovered ({_cs}) with paired terminal repeats, but neither "
+                          f"reverse transcriptase nor transposase detected")
+            elif cset & _RETRO_SPECIFIC:
                 superfamily, te_class = f"coding fragment ({_cs}; RT/transposase not detected)", "retro/partial"
-            ev.append(f"coding domain(s) recovered ({_cs}) but neither reverse transcriptase nor transposase detected")
+                ev.append(f"coding domain(s) recovered ({_cs}) but neither reverse transcriptase nor "
+                          f"transposase detected")
+            else:
+                klass = "unclassified"
+                superfamily = f"{_cs} domain(s) detected; no transposable-element assignment"
+                te_class = "unclassified"
+                ev.append(f"the only coding evidence is {_cs}, which host genes also carry — an "
+                          f"endonuclease model matches apurinic endonucleases and DNase I, and a tyrosine "
+                          f"recombinase matches phage, plasmid and host site-specific recombinases. Without "
+                          f"a reverse transcriptase, a transposase, a capsid, an envelope or an integrase "
+                          f"there is no element-specific evidence, so no class is assigned")
         elif has_ltr:
             superfamily, te_class = "LTR retrotransposon (no coding domains detected)", "LTR/structural-only"
             ev.append("paired LTRs but no coding domain recovered")
         elif has_tir:
-            # An inverted terminal repeat WITHOUT a transposase is not Class II evidence. Verified on the
-            # real copia 5' LTR (276 bp): fed alone it trips the terminal-inverted-repeat scan and used to
-            # be filed as a DNA transposon — a Class I fragment assigned to Class II. Solo LTRs outnumber
-            # full-length elements in most genomes, so this is the common case, not an edge case.
-            superfamily, te_class = "terminal inverted repeat, class unassigned", "repeat/structural-only"
-            ev.append("an inverted terminal repeat was detected but no transposase — this does not establish "
-                      "a DNA transposon. A solo LTR, a fragment of a larger element, or an unrelated "
-                      "inverted repeat all produce the same signal, so the class is left unassigned")
+            # A SHORT inverted terminal repeat without a transposase is not Class II evidence. Verified on
+            # the real copia 5' LTR (276 bp): fed alone it trips the terminal-inverted-repeat scan and used
+            # to be filed as a DNA transposon — a Class I fragment assigned to Class II. Solo LTRs
+            # outnumber full-length elements in most genomes, so this is the common case, not an edge case.
+            #
+            # A LONG one is different, and the distinction is measured rather than assumed. Chance inverted
+            # repeats reached at most 15 bp at the recorded seed and 17 bp across five seeds over 4,500
+            # random sequences (benchmarks/chance_tir.py; see structural.MIN_TIR_STANDALONE),
+            # and the solo copia LTR that motivated this branch yields 12 bp. Above that ceiling the repeat
+            # is not attributable to chance, and a terminal inverted repeat is the defining structural
+            # feature of a Class II element. Refusing to call it left every NON-AUTONOMOUS DNA transposon
+            # unassigned — a MITE has no transposase by definition, which is what makes it non-autonomous,
+            # so requiring one to name the class excluded the whole category by construction.
+            _tl = (tir_ev or {}).get("tir_len") or 0
+            if _tl >= structural_mod.MIN_TIR_STANDALONE:
+                klass = "Class II · DNA transposon"
+                superfamily = "non-autonomous TIR element (superfamily undetermined)"
+                te_class = "DNA/non-autonomous"
+                ev.append(f"a {_tl} bp terminal inverted repeat was detected with no transposase. Chance "
+                          f"inverted repeats reached at most {structural_mod.MIN_TIR_STANDALONE - 3} bp "
+                          f"over 4,500 random sequences, so a repeat this "
+                          f"long is structural evidence of a Class II element; the absence of a transposase "
+                          f"is consistent with a non-autonomous derivative such as a MITE or an internally "
+                          f"deleted copy, which carry terminal repeats and no coding capacity")
+                ev.append("the superfamily is not called: that needs the transposase family, which was not "
+                          "detected here")
+            else:
+                superfamily, te_class = "terminal inverted repeat, class unassigned", "repeat/structural-only"
+                ev.append(f"an inverted terminal repeat was detected ({_tl} bp) but no transposase, and a "
+                          f"repeat this short arises by chance on random sequence — this does not establish "
+                          f"a DNA transposon. A solo LTR, a fragment of a larger element, or an unrelated "
+                          f"inverted repeat all produce the same signal, so the class is left unassigned")
         else:
             superfamily, te_class = "no clear TE signature", "none"
 
@@ -333,7 +431,10 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
 
     # domain-architecture order shows ONLY the domains actually detected, in the superfamily's
     # canonical order — never a full template presented as if it were observed. ENV closes the retroviral order.
-    _CANON = {"Copia": ["GAG", "PR", "INT", "RT", "RNaseH", "CHR", "ENV"],
+    # No CHR in the Copia canon: a chromodomain-bearing integrase is a chromovirus feature and
+    # chromoviruses are a Ty3/Gypsy lineage, so listing it here would render a spurious PF00385 hit on a
+    # Copia call as though it were canonical Copia architecture.
+    _CANON = {"Copia": ["GAG", "PR", "INT", "RT", "RNaseH", "ENV"],
               "Gypsy": ["GAG", "PR", "RT", "RNaseH", "INT", "CHR", "ENV"]}
     _sf = superfamily.split(" ")[0] if superfamily else ""
     if _sf in _CANON:

@@ -1,0 +1,149 @@
+{
+ "case": {
+  "amplicon_range_bp": "490 bp for the insertion (I) allele, 190 bp for the deletion (D) allele; an intermediate heteroduplex band is also reported in heterozygotes",
+  "caveats": "Template substitution: the paper cites EMBL X62855 as the sequence it worked from, but X62855.1 is only 1856 bp and stops 36 bp short of the reverse-primer site (the forward primer matches at 1403 and the I-allele amplicon would run 1403..1892), so X62855 cannot serve as the template. AF118569.1 was substituted and does carry the insertion allele. Size discrepancy: 490/190 are gel estimates and are internally inconsistent with the paper's own 287-bp Alu; the sequence-derived lengths on AF118569.1 are 480 bp (filled, at 14044..14523) and 193 bp (empty). expected_amplicon_bp is reported as the paper's 490, not the measured 480. Text-layer note: the PDF renders the sense oligo as 'CTGGAGACCACTCCCATCC1TT-CT'; the '1' is an OCR artifact for T, confirmed by the exact single-site genomic match at the ACE intron 16 locus. Both primers have exactly one site on AF118569.1.",
+  "citation": "Rigat B, Hubert C, Corvol P, Soubrier F. PCR detection of the insertion/deletion polymorphism of the human angiotensin converting enzyme gene (DCP1) (dipeptidyl carboxypeptidase 1). Nucleic Acids Res. 1992;20(6):1433. doi:10.1093/nar/20.6.1433-a. PMID 1313972; PMCID PMC312213.",
+  "confidence": "medium",
+  "element": "Alu element (SINE), 287 bp, inserted in intron 16 of the ACE/DCP1 gene at 17q23",
+  "expected_amplicon_bp": 490,
+  "expected_bp_provenance": "stated_in_source",
+  "forward_primer": "CTGGAGACCACTCCCATCCTTTCT",
+  "loci_justification": "The pair flanks one locus on the cited template: a single insertion site, a single excision site, or a single transcript. A second product on this template would be an off-target prediction.",
+  "loci_on_template": "single",
+  "name": "Human ACE (DCP1) intron 16 Alu insertion/deletion polymorphism (the classic ACE I/D assay)",
+  "organism": "Homo sapiens",
+  "panel": "irap-remap",
+  "reverse_primer": "GATGTGGCCATCACATTCGTCAGAT",
+  "template_accession": "AF118569.1",
+  "where_in_paper": "The 'PCR Conditions' paragraph gives both oligos verbatim; the sentence immediately after states 'The PCR product is a 190 bp fragment in the absence of the insertion and a 490 bp fragment in the presence of the insertion.'",
+  "worked_prediction_in_entry": true,
+  "worked_prediction_note": "The entry records a worked prediction — a coordinate range, an in-silico check, or a sequence-derived length — so the expected answer was written down before the engine ran. The published size remains external, but this case was not scored blind."
+ },
+ "result": {
+  "amplicons": [
+   {
+    "amplicon_5p": "CTGGAGACCACTCCCATCCTTTCTCCCATT…",
+    "end": 14523,
+    "fwd_anneal_len": 24,
+    "fwd_mm": 0,
+    "fwd_primer": "F",
+    "fwd_tail5": 0,
+    "length": 480,
+    "on_target": false,
+    "product_length": 480,
+    "rev_anneal_len": 25,
+    "rev_mm": 0,
+    "rev_primer": "R",
+    "rev_tail5": 0,
+    "seq": "CTGGAGACCACTCCCATCCTTTCTCCCATTTCTCTAGACCTGCTGCCTATACAGTCACTTTTTTTTTTTTTTTGAGACGGAGTCTCGCTCTGTCGCCCAGGCTGGAGTGCAGTGGCGGGATCTCGGCTCACTGCAAGCTCCGCCTCCCGGGTTCACGCCATTCTCCTGCCTCAGCCTCCCAAGTAGCTGGGACCACAGGCGCCCGCCACTACGCCCGGCTAATTTTTTGTATTTTTAGTAGAGACGGGGTTTCACCGTTTTAGCCGGGATGGTCTCGATCTCCTGACCTCGTGATCCGCCCGCCTCGGCCTCCCAAAGTGCTGGGATTACAGGCGTGATACAGTCACTTTTATGTGGTTTCGCCAATTTTATTCCAGCTCTGAAATTCTCTGAGCTCCCCTTACAAGCAGAGGTGAGCTAAGGGCTGGAGCTCAAGGCATTCAAACCCCTACCAGATCTGACGAATGTGATGGCCACATC",
+    "single_primer": false,
+    "source": "AF118569.1 Homo sapiens angiotensin I converting enzyme precursor (DCP1) gene, alternative splice products, complete cds (input)",
+    "start": 14043
+   }
+  ],
+  "backgroundsSearched": [
+   "AF118569.1 Homo sapiens angiotensin I converting enzyme precursor (DCP1) gene, alternative splice products, complete cds (input)"
+  ],
+  "criteria": {
+   "max_mismatch": 2,
+   "min_anneal": 18,
+   "product_size": [
+    28,
+    3825
+   ],
+   "three_prime_strict": 5
+  },
+  "notSearched": [
+   "Reference assembly (needs WSL/NCBI)",
+   "External NCBI Primer-BLAST",
+   "IUPAC-ambiguous template bases"
+  ],
+  "provenance": {
+   "createdUtc": "2026-08-06T03:58:36+00:00",
+   "databases": [],
+   "environment": {
+    "machine": "AMD64",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10"
+   },
+   "input": {
+    "id": "AF118569.1 Homo sapiens angiotensin I converting enzyme precursor (DCP1) gene, alternative splice products, complete cds",
+    "length": 24070,
+    "sha256": "d325c31ca200e2b4f710c62fab669c1bffeebbb27246ea927341863650ba7a0c"
+   },
+   "manifestSha256": "f161cfee4841f3ea136474e55b508730639bba007f9d78768fbde826f992bc6b",
+   "notRun": [
+    "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
+    "External NCBI Primer-BLAST",
+    "De novo family discovery"
+   ],
+   "parameters": {
+    "background_sha256": null,
+    "fwd": "CTGGAGACCACTCCCATCCTTTCT",
+    "max_mm": 2,
+    "min_anneal": 18,
+    "prod_max": 3825,
+    "prod_min": 28,
+    "rev": "GATGTGGCCATCACATTCGTCAGAT",
+    "target_span": null,
+    "tp": 5
+   },
+   "references": [],
+   "runType": "in-silico-pcr",
+   "schemaVersion": "0.1",
+   "software": [
+    {
+     "name": "python",
+     "version": "3.12.10"
+    },
+    {
+     "name": "TEagle core",
+     "version": "3.6.0"
+    }
+   ],
+   "teagleVersion": "3.6.0"
+  },
+  "references": [],
+  "truncated": false,
+  "truncatedOn": [],
+  "warning": null
+ },
+ "scored": {
+  "accession": "AF118569.1",
+  "caveats": "Template substitution: the paper cites EMBL X62855 as the sequence it worked from, but X62855.1 is only 1856 bp and stops 36 bp short of the reverse-primer site (the forward primer matches at 1403 and the I-allele amplicon would run 1403..1892), so X62855 cannot serve as the template. AF118569.1 was substituted and does carry the insertion allele. Size discrepancy: 490/190 are gel estimates and are internally inconsistent with the paper's own 287-bp Alu; the sequence-derived lengths on AF118569.1 are 480 bp (filled, at 14044..14523) and 193 bp (empty). expected_amplicon_bp is reported as the paper's 490, not the measured 480. Text-layer note: the PDF renders the sense oligo as 'CTGGAGACCACTCCCATCC1TT-CT'; the '1' is an OCR artifact for T, confirmed by the exact single-site genomic match at the ACE intron 16 locus. Both primers have exactly one site on AF118569.1.",
+  "citation": "Rigat B, Hubert C, Corvol P, Soubrier F. PCR detection of the insertion/deletion polymorphism of the human angiotensin converting enzyme gene (DCP1) (dipeptidyl carboxypeptidase 1). Nucleic Acids Res. 1992;20(6):1433. doi:10.1093/nar/20.6.1433-a. PMID 1313972; PMCID PMC312213.",
+  "closest_bp": 480,
+  "difference_bp": -10,
+  "elapsed_s": 0.062,
+  "element": "Alu element (SINE), 287 bp, inserted in intron 16 of the ACE/DCP1 gene at 17q23",
+  "expected_bp": 490,
+  "found": true,
+  "ground_truth": "stated_in_source",
+  "loci_on_template": "single",
+  "multilocus_by_design": false,
+  "n_products": 1,
+  "name": "Human ACE (DCP1) intron 16 Alu insertion/deletion polymorphism (the classic ACE I/D assay)",
+  "organism": "Homo sapiens",
+  "panel": "irap-remap",
+  "preworked_in_corpus": true,
+  "primer_degenerate": false,
+  "primer_fwd_as_published": "CTGGAGACCACTCCCATCCTTTCT",
+  "primer_rev_as_published": "GATGTGGCCATCACATTCGTCAGAT",
+  "product_sizes": [
+   480
+  ],
+  "scored_product_anneal_bp": [
+   24,
+   25
+  ],
+  "scored_product_tail_bp": 0,
+  "search_window_bp": [
+   28,
+   3825
+  ],
+  "source_confidence": "medium",
+  "template_sha256": "815dbcb87ac9fb3d",
+  "tolerance_bp": 49.0,
+  "within_tolerance": true
+ }
+}

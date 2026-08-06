@@ -1,0 +1,601 @@
+{
+ "accession": "AF030881",
+ "corpus_row": {
+  "accession": "AF030881",
+  "citation": "Poulter R, Butler M (1998) Gene 215(2):241-249, \"A retrotransposon family from the pufferfish (fugu) Fugu rubripes\" (PMID 9714821). Abstract: \"Sequence comparisons of the predicted ORFs indicate that this element is related to the gypsy class of LTR-retrotransposons. Specifically, the sushi retrotransposons are most closely related to the retrotransposon group which includes the MAGGY retroelement ... and the CfT-1 element\".",
+  "confidence": "high",
+  "coords": "",
+  "evidence_type": "primary literature",
+  "expected_class": "Class I / LTR",
+  "expected_superfamily": "Gypsy (Ty3)",
+  "organism": "Takifugu rubripes",
+  "panel": "ltr-gypsy",
+  "why_safe": "The gypsy assignment is the discovery paper's own sequence comparison of the gag and pol ORFs against known gypsy-class elements, with a specific sister-group relationship to MAGGY/CfT-1 - not a pipeline call, and post-dating the Ty3/Gypsy vs Bel/Pao split so the \"gypsy\" term is used in its modern sense. The deposit is the element: mobile_element 1..5645 covering the whole record, with 5' LTR 1..560; the paper's stated full length (5.645 kb) matches the LOCUS length. Independent later corroboration exists in the sushi-ichi/SIRH-PEG10 domestication literature, and the record notes it contains the ICTV exemplar Takifugu rubripes Sushi virus."
+ },
+ "elapsed_s": 0.032,
+ "fetch_source": {
+  "accession": "AF030881.2",
+  "coords_applied": null,
+  "length": 5645,
+  "organism": "Takifugu rubripes",
+  "title": "Takifugu rubripes sushi-ichi retrotransposon, complete sequence"
+ },
+ "input_length": 5645,
+ "input_sha256": "8bc35f58ac187df50e79e7288691c6344f8a50d6c99955f956ebbb62632c70b7",
+ "result": {
+  "provenance": {
+   "createdUtc": "2026-08-05T20:39:49+00:00",
+   "databases": [
+    {
+     "file": "data/te_domains.hmm",
+     "name": "Pfam TE-domain profiles (bundled, CC0)",
+     "sha256": "57f2b7881f35e2aeb2885430c80d7d514005d32b9f1f782e362189b3207858ac"
+    }
+   ],
+   "environment": {
+    "machine": "AMD64",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10"
+   },
+   "input": {
+    "id": "AF030881.2 Takifugu rubripes sushi-ichi retrotransposon, complete sequence",
+    "length": 5645,
+    "sha256": "77cf67e76fcf7054836501757c8e969fddff49edb6553023758682a16df0e44a"
+   },
+   "manifestSha256": "3c894fbe3c225d83a6027630040187ed0c0018509b6783c5ed37690f315df300",
+   "notRun": [
+    "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
+    "External NCBI Primer-BLAST",
+    "De novo family discovery"
+   ],
+   "parameters": {
+    "domain_evalue_max": 0.001,
+    "domain_orfs_scanned_max": 12,
+    "ltr_min_anchors": 4,
+    "ltr_min_identity_pct": 80.0,
+    "ltr_min_len": 80,
+    "ltr_seed_k": 13,
+    "orf_min_aa": 40,
+    "pbs_min_identity": 0.55,
+    "pbs_search_window": 44,
+    "polya_min_run": 8,
+    "ppt_max_defects": 2,
+    "ppt_min_len": 9,
+    "ppt_min_purine": 0.82,
+    "ppt_window": 30,
+    "tir_max_len": 1000,
+    "tir_min_anchors": 3,
+    "tir_min_identity_pct": 80,
+    "tir_min_len": 10,
+    "tir_seed_k": 11,
+    "tsd_max_len": 12,
+    "tsd_min_len": 2
+   },
+   "references": [
+    {
+     "citation": "Wicker T, Sabot F, Hua-Van A, et al. (2007) A unified classification system for eukaryotic transposable elements. Nat Rev Genet 8(12):973-982.",
+     "doi": "10.1038/nrg2165",
+     "key": "Wicker2007",
+     "license": "",
+     "name": "TE classification framework",
+     "url": "https://doi.org/10.1038/nrg2165"
+    },
+    {
+     "citation": "Zhang RG, Li GY, Wang XL, et al. (2022) TEsorter: an accurate and fast method to classify LTR-retrotransposons in plant genomes. Horticulture Research 9:uhac017.",
+     "doi": "10.1093/hr/uhac017",
+     "key": "TEsorter",
+     "license": "",
+     "name": "Domain-architecture completeness (domain-completeness basis)",
+     "url": "https://doi.org/10.1093/hr/uhac017"
+    },
+    {
+     "citation": "Ou S, Jiang N (2018) LTR_retriever: a highly accurate and sensitive program for identification of long terminal repeat retrotransposons. Plant Physiology 176(2):1410-1422.",
+     "doi": "10.1104/pp.17.01310",
+     "key": "LTRretriever",
+     "license": "",
+     "name": "Intact LTR-retrotransposon criteria (domain-completeness basis)",
+     "url": "https://doi.org/10.1104/pp.17.01310"
+    },
+    {
+     "citation": "Eddy SR (2011) Accelerated Profile HMM Searches. PLoS Comput Biol 7(10):e1002195.",
+     "doi": "10.1371/journal.pcbi.1002195",
+     "key": "HMMER",
+     "license": "BSD-3-Clause",
+     "name": "HMMER (via pyhmmer 0.12.1)",
+     "url": "http://hmmer.org"
+    },
+    {
+     "citation": "Mistry J, Chuguransky S, Williams L, et al. (2021) Pfam: The protein families database in 2021. Nucleic Acids Res 49(D1):D412-D419.",
+     "doi": "10.1093/nar/gkaa913",
+     "key": "Pfam",
+     "license": "CC0",
+     "name": "Pfam-A profiles (via InterPro, retrieved 2026-07-17)",
+     "url": "https://www.ebi.ac.uk/interpro/"
+    }
+   ],
+   "runType": "analysis",
+   "schemaVersion": "0.1",
+   "software": [
+    {
+     "name": "HMMER (pyhmmer)",
+     "version": "0.12.1"
+    },
+    {
+     "name": "python",
+     "version": "3.12.10"
+    },
+    {
+     "name": "TEagle core",
+     "version": "3.6.0"
+    }
+   ],
+   "teagleVersion": "3.6.0"
+  },
+  "records": [
+   {
+    "classification": {
+     "class": "Class I · retrotransposon",
+     "completeness": {
+      "coding": {
+       "frames": 2,
+       "note": "the detected domains fall in 2 separate reading frame(s) — consistent with an interrupted, rearranged or degenerate copy, though a genuine multi-ORF architecture (LINE ORF1/ORF2, some ERVs) also looks like this",
+       "state": "split across reading frames",
+       "truncated_frame": false,
+       "unplaced": 0
+      },
+      "expected": [
+       "GAG",
+       "PR",
+       "RT",
+       "RNaseH",
+       "INT"
+      ],
+      "kind": "LTR retroelement",
+      "missing": [
+       "PR",
+       "RNaseH"
+      ],
+      "present": [
+       "GAG",
+       "RT",
+       "INT"
+      ],
+      "scope": "gag (matrix/capsid/nucleocapsid), protease, RT, RNase H, DDE integrase, envelope, chromodomain, LINE ORF1p and apurinic-like endonuclease, tyrosine recombinase, Helitron helicase, and transposases of the CACTA, hAT, IS4, MULE, Tc1/Mariner and unclassified DDE groups",
+      "tier": "near-complete"
+     },
+     "confidence": "High",
+     "domains_unavailable": false,
+     "evidence": [
+      "reverse-transcriptase domain present",
+      "integrase C-terminal to RT + paired LTRs → Gypsy/Ty3 order",
+      "13 shorter ORF(s) were outside the profile search's ORF budget and were not searched — a domain listed as not detected was not tested on those"
+     ],
+     "explanation": "Classified as LTR/Gypsy (high confidence). Structural: LTR. Domains: GAG · RT · INT · CHR. reverse-transcriptase domain present; integrase C-terminal to RT + paired LTRs → Gypsy/Ty3 order.",
+     "is_erv": false,
+     "n_domains": 4,
+     "order": "GAG–RT–INT–CHR",
+     "orfs_unscanned": 13,
+     "superfamily": "Gypsy (Ty3) · chromovirus",
+     "te_class": "LTR/Gypsy"
+    },
+    "composition": {
+     "ambiguous": 0.0,
+     "ambiguous_counts": {},
+     "counts": {
+      "A": 982,
+      "C": 2029,
+      "G": 1367,
+      "N": 0,
+      "T": 1267
+     },
+     "gc": 60.2,
+     "length": 5645,
+     "n": 0.0
+    },
+    "domains": [
+     {
+      "aa": [
+       109,
+       189
+      ],
+      "class": "retro",
+      "confidence": "high",
+      "dna": "AACCTTGCCAGCCCCCGTGTGTTCGGCGGGGATTTCGACCTGGGCAAGGGGTTCCTCCACCAATGTGAGCTGCTCTTCCGCCATCAGCCCTCCAGATTTGTTTCCGACGAGGCCAAGGTTGGATTTATAACCTCCCTCCTGGCCGACAAGGCATTGAGCTGGGCCATAGCTGCCGTCGACCTGGACCCCCGCCTCTCCTCAGACTACAGCGCCTTTCGACGGGAGTTCAAGGCTGTGTTCGAG",
+      "domain": "GAG",
+      "evalue": 3.5411544406248867e-16,
+      "hmm": "PEG10_N-capsid",
+      "label": "gag capsid (retrotransposon/PEG10-type)",
+      "nt": [
+       900,
+       1143
+      ],
+      "orf": 1,
+      "pfam": "PF03732",
+      "protein": "NLASPRVFGGDFDLGKGFLHQCELLFRHQPSRFVSDEAKVGFITSLLADKALSWAIAAVDLDPRLSSDYSAFRREFKAVFE",
+      "score": 49.1,
+      "strand": "+"
+     },
+     {
+      "aa": [
+       199,
+       359
+      ],
+      "class": "retro",
+      "confidence": "high",
+      "dna": "GTAGCCAAGGAGGATGGCGGCCTGAGGCCCTGCATCGACTTCCGCAAACTTAACAACATCACCGTTAAGAACAAGTACCCTCTTCCCCTTATGAGTTCCACGTTCGAGCCTCTCACTCATGCCCGGGTGTTCACTAAGTTAGACCTCCGCAACGCTTACCACTTGGTGCAGATCAGGAAAGGGGACGAATGGAAGACCGCCTTCAACACTCACCTCGGGCACTTCGAATACCTGGTCATGCCCTTCGGCCTCTCCAACGCCCCCGCCGTCTTCCAGGAGTTGGTCAACGATGTGCTCCGGGACATGATCAACGTCTTTGTGGTGGTCTACTTGGACGACATCTTGATCTTCTCCCGCACCATGGAGGAGCACCACCAGCATGTTCGCCTGGTCCTACAACGGCTTTTGGAGAACCGACTATTCATCAAAGCCGAGAAGTGCATCTTCCACTCCGCCTCAGTGGGGTACCTCGGCTACATCGTG",
+      "domain": "RT",
+      "evalue": 2.9974700609562836e-40,
+      "hmm": "RVT_1",
+      "label": "reverse transcriptase",
+      "nt": [
+       2423,
+       2906
+      ],
+      "orf": 0,
+      "pfam": "PF00078",
+      "protein": "VAKEDGGLRPCIDFRKLNNITVKNKYPLPLMSSTFEPLTHARVFTKLDLRNAYHLVQIRKGDEWKTAFNTHLGHFEYLVMPFGLSNAPAVFQELVNDVLRDMINVFVVVYLDDILIFSRTMEEHHQHVRLVLQRLLENRLFIKAEKCIFHSASVGYLGYIV",
+      "score": 127.9,
+      "strand": "+"
+     },
+     {
+      "aa": [
+       700,
+       799
+      ],
+      "class": "retro",
+      "confidence": "high",
+      "dna": "CCCAGTCGACCCTGGTCTCACGTAGCCCTGGATTTTGTGACGGGCCTCCCCGTCTCGCAGGGGAACGACACCATCCTGACCATTGTGGACCGCTTCTCCAAGGGGGTCCACTTTGTCGCCCTCCCCAAACTCCCTTCTGCTGCAGAAACAGCTGAACTCCTGGTCTCCCACGTTGTGCGTCTCCATGGGATCCCCCTGGACGTGGTCTCTGACCGTGGCCCCCAATTCACTTCTAGGGTGTGGCAGGCCTTCTGCAAGGGGATTGGGGCCACGGTCAGCCTGTCCTCTGGGTACCACCCC",
+      "domain": "INT",
+      "evalue": 6.209947470695984e-15,
+      "hmm": "rve",
+      "label": "integrase",
+      "nt": [
+       3926,
+       4226
+      ],
+      "orf": 0,
+      "pfam": "PF00665",
+      "protein": "PSRPWSHVALDFVTGLPVSQGNDTILTIVDRFSKGVHFVALPKLPSAAETAELLVSHVVRLHGIPLDVVSDRGPQFTSRVWQAFCKGIGATVSLSSGYHP",
+      "score": 45.1,
+      "strand": "+"
+     },
+     {
+      "aa": [
+       1004,
+       1053
+      ],
+      "class": "retro",
+      "confidence": "moderate",
+      "dna": "TGGAGCGTTAACAAGCTGCTGGCGGTCCGCCGACGGGGAAGGGGCTTCCAGTACCTGGTGGATTGGGTGGGTTACGGCCCCGAAGACCAGAGCTGGGTGCCCCCATCCTATCTCGCTGACCCCTCCCTCCTCGAAGACTTTTTACCGAGA",
+      "domain": "CHR",
+      "evalue": 5.131426829768287e-09,
+      "hmm": "Chromo",
+      "label": "chromodomain",
+      "nt": [
+       4838,
+       4988
+      ],
+      "orf": 0,
+      "pfam": "PF00385",
+      "protein": "WSVNKLLAVRRRGRGFQYLVDWVGYGPEDQSWVPPSYLADPSLLEDFLPR",
+      "score": 25.8,
+      "strand": "+"
+     }
+    ],
+    "id": "AF030881.2 Takifugu rubripes sushi-ichi retrotransposon, complete sequence",
+    "invalid": [],
+    "notes": [
+     "protein-domain search read the 12 longest ORFs of 25; 13 shorter ORF(s) were not searched, so a domain listed as not detected was not necessarily absent from the whole sequence"
+    ],
+    "orfs": [
+     {
+      "end": 5030,
+      "frame": 3,
+      "length_aa": 1066,
+      "length_nt": 3201,
+      "open_end": false,
+      "start": 1829,
+      "strand": "+"
+     },
+     {
+      "end": 1692,
+      "frame": 1,
+      "length_aa": 371,
+      "length_nt": 1116,
+      "open_end": false,
+      "start": 576,
+      "strand": "+"
+     },
+     {
+      "end": 4703,
+      "frame": 1,
+      "length_aa": 322,
+      "length_nt": 969,
+      "open_end": false,
+      "start": 3734,
+      "strand": "-"
+     },
+     {
+      "end": 3423,
+      "frame": 1,
+      "length_aa": 206,
+      "length_nt": 621,
+      "open_end": false,
+      "start": 2802,
+      "strand": "+"
+     },
+     {
+      "end": 3413,
+      "frame": 1,
+      "length_aa": 177,
+      "length_nt": 534,
+      "open_end": false,
+      "start": 2879,
+      "strand": "-"
+     },
+     {
+      "end": 3109,
+      "frame": 2,
+      "length_aa": 165,
+      "length_nt": 498,
+      "open_end": false,
+      "start": 2611,
+      "strand": "+"
+     },
+     {
+      "end": 4351,
+      "frame": 2,
+      "length_aa": 135,
+      "length_nt": 408,
+      "open_end": false,
+      "start": 3943,
+      "strand": "-"
+     },
+     {
+      "end": 1777,
+      "frame": 2,
+      "length_aa": 133,
+      "length_nt": 402,
+      "open_end": false,
+      "start": 1375,
+      "strand": "+"
+     },
+     {
+      "end": 1934,
+      "frame": 1,
+      "length_aa": 83,
+      "length_nt": 252,
+      "open_end": false,
+      "start": 1682,
+      "strand": "-"
+     },
+     {
+      "end": 2804,
+      "frame": 1,
+      "length_aa": 80,
+      "length_nt": 243,
+      "open_end": false,
+      "start": 2561,
+      "strand": "-"
+     },
+     {
+      "end": 4665,
+      "frame": 3,
+      "length_aa": 72,
+      "length_nt": 219,
+      "open_end": false,
+      "start": 4446,
+      "strand": "-"
+     },
+     {
+      "end": 5366,
+      "frame": 3,
+      "length_aa": 70,
+      "length_nt": 213,
+      "open_end": false,
+      "start": 5153,
+      "strand": "+"
+     },
+     {
+      "end": 3625,
+      "frame": 2,
+      "length_aa": 66,
+      "length_nt": 201,
+      "open_end": false,
+      "start": 3424,
+      "strand": "-"
+     },
+     {
+      "end": 2139,
+      "frame": 3,
+      "length_aa": 63,
+      "length_nt": 192,
+      "open_end": false,
+      "start": 1947,
+      "strand": "-"
+     },
+     {
+      "end": 4287,
+      "frame": 1,
+      "length_aa": 58,
+      "length_nt": 177,
+      "open_end": false,
+      "start": 4110,
+      "strand": "+"
+     },
+     {
+      "end": 3217,
+      "frame": 2,
+      "length_aa": 58,
+      "length_nt": 177,
+      "open_end": false,
+      "start": 3040,
+      "strand": "-"
+     },
+     {
+      "end": 5206,
+      "frame": 2,
+      "length_aa": 54,
+      "length_nt": 165,
+      "open_end": false,
+      "start": 5041,
+      "strand": "-"
+     },
+     {
+      "end": 5521,
+      "frame": 2,
+      "length_aa": 52,
+      "length_nt": 159,
+      "open_end": false,
+      "start": 5362,
+      "strand": "-"
+     },
+     {
+      "end": 1804,
+      "frame": 2,
+      "length_aa": 52,
+      "length_nt": 159,
+      "open_end": false,
+      "start": 1645,
+      "strand": "-"
+     },
+     {
+      "end": 436,
+      "frame": 2,
+      "length_aa": 52,
+      "length_nt": 159,
+      "open_end": false,
+      "start": 277,
+      "strand": "-"
+     },
+     {
+      "end": 2543,
+      "frame": 1,
+      "length_aa": 46,
+      "length_nt": 141,
+      "open_end": false,
+      "start": 2402,
+      "strand": "-"
+     },
+     {
+      "end": 821,
+      "frame": 1,
+      "length_aa": 45,
+      "length_nt": 138,
+      "open_end": false,
+      "start": 683,
+      "strand": "-"
+     },
+     {
+      "end": 2482,
+      "frame": 2,
+      "length_aa": 43,
+      "length_nt": 132,
+      "open_end": false,
+      "start": 2350,
+      "strand": "-"
+     },
+     {
+      "end": 1649,
+      "frame": 1,
+      "length_aa": 41,
+      "length_nt": 126,
+      "open_end": false,
+      "start": 1523,
+      "strand": "-"
+     },
+     {
+      "end": 984,
+      "frame": 3,
+      "length_aa": 40,
+      "length_nt": 123,
+      "open_end": false,
+      "start": 861,
+      "strand": "-"
+     }
+    ],
+    "retroviral": null,
+    "seq": "TGACTCCTACTCTGGCCCCACCTCCTCCTGGGCAATCAGCTCAACCACCACCACCTGGGCCCTCTCCTTCAGCTGCACCCAATCCGCCCAAATGACTCTGCACCCATAAAAGGCCCCTATGCACTCAGGCCAGTGCTTGATCTTACTGATGTTTTTGGCAACTCTTCCCGTTGACCCAACATCTCTCCAGGCTCCCCAGTGACTCCCTGCGTCTCCCTGCGTCTTCCAGGGACTCCCAGCGACTCCCAGCGACTCCCCCGGCTCTTCTGCTACCTTCCTAGCCCCTCTTCCTCTGACCTCTTCCTCTTCCCCTTCCTCGGACGGATTTCTCCTGGCCTCTGGACACTTGGACTCTCCCACGGACTCTCGCCCCTGGATCTCGAACTTGGTTCGTCTGCCGCATCACGCACCTATAGTTTGTCTCGGCCTCTCTCATTTAGTTTCTTCCCTCCTGTTTCTTTTGCTTCATTAAACCGTCTGAGTTCACTTTTAATTCCTGTGTCTGTCTGCCTTCTTTGGGGTTCCGCCACACTTGACCGCCAGTCCTCTCGAGCTTAACAGAAAGATCAAGCCAAGATGAGTCAAGGTGGAACCCCGGGGCAGCCGGGCGGCCCTAGGACCCCCACGTTACCCTCCCCCCTCGAAAGAAGAGTGGAGGCCCACTCTGCCCAGCTCTCCTCCCTTCAGTCGGAGCTAACCAAGGCCTTCCCCACAATCCAGGGGGAGATTTCCGAGCTCCAGAGCTCCTCCCAGACCACCTCCAGTACCCTGTCCGCCCTCTCCAACCAGATGTCCGCCATGGCAACCGTTTTGGCTTCCATTATTCAGAAGCTAGGCAGCGACCCCGGTGGGGCTGCTCCATCAGAACCATCTCTCCCGCTTTCTCCCCGAGCCGAGCCCAACCTTGCCAGCCCCCGTGTGTTCGGCGGGGATTTCGACCTGGGCAAGGGGTTCCTCCACCAATGTGAGCTGCTCTTCCGCCATCAGCCCTCCAGATTTGTTTCCGACGAGGCCAAGGTTGGATTTATAACCTCCCTCCTGGCCGACAAGGCATTGAGCTGGGCCATAGCTGCCGTCGACCTGGACCCCCGCCTCTCCTCAGACTACAGCGCCTTTCGACGGGAGTTCAAGGCTGTGTTCGAGCACCCCACCTACGGTGAAGACGCCGCGAGTCGTCTGCTCGCTCTCCAGCAGGGGTCACGGTCAGTTGCGGAGTACACCCTTGAGTTCCGCATCCTGGCTGCAGAGAGCCGCTGGGGCGAGACCGCGCTCCGTAGCGCCTATCGACGGGGCCTGAGTGAGGCAATCAAGGACCTGATTGTGAGGGACCGCCCCTCGTCACTCAACGAGCTGATCACCCTCTCGCTCCAGATGGATGAACGACTACGGGAGCGCCGCCAGGAGCGCGCCCAACGTGCGGGCGGTTCTACCCGCCAACTCTCCCACCGCACTTCCTCTGCCCCTGATTTCTCCCTTACCAGCACTGCCGCCCCGCCTCCTCACATCCTCTTGCAATCCCCAGCTCACCCCTCCCCCAGAGTCGGAGAGGAACCCATGCAGATCGGCCGGTCCCGTCTCTCACGGCAGGAGCGGGAGCAAAGACTCCGAGACCAGTTGTGCCTGTACTGCGGAAACAACGGCCACTTCATCCAAGCCTGCCCCGTCCGACCAAAAGGGCCTGCTCACCAGTAGGGGGAGTATTGGTGAGCCGAGCTGTGATTCCCCAACCCACCGAACAACACAACCGCCTCTTCCCCGCAACCCTCTCCTGGGATAAGGAGTCTATTCCGGTGAGTGTTCTCATTGACTCTGGGGCTGATGAGTCCCTGATGGACTTTTCTCTCGCGCGTCAAGCTGGCATTCCCCTGGTTCCTCTCGATCGCTCCCTGTCCCCCCAGGCGATCGATGGCCGCTCTCTGGGTAACATCACGCATCGCACCATCCCACTCACCCTAACACTCTCGGGTAATCACATAGAGAGTACACCTTTCCTGGTTTTGCACGCCCCCACCGCTCCACTCGTGTTAGGAAGACCGTGGTTGGAAAGGCACGACCCCCACATCTCATGGGCTTCGGGTCGGATCCTGGGGTGGAGCGTGGCCTGTCACGCCAACTGCCTTCGGTCCGCCCCCTCTCCATCCAGTAATCCCAGGCCCGCGCTCACTCCCCCGGATCTCAGTGGTGTTCCCCCTATCTACAATGATTTAGCCCCAGTGTTCAGTAAGGACAATGCTCTGTCCCTTCCCCCTCACTGGCCCTATGATTGCCCCATCGACCTCCTCCCCGGGGCTCCCTACCCCACGGGTCGACTTTACAATCTCTCCATCCCAGAGAAGGAGGTGATGCGCAATTACATCACTGAATCACTTGCCTCTGGGATCATAAGACCATCGTCATCCCCCTTAGCTGCAGGTTTCTTCTTTGTAGCCAAGGAGGATGGCGGCCTGAGGCCCTGCATCGACTTCCGCAAACTTAACAACATCACCGTTAAGAACAAGTACCCTCTTCCCCTTATGAGTTCCACGTTCGAGCCTCTCACTCATGCCCGGGTGTTCACTAAGTTAGACCTCCGCAACGCTTACCACTTGGTGCAGATCAGGAAAGGGGACGAATGGAAGACCGCCTTCAACACTCACCTCGGGCACTTCGAATACCTGGTCATGCCCTTCGGCCTCTCCAACGCCCCCGCCGTCTTCCAGGAGTTGGTCAACGATGTGCTCCGGGACATGATCAACGTCTTTGTGGTGGTCTACTTGGACGACATCTTGATCTTCTCCCGCACCATGGAGGAGCACCACCAGCATGTTCGCCTGGTCCTACAACGGCTTTTGGAGAACCGACTATTCATCAAAGCCGAGAAGTGCATCTTCCACTCCGCCTCAGTGGGGTACCTCGGCTACATCGTGGAGGAGGGGCGGGTGCGCGCAGATCCGGCCAAGATCCAAGCTGTGGTGGAGTGGCCACGCCCCACCGACCGCACTCAGCTTCGCCGGTTCCTTGGGTTCGCCGGGTTCATCCGGCGGTTCATCAAAGGGTTCAGTCAAGTGGCTGCCCCTCTCTCCGCTCTCACCTCCACCTCGCGCCCTTTCGCATGGACACCGGAGGCTGAGACCGCCTTCTCGGCCCTCAAGGACAGGTTCACGACGGCTCCGGTGCTCGCCCATCCAGACCCCGCTCGGCAGTTCATCGTCGAGGTCGATGCTTCGGACGCGGGCATCGGGGCAGTCCTCTCCCAGCGGTCCGAGGCAGACCAGAAGATTCACCCATGTGCCTACTTTTCCCGCCGTTTTGATCCGGCTGAACGAAATTACGATGTGGGCAACAGGGAACTTCTGGCGGTCTATGGAGCCTTGGTGGAGTGGAAACACTGGCTGGAGGGAGCAAAGCACCCGTTCCTTGTGTGGTCGGACCATAAGAACTTGACCTATGTGAGAACGGCCAAGAGACTCAATCCCAGACAGGGCCGCTGGGCTCTCTTCAGTCGGTTTGATTTCACCCTCACTTTCCGTCCTGGTTCCAAGAATATCCGGGCTGATGCCCTCTCCCGCCAGTTTCCGGAGGAATTCCCCGGGGCCCCCAGGGATCCTGACACCATCGTTCCCCCGGCCCGGGTCATAGGGGTCATCTCCTGGCCGATCGAGACGGCCGTCGAGCAAGCCCAGAGAGACGAGCCATATCCTGGGAACGGGCCTCAGGGCCGAATGTTCGTGCCTTCCTCCGTCCGGCCGCAGGTGCTAGAGTGGGGCCACTCCAGTTGTTTCGCCTGCCATCCTGGCGTGCGTCGGACGGCGGAGTTTGTGCAGCGGCGCTTCTGGTGGCCCAACCTCCAAGAGGATGTTCGGGAGTTTGTGGGCGCCTGCACGGTCTGTGCCCGCAGCAAGGCCTCCCATCGCTCGCCAGCAGGCCTTCTGCACCCCCTTCCCGTCCCCAGTCGACCCTGGTCTCACGTAGCCCTGGATTTTGTGACGGGCCTCCCCGTCTCGCAGGGGAACGACACCATCCTGACCATTGTGGACCGCTTCTCCAAGGGGGTCCACTTTGTCGCCCTCCCCAAACTCCCTTCTGCTGCAGAAACAGCTGAACTCCTGGTCTCCCACGTTGTGCGTCTCCATGGGATCCCCCTGGACGTGGTCTCTGACCGTGGCCCCCAATTCACTTCTAGGGTGTGGCAGGCCTTCTGCAAGGGGATTGGGGCCACGGTCAGCCTGTCCTCTGGGTACCACCCCCAGTCCAACGGACAAGCCGAACGGGCCAACCAGGCTATGGAGGCGGCCCTGCGCTGCGTGACCACCAGCAATCCTGCCTCCTGGTCCAAGTTCCTGCCGTGGGTGGAATACTCCCTCAACGCCATGGAAAGCTCTGCTACTGGTATGTCCCCCTTTCAATGTTTCCTGGGCTACCAACCCCCTCTGTTCCCCCAGCAGGAGCTGGAGATCGCAGTGCCGTCTACCAGGGCCCATCTCCGCCGATGTAGGCGCATCTGGAAAACTGCCCGCAAAGCCATCTTGCGGGCCACTGAGCAGTCCCGGCGTTCGGCCAACCGGCGAAGGAGGCCGGCCCCTGCTTACCGGCCTGGCCAGAAGGTCTGGCTGTTGGCCCGGGACCTGCCCCTCCAGACCTCGCAGACTTCCTCCAGAAAGCTGAACCCCCGCGACATCGGTCCATACACCATCTGCAGCATCATCAACCCCTCTGCAGTCCATTTGGATCTCCCTGCCGCCCTCAAGGTTCACCCGGTCTTCCACGTTTCGCTCATTAAACCCTTTTCCACCAGCCCCCTGTCCCCTCCTGCTCCGATTCCACCTCCCCCACAGGTCCTGTCGGACGGAGAGCCGGTGTGGAGCGTTAACAAGCTGCTGGCGGTCCGCCGACGGGGAAGGGGCTTCCAGTACCTGGTGGATTGGGTGGGTTACGGCCCCGAAGACCAGAGCTGGGTGCCCCCATCCTATCTCGCTGACCCCTCCCTCCTCGAAGACTTTTTACCGAGAGCACCCGGATGCTCCTGGGCGGTCGTCCGGTGCCTCCCGTAAGGGGGTGACTCCTACTCTGGCCCCACCTCCTCCTGGGCAATCAGCTCAACCACCACCACCTGGGCCCTCTCCTTCAGCTGCACCCAATCCGCCCAAATGACTCTGCACCCATAAAAGGCCCCTATGCACTCAGGCCAGTGCTTGATCTTACTGATGTTTTTGGCAACACTTCCCATTGACCCAACATCTCTCCAGGCTCCCCAGCGACTCCCTGCGTCTTCCAGCGACTCCCTGCGTCTTCCAGCGACTCCCGGCGTCTTCCAGCGACTCCCTGCGTCTTCCAGCGACTCCCAGCGACTCCCAGCGTCTCCCCCGGCTCTTCTGCTACCTTCCTAGCCCCTCTTCCTCTGACCTCTTCCTCTTCCCCTTCCTCGGACGGATTTCTCCTGGCCTCTGGACACTTGGACTCTCCCACGGACTCTCGCCCCTGGATCTCGAACTTGGTTCGTCTGCCGCATCACGCACCTATAGTTTGTCTCGGCCTCTCTCATTTAGTTTCTTCCCTCCTGTTTCTTTTGCTTCATTAAACCATCTGAGTTCACTTTTAATTCCTGTGTCTGTCTGCCTTCTTTGGGGTTCCGCCACACTTGACCGCCAGTCCTCTCGAGCTTAACA",
+    "seq_preview": "TGACTCCTACTCTGGCCCCACCTCCTCCTGGGCAATCAGCTCAACCACCACCACCTGGGCCCTCTCCTTCAGCTGCACCCAATCCGCCCAAATGACTCTGCACCCATAAAAGGCCCCTAT",
+    "structural": [
+     {
+      "bound_reason": "the repeat still matched where the record ends, so the copies may extend beyond it — the length is a lower bound, not a measurement",
+      "element_span": [
+       208,
+       5645
+      ],
+      "five_prime": [
+       208,
+       560
+      ],
+      "identity": 98.9,
+      "length_is_lower_bound": true,
+      "ltr_len": 352,
+      "method": "k-mer seed (k=13, 2822 bp window) + X-drop diagonal extension",
+      "termini": {
+       "canonical": false,
+       "five_end": "CA",
+       "five_start": "GC",
+       "mismatches": 2,
+       "motif_tier": "none",
+       "noncanonical_motif": null,
+       "note": "termini match neither TG…CA nor any of the seven known non-canonical motifs; the motif is common but not universal among LTR retrotransposons, so its absence is not evidence against the call",
+       "three_end": "CA",
+       "three_start": "GC",
+       "within_ltrharvest_tolerance": false
+      },
+      "three_prime": [
+       5293,
+       5645
+      ],
+      "tsd_state": "not assessable (no flanking sequence in the record)",
+      "type": "LTR (terminal direct repeat)"
+     }
+    ],
+    "valid": true
+   }
+  ],
+  "references": [
+   {
+    "citation": "Wicker T, Sabot F, Hua-Van A, et al. (2007) A unified classification system for eukaryotic transposable elements. Nat Rev Genet 8(12):973-982.",
+    "doi": "10.1038/nrg2165",
+    "key": "Wicker2007",
+    "license": "",
+    "name": "TE classification framework",
+    "url": "https://doi.org/10.1038/nrg2165"
+   },
+   {
+    "citation": "Zhang RG, Li GY, Wang XL, et al. (2022) TEsorter: an accurate and fast method to classify LTR-retrotransposons in plant genomes. Horticulture Research 9:uhac017.",
+    "doi": "10.1093/hr/uhac017",
+    "key": "TEsorter",
+    "license": "",
+    "name": "Domain-architecture completeness (domain-completeness basis)",
+    "url": "https://doi.org/10.1093/hr/uhac017"
+   },
+   {
+    "citation": "Ou S, Jiang N (2018) LTR_retriever: a highly accurate and sensitive program for identification of long terminal repeat retrotransposons. Plant Physiology 176(2):1410-1422.",
+    "doi": "10.1104/pp.17.01310",
+    "key": "LTRretriever",
+    "license": "",
+    "name": "Intact LTR-retrotransposon criteria (domain-completeness basis)",
+    "url": "https://doi.org/10.1104/pp.17.01310"
+   },
+   {
+    "citation": "Eddy SR (2011) Accelerated Profile HMM Searches. PLoS Comput Biol 7(10):e1002195.",
+    "doi": "10.1371/journal.pcbi.1002195",
+    "key": "HMMER",
+    "license": "BSD-3-Clause",
+    "name": "HMMER (via pyhmmer 0.12.1)",
+    "url": "http://hmmer.org"
+   },
+   {
+    "citation": "Mistry J, Chuguransky S, Williams L, et al. (2021) Pfam: The protein families database in 2021. Nucleic Acids Res 49(D1):D412-D419.",
+    "doi": "10.1093/nar/gkaa913",
+    "key": "Pfam",
+    "license": "CC0",
+    "name": "Pfam-A profiles (via InterPro, retrieved 2026-07-17)",
+    "url": "https://www.ebi.ac.uk/interpro/"
+   }
+  ]
+ }
+}

@@ -157,13 +157,18 @@ def _detector_parameters():
     return {
         "orf_min_aa": d(sequtil.find_orfs, "min_aa"),
         "domain_evalue_max": d(domains.scan_domains, "evalue"),
-        "domain_orfs_scanned_max": domains.MAX_ORFS_SCANNED,
+        # Read from the signature of the function that applies it, like every other entry here. It was
+        # previously read from the module constant, which is the value scan_domains defaults to today but
+        # is not the value scan_domains applies by construction; the two could diverge without the seal
+        # noticing. A key-identity coverage audit is what surfaced the difference.
+        "domain_orfs_scanned_max": d(domains.scan_domains, "max_orfs"),
         "ltr_seed_k": d(structural.find_ltr, "k"),
         "ltr_min_len": d(structural.find_ltr, "min_ltr"),
         "ltr_min_anchors": d(structural.find_ltr, "min_anchors"),
         "ltr_min_identity_pct": structural.MIN_LTR_IDENTITY,
         "tir_seed_k": d(structural.find_tir, "k"),
         "tir_min_len": d(structural.find_tir, "min_tir"),
+        "tir_max_len": d(structural.find_tir, "max_tir"),
         "tir_min_anchors": d(structural.find_tir, "min_anchors"),
         "tsd_min_len": structural.MIN_TSD,
         "tsd_max_len": structural.MAX_TSD,
@@ -492,6 +497,12 @@ def run_pcr(body):
         raise BadRequest("target_span must be a [start, end] pair of finite numbers")
     tp = max(0, int(_num(p.get("tp", 5), 5)))            # non-negative int; float/NaN already rejected by _clean_params
     mm = max(0, int(_num(p.get("max_mm", 2), 2)))
+    # The shortest 3'-proximal core that may be called a binding site. It changes which products are
+    # reported for a tailed primer, so it is resolved here and written into the seal below rather than
+    # left as a bare default inside the matcher where no manifest would record it.
+    ma = max(1, int(_num(p.get("min_anneal", primers.MIN_PRIMER_SIZE), primers.MIN_PRIMER_SIZE)))
+    pmin = int(_num(p.get("prod_min", 70), 70))
+    pmax = int(_num(p.get("prod_max", 1000), 1000))
     try:
         amps = []
         pcr_stats = {}
@@ -500,8 +511,7 @@ def run_pcr(body):
             st = {}
             amps += primers.in_silico_pcr(
                 fwd, rev, bg["seq"], bg["id"],
-                max_mm=mm, tp=tp,
-                prod_min=int(_num(p.get("prod_min", 70), 70)), prod_max=int(_num(p.get("prod_max", 1000), 1000)),
+                max_mm=mm, tp=tp, min_anneal=ma, prod_min=pmin, prod_max=pmax,
                 target_span=(list(ts) if (ts and k == 0) else None),  # on-target only on the input sequence
                 stats=st)
             if st.get("amplicons_capped") or st.get("sites_capped"):
@@ -509,8 +519,14 @@ def run_pcr(body):
             pcr_stats = st or pcr_stats
     except (ValueError, TypeError) as e:
         raise BadRequest(f"in-silico PCR parameters rejected: {type(e).__name__}: {e}")
+    # Seal the RESOLVED values, not the submitted ones. `dict(p)` alone records only what the caller
+    # happened to type, so a run left entirely at defaults sealed no thresholds at all — the same defect
+    # _detector_parameters() was written to remove from the analysis path, still present here. Every number
+    # that selects which products are reported now goes in, whether the caller set it or not.
     seal_p = dict(p)                                     # primers/target/background drive the result -> must be in the seal
     seal_p.update({"fwd": fwd, "rev": rev, "target_span": (list(ts) if ts else None),
+                   "max_mm": mm, "tp": tp, "min_anneal": ma,
+                   "prod_min": pmin, "prod_max": pmax,
                    "background_sha256": (hashlib.sha256(bg_text.encode()).hexdigest() if bg_text else None)})
     # A capped search must say so. Both caps bite on exactly the repetitive templates where "no further
     # product" would otherwise read as a specificity result rather than as the search stopping early.
@@ -528,8 +544,8 @@ def run_pcr(body):
         "backgroundsSearched": [bg["id"] for bg in backgrounds],
         "notSearched": ["Reference assembly (needs WSL/NCBI)", "External NCBI Primer-BLAST",
                         "IUPAC-ambiguous template bases"],
-        "criteria": {"max_mismatch": mm, "three_prime_strict": tp,
-                     "product_size": [int(_num(p.get("prod_min", 70), 70)), int(_num(p.get("prod_max", 1000), 1000))]},
+        "criteria": {"max_mismatch": mm, "three_prime_strict": tp, "min_anneal": ma,
+                     "product_size": [pmin, pmax]},
         "references": refs.for_run("in-silico-pcr"),
         "provenance": provenance.build_manifest("in-silico-pcr", seq, recs[0][0], seal_p,
                       references=refs.for_run("in-silico-pcr"))}

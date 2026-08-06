@@ -1,0 +1,148 @@
+{
+ "case": {
+  "caveats": "ASSAY FORMAT: TaqMan; internal MGB probe ATCGGTGGTATTGGAAC lies inside the amplicon and does not change the 57 bp primer-to-primer product. SPLICING - IMPORTANT AND DIFFERENT FROM THE GAPDH CASE: these primers FLANK an intron. The paper states the exon-exon borders were deduced by alignment with zebrafish and that \"The chosen primers were subsequently used to confirm that the salmon genes contained an intron between the same sites... The PCR products containing the introns were cloned into TOPO vector and sequenced.\" So on genomic DNA this pair yields 57 bp PLUS the intron; the 57 bp ground truth applies to cDNA/mRNA template (AF321836.1, \"Salmo salar elongation factor 1 alpha mRNA, complete cds\", 1445 bp). SIZE: at 57 bp this is the short-amplicon end of the set. In-silico check: forward matches once at 800, reverse site once ending at 856; product 800..856 = 57 bp, exact, no alternative products. EF1A is a two-paralogue system in salmon (EF1AA/EF1AB); the EF1AB assay in the same table uses a different, overlapping primer pair, so cross-paralogue priming should be considered if the engine is run against a whole-transcriptome target rather than this single accession.",
+  "citation": "Olsvik PA, Lie KK, Jordal AEO, Nilsen TO, Hordvik I. Evaluation of potential reference genes in real-time RT-PCR studies of Atlantic salmon. BMC Mol Biol. 2005;6:21. doi:10.1186/1471-2199-6-21. PMID 16293192; PMCID PMC1314898.",
+  "confidence": "high",
+  "element": "Non-TE control assay. Elongation factor 1 alpha paralogue A (EF1AA) evaluated as a real-time RT-PCR reference gene.",
+  "expected_amplicon_bp": 57,
+  "expected_bp_provenance": "stated_in_source",
+  "forward_primer": "CCCCTCCAGGACGTTTACAAA",
+  "loci_justification": "The pair flanks one locus on the cited template: a single insertion site, a single excision site, or a single transcript. A second product on this template would be an off-target prediction.",
+  "loci_on_template": "single",
+  "name": "Atlantic salmon elongation factor 1A-A (EF1AA) TaqMan reference-gene assay",
+  "organism": "Salmo salar (Atlantic salmon)",
+  "panel": "controls",
+  "reverse_primer": "CACACGGCCCACAGGTACA",
+  "template_accession": "AF321836.1",
+  "where_in_paper": "Table 1 (\"TaqMan assays used to evaluate potential reference genes in Atlantic salmon\"), row EF1AA: \"Forward primer\" and \"Reverse primer\" columns, and 57 in the \"Amplicon size (bp)\" column. Template accession in Methods, \"Design of PCR primers and TaqMan probes\": \"The EF1A A assay was based on a cDNA clone that we reported to the GenBank previously (AF321836)\". The same paragraph states \"The primers amplify PCR products between 57-98 basepairs (bp) long\".",
+  "worked_prediction_in_entry": true,
+  "worked_prediction_note": "The entry records a worked prediction — a coordinate range, an in-silico check, or a sequence-derived length — so the expected answer was written down before the engine ran. The published size remains external, but this case was not scored blind."
+ },
+ "result": {
+  "amplicons": [
+   {
+    "amplicon_5p": "CCCCTCCAGGACGTTTACAAAATCGGTGGT",
+    "end": 856,
+    "fwd_anneal_len": 21,
+    "fwd_mm": 0,
+    "fwd_primer": "F",
+    "fwd_tail5": 0,
+    "length": 57,
+    "on_target": false,
+    "product_length": 57,
+    "rev_anneal_len": 19,
+    "rev_mm": 0,
+    "rev_primer": "R",
+    "rev_tail5": 0,
+    "seq": "CCCCTCCAGGACGTTTACAAAATCGGTGGTATTGGAACTGTACCTGTGGGCCGTGTG",
+    "single_primer": false,
+    "source": "AF321836.1 Salmo salar elongation factor 1 alpha mRNA, complete cds (input)",
+    "start": 799
+   }
+  ],
+  "backgroundsSearched": [
+   "AF321836.1 Salmo salar elongation factor 1 alpha mRNA, complete cds (input)"
+  ],
+  "criteria": {
+   "max_mismatch": 2,
+   "min_anneal": 18,
+   "product_size": [
+    28,
+    3825
+   ],
+   "three_prime_strict": 5
+  },
+  "notSearched": [
+   "Reference assembly (needs WSL/NCBI)",
+   "External NCBI Primer-BLAST",
+   "IUPAC-ambiguous template bases"
+  ],
+  "provenance": {
+   "createdUtc": "2026-08-06T03:58:36+00:00",
+   "databases": [],
+   "environment": {
+    "machine": "AMD64",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10"
+   },
+   "input": {
+    "id": "AF321836.1 Salmo salar elongation factor 1 alpha mRNA, complete cds",
+    "length": 1445,
+    "sha256": "22632822e5a045f42b7cb391bc64161adbfebff98ded8b4c6ab466b304a047fd"
+   },
+   "manifestSha256": "f7c8b77a83c580b9d93f1d723c77ae8780f4d1769418da4068f6269f0eef0dd7",
+   "notRun": [
+    "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
+    "External NCBI Primer-BLAST",
+    "De novo family discovery"
+   ],
+   "parameters": {
+    "background_sha256": null,
+    "fwd": "CCCCTCCAGGACGTTTACAAA",
+    "max_mm": 2,
+    "min_anneal": 18,
+    "prod_max": 3825,
+    "prod_min": 28,
+    "rev": "CACACGGCCCACAGGTACA",
+    "target_span": null,
+    "tp": 5
+   },
+   "references": [],
+   "runType": "in-silico-pcr",
+   "schemaVersion": "0.1",
+   "software": [
+    {
+     "name": "python",
+     "version": "3.12.10"
+    },
+    {
+     "name": "TEagle core",
+     "version": "3.6.0"
+    }
+   ],
+   "teagleVersion": "3.6.0"
+  },
+  "references": [],
+  "truncated": false,
+  "truncatedOn": [],
+  "warning": null
+ },
+ "scored": {
+  "accession": "AF321836.1",
+  "caveats": "ASSAY FORMAT: TaqMan; internal MGB probe ATCGGTGGTATTGGAAC lies inside the amplicon and does not change the 57 bp primer-to-primer product. SPLICING - IMPORTANT AND DIFFERENT FROM THE GAPDH CASE: these primers FLANK an intron. The paper states the exon-exon borders were deduced by alignment with zebrafish and that \"The chosen primers were subsequently used to confirm that the salmon genes contained an intron between the same sites... The PCR products containing the introns were cloned into TOPO vector and sequenced.\" So on genomic DNA this pair yields 57 bp PLUS the intron; the 57 bp ground truth applies to cDNA/mRNA template (AF321836.1, \"Salmo salar elongation factor 1 alpha mRNA, complete cds\", 1445 bp). SIZE: at 57 bp this is the short-amplicon end of the set. In-silico check: forward matches once at 800, reverse site once ending at 856; product 800..856 = 57 bp, exact, no alternative products. EF1A is a two-paralogue system in salmon (EF1AA/EF1AB); the EF1AB assay in the same table uses a different, overlapping primer pair, so cross-paralogue priming should be considered if the engine is run against a whole-transcriptome target rather than this single accession.",
+  "citation": "Olsvik PA, Lie KK, Jordal AEO, Nilsen TO, Hordvik I. Evaluation of potential reference genes in real-time RT-PCR studies of Atlantic salmon. BMC Mol Biol. 2005;6:21. doi:10.1186/1471-2199-6-21. PMID 16293192; PMCID PMC1314898.",
+  "closest_bp": 57,
+  "difference_bp": 0,
+  "elapsed_s": 0.004,
+  "element": "Non-TE control assay. Elongation factor 1 alpha paralogue A (EF1AA) evaluated as a real-time RT-PCR reference gene.",
+  "expected_bp": 57,
+  "found": true,
+  "ground_truth": "stated_in_source",
+  "loci_on_template": "single",
+  "multilocus_by_design": false,
+  "n_products": 1,
+  "name": "Atlantic salmon elongation factor 1A-A (EF1AA) TaqMan reference-gene assay",
+  "organism": "Salmo salar (Atlantic salmon)",
+  "panel": "controls",
+  "preworked_in_corpus": true,
+  "primer_degenerate": false,
+  "primer_fwd_as_published": "CCCCTCCAGGACGTTTACAAA",
+  "primer_rev_as_published": "CACACGGCCCACAGGTACA",
+  "product_sizes": [
+   57
+  ],
+  "scored_product_anneal_bp": [
+   21,
+   19
+  ],
+  "scored_product_tail_bp": 0,
+  "search_window_bp": [
+   28,
+   3825
+  ],
+  "source_confidence": "high",
+  "template_sha256": "bfb0d630b1dfcc73",
+  "tolerance_bp": 20.0,
+  "within_tolerance": true
+ }
+}

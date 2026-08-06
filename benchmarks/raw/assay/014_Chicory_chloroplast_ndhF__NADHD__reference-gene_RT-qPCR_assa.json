@@ -1,0 +1,148 @@
+{
+ "case": {
+  "caveats": "VERBATIM NOTE: the forward and reverse primers are printed inside a SINGLE Table 1 cell as two lines (forward above reverse, separated by a line break in the published layout / a <break/> element in the JATS full text). The split was taken at that printed line break; the in-silico product landing at exactly the printed 102 bp independently confirms the split is correct. TEMPLATE: L39390 flat file records mol_type=\"genomic DNA\", organelle=\"plastid:chloroplast\", with ndhF annotated as a single uninterrupted CDS 1..2226 - so there is no splicing consideration at all and the assay behaves identically on cDNA and on chloroplast DNA. This is the cleanest case in the set. In-silico check: forward matches once at position 510, reverse-complement of the reverse primer matches once ending at 611; product 510..611 = 102 bp, exact match, no alternative products. The paper states all primer pairs amplified a single PCR product of the expected size and that cloned amplicons were sequenced; NADHD was NOT among the genes flagged as differing from the GenBank design sequence (only ACT/EF at 1 bp and H3 at 18 bp were). Chloroplast is high-copy in vivo, but the locus is single-copy within this accession.",
+  "citation": "Maroufi A, Van Bockstaele E, De Loose M. Validation of reference genes for gene expression analysis in chicory (Cichorium intybus) using quantitative real-time PCR. BMC Mol Biol. 2010;11:15. doi:10.1186/1471-2199-11-15. PMID 20156357; PMCID PMC2830926.",
+  "confidence": "high",
+  "element": "Non-TE control assay. Chloroplast ndhF (NADH dehydrogenase subunit F) used as a candidate RT-qPCR reference gene.",
+  "expected_amplicon_bp": 102,
+  "expected_bp_provenance": "stated_in_source",
+  "forward_primer": "TGCAGCAAAGGCTTGTCAAA",
+  "loci_justification": "The pair flanks one locus on the cited template: a single insertion site, a single excision site, or a single transcript. A second product on this template would be an off-target prediction.",
+  "loci_on_template": "single",
+  "name": "Chicory chloroplast ndhF (NADHD) reference-gene RT-qPCR assay",
+  "organism": "Cichorium intybus (chicory), chloroplast genome",
+  "panel": "controls",
+  "reverse_primer": "TCGAAACTTCCCGTTATCCAA",
+  "template_accession": "L39390.1",
+  "where_in_paper": "Table 1 (\"Selected candidate reference genes, primers and different parameters derived from qRT-PCR analysis\"), row NADHD: primer sequences in the \"Primer sequences (forward/reverse)\" column, accession L39390 in the \"GenBank accession number\" column, 102 in the \"Amplicon length (bp)\" column. Product verification described under \"Verification of amplicons, primer specificity, Cp data collection and gene-specific PCR amplification efficiency\" (Figure 1a agarose gel, Figure 1b melting curves).",
+  "worked_prediction_in_entry": true,
+  "worked_prediction_note": "The entry records a worked prediction — a coordinate range, an in-silico check, or a sequence-derived length — so the expected answer was written down before the engine ran. The published size remains external, but this case was not scored blind."
+ },
+ "result": {
+  "amplicons": [
+   {
+    "amplicon_5p": "TGCAGCAAAGGCTTGTCAAAAGGCATTTGT…",
+    "end": 611,
+    "fwd_anneal_len": 20,
+    "fwd_mm": 0,
+    "fwd_primer": "F",
+    "fwd_tail5": 0,
+    "length": 102,
+    "on_target": false,
+    "product_length": 102,
+    "rev_anneal_len": 21,
+    "rev_mm": 0,
+    "rev_primer": "R",
+    "rev_tail5": 0,
+    "seq": "TGCAGCAAAGGCTTGTCAAAAGGCATTTGTAACTAATCGTGTTGGCGATTTTGGTTTATTATTAGGTATTTTAGGGTTTTATTGGATAACGGGAAGTTTCGA",
+    "single_primer": false,
+    "source": "L39390.1 Cichorium intybus chloroplast NADH dehydrogenase (ndhF) gene, complete cds (input)",
+    "start": 509
+   }
+  ],
+  "backgroundsSearched": [
+   "L39390.1 Cichorium intybus chloroplast NADH dehydrogenase (ndhF) gene, complete cds (input)"
+  ],
+  "criteria": {
+   "max_mismatch": 2,
+   "min_anneal": 18,
+   "product_size": [
+    28,
+    3825
+   ],
+   "three_prime_strict": 5
+  },
+  "notSearched": [
+   "Reference assembly (needs WSL/NCBI)",
+   "External NCBI Primer-BLAST",
+   "IUPAC-ambiguous template bases"
+  ],
+  "provenance": {
+   "createdUtc": "2026-08-06T03:58:36+00:00",
+   "databases": [],
+   "environment": {
+    "machine": "AMD64",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10"
+   },
+   "input": {
+    "id": "L39390.1 Cichorium intybus chloroplast NADH dehydrogenase (ndhF) gene, complete cds",
+    "length": 2226,
+    "sha256": "b21aab312fda85c69c363908a278f0216629a01b890005a9bd953c4c983f7684"
+   },
+   "manifestSha256": "25b62ce6f62188e790a4b5d66b00b759d31c150a368729b2bddf5f73ff15e96b",
+   "notRun": [
+    "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
+    "External NCBI Primer-BLAST",
+    "De novo family discovery"
+   ],
+   "parameters": {
+    "background_sha256": null,
+    "fwd": "TGCAGCAAAGGCTTGTCAAA",
+    "max_mm": 2,
+    "min_anneal": 18,
+    "prod_max": 3825,
+    "prod_min": 28,
+    "rev": "TCGAAACTTCCCGTTATCCAA",
+    "target_span": null,
+    "tp": 5
+   },
+   "references": [],
+   "runType": "in-silico-pcr",
+   "schemaVersion": "0.1",
+   "software": [
+    {
+     "name": "python",
+     "version": "3.12.10"
+    },
+    {
+     "name": "TEagle core",
+     "version": "3.6.0"
+    }
+   ],
+   "teagleVersion": "3.6.0"
+  },
+  "references": [],
+  "truncated": false,
+  "truncatedOn": [],
+  "warning": null
+ },
+ "scored": {
+  "accession": "L39390.1",
+  "caveats": "VERBATIM NOTE: the forward and reverse primers are printed inside a SINGLE Table 1 cell as two lines (forward above reverse, separated by a line break in the published layout / a <break/> element in the JATS full text). The split was taken at that printed line break; the in-silico product landing at exactly the printed 102 bp independently confirms the split is correct. TEMPLATE: L39390 flat file records mol_type=\"genomic DNA\", organelle=\"plastid:chloroplast\", with ndhF annotated as a single uninterrupted CDS 1..2226 - so there is no splicing consideration at all and the assay behaves identically on cDNA and on chloroplast DNA. This is the cleanest case in the set. In-silico check: forward matches once at position 510, reverse-complement of the reverse primer matches once ending at 611; product 510..611 = 102 bp, exact match, no alternative products. The paper states all primer pairs amplified a single PCR product of the expected size and that cloned amplicons were sequenced; NADHD was NOT among the genes flagged as differing from the GenBank design sequence (only ACT/EF at 1 bp and H3 at 18 bp were). Chloroplast is high-copy in vivo, but the locus is single-copy within this accession.",
+  "citation": "Maroufi A, Van Bockstaele E, De Loose M. Validation of reference genes for gene expression analysis in chicory (Cichorium intybus) using quantitative real-time PCR. BMC Mol Biol. 2010;11:15. doi:10.1186/1471-2199-11-15. PMID 20156357; PMCID PMC2830926.",
+  "closest_bp": 102,
+  "difference_bp": 0,
+  "elapsed_s": 0.007,
+  "element": "Non-TE control assay. Chloroplast ndhF (NADH dehydrogenase subunit F) used as a candidate RT-qPCR reference gene.",
+  "expected_bp": 102,
+  "found": true,
+  "ground_truth": "stated_in_source",
+  "loci_on_template": "single",
+  "multilocus_by_design": false,
+  "n_products": 1,
+  "name": "Chicory chloroplast ndhF (NADHD) reference-gene RT-qPCR assay",
+  "organism": "Cichorium intybus (chicory), chloroplast genome",
+  "panel": "controls",
+  "preworked_in_corpus": true,
+  "primer_degenerate": false,
+  "primer_fwd_as_published": "TGCAGCAAAGGCTTGTCAAA",
+  "primer_rev_as_published": "TCGAAACTTCCCGTTATCCAA",
+  "product_sizes": [
+   102
+  ],
+  "scored_product_anneal_bp": [
+   20,
+   21
+  ],
+  "scored_product_tail_bp": 0,
+  "search_window_bp": [
+   28,
+   3825
+  ],
+  "source_confidence": "high",
+  "template_sha256": "f3f453ca24d909e0",
+  "tolerance_bp": 20.0,
+  "within_tolerance": true
+ }
+}

@@ -1,0 +1,149 @@
+{
+ "case": {
+  "amplicon_range_bp": "empty site 528 bp / filled site 834 bp (delta 306 bp)",
+  "caveats": "Dimorphic locus. Cited accession (clone CTD-2563K22, chromosome 8, 191,525 bp) carries the FILLED (Alu-present) allele; expect 834 bp. The 528 bp empty allele is not in this accession. No degenerate bases; no junction-spanning primer. Verified by exact-string in-silico PCR: exactly one product, plus strand, 834 bp; amplicon contains the Ye-diagnostic 25-mer and canonical Alu motifs (TGTAATCCCAGCACTTTGGGAGG, GGGATTACAGGCGTGAGCCA) plus the oligo-dA tail. This is the longest amplicon in the set, useful for exercising product-length handling. Uniqueness checked within the cited accession only. Annealing temperature 55 C.",
+  "citation": "Salem AH, Ray DA, Hedges DJ, Jurka J, Batzer MA. Analysis of the human Alu Ye lineage. BMC Evolutionary Biology 2005;5:18. doi:10.1186/1471-2148-5-18. PMID 15725352; PMCID PMC554112.",
+  "confidence": "high",
+  "element": "Alu Ye5 (SINE, non-LTR); Alu Ye lineage insertion polymorphism",
+  "expected_amplicon_bp": 834,
+  "expected_bp_provenance": "stated_in_source",
+  "forward_primer": "CTCTGACTACTGGGGTTGAA",
+  "loci_justification": "The pair flanks one locus on the cited template: a single insertion site, a single excision site, or a single transcript. A second product on this template would be an off-target prediction.",
+  "loci_on_template": "single",
+  "name": "Alu Ye5AH5 insertion-site PCR (chr8)",
+  "organism": "Homo sapiens",
+  "panel": "line-sine",
+  "reverse_primer": "ATAAAATTTCCGTTCCCTTG",
+  "template_accession": "AC103830.2",
+  "where_in_paper": "Additional File 2, captioned \"Supplemental Table. Alu Ye elements, Genbank numbers, PCR primers, annealing temperature, primate diversity, location and amplicon sizes.\" Ye5AH5 row supplies both primers, the accession, and the filled/empty product sizes.",
+  "worked_prediction_in_entry": true,
+  "worked_prediction_note": "The entry records a worked prediction — a coordinate range, an in-silico check, or a sequence-derived length — so the expected answer was written down before the engine ran. The published size remains external, but this case was not scored blind."
+ },
+ "result": {
+  "amplicons": [
+   {
+    "amplicon_5p": "CTCTGACTACTGGGGTTGAAAAACAATTTT…",
+    "end": 130279,
+    "fwd_anneal_len": 20,
+    "fwd_mm": 0,
+    "fwd_primer": "F",
+    "fwd_tail5": 0,
+    "length": 834,
+    "on_target": false,
+    "product_length": 834,
+    "rev_anneal_len": 20,
+    "rev_mm": 0,
+    "rev_primer": "R",
+    "rev_tail5": 0,
+    "seq": "CTCTGACTACTGGGGTTGAAAAACAATTTTTCTGCTAAAGCTCGTACTTCTGTCTAAATTTCCTTCCTATTTCTGTCAGAAAAGAAACTTCAGGCTGGGCGCAGTGGCTCACGTATGTAATCCCAGCACTTTGGGAGGCCAAGGAGGGCGGATCACGAGGTCAGGAGATCGAGACCATCCTGGCTAACACGGTGAAACCCCGTCTCTACTAAAAATACAAAAAACTAGTCAGGCGAGGTGGCGGGCACCTGTAGTCCCAGCTACTCGGGAGGCTAAGGCAGGAGAATGGTGTGAACCCCGGGGGGCGGAGCCTGCAGTGAGCCAAAATCGCACCACTGCACTCCAGCCTGGGCAACAGCGAGACTCTGTCTCAAAAAAAAAAAAAAAAAGAAACTTCAAATTAGATTTTGTGTGTGTGTGTGTGTGATGATGTTTCGCTCTTGTCACCCAGGCTGGAGTGCAATGACGCGATCTCGGCTTACTACAACCTCCGCCTCCCAGGTTCAAGCGATTCTCCTGCCTCAGCCTCCCAAATAGCTGGGATTACAGGTGCATGCCACCACACCCAGCTAATTTTTATGTTTTTACTAGAGACAGGGTTTCACCGTGTTGGCCAGGCTGGTCTCAAACTCCAGACCGCAGGTAATCCACCTGCCTCAGCCTCCCAAAGTGCTGGGATTACAGGCGTGAGCCACTGCACCTGGCCCAAATCAGATTTTTGTAGAGAAGTACTGATGTATAATGATTGAAAAATGTAGGAGGAATAAGAAAATTATATCTAAAAGTTAACATTATTTGTGAGAAGAAAGAAAAACAAGGGAACGGAAATTTTAT",
+    "single_primer": false,
+    "source": "AC103830.2 Homo sapiens chromosome 8, clone CTD-2563K22, complete sequence (input)",
+    "start": 129445
+   }
+  ],
+  "backgroundsSearched": [
+   "AC103830.2 Homo sapiens chromosome 8, clone CTD-2563K22, complete sequence (input)"
+  ],
+  "criteria": {
+   "max_mismatch": 2,
+   "min_anneal": 18,
+   "product_size": [
+    28,
+    3825
+   ],
+   "three_prime_strict": 5
+  },
+  "notSearched": [
+   "Reference assembly (needs WSL/NCBI)",
+   "External NCBI Primer-BLAST",
+   "IUPAC-ambiguous template bases"
+  ],
+  "provenance": {
+   "createdUtc": "2026-08-06T03:58:19+00:00",
+   "databases": [],
+   "environment": {
+    "machine": "AMD64",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10"
+   },
+   "input": {
+    "id": "AC103830.2 Homo sapiens chromosome 8, clone CTD-2563K22, complete sequence",
+    "length": 191525,
+    "sha256": "244f172596aabe7ce78233bb5b4668644cbde91c037f6e58c6a6ca00b63e5f0a"
+   },
+   "manifestSha256": "e53184b3a616340d004938ff3c2f12bbf73da6b5b725c149d81dfd922a0eb13c",
+   "notRun": [
+    "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
+    "External NCBI Primer-BLAST",
+    "De novo family discovery"
+   ],
+   "parameters": {
+    "background_sha256": null,
+    "fwd": "CTCTGACTACTGGGGTTGAA",
+    "max_mm": 2,
+    "min_anneal": 18,
+    "prod_max": 3825,
+    "prod_min": 28,
+    "rev": "ATAAAATTTCCGTTCCCTTG",
+    "target_span": null,
+    "tp": 5
+   },
+   "references": [],
+   "runType": "in-silico-pcr",
+   "schemaVersion": "0.1",
+   "software": [
+    {
+     "name": "python",
+     "version": "3.12.10"
+    },
+    {
+     "name": "TEagle core",
+     "version": "3.6.0"
+    }
+   ],
+   "teagleVersion": "3.6.0"
+  },
+  "references": [],
+  "truncated": false,
+  "truncatedOn": [],
+  "warning": null
+ },
+ "scored": {
+  "accession": "AC103830.2",
+  "caveats": "Dimorphic locus. Cited accession (clone CTD-2563K22, chromosome 8, 191,525 bp) carries the FILLED (Alu-present) allele; expect 834 bp. The 528 bp empty allele is not in this accession. No degenerate bases; no junction-spanning primer. Verified by exact-string in-silico PCR: exactly one product, plus strand, 834 bp; amplicon contains the Ye-diagnostic 25-mer and canonical Alu motifs (TGTAATCCCAGCACTTTGGGAGG, GGGATTACAGGCGTGAGCCA) plus the oligo-dA tail. This is the longest amplicon in the set, useful for exercising product-length handling. Uniqueness checked within the cited accession only. Annealing temperature 55 C.",
+  "citation": "Salem AH, Ray DA, Hedges DJ, Jurka J, Batzer MA. Analysis of the human Alu Ye lineage. BMC Evolutionary Biology 2005;5:18. doi:10.1186/1471-2148-5-18. PMID 15725352; PMCID PMC554112.",
+  "closest_bp": 834,
+  "difference_bp": 0,
+  "elapsed_s": 0.525,
+  "element": "Alu Ye5 (SINE, non-LTR); Alu Ye lineage insertion polymorphism",
+  "expected_bp": 834,
+  "found": true,
+  "ground_truth": "stated_in_source",
+  "loci_on_template": "single",
+  "multilocus_by_design": false,
+  "n_products": 1,
+  "name": "Alu Ye5AH5 insertion-site PCR (chr8)",
+  "organism": "Homo sapiens",
+  "panel": "line-sine",
+  "preworked_in_corpus": true,
+  "primer_degenerate": false,
+  "primer_fwd_as_published": "CTCTGACTACTGGGGTTGAA",
+  "primer_rev_as_published": "ATAAAATTTCCGTTCCCTTG",
+  "product_sizes": [
+   834
+  ],
+  "scored_product_anneal_bp": [
+   20,
+   20
+  ],
+  "scored_product_tail_bp": 0,
+  "search_window_bp": [
+   28,
+   3825
+  ],
+  "source_confidence": "high",
+  "template_sha256": "394d3b45393109fa",
+  "tolerance_bp": 83.4,
+  "within_tolerance": true
+ }
+}

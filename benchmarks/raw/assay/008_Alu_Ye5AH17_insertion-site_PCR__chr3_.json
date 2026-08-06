@@ -1,0 +1,149 @@
+{
+ "case": {
+  "amplicon_range_bp": "empty site 175 bp / filled site 494 bp (delta 319 bp)",
+  "caveats": "Dimorphic locus. Cited accession (BAC RP11-892D12, chromosome 3, 85,234 bp) carries the FILLED allele; expect 494 bp. The 175 bp empty allele is not in this accession. No degenerate bases; no junction-spanning primer. Verified by exact-string in-silico PCR: exactly one product, plus strand, 494 bp, containing the Ye-diagnostic 25-mer and canonical Alu motifs. Uniqueness checked within the cited accession only. Annealing temperature 55 C.",
+  "citation": "Salem AH, Ray DA, Hedges DJ, Jurka J, Batzer MA. Analysis of the human Alu Ye lineage. BMC Evolutionary Biology 2005;5:18. doi:10.1186/1471-2148-5-18. PMID 15725352; PMCID PMC554112.",
+  "confidence": "high",
+  "element": "Alu Ye5 (SINE, non-LTR); Alu Ye lineage insertion polymorphism",
+  "expected_amplicon_bp": 494,
+  "expected_bp_provenance": "stated_in_source",
+  "forward_primer": "GTATCTATTTGGAGCTCTCAGG",
+  "loci_justification": "The pair flanks one locus on the cited template: a single insertion site, a single excision site, or a single transcript. A second product on this template would be an off-target prediction.",
+  "loci_on_template": "single",
+  "name": "Alu Ye5AH17 insertion-site PCR (chr3)",
+  "organism": "Homo sapiens",
+  "panel": "line-sine",
+  "reverse_primer": "CTTCCCTGCCTAGCTCTATT",
+  "template_accession": "AC108730.7",
+  "where_in_paper": "Additional File 2, captioned \"Supplemental Table. Alu Ye elements, Genbank numbers, PCR primers, annealing temperature, primate diversity, location and amplicon sizes.\" Ye5AH17 row supplies both primers, the accession, and the filled/empty product sizes.",
+  "worked_prediction_in_entry": true,
+  "worked_prediction_note": "The entry records a worked prediction — a coordinate range, an in-silico check, or a sequence-derived length — so the expected answer was written down before the engine ran. The published size remains external, but this case was not scored blind."
+ },
+ "result": {
+  "amplicons": [
+   {
+    "amplicon_5p": "GTATCTATTTGGAGCTCTCAGGTTTGTATT…",
+    "end": 63966,
+    "fwd_anneal_len": 22,
+    "fwd_mm": 0,
+    "fwd_primer": "F",
+    "fwd_tail5": 0,
+    "length": 494,
+    "on_target": false,
+    "product_length": 494,
+    "rev_anneal_len": 20,
+    "rev_mm": 0,
+    "rev_primer": "R",
+    "rev_tail5": 0,
+    "seq": "GTATCTATTTGGAGCTCTCAGGTTTGTATTCACTGAGAAAATAAAACTGAATTTGTAAAGAGTAAGAGAGAAAGAAAGTCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGATCACGAAGTCAGGAGATCGAGACCATCCTGGCCAACACGGTGAAACCCTGTCTCTACTAAAAATACAAAAAATTAGTTGGGCGTGGTGGCGGGTGCCTGTAGTCCCAGCTGCTCGGGAGGCTGAGGCAGGAGAATGGCGTGAACCCCGGGGGGCGGAGCCTGCAGTGAGCGGAGATCGCGCCACTGCACTCCAGCCTGGGAGAGAGCGAGACTCCGTCTCAAAAAAAAAAAAAAAAAAAAATAGAGAGAGAGAAAGACAGGAGAAAAAGAGGAAAAGAAAAGTAAAGACATGGGAAAGGAAAAAAAGAGTAAAAAAAGTAAAGACAAAACAGGAAAAAATAGAGCTAGGCAGGGAAG",
+    "single_primer": false,
+    "source": "AC108730.7 Homo sapiens 3 BAC RP11-892D12 (Roswell Park Cancer Institute Human BAC Library) complete sequence (input)",
+    "start": 63472
+   }
+  ],
+  "backgroundsSearched": [
+   "AC108730.7 Homo sapiens 3 BAC RP11-892D12 (Roswell Park Cancer Institute Human BAC Library) complete sequence (input)"
+  ],
+  "criteria": {
+   "max_mismatch": 2,
+   "min_anneal": 18,
+   "product_size": [
+    28,
+    3825
+   ],
+   "three_prime_strict": 5
+  },
+  "notSearched": [
+   "Reference assembly (needs WSL/NCBI)",
+   "External NCBI Primer-BLAST",
+   "IUPAC-ambiguous template bases"
+  ],
+  "provenance": {
+   "createdUtc": "2026-08-06T03:58:20+00:00",
+   "databases": [],
+   "environment": {
+    "machine": "AMD64",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10"
+   },
+   "input": {
+    "id": "AC108730.7 Homo sapiens 3 BAC RP11-892D12 (Roswell Park Cancer Institute Human BAC Library) complete sequence",
+    "length": 85234,
+    "sha256": "ee8a64275aa4b7d7381ecd97080d2b4b7ac5a95ce866fa1ace728e0aaa2d7a06"
+   },
+   "manifestSha256": "ef6e94eccd002b6d51d9dcc93ff55525bf1afa697bc549faf8fb6147ebc354ba",
+   "notRun": [
+    "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
+    "External NCBI Primer-BLAST",
+    "De novo family discovery"
+   ],
+   "parameters": {
+    "background_sha256": null,
+    "fwd": "GTATCTATTTGGAGCTCTCAGG",
+    "max_mm": 2,
+    "min_anneal": 18,
+    "prod_max": 3825,
+    "prod_min": 28,
+    "rev": "CTTCCCTGCCTAGCTCTATT",
+    "target_span": null,
+    "tp": 5
+   },
+   "references": [],
+   "runType": "in-silico-pcr",
+   "schemaVersion": "0.1",
+   "software": [
+    {
+     "name": "python",
+     "version": "3.12.10"
+    },
+    {
+     "name": "TEagle core",
+     "version": "3.6.0"
+    }
+   ],
+   "teagleVersion": "3.6.0"
+  },
+  "references": [],
+  "truncated": false,
+  "truncatedOn": [],
+  "warning": null
+ },
+ "scored": {
+  "accession": "AC108730.7",
+  "caveats": "Dimorphic locus. Cited accession (BAC RP11-892D12, chromosome 3, 85,234 bp) carries the FILLED allele; expect 494 bp. The 175 bp empty allele is not in this accession. No degenerate bases; no junction-spanning primer. Verified by exact-string in-silico PCR: exactly one product, plus strand, 494 bp, containing the Ye-diagnostic 25-mer and canonical Alu motifs. Uniqueness checked within the cited accession only. Annealing temperature 55 C.",
+  "citation": "Salem AH, Ray DA, Hedges DJ, Jurka J, Batzer MA. Analysis of the human Alu Ye lineage. BMC Evolutionary Biology 2005;5:18. doi:10.1186/1471-2148-5-18. PMID 15725352; PMCID PMC554112.",
+  "closest_bp": 494,
+  "difference_bp": 0,
+  "elapsed_s": 0.215,
+  "element": "Alu Ye5 (SINE, non-LTR); Alu Ye lineage insertion polymorphism",
+  "expected_bp": 494,
+  "found": true,
+  "ground_truth": "stated_in_source",
+  "loci_on_template": "single",
+  "multilocus_by_design": false,
+  "n_products": 1,
+  "name": "Alu Ye5AH17 insertion-site PCR (chr3)",
+  "organism": "Homo sapiens",
+  "panel": "line-sine",
+  "preworked_in_corpus": true,
+  "primer_degenerate": false,
+  "primer_fwd_as_published": "GTATCTATTTGGAGCTCTCAGG",
+  "primer_rev_as_published": "CTTCCCTGCCTAGCTCTATT",
+  "product_sizes": [
+   494
+  ],
+  "scored_product_anneal_bp": [
+   22,
+   20
+  ],
+  "scored_product_tail_bp": 0,
+  "search_window_bp": [
+   28,
+   3825
+  ],
+  "source_confidence": "high",
+  "template_sha256": "c9b3f215a96345b6",
+  "tolerance_bp": 49.4,
+  "within_tolerance": true
+ }
+}

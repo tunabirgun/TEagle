@@ -1,0 +1,181 @@
+{
+ "agreed": 6000,
+ "core_length_histogram": {
+  "10": 240,
+  "11": 209,
+  "12": 223,
+  "13": 217,
+  "14": 191,
+  "15": 205,
+  "16": 240,
+  "17": 234,
+  "18": 204,
+  "19": 197,
+  "20": 212,
+  "21": 181,
+  "22": 219,
+  "23": 203,
+  "24": 160,
+  "25": 162,
+  "26": 165,
+  "27": 128,
+  "28": 122,
+  "29": 107,
+  "30": 106,
+  "31": 117,
+  "32": 90,
+  "33": 84,
+  "34": 72,
+  "35": 60,
+  "36": 58,
+  "37": 53,
+  "38": 41,
+  "39": 49,
+  "40": 40,
+  "41": 23,
+  "42": 14,
+  "6": 110,
+  "7": 109,
+  "8": 53,
+  "9": 85
+ },
+ "coverage": {
+  "by_max_mm": {
+   "0": 1497,
+   "1": 1468,
+   "2": 1505,
+   "3": 1530
+  },
+  "by_tp": {
+   "0": 531,
+   "1": 484,
+   "2": 484,
+   "3": 506,
+   "4": 502,
+   "5": 493,
+   "6": 490,
+   "7": 1015,
+   "8": 1495
+  },
+  "concrete_primer": 3046,
+  "degenerate_primer": 2954,
+  "forward_strand": 2958,
+  "reverse_strand": 3042
+ },
+ "degenerate_codes": [
+  "B",
+  "D",
+  "H",
+  "K",
+  "M",
+  "N",
+  "R",
+  "S",
+  "V",
+  "W",
+  "Y"
+ ],
+ "disagreements": 0,
+ "elapsed_s": 9.6,
+ "examples": [],
+ "generated": "2026-08-06T07:31:53",
+ "informative": {
+  "both_empty": 1486,
+  "site_yield": 0.7523,
+  "sites_compared": 4983,
+  "strict_stratum_trials_with_sites": 1077,
+  "trials_where_the_winning_core_was_shorter_than_the_primer": 3195,
+  "trials_with_sites": 4514
+ },
+ "module_constants": {
+  "MAX_SITES": 4000,
+  "MIN_PRIMER_SIZE": 18
+ },
+ "parameter_ranges": {
+  "max_mm": [
+   0,
+   3
+  ],
+  "min_anneal": [
+   6,
+   22
+  ],
+  "primer_len": [
+   10,
+   42
+  ],
+  "primers": [
+   "concrete",
+   "IUPAC-degenerate"
+  ],
+  "seq_len": [
+   90,
+   500
+  ],
+  "strands": [
+   "forward",
+   "reverse"
+  ],
+  "tp": [
+   0,
+   8
+  ]
+ },
+ "python": "3.12.10",
+ "seed": 20260806,
+ "sensitivity_control": {
+  "description": "trials on which a reference clamping the strict 3' window once, at the shortest permitted core, gives a different answer from the correct per-core-length clamp",
+  "strict_stratum_caught": 137,
+  "trials_caught": 144,
+  "trials_tested": 1580
+ },
+ "sensitivity_ok": true,
+ "site_cap_hits": 0,
+ "site_yield_ok": true,
+ "strata": {
+  "strict_share_requested": 0.25,
+  "strict_window_wider_than_shortest_core": 1500,
+  "uniform": 4500
+ },
+ "tail_length_histogram": {
+  "0": 1638,
+  "1": 351,
+  "10": 149,
+  "11": 106,
+  "12": 122,
+  "13": 105,
+  "14": 101,
+  "15": 75,
+  "16": 74,
+  "17": 67,
+  "18": 59,
+  "19": 45,
+  "2": 316,
+  "20": 44,
+  "21": 40,
+  "22": 27,
+  "23": 30,
+  "24": 21,
+  "25": 23,
+  "26": 13,
+  "27": 15,
+  "28": 19,
+  "29": 11,
+  "3": 266,
+  "30": 19,
+  "31": 4,
+  "32": 12,
+  "33": 10,
+  "34": 4,
+  "35": 2,
+  "36": 4,
+  "4": 239,
+  "5": 217,
+  "6": 206,
+  "7": 201,
+  "8": 182,
+  "9": 166
+ },
+ "teagle_version": "3.6.0",
+ "trials": 6000
+}

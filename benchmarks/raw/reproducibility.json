@@ -1,0 +1,100 @@
+{
+ "assay_fidelity": {
+  "coverage_complete": true,
+  "matcher_thresholds_found": 5,
+  "matcher_thresholds_unaccounted_for": [],
+  "min_anneal_live_default": 18,
+  "min_anneal_sealed_value": 18,
+  "run_at_defaults": true,
+  "sealed_parameters": 9
+ },
+ "elapsed_s": 0.6,
+ "fidelity": {
+  "coverage_complete": true,
+  "derivation": "engine._detector_parameters() via inspect.signature - never restated as a literal",
+  "detector_thresholds_found": 17,
+  "detector_thresholds_unaccounted_for": [],
+  "detectors_examined": [
+   "sequtil.find_orfs",
+   "domains.scan_domains",
+   "structural.find_ltr",
+   "structural.find_tir",
+   "structural.find_polya",
+   "structural.find_pbs",
+   "structural.find_ppt"
+  ],
+  "keys_derived_but_not_sealed": [],
+  "keys_sealed_but_not_derived": [],
+  "mismatches": [],
+  "sealed_parameters": 21,
+  "serialised_matches_live_derivation": true
+ },
+ "generated": "2026-08-06T06:51:42",
+ "replicates": 10,
+ "seal_contents": {
+  "database_checksums": [
+   "57f2b7881f35"
+  ],
+  "databases_recorded": [
+   "Pfam TE-domain profiles (bundled, CC0)"
+  ],
+  "parameters_recorded": 21,
+  "reference_dois": [
+   "10.1038/nrg2165",
+   "10.1093/hr/uhac017",
+   "10.1104/pp.17.01310"
+  ],
+  "references_recorded": 3,
+  "software_recorded": [
+   "HMMER (pyhmmer)",
+   "python",
+   "TEagle core"
+  ],
+  "top_level_keys": [
+   "createdUtc",
+   "databases",
+   "environment",
+   "input",
+   "manifestSha256",
+   "notRun",
+   "parameters",
+   "references",
+   "runType",
+   "schemaVersion",
+   "software",
+   "teagleVersion"
+  ]
+ },
+ "sensitivity": {
+  "all_distinct": true,
+  "distinct_seals": 3,
+  "input_sha256": {
+   "A": "f4a67cf95611558b1052ee90c687fff76fc27ade98f60064390ee7374c28a0a5",
+   "A_one_base_changed": "e0e2ce17df9368f225e98fe90b5bf0605a05ba2ee25d42e03ea9d9635d66c9b7",
+   "B": "aa01507b4b5d6124c504e0d7f3fa9342bedbd9a4ac142c53dbe877e49aaa0572"
+  },
+  "inputs": 3,
+  "one_base_change_alters_seal": true
+ },
+ "stability": {
+  "A": {
+   "distinct_seal_hashes": 1,
+   "seal_sha256": "48c915de4421df8e47b0cd6b8cec39271ae1a12325f079a85192832c5dff79c2",
+   "stable": true
+  },
+  "A_one_base_changed": {
+   "distinct_seal_hashes": 1,
+   "seal_sha256": "fa21d674508f9256bc165633c7e309eeae009b3e9a81a7873976719f5de253be",
+   "stable": true
+  },
+  "B": {
+   "distinct_seal_hashes": 1,
+   "seal_sha256": "5177ecd0026a115f268bdf7f11408511702653a242bb958a2085c98684a67c92",
+   "stable": true
+  }
+ },
+ "teagle_version": "3.6.0",
+ "volatile_fields_excluded": [
+  "createdUtc"
+ ]
+}

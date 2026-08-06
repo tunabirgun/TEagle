@@ -13,6 +13,12 @@ except Exception as _e:
     PRIMER3_ERROR = f"{type(_e).__name__}: {_e}"
 
 
+# The shortest oligo the tool will accept as a primer. It is the Primer3 minimum used for design and, in
+# in-silico PCR, the shortest 3'-proximal core that may be called a binding site. One constant for both, so
+# the tool cannot report a product from an annealing footprint shorter than a primer it would design.
+MIN_PRIMER_SIZE = 18
+
+
 def design_primers(template: str, params: dict | None = None, target: list | None = None,
                    included: list | None = None):
     """Design primer pairs with Primer3. target=[start,len] forces the product to span a locus;
@@ -23,7 +29,7 @@ def design_primers(template: str, params: dict | None = None, target: list | Non
     p = params or {}
     global_args = {
         "PRIMER_OPT_SIZE": p.get("opt_size", 20),
-        "PRIMER_MIN_SIZE": p.get("min_size", 18),
+        "PRIMER_MIN_SIZE": p.get("min_size", MIN_PRIMER_SIZE),
         "PRIMER_MAX_SIZE": p.get("max_size", 27),
         "PRIMER_OPT_TM": p.get("opt_tm", 60.0),
         "PRIMER_MIN_TM": p.get("min_tm", 57.0),
@@ -97,65 +103,153 @@ def _scan(pattern: str, seq: str, max_mm: int, tp: int):
     return hits
 
 
+MAX_SITES, MAX_AMPS = 4000, 4000              # bound work + memory on repetitive templates
+
+
+def _match_at(pattern, seq, at):
+    """Mismatch count and positions for `pattern` placed at `at`, or None if it runs off the template."""
+    if at < 0 or at + len(pattern) > len(seq):
+        return None
+    mm, pos = 0, []
+    for k, pb in enumerate(pattern):
+        if not _base_ok(pb, seq[at + k]):
+            mm += 1
+            pos.append(k)
+    return mm, pos
+
+
+def anchored_sites(primer, seq, max_mm, tp, min_anneal, on_reverse):
+    """Binding sites for the longest 3'-proximal core of `primer` that anneals, found in ONE pass.
+
+    Trying the full primer, then one base shorter, and so on until something binds is the obvious
+    implementation and costs a whole template scan per tail length — twenty-five scans of a 58 Mb
+    chromosome for a 42-mer. It is also unnecessary: shortening a match cannot introduce a mismatch, so
+    every site of a long core is already a site of its own 3' suffix. The shortest permitted core is
+    therefore scanned once and each hit extended 5' while the mismatch budget holds. The longest
+    extension reached anywhere is the core the assay uses, which is what the descending scan returns.
+
+    Returns (sites, capped). `on_reverse` selects the strand the primer primes from; on that strand a 5'
+    extension of the primer appends complemented bases to the RIGHT of the matched window, because
+    reverse-complementing swaps the ends.
+    """
+    L = len(primer)
+    if L == 0:
+        return [], False
+    floor = max(1, min(min_anneal, L))
+    t = min(tp, floor)                                # the strict 3' window lies inside every core
+    core_min = primer[L - floor:]
+    pat = reverse_complement(core_min) if on_reverse else core_min
+    three = set(range(0, t)) if on_reverse else set(range(floor - t, floor))
+    capped = False
+    cands = []
+    for i, _mm, pos in _scan(pat, seq, max_mm, t):
+        if any(pp in three for pp in pos):            # strict 3': no mismatch in the terminal t bases
+            continue
+        cands.append(i)
+        if len(cands) >= MAX_SITES:
+            capped = True
+            break
+    if not cands:
+        return [], capped
+
+    # For each candidate, the longest core it supports. Working in DISTANCE FROM THE 3' END makes both
+    # constraints closed-form: a core of length n is acceptable when it carries at most `max_mm`
+    # mismatches (all mismatches at distance < n) and none inside its strict 3' window, which spans
+    # min(tp, n) bases. The window widens with n only while n < tp, so the second constraint caps n at
+    # the nearest mismatch whenever that mismatch falls inside the window at all.
+    reach = []
+    for i in cands:
+        dists = sorted((p if on_reverse else floor - 1 - p) for p in _match_at(pat, seq, i)[1])
+        limit = L                                     # how far the template allows the core to extend
+        for n in range(floor, L):
+            b = primer[L - n - 1]
+            q = (i + n) if on_reverse else (i - (n - floor) - 1)
+            if q < 0 or q >= len(seq):
+                limit = n
+                break
+            if not _base_ok(reverse_complement(b) if on_reverse else b, seq[q]):
+                dists.append(n)                       # the base just added lies n from the 3' end
+        n_budget = L if len(dists) <= max_mm else sorted(dists)[max_mm]
+        nearest = min(dists) if dists else None
+        n_strict = L if (nearest is None or nearest >= tp) else nearest
+        reach.append(min(limit, n_budget, n_strict))
+
+    viable = [(i, n) for i, n in zip(cands, reach) if n >= floor]
+    if not viable:                                    # every candidate failed once the exact 3' rule was
+        return [], capped                             # applied at its own core length
+    best = max(n for _i, n in viable)
+    core = primer[L - best:]
+    pat_best = reverse_complement(core) if on_reverse else core
+    out = []
+    for i, n in viable:
+        if n != best:
+            continue
+        at = i if on_reverse else i - (best - floor)
+        m = _match_at(pat_best, seq, at)
+        if m is None:                                 # the extension check bounds this; kept as a guard
+            continue
+        mm, pos = m
+        site = {"mm": mm, "mm_pos": pos, "tail5": L - best, "anneal_len": best}
+        site["right" if on_reverse else "left"] = (at + best) if on_reverse else at
+        out.append(site)
+    return out, capped
+
+
 def in_silico_pcr(fwd: str, rev: str, seq: str, seq_id: str = "template",
                   max_mm: int = 2, tp: int = 5, prod_min: int = 70, prod_max: int = 1000,
-                  target_span: list | None = None, stats: dict | None = None):
+                  target_span: list | None = None, stats: dict | None = None,
+                  min_anneal: int = MIN_PRIMER_SIZE):
     """Pair-aware in-silico PCR. Searches both strands, applies a strict 3' rule
     (zero mismatches in the terminal `tp` bases), builds amplicons from inward-facing
     sites within [prod_min, prod_max] — both two-primer (F+R) products and single-primer
     (F+F / R+R) self-priming products across inverted repeats (marked single_primer).
     on_target and single_primer are mutually exclusive, so on/off/single counts are disjoint
     and exhaustive downstream (off = total - on - single can never go negative).
+    A primer may carry a non-templated 5' tail - a restriction site, an adapter, a barcode, a promoter -
+    which does not anneal on the first cycle but is incorporated into the product. Requiring the whole
+    primer to match therefore rejects a large and ordinary class of real assays. Binding is instead
+    anchored at the 3' end: the longest 3'-proximal suffix that matches is used, down to `min_anneal`
+    bases, and any unmatched 5' remainder is reported as a tail rather than silently ignored. Product
+    length is reported both as the templated span and as the full product including both tails, because
+    those differ for a tailed pair and a user comparing against a gel needs the latter.
+
     Returns real amplicon list."""
     fwd, rev, seq = fwd.upper(), rev.upper(), seq.upper()     # case-insensitive: a lowercase primer must still bind
     max_mm, tp = max(0, int(max_mm)), max(0, int(tp))         # non-negative ints; tp<0 must not silently disable the 3' rule
-    MAX_SITES, MAX_AMPS = 4000, 4000                          # bound work + memory on repetitive templates
     amps = []
     sites_capped = False                                      # a binding-site scan that hit MAX_SITES stopped early
-    # forward-capable binding: primer matches top strand 5'->3'; 3' end = right side
-    def forward_sites(primer):
-        t = min(tp, len(primer))                              # clamp so a huge tp cannot build an enormous index set
-        sites = []
-        for i, mm, pos in _scan(primer, seq, max_mm, t):
-            three = set(range(len(primer) - t, len(primer)))
-            if any(pp in three for pp in pos):        # strict 3': no mismatch in last t
-                continue
-            sites.append({"left": i, "mm": mm, "mm_pos": pos})
-            if len(sites) >= MAX_SITES:
-                nonlocal sites_capped
-                sites_capped = True
-                break
-        return sites
-    # reverse-capable binding: revcomp(primer) matches top strand; primer 3' = left side
-    def reverse_sites(primer):
-        t = min(tp, len(primer))
-        rc = reverse_complement(primer)
-        sites = []
-        for i, mm, pos in _scan(rc, seq, max_mm, t):
-            three = set(range(0, t))                  # primer 3' maps to left of rc window
-            if any(pp in three for pp in pos):
-                continue
-            sites.append({"right": i + len(rc), "mm": mm, "mm_pos": pos})
-            if len(sites) >= MAX_SITES:
-                nonlocal sites_capped
-                sites_capped = True
-                break
-        return sites
 
-    fset = [("F", s) for s in forward_sites(fwd)] + [("R", s) for s in forward_sites(rev)]
-    rset = [("F", s) for s in reverse_sites(fwd)] + [("R", s) for s in reverse_sites(rev)]
+    def sites(primer, on_reverse):
+        nonlocal sites_capped
+        found, capped = anchored_sites(primer, seq, max_mm, tp, min_anneal, on_reverse)
+        sites_capped = sites_capped or capped
+        return found
+
+    fset = [("F", s) for s in sites(fwd, False)] + [("R", s) for s in sites(rev, False)]
+    rset = [("F", s) for s in sites(fwd, True)] + [("R", s) for s in sites(rev, True)]
     capped = False
     for fo, fs in fset:
         for ro, rs in rset:
             left, right = fs["left"], rs["right"]
             plen = right - left
-            if left < right and prod_min <= plen <= prod_max:
+            t5f, t5r = fs.get("tail5", 0), rs.get("tail5", 0)
+            # The size window is about the band, so it is applied to the product that is actually made -
+            # templated span plus both incorporated 5' tails - not to the distance between binding sites.
+            # For an untailed pair the two are identical and the behaviour is unchanged.
+            if left < right and prod_min <= plen + t5f + t5r <= prod_max:
                 single = fo == ro                     # same primer at both ends: self-priming across a TIR/LTR
                 # a self-priming product is an artefact, never the intended amplicon (that is always F+R), so it
                 # stays in the single-primer bucket even inside the target window -> on/off/single stay disjoint
                 on = (not single) and bool(target_span and left >= target_span[0] - 5 and right <= target_span[1] + 5)
+                # A non-templated 5' tail is incorporated into the product, so the band a user sees on a
+                # gel is the templated span PLUS both tails. Both are reported: `length` stays the
+                # templated span so coordinates and slices remain consistent, and `product_length` is
+                # what the assay actually yields.
                 amps.append({
                     "source": seq_id, "start": left, "end": right, "length": plen,
+                    "product_length": plen + t5f + t5r,
+                    "fwd_tail5": t5f, "rev_tail5": t5r,
+                    "fwd_anneal_len": fs.get("anneal_len"), "rev_anneal_len": rs.get("anneal_len"),
                     "fwd_primer": fo, "rev_primer": ro, "single_primer": single,
                     "fwd_mm": fs["mm"], "rev_mm": rs["mm"],
                     "on_target": on,

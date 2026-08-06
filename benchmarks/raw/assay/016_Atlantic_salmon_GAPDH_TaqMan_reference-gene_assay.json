@@ -1,0 +1,148 @@
+{
+ "case": {
+  "caveats": "ASSAY FORMAT: this is a TaqMan assay; the internal MGB probe (CTGATCATTGGAAACCT, Table 1) sits inside the amplicon and does not affect the 96 bp primer-to-primer product. SPLICING: the paper explicitly states exon-exon borders \"were not considered\" when designing the S20 and GAPDH assays, so 96 bp is established on this cDNA/EST template only - whether the primers also amplify from genomic DNA, and at what size, is simply NOT established by the paper (this is different from a known intron-spanning assay). TEMPLATE: BU693999.1 is an Atlantic salmon eye cDNA library EST (796 bp), i.e. cDNA, not genomic. In-silico check: forward matches once at 230, reverse site once ending at 325; product 230..325 = 96 bp, exact, no alternative products.",
+  "citation": "Olsvik PA, Lie KK, Jordal AEO, Nilsen TO, Hordvik I. Evaluation of potential reference genes in real-time RT-PCR studies of Atlantic salmon. BMC Mol Biol. 2005;6:21. doi:10.1186/1471-2199-6-21. PMID 16293192; PMCID PMC1314898.",
+  "confidence": "high",
+  "element": "Non-TE control assay. Glyceraldehyde-3-phosphate dehydrogenase (GAPDH) evaluated as a real-time RT-PCR reference gene.",
+  "expected_amplicon_bp": 96,
+  "expected_bp_provenance": "stated_in_source",
+  "forward_primer": "AAGTGAAGCAGGAGGGTGGAA",
+  "loci_justification": "The pair flanks one locus on the cited template: a single insertion site, a single excision site, or a single transcript. A second product on this template would be an off-target prediction.",
+  "loci_on_template": "single",
+  "name": "Atlantic salmon GAPDH TaqMan reference-gene assay",
+  "organism": "Salmo salar (Atlantic salmon)",
+  "panel": "controls",
+  "reverse_primer": "CAGCCTCACCCCATTTGATG",
+  "template_accession": "BU693999.1",
+  "where_in_paper": "Table 1 (\"TaqMan assays used to evaluate potential reference genes in Atlantic salmon\"), row GAPDH: \"Forward primer\" and \"Reverse primer\" columns, and 96 in the \"Amplicon size (bp)\" column. The template accession is given in Methods, \"Design of PCR primers and TaqMan probes\": \"The mRNA sequences encoding S20 ribosomal protein and GAPDH were obtained from GenBank accession numbers BG936672 and BU693999, respectively (exon-exon borders were not considered).\" The same section states \"Amplified PCR products of all actual cDNAs were sequenced to ensure that the correct mRNA sequences were quantified.\"",
+  "worked_prediction_in_entry": true,
+  "worked_prediction_note": "The entry records a worked prediction — a coordinate range, an in-silico check, or a sequence-derived length — so the expected answer was written down before the engine ran. The published size remains external, but this case was not scored blind."
+ },
+ "result": {
+  "amplicons": [
+   {
+    "amplicon_5p": "AAGTGAAGCAGGAGGGTGGAAAGCTGATCA…",
+    "end": 325,
+    "fwd_anneal_len": 21,
+    "fwd_mm": 0,
+    "fwd_primer": "F",
+    "fwd_tail5": 0,
+    "length": 96,
+    "on_target": false,
+    "product_length": 96,
+    "rev_anneal_len": 20,
+    "rev_mm": 0,
+    "rev_primer": "R",
+    "rev_tail5": 0,
+    "seq": "AAGTGAAGCAGGAGGGTGGAAAGCTGATCATTGGAAACCTCCACATCACAGTTTTCCATGAGAGGGACCCCACTGCCATCAAATGGGGTGAGGCTG",
+    "single_primer": false,
+    "source": "BU693999.1 EST0036 Atlantic salmon Lambda Zap Express eye cDNA library Salmo salar cDNA clone EER2-c03 5' similar to Glyceraldehyde 3-phosphate dehydrogenase, mRNA sequence (input)",
+    "start": 229
+   }
+  ],
+  "backgroundsSearched": [
+   "BU693999.1 EST0036 Atlantic salmon Lambda Zap Express eye cDNA library Salmo salar cDNA clone EER2-c03 5' similar to Glyceraldehyde 3-phosphate dehydrogenase, mRNA sequence (input)"
+  ],
+  "criteria": {
+   "max_mismatch": 2,
+   "min_anneal": 18,
+   "product_size": [
+    28,
+    3825
+   ],
+   "three_prime_strict": 5
+  },
+  "notSearched": [
+   "Reference assembly (needs WSL/NCBI)",
+   "External NCBI Primer-BLAST",
+   "IUPAC-ambiguous template bases"
+  ],
+  "provenance": {
+   "createdUtc": "2026-08-06T03:58:36+00:00",
+   "databases": [],
+   "environment": {
+    "machine": "AMD64",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10"
+   },
+   "input": {
+    "id": "BU693999.1 EST0036 Atlantic salmon Lambda Zap Express eye cDNA library Salmo salar cDNA clone EER2-c03 5' similar to Glyceraldehyde 3-phosphate dehydrogenase, mRNA sequence",
+    "length": 796,
+    "sha256": "a739716b0ae08b2c6c18d1ed227fc1007576b89892470d748b173cbe2f01d1c9"
+   },
+   "manifestSha256": "dbf579b0457e2a66886d5cd5e8208f47fe6152f793e75b5290b1b9080442bbc3",
+   "notRun": [
+    "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
+    "External NCBI Primer-BLAST",
+    "De novo family discovery"
+   ],
+   "parameters": {
+    "background_sha256": null,
+    "fwd": "AAGTGAAGCAGGAGGGTGGAA",
+    "max_mm": 2,
+    "min_anneal": 18,
+    "prod_max": 3825,
+    "prod_min": 28,
+    "rev": "CAGCCTCACCCCATTTGATG",
+    "target_span": null,
+    "tp": 5
+   },
+   "references": [],
+   "runType": "in-silico-pcr",
+   "schemaVersion": "0.1",
+   "software": [
+    {
+     "name": "python",
+     "version": "3.12.10"
+    },
+    {
+     "name": "TEagle core",
+     "version": "3.6.0"
+    }
+   ],
+   "teagleVersion": "3.6.0"
+  },
+  "references": [],
+  "truncated": false,
+  "truncatedOn": [],
+  "warning": null
+ },
+ "scored": {
+  "accession": "BU693999.1",
+  "caveats": "ASSAY FORMAT: this is a TaqMan assay; the internal MGB probe (CTGATCATTGGAAACCT, Table 1) sits inside the amplicon and does not affect the 96 bp primer-to-primer product. SPLICING: the paper explicitly states exon-exon borders \"were not considered\" when designing the S20 and GAPDH assays, so 96 bp is established on this cDNA/EST template only - whether the primers also amplify from genomic DNA, and at what size, is simply NOT established by the paper (this is different from a known intron-spanning assay). TEMPLATE: BU693999.1 is an Atlantic salmon eye cDNA library EST (796 bp), i.e. cDNA, not genomic. In-silico check: forward matches once at 230, reverse site once ending at 325; product 230..325 = 96 bp, exact, no alternative products.",
+  "citation": "Olsvik PA, Lie KK, Jordal AEO, Nilsen TO, Hordvik I. Evaluation of potential reference genes in real-time RT-PCR studies of Atlantic salmon. BMC Mol Biol. 2005;6:21. doi:10.1186/1471-2199-6-21. PMID 16293192; PMCID PMC1314898.",
+  "closest_bp": 96,
+  "difference_bp": 0,
+  "elapsed_s": 0.007,
+  "element": "Non-TE control assay. Glyceraldehyde-3-phosphate dehydrogenase (GAPDH) evaluated as a real-time RT-PCR reference gene.",
+  "expected_bp": 96,
+  "found": true,
+  "ground_truth": "stated_in_source",
+  "loci_on_template": "single",
+  "multilocus_by_design": false,
+  "n_products": 1,
+  "name": "Atlantic salmon GAPDH TaqMan reference-gene assay",
+  "organism": "Salmo salar (Atlantic salmon)",
+  "panel": "controls",
+  "preworked_in_corpus": true,
+  "primer_degenerate": false,
+  "primer_fwd_as_published": "AAGTGAAGCAGGAGGGTGGAA",
+  "primer_rev_as_published": "CAGCCTCACCCCATTTGATG",
+  "product_sizes": [
+   96
+  ],
+  "scored_product_anneal_bp": [
+   21,
+   20
+  ],
+  "scored_product_tail_bp": 0,
+  "search_window_bp": [
+   28,
+   3825
+  ],
+  "source_confidence": "high",
+  "template_sha256": "f82e6498a1ca1f66",
+  "tolerance_bp": 20.0,
+  "within_tolerance": true
+ }
+}

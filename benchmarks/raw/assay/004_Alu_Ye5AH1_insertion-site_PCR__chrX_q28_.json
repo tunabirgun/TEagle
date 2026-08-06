@@ -1,0 +1,149 @@
+{
+ "case": {
+  "amplicon_range_bp": "empty site 242 bp / filled site 495 bp (delta 253 bp)",
+  "caveats": "Dimorphic locus, so the paper prints two sizes; the cited accession (BAC RP11-115M6, Xq28, 178,516 bp) carries the FILLED (Alu-present) allele, so 495 bp is the size to expect in this template. The 242 bp empty-site allele is NOT present in this accession. No degenerate bases; neither primer spans a junction. Verified by exact-string in-silico PCR against AC109993.3: exactly one product, plus strand, length 495 bp, and the Ye-lineage diagnostic 25-mer (5'-GAACCCCGGGGGGCGGAGCCTGCAG-3', the paper's own subfamily-diagnostic oligo) lies inside the amplicon, confirming it genuinely spans an Alu Ye element. Product uniqueness was confirmed within the cited accession only, not genome-wide. Annealing temperature 55 C.",
+  "citation": "Salem AH, Ray DA, Hedges DJ, Jurka J, Batzer MA. Analysis of the human Alu Ye lineage. BMC Evolutionary Biology 2005;5:18. doi:10.1186/1471-2148-5-18. PMID 15725352; PMCID PMC554112.",
+  "confidence": "high",
+  "element": "Alu Ye5 (SINE, non-LTR); Alu Ye lineage insertion polymorphism",
+  "expected_amplicon_bp": 495,
+  "expected_bp_provenance": "stated_in_source",
+  "forward_primer": "AAGTACACCCTGTGATGTTTG",
+  "loci_justification": "The pair flanks one locus on the cited template: a single insertion site, a single excision site, or a single transcript. A second product on this template would be an off-target prediction.",
+  "loci_on_template": "single",
+  "name": "Alu Ye5AH1 insertion-site PCR (chrX q28)",
+  "organism": "Homo sapiens",
+  "panel": "line-sine",
+  "reverse_primer": "TGCTTGATTCTTCCCTTTTA",
+  "template_accession": "AC109993.3",
+  "where_in_paper": "Additional File 2, captioned \"Supplemental Table. Alu Ye elements, Genbank numbers, PCR primers, annealing temperature, primate diversity, location and amplicon sizes.\" Columns: Name | Accession | 5' Primer sequence (5'-3') | 3' Primer sequence (5'-3') | A.T. | Diversity | Chr. Loc. | Product Size Filled | Empty. Primers and both sizes are in the Ye5AH1 row; the Accession column supplies AC109993.3.",
+  "worked_prediction_in_entry": true,
+  "worked_prediction_note": "The entry records a worked prediction — a coordinate range, an in-silico check, or a sequence-derived length — so the expected answer was written down before the engine ran. The published size remains external, but this case was not scored blind."
+ },
+ "result": {
+  "amplicons": [
+   {
+    "amplicon_5p": "AAGTACACCCTGTGATGTTTGCAAAGTGAC…",
+    "end": 34727,
+    "fwd_anneal_len": 21,
+    "fwd_mm": 0,
+    "fwd_primer": "F",
+    "fwd_tail5": 0,
+    "length": 495,
+    "on_target": false,
+    "product_length": 495,
+    "rev_anneal_len": 20,
+    "rev_mm": 0,
+    "rev_primer": "R",
+    "rev_tail5": 0,
+    "seq": "AAGTACACCCTGTGATGTTTGCAAAGTGACTAAATCACCTAATGACACATTTCTCAGAACATATGCCCGTCATTGAATGATGCATGATTGTGTAATAATTATAGTAGCTTGAAATCCATCAAATACACTTAAATCCATGAGTTCATTATGATATTAGAAAAATAATTTGTCATCAGGAGATCGAGACCATCCTGGCTAACACAGTGAAACCCCGTCTCTAATAAAAATACAAAAAATTAGCCGGGCGAGGTAGTGGGCGCCTGTAGTCCCAGCTACTCGGGAGGCTGAGGCAGGAGAATGGCGTGAACCCCGGGGGGCGGAGCCTGCAGTGAGCCGAGATCGCGCCACTGCACTCCAGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAAAAAAAAAAAAAAAAAAAAGCAAAAGAATTTGTCATCTTCAGAGGATGTAAGGGAACTACTTCATTTCCTTGAAAACTACTTAAGTAAAAGGGAAGAATCAAGCA",
+    "single_primer": false,
+    "source": "AC109993.3 Homo sapiens chromosome X clone RP11-115M6 map q28, complete sequence (input)",
+    "start": 34232
+   }
+  ],
+  "backgroundsSearched": [
+   "AC109993.3 Homo sapiens chromosome X clone RP11-115M6 map q28, complete sequence (input)"
+  ],
+  "criteria": {
+   "max_mismatch": 2,
+   "min_anneal": 18,
+   "product_size": [
+    28,
+    3825
+   ],
+   "three_prime_strict": 5
+  },
+  "notSearched": [
+   "Reference assembly (needs WSL/NCBI)",
+   "External NCBI Primer-BLAST",
+   "IUPAC-ambiguous template bases"
+  ],
+  "provenance": {
+   "createdUtc": "2026-08-06T03:58:19+00:00",
+   "databases": [],
+   "environment": {
+    "machine": "AMD64",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10"
+   },
+   "input": {
+    "id": "AC109993.3 Homo sapiens chromosome X clone RP11-115M6 map q28, complete sequence",
+    "length": 178516,
+    "sha256": "790d9db9528f850c339357ed2bb49c456ae46707b6f29e52e7a2bfbb41c64891"
+   },
+   "manifestSha256": "8bac675c61e7535dc5d53b9cf0819eb5e8f9fc1b3ddb2108ba062c6896595a7e",
+   "notRun": [
+    "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
+    "External NCBI Primer-BLAST",
+    "De novo family discovery"
+   ],
+   "parameters": {
+    "background_sha256": null,
+    "fwd": "AAGTACACCCTGTGATGTTTG",
+    "max_mm": 2,
+    "min_anneal": 18,
+    "prod_max": 3825,
+    "prod_min": 28,
+    "rev": "TGCTTGATTCTTCCCTTTTA",
+    "target_span": null,
+    "tp": 5
+   },
+   "references": [],
+   "runType": "in-silico-pcr",
+   "schemaVersion": "0.1",
+   "software": [
+    {
+     "name": "python",
+     "version": "3.12.10"
+    },
+    {
+     "name": "TEagle core",
+     "version": "3.6.0"
+    }
+   ],
+   "teagleVersion": "3.6.0"
+  },
+  "references": [],
+  "truncated": false,
+  "truncatedOn": [],
+  "warning": null
+ },
+ "scored": {
+  "accession": "AC109993.3",
+  "caveats": "Dimorphic locus, so the paper prints two sizes; the cited accession (BAC RP11-115M6, Xq28, 178,516 bp) carries the FILLED (Alu-present) allele, so 495 bp is the size to expect in this template. The 242 bp empty-site allele is NOT present in this accession. No degenerate bases; neither primer spans a junction. Verified by exact-string in-silico PCR against AC109993.3: exactly one product, plus strand, length 495 bp, and the Ye-lineage diagnostic 25-mer (5'-GAACCCCGGGGGGCGGAGCCTGCAG-3', the paper's own subfamily-diagnostic oligo) lies inside the amplicon, confirming it genuinely spans an Alu Ye element. Product uniqueness was confirmed within the cited accession only, not genome-wide. Annealing temperature 55 C.",
+  "citation": "Salem AH, Ray DA, Hedges DJ, Jurka J, Batzer MA. Analysis of the human Alu Ye lineage. BMC Evolutionary Biology 2005;5:18. doi:10.1186/1471-2148-5-18. PMID 15725352; PMCID PMC554112.",
+  "closest_bp": 495,
+  "difference_bp": 0,
+  "elapsed_s": 0.448,
+  "element": "Alu Ye5 (SINE, non-LTR); Alu Ye lineage insertion polymorphism",
+  "expected_bp": 495,
+  "found": true,
+  "ground_truth": "stated_in_source",
+  "loci_on_template": "single",
+  "multilocus_by_design": false,
+  "n_products": 1,
+  "name": "Alu Ye5AH1 insertion-site PCR (chrX q28)",
+  "organism": "Homo sapiens",
+  "panel": "line-sine",
+  "preworked_in_corpus": true,
+  "primer_degenerate": false,
+  "primer_fwd_as_published": "AAGTACACCCTGTGATGTTTG",
+  "primer_rev_as_published": "TGCTTGATTCTTCCCTTTTA",
+  "product_sizes": [
+   495
+  ],
+  "scored_product_anneal_bp": [
+   21,
+   20
+  ],
+  "scored_product_tail_bp": 0,
+  "search_window_bp": [
+   28,
+   3825
+  ],
+  "source_confidence": "high",
+  "template_sha256": "8bcb9e8f4fed0b09",
+  "tolerance_bp": 49.5,
+  "within_tolerance": true
+ }
+}

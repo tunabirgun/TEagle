@@ -1,0 +1,148 @@
+{
+ "case": {
+  "caveats": "Five-primer multiplex cocktail (AMOS-PCR): one IS711 primer at 1 uM plus four species-specific primers at 0.2 uM each, so the intended reaction is multi-primer, not a simple pair. The IS711 primer matches 17 sites on CP000708.1 (multi-locus by design); only one pairs productively with the B. ovis primer, which lies in the bcsp31/BCSP31K gene upstream of the B. ovis IS711 copy. Correct orientation is IS711 primer forward / B. ovis primer reverse. A second in-silico pair of 13,980 bp also exists on this template and would not amplify under the paper's 2-min extension. Independently verified: exact 976-bp product at 1175240..1176215 on CP000708.1, against a size the paper read from a 1.5% agarose gel versus a 100-bp ladder.",
+  "citation": "Bricker BJ, Halling SM. Differentiation of Brucella abortus bv. 1, 2, and 4, Brucella melitensis, Brucella ovis, and Brucella suis bv. 1 by PCR. J Clin Microbiol. 1994;32(11):2660-2666. doi:10.1128/jcm.32.11.2660-2666.1994. PMID 7852552.",
+  "confidence": "high",
+  "element": "IS711 (IS711/IS6501 insertion sequence) - species-specific IS711 insertion-site PCR",
+  "expected_amplicon_bp": 976,
+  "expected_bp_provenance": "stated_in_source",
+  "forward_primer": "TGCCGATCACTTAAGGGCCTTCAT",
+  "loci_justification": "AMOS-PCR is run at the bench as a five-primer multiplex; the pair scored here is the species-specific pair for this template, and the IS711 copy it reports is a single chromosomal locus. Filed under the 'irap-remap' panel for convenience, which is a label and not a statement about locus multiplicity.",
+  "loci_on_template": "single",
+  "name": "Brucella AMOS-PCR, B. ovis product (IS711 insertion-site PCR)",
+  "organism": "Brucella ovis (type strain ATCC 25840, listed in Table 1 of the paper)",
+  "panel": "irap-remap",
+  "reverse_primer": "CGGGTTCTGGCACCATCGTCG",
+  "template_accession": "CP000708.1",
+  "where_in_paper": "Table 2 ('Sequences of oligonucleotide primers for PCR') gives the IS711-specific and B. ovis-specific primers verbatim; Results section 'Amplification of DNA fragments from the 19 Brucella biovars by PCR with a primer cocktail' and Fig. 2 give the 976-bp size.",
+  "worked_prediction_in_entry": true,
+  "worked_prediction_note": "The entry records a worked prediction — a coordinate range, an in-silico check, or a sequence-derived length — so the expected answer was written down before the engine ran. The published size remains external, but this case was not scored blind."
+ },
+ "result": {
+  "amplicons": [
+   {
+    "amplicon_5p": "TGCCGATCACTTAAGGGCCTTCATTGCCAG…",
+    "end": 1176215,
+    "fwd_anneal_len": 24,
+    "fwd_mm": 0,
+    "fwd_primer": "F",
+    "fwd_tail5": 0,
+    "length": 976,
+    "on_target": false,
+    "product_length": 976,
+    "rev_anneal_len": 21,
+    "rev_mm": 0,
+    "rev_primer": "R",
+    "rev_tail5": 0,
+    "seq": "TGCCGATCACTTAAGGGCCTTCATTGCCAGCAATCTCAAGGCAACGGCTCAGATCAAGGTCAATCCAACACGTTCCAGTGTCCCAACAATCGACTGGAGGCTGTACAAGGAACGCCATCAGATTGAATGCTTTTTTAACAAGTTGAAACGCTATCGTCGTATTGCGCTGCGATGCGAGAAAACATTGACCGCATTCATGGGCTTCGTCCATCTCGCATGCGCTATGATCTGGTTACGTTGAATGCAGACACGCCCTAGAGCATTTCCAGCAAAAGCGTGAAACGGTTTTGCGTCGGATAATGCGTAAAAACAAAGAGATAGAGCGGTTCCAACGATTCCGTTCTAACCGGAACCGCTCTGGAAAACGGGAGCGCAGCAGCGCGCATAACGAGCTGCCGCAATGTCACCCTTCAATTCGGAATAAGATATCAGGAACCGATCATTGAGGGATTATTCAGCACGCCCGCTTCCTTGTAAAAGCGTTCTGCGCCGGGATGCAGCGGAATACCGAGGCTGCTCGTCGCACTATCGAGCTTGATGAGCTTGCCCTTCGCATGGCCCGCATCGAGTGCCTTGCGTGTATCCTCGTTCCAGAGAACCTTGGTGATGTTATAGATGAGGTCGTCCGGCTGCTTGGCGCTCGTCACCCACTGTGCGGCAACGGCAAGGGTCAGTGTTTCCGCCACGTCCTTATAGGCTCCGGCAGGAACCACATCCTTCGAGAAGAAGGAATATTTCTCCAGAATCTTGTCCGCTTCCGGCCCGGAGATCAGAACGAGCGAAATACCGTTCGAGATGGCCAGTTCCGAGATTGCGCCCGTCGGATAGCCGCCCACAAAGAAATAGGCGTCCAGCGCACCATCTTTCAGCCTCTCGCCTGCCGGTCCCGGCTTCAGGTGTTCAGCCTTGATATCGTCTTCCGTGAGGCCGTAGGCTTCAAGAACGATACGCGCATCGACGATGGTGCCAGAACCCG",
+    "single_primer": false,
+    "source": "CP000708.1 Brucella ovis ATCC 25840 chromosome I, complete sequence (input)",
+    "start": 1175239
+   }
+  ],
+  "backgroundsSearched": [
+   "CP000708.1 Brucella ovis ATCC 25840 chromosome I, complete sequence (input)"
+  ],
+  "criteria": {
+   "max_mismatch": 2,
+   "min_anneal": 18,
+   "product_size": [
+    28,
+    3825
+   ],
+   "three_prime_strict": 5
+  },
+  "notSearched": [
+   "Reference assembly (needs WSL/NCBI)",
+   "External NCBI Primer-BLAST",
+   "IUPAC-ambiguous template bases"
+  ],
+  "provenance": {
+   "createdUtc": "2026-08-06T03:58:25+00:00",
+   "databases": [],
+   "environment": {
+    "machine": "AMD64",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10"
+   },
+   "input": {
+    "id": "CP000708.1 Brucella ovis ATCC 25840 chromosome I, complete sequence",
+    "length": 2111370,
+    "sha256": "422a1a789ee55378bb9b6d8087eb02eeb0b3a3befdb3abf1c89559abb23aa7e6"
+   },
+   "manifestSha256": "bea49da8336dc0e3422b8e832701c9c523640226f71c4e441153ce69064a5b57",
+   "notRun": [
+    "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
+    "External NCBI Primer-BLAST",
+    "De novo family discovery"
+   ],
+   "parameters": {
+    "background_sha256": null,
+    "fwd": "TGCCGATCACTTAAGGGCCTTCAT",
+    "max_mm": 2,
+    "min_anneal": 18,
+    "prod_max": 3825,
+    "prod_min": 28,
+    "rev": "CGGGTTCTGGCACCATCGTCG",
+    "target_span": null,
+    "tp": 5
+   },
+   "references": [],
+   "runType": "in-silico-pcr",
+   "schemaVersion": "0.1",
+   "software": [
+    {
+     "name": "python",
+     "version": "3.12.10"
+    },
+    {
+     "name": "TEagle core",
+     "version": "3.6.0"
+    }
+   ],
+   "teagleVersion": "3.6.0"
+  },
+  "references": [],
+  "truncated": false,
+  "truncatedOn": [],
+  "warning": null
+ },
+ "scored": {
+  "accession": "CP000708.1",
+  "caveats": "Five-primer multiplex cocktail (AMOS-PCR): one IS711 primer at 1 uM plus four species-specific primers at 0.2 uM each, so the intended reaction is multi-primer, not a simple pair. The IS711 primer matches 17 sites on CP000708.1 (multi-locus by design); only one pairs productively with the B. ovis primer, which lies in the bcsp31/BCSP31K gene upstream of the B. ovis IS711 copy. Correct orientation is IS711 primer forward / B. ovis primer reverse. A second in-silico pair of 13,980 bp also exists on this template and would not amplify under the paper's 2-min extension. Independently verified: exact 976-bp product at 1175240..1176215 on CP000708.1, against a size the paper read from a 1.5% agarose gel versus a 100-bp ladder.",
+  "citation": "Bricker BJ, Halling SM. Differentiation of Brucella abortus bv. 1, 2, and 4, Brucella melitensis, Brucella ovis, and Brucella suis bv. 1 by PCR. J Clin Microbiol. 1994;32(11):2660-2666. doi:10.1128/jcm.32.11.2660-2666.1994. PMID 7852552.",
+  "closest_bp": 976,
+  "difference_bp": 0,
+  "elapsed_s": 5.197,
+  "element": "IS711 (IS711/IS6501 insertion sequence) - species-specific IS711 insertion-site PCR",
+  "expected_bp": 976,
+  "found": true,
+  "ground_truth": "stated_in_source",
+  "loci_on_template": "single",
+  "multilocus_by_design": false,
+  "n_products": 1,
+  "name": "Brucella AMOS-PCR, B. ovis product (IS711 insertion-site PCR)",
+  "organism": "Brucella ovis (type strain ATCC 25840, listed in Table 1 of the paper)",
+  "panel": "irap-remap",
+  "preworked_in_corpus": true,
+  "primer_degenerate": false,
+  "primer_fwd_as_published": "TGCCGATCACTTAAGGGCCTTCAT",
+  "primer_rev_as_published": "CGGGTTCTGGCACCATCGTCG",
+  "product_sizes": [
+   976
+  ],
+  "scored_product_anneal_bp": [
+   24,
+   21
+  ],
+  "scored_product_tail_bp": 0,
+  "search_window_bp": [
+   28,
+   3825
+  ],
+  "source_confidence": "high",
+  "template_sha256": "5862d88b072e74b5",
+  "tolerance_bp": 97.6,
+  "within_tolerance": true
+ }
+}

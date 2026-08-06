@@ -1,0 +1,793 @@
+{
+ "accession": "MG981046",
+ "corpus_row": {
+  "accession": "MG981046",
+  "citation": "Russo AG, Eden JS, Enosi Tuipulotu D, Shi M, Selechnik D, Shine R, Rollins LA, Holmes EC, White PA (2018) Viral discovery in the invasive Australian cane toad (Rhinella marina) using metatranscriptomic and genomic approaches. J Virol 92(17):e00768-18. PMID 29899109. Abstract states verbatim: 'we also identified a complete genome sequence of a distinct epsilonretrovirus, Rhinella marina endogenous retrovirus (RMERV). The recently sequenced cane toad genome contains 8 complete RMERV proviruses as well as 21 additional truncated insertions. The oldest full-length RMERV provirus was estimated to have inserted 1.9 million years ago (MYA).'",
+  "confidence": "high",
+  "coords": "",
+  "evidence_type": "primary literature",
+  "expected_class": "Class I / LTR (endogenous retrovirus)",
+  "expected_superfamily": "Retroviridae, Epsilonretrovirus (RMERV)",
+  "organism": "Rhinella marina (host); ORGANISM field on the record is Rhinella marina endogenous retrovirus",
+  "panel": "erv",
+  "why_safe": "Genus assignment ('a distinct epsilonretrovirus') is stated in words by the authors who described the element, from their own phylogenetic analysis, and their endogeneity evidence is independent of any repeat annotator (8 complete proviruses plus 21 truncated insertions found in the assembled cane toad genome, with an insertion-age estimate). Record annotates both LTRs (1-471, 9739-10209) and gag (1207-3828), pol (3886-7680, 'protease, reverse transcriptase, integrase') and env (7668-9569) CDSs. Caveat for the benchmark: mol_type is RNA and the deposit is a Trinity assembly from a pooled liver transcriptome, i.e. a consensus provirus rather than a cloned genomic locus."
+ },
+ "elapsed_s": 0.06,
+ "fetch_source": {
+  "accession": "MG981046.1",
+  "coords_applied": null,
+  "length": 10209,
+  "organism": "Rhinella marina endogenous retrovirus",
+  "title": "Rhinella marina endogenous retrovirus gag protein, pol protein, and envelope protein genes, complete cds"
+ },
+ "input_length": 10209,
+ "input_sha256": "01417ddf4d7ec336b9d1d5b1615b8bc7caed8d9240dfabc3c9fb1d6330628b52",
+ "result": {
+  "provenance": {
+   "createdUtc": "2026-08-05T20:39:50+00:00",
+   "databases": [
+    {
+     "file": "data/te_domains.hmm",
+     "name": "Pfam TE-domain profiles (bundled, CC0)",
+     "sha256": "57f2b7881f35e2aeb2885430c80d7d514005d32b9f1f782e362189b3207858ac"
+    }
+   ],
+   "environment": {
+    "machine": "AMD64",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10"
+   },
+   "input": {
+    "id": "MG981046.1 Rhinella marina endogenous retrovirus gag protein, pol protein, and envelope protein genes, complete cds",
+    "length": 10209,
+    "sha256": "c881417d71214f1b2564adec911e8c3b484e25fad7288205d9ac2e69323e17d1"
+   },
+   "manifestSha256": "26d166de0a09ad6958581631954bb4d2706ee1affc1cd6184340011b32c7073a",
+   "notRun": [
+    "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
+    "External NCBI Primer-BLAST",
+    "De novo family discovery"
+   ],
+   "parameters": {
+    "domain_evalue_max": 0.001,
+    "domain_orfs_scanned_max": 12,
+    "ltr_min_anchors": 4,
+    "ltr_min_identity_pct": 80.0,
+    "ltr_min_len": 80,
+    "ltr_seed_k": 13,
+    "orf_min_aa": 40,
+    "pbs_min_identity": 0.55,
+    "pbs_search_window": 44,
+    "polya_min_run": 8,
+    "ppt_max_defects": 2,
+    "ppt_min_len": 9,
+    "ppt_min_purine": 0.82,
+    "ppt_window": 30,
+    "tir_max_len": 1000,
+    "tir_min_anchors": 3,
+    "tir_min_identity_pct": 80,
+    "tir_min_len": 10,
+    "tir_seed_k": 11,
+    "tsd_max_len": 12,
+    "tsd_min_len": 2
+   },
+   "references": [
+    {
+     "citation": "Wicker T, Sabot F, Hua-Van A, et al. (2007) A unified classification system for eukaryotic transposable elements. Nat Rev Genet 8(12):973-982.",
+     "doi": "10.1038/nrg2165",
+     "key": "Wicker2007",
+     "license": "",
+     "name": "TE classification framework",
+     "url": "https://doi.org/10.1038/nrg2165"
+    },
+    {
+     "citation": "Zhang RG, Li GY, Wang XL, et al. (2022) TEsorter: an accurate and fast method to classify LTR-retrotransposons in plant genomes. Horticulture Research 9:uhac017.",
+     "doi": "10.1093/hr/uhac017",
+     "key": "TEsorter",
+     "license": "",
+     "name": "Domain-architecture completeness (domain-completeness basis)",
+     "url": "https://doi.org/10.1093/hr/uhac017"
+    },
+    {
+     "citation": "Ou S, Jiang N (2018) LTR_retriever: a highly accurate and sensitive program for identification of long terminal repeat retrotransposons. Plant Physiology 176(2):1410-1422.",
+     "doi": "10.1104/pp.17.01310",
+     "key": "LTRretriever",
+     "license": "",
+     "name": "Intact LTR-retrotransposon criteria (domain-completeness basis)",
+     "url": "https://doi.org/10.1104/pp.17.01310"
+    },
+    {
+     "citation": "Eddy SR (2011) Accelerated Profile HMM Searches. PLoS Comput Biol 7(10):e1002195.",
+     "doi": "10.1371/journal.pcbi.1002195",
+     "key": "HMMER",
+     "license": "BSD-3-Clause",
+     "name": "HMMER (via pyhmmer 0.12.1)",
+     "url": "http://hmmer.org"
+    },
+    {
+     "citation": "Mistry J, Chuguransky S, Williams L, et al. (2021) Pfam: The protein families database in 2021. Nucleic Acids Res 49(D1):D412-D419.",
+     "doi": "10.1093/nar/gkaa913",
+     "key": "Pfam",
+     "license": "CC0",
+     "name": "Pfam-A profiles (via InterPro, retrieved 2026-07-17)",
+     "url": "https://www.ebi.ac.uk/interpro/"
+    }
+   ],
+   "runType": "analysis",
+   "schemaVersion": "0.1",
+   "software": [
+    {
+     "name": "HMMER (pyhmmer)",
+     "version": "0.12.1"
+    },
+    {
+     "name": "python",
+     "version": "3.12.10"
+    },
+    {
+     "name": "TEagle core",
+     "version": "3.6.0"
+    }
+   ],
+   "teagleVersion": "3.6.0"
+  },
+  "records": [
+   {
+    "classification": {
+     "class": "Class I · retrotransposon",
+     "completeness": {
+      "coding": {
+       "frames": 2,
+       "note": "the detected domains fall in 2 separate reading frame(s) — consistent with an interrupted, rearranged or degenerate copy, though a genuine multi-ORF architecture (LINE ORF1/ORF2, some ERVs) also looks like this",
+       "state": "split across reading frames",
+       "truncated_frame": false,
+       "unplaced": 0
+      },
+      "expected": [
+       "GAG",
+       "PR",
+       "RT",
+       "RNaseH",
+       "INT",
+       "ENV"
+      ],
+      "kind": "ERV (env-bearing LTR retroelement)",
+      "missing": [
+       "GAG"
+      ],
+      "present": [
+       "PR",
+       "RT",
+       "RNaseH",
+       "INT",
+       "ENV"
+      ],
+      "scope": "gag (matrix/capsid/nucleocapsid), protease, RT, RNase H, DDE integrase, envelope, chromodomain, LINE ORF1p and apurinic-like endonuclease, tyrosine recombinase, Helitron helicase, and transposases of the CACTA, hAT, IS4, MULE, Tc1/Mariner and unclassified DDE groups",
+      "tier": "partial (pol core present)"
+     },
+     "confidence": "High",
+     "domains_unavailable": false,
+     "evidence": [
+      "reverse-transcriptase domain present",
+      "integrase C-terminal to RT + paired LTRs → Gypsy/Ty3 order",
+      "aspartic-protease domain present",
+      "RNase H domain present",
+      "envelope (env) domain present with paired LTRs → endogenous retrovirus (ERV) / errantivirus lineage (an env-bearing LTR retroelement)",
+      "25 shorter ORF(s) were outside the profile search's ORF budget and were not searched — a domain listed as not detected was not tested on those"
+     ],
+     "explanation": "Classified as LTR/Gypsy (high confidence). Structural: LTR, PBS. Domains: PR · RT · RNaseH · INT · ENV · ENV. reverse-transcriptase domain present; integrase C-terminal to RT + paired LTRs → Gypsy/Ty3 order; aspartic-protease domain present; RNase H domain present; envelope (env) domain present with paired LTRs → endogenous retrovirus (ERV) / errantivirus lineage (an env-bearing LTR retroelement).",
+     "is_erv": true,
+     "n_domains": 5,
+     "order": "PR–RT–RNaseH–INT–ENV",
+     "orfs_unscanned": 25,
+     "superfamily": "Gypsy (Ty3)",
+     "te_class": "LTR/Gypsy"
+    },
+    "composition": {
+     "ambiguous": 0.0,
+     "ambiguous_counts": {},
+     "counts": {
+      "A": 2701,
+      "C": 2594,
+      "G": 2465,
+      "N": 0,
+      "T": 2449
+     },
+     "gc": 49.6,
+     "length": 10209,
+     "n": 0.0
+    },
+    "domains": [
+     {
+      "aa": [
+       1,
+       94
+      ],
+      "class": "retro",
+      "confidence": "high",
+      "dna": "ATGGTGACCTTGGAAGTGGACAACCATCCTCTCAAGTTCCTGGTGGACACTGGGGCGGCCACCTCAGTCATCTCCTCTTCCCAGCTACCTCCTTCTGTTTCGTTGTCCTCGGACTACCTTACATGTGTTGGAGTCAAAGGCCAACAAACCTCGTCTCCACTCACAGTTCCTGTTCCAGCTGGTCCTTTTTCTGGTGTCTTGACCAAGTTCTTGGTGTCTGATACCTGCCCAGTCAATCTCTTGGGAGCTGACCTTCTCCAAAGGCTTCGTGCTACCATCACC",
+      "domain": "PR",
+      "evalue": 1.8329330448416638e-14,
+      "hmm": "RVP",
+      "label": "aspartic protease",
+      "nt": [
+       3885,
+       4167
+      ],
+      "orf": 0,
+      "pfam": "PF00077",
+      "protein": "MVTLEVDNHPLKFLVDTGAATSVISSSQLPPSVSLSSDYLTCVGVKGQQTSSPLTVPVPAGPFSGVLTKFLVSDTCPVNLLGADLLQRLRATIT",
+      "score": 43.6,
+      "strand": "+"
+     },
+     {
+      "aa": [
+       213,
+       382
+      ],
+      "class": "retro",
+      "confidence": "high",
+      "dna": "GTAAAAAAGAAGACCCTCCCTGGAGAACCCCCAAAATACAGACTTGTCCAGGACCTGAGAGCTGTTAACACTGCCACTATCTTGGAAACTCCTGTGGTACCCAACCCAAACACTTTGCTTTCTCAAGTGCCTACCTCAGCTACACTCTTTACTGTCATTGACCTGGCCAATGCCTTCTTCAGCGTCCCACTTCACGAAGATTCCCAGTTCCTCTTTGCTTTCACATTCCAGGGTACCCAGATGACCTGGACCCGGACCCCACAAGGAGCCCAGAATTCGCCCAATCAATTTACCCATGCAATGAAGATGGTCTTGGACCCGTGGATTCAAGAAAATCTTCACGTGACCCTTCTCCAGTATGTTGACGACTTACTTCTCTGTGGAACTGAAGAGAACCTGTCTGCAGCTTCGGAGTCTTTACTCCGTTTCCTCCATTCTGCTAACTGCAAAGTCTCAAAGTCCAAAGTTCAATGGTGCCAAGAGAAAGTTGTCTTCCTTGGCCACTGCATC",
+      "domain": "RT",
+      "evalue": 8.697985669688816e-32,
+      "hmm": "RVT_1",
+      "label": "reverse transcriptase",
+      "nt": [
+       4521,
+       5031
+      ],
+      "orf": 0,
+      "pfam": "PF00078",
+      "protein": "VKKKTLPGEPPKYRLVQDLRAVNTATILETPVVPNPNTLLSQVPTSATLFTVIDLANAFFSVPLHEDSQFLFAFTFQGTQMTWTRTPQGAQNSPNQFTHAMKMVLDPWIQENLHVTLLQYVDDLLLCGTEENLSAASESLLRFLHSANCKVSKSKVQWCQEKVVFLGHCI",
+      "score": 100.2,
+      "strand": "+"
+     },
+     {
+      "aa": [
+       648,
+       794
+      ],
+      "class": "retro",
+      "confidence": "high",
+      "dna": "AACCCTGACTTACAATTATGGACTGACGGATCTCGATTTGCAGACTCTCATGGCAAGTTTCACACTGGATATGCTGTTACCACTGAAACAGAAGTTCTTTTAGCTGAAGCCCTACCACCTCACCTGTCAGCACAAGAAGCTGAACTGGTGGCCCTTCAACAAGCATGCTACCTAGCAGAAGGGAAAACAGTCAACGTTTACACTGACTCAAGGTATGGCTATGGAATTTGCCATGACTTTGGATTCTTGTGGAAATCCCGAGGGTTTATTACAGCTACAGGAACCCCGGTTAAACATGCACTAAGGATCAAGGCCTTGATGAAGGCACTGGAGCTACCCACACAAATTGCTGTGATCAAGGTCAAAGCCCATGGGAAGGTCAATTCGAAAGAGACTAGAGGAAATCACCTAGCAGACCAAGCTGCCAAAGCTGCTGCCATG",
+      "domain": "RNaseH",
+      "evalue": 8.826129867747165e-23,
+      "hmm": "RNase_H",
+      "label": "RNase H",
+      "nt": [
+       5826,
+       6267
+      ],
+      "orf": 0,
+      "pfam": "PF00075",
+      "protein": "NPDLQLWTDGSRFADSHGKFHTGYAVTTETEVLLAEALPPHLSAQEAELVALQQACYLAEGKTVNVYTDSRYGYGICHDFGFLWKSRGFITATGTPVKHALRIKALMKALELPTQIAVIKVKAHGKVNSKETRGNHLADQAAKAAAM",
+      "score": 70.7,
+      "strand": "+"
+     },
+     {
+      "aa": [
+       994,
+       1091
+      ],
+      "class": "retro",
+      "confidence": "high",
+      "dna": "CCAGACTACCCTTGGCAAAGGATCCAAGTTGATCATATTCAGATGCCAAAGTCAGGAAAGTACGAATATGTCCTAGTGGCTGTGGACATGTTCTCAGGATGGCCAGAAGCCTACCCAGTGACCAATATGACTGCCAAGACCACTGCGAAGAAGCTTATCACTGAAATTTCGTGCCGGTTCGGAATCCCGGAAGTGATTGAATCGGACCAAGGCCCGGCCTTTACTGCCAGCATCTATGAGGAATTGTGGTCCATGTTAGGGACAGGTTTGGGCCTACATACTCCTTACCATCCC",
+      "domain": "INT",
+      "evalue": 1.6801447458906335e-16,
+      "hmm": "rve",
+      "label": "integrase",
+      "nt": [
+       6864,
+       7158
+      ],
+      "orf": 0,
+      "pfam": "PF00665",
+      "protein": "PDYPWQRIQVDHIQMPKSGKYEYVLVAVDMFSGWPEAYPVTNMTAKTTAKKLITEISCRFGIPEVIESDQGPAFTASIYEELWSMLGTGLGLHTPYHP",
+      "score": 50.1,
+      "strand": "+"
+     },
+     {
+      "aa": [
+       293,
+       397
+      ],
+      "class": "retro",
+      "confidence": "moderate",
+      "dna": "GAAGTAACCGTTCTAGCTGATAATTATACTTGCTACAGCTCGGACGACAGGTCAGGTACACCTGTAGGGGTCTTTGAGCCAGGCTTCTGCAAAGGAAACAGCACTGTGAATGCTGACCTGTTAGTCGACCACATACGATACATGTATGACATTTATTGGTTATGTGGAGACGGTAAGCTCCGCTCTAGGTTGCCCACCGCTTGGATGGGCCAATGCACTCTCATTAAGCTGGCTATGCAGTTCAGAATCCTACCATGGGATCTAGAGACACCCGATGAACCTACCCGAAAGAAGAGAAGCTTCGATCAGCTTCAC",
+      "domain": "ENV",
+      "evalue": 0.0004198612452912219,
+      "hmm": "TLV_coat",
+      "label": "envelope, surface (SU)",
+      "nt": [
+       8543,
+       8858
+      ],
+      "orf": 2,
+      "pfam": "PF00429",
+      "protein": "EVTVLADNYTCYSSDDRSGTPVGVFEPGFCKGNSTVNADLLVDHIRYMYDIYWLCGDGKLRSRLPTAWMGQCTLIKLAMQFRILPWDLETPDEPTRKKRSFDQLH",
+      "score": 8.7,
+      "strand": "+"
+     },
+     {
+      "aa": [
+       472,
+       579
+      ],
+      "class": "retro",
+      "confidence": "moderate",
+      "dna": "CTAGGTCCTAATACCAGGATGACCCTCCAGAACAGATTGGCCCTAGACATGATCCTAGCAGAGAAAGGTGGAGTCTGTGGGATGGTGGGAGAAGAGTGCTGCACCTACATCCCCCAGAACTCTGGAGTAAAGGGAAAAACTATGATAGCCCTTAGAAAGATTATTGGCTTGGCAGCAGAATTGAAAACTAATGCTGGGGTAGACACATCTTTCTTTTCCAGTTGGTTGGGTGGTTTTAAGGGATTCCTTCAACAAGCTTGTCTGGTATTAATTGGCCTCATTGTAGTTGGATTGATGATCCTCTGTTGTGTTATTCCCTTGTAT",
+      "domain": "ENV",
+      "evalue": 1.079323251931945e-10,
+      "hmm": "TLV_coat",
+      "label": "envelope, surface (SU)",
+      "nt": [
+       9080,
+       9404
+      ],
+      "orf": 2,
+      "pfam": "PF00429",
+      "protein": "LGPNTRMTLQNRLALDMILAEKGGVCGMVGEECCTYIPQNSGVKGKTMIALRKIIGLAAELKTNAGVDTSFFSSWLGGFKGFLQQACLVLIGLIVVGLMILCCVIPLY",
+      "score": 30.4,
+      "strand": "+"
+     }
+    ],
+    "id": "MG981046.1 Rhinella marina endogenous retrovirus gag protein, pol protein, and envelope protein genes, complete cds",
+    "invalid": [],
+    "notes": [
+     "protein-domain search read the 12 longest ORFs of 37; 25 shorter ORF(s) were not searched, so a domain listed as not detected was not necessarily absent from the whole sequence"
+    ],
+    "orfs": [
+     {
+      "end": 7680,
+      "frame": 1,
+      "length_aa": 1264,
+      "length_nt": 3795,
+      "open_end": false,
+      "start": 3885,
+      "strand": "+"
+     },
+     {
+      "end": 3828,
+      "frame": 1,
+      "length_aa": 873,
+      "length_nt": 2622,
+      "open_end": false,
+      "start": 1206,
+      "strand": "+"
+     },
+     {
+      "end": 9569,
+      "frame": 3,
+      "length_aa": 633,
+      "length_nt": 1902,
+      "open_end": false,
+      "start": 7667,
+      "strand": "+"
+     },
+     {
+      "end": 6711,
+      "frame": 1,
+      "length_aa": 144,
+      "length_nt": 435,
+      "open_end": false,
+      "start": 6276,
+      "strand": "-"
+     },
+     {
+      "end": 526,
+      "frame": 3,
+      "length_aa": 120,
+      "length_nt": 363,
+      "open_end": false,
+      "start": 163,
+      "strand": "-"
+     },
+     {
+      "end": 8455,
+      "frame": 3,
+      "length_aa": 101,
+      "length_nt": 306,
+      "open_end": false,
+      "start": 8149,
+      "strand": "-"
+     },
+     {
+      "end": 6940,
+      "frame": 2,
+      "length_aa": 98,
+      "length_nt": 297,
+      "open_end": false,
+      "start": 6643,
+      "strand": "+"
+     },
+     {
+      "end": 1791,
+      "frame": 1,
+      "length_aa": 93,
+      "length_nt": 282,
+      "open_end": false,
+      "start": 1509,
+      "strand": "-"
+     },
+     {
+      "end": 7632,
+      "frame": 1,
+      "length_aa": 87,
+      "length_nt": 264,
+      "open_end": false,
+      "start": 7368,
+      "strand": "-"
+     },
+     {
+      "end": 6691,
+      "frame": 3,
+      "length_aa": 80,
+      "length_nt": 243,
+      "open_end": false,
+      "start": 6448,
+      "strand": "-"
+     },
+     {
+      "end": 7813,
+      "frame": 3,
+      "length_aa": 78,
+      "length_nt": 237,
+      "open_end": false,
+      "start": 7576,
+      "strand": "-"
+     },
+     {
+      "end": 2081,
+      "frame": 2,
+      "length_aa": 74,
+      "length_nt": 225,
+      "open_end": false,
+      "start": 1856,
+      "strand": "-"
+     },
+     {
+      "end": 4179,
+      "frame": 1,
+      "length_aa": 69,
+      "length_nt": 210,
+      "open_end": false,
+      "start": 3969,
+      "strand": "-"
+     },
+     {
+      "end": 5077,
+      "frame": 2,
+      "length_aa": 65,
+      "length_nt": 198,
+      "open_end": false,
+      "start": 4879,
+      "strand": "+"
+     },
+     {
+      "end": 2987,
+      "frame": 2,
+      "length_aa": 60,
+      "length_nt": 183,
+      "open_end": false,
+      "start": 2804,
+      "strand": "-"
+     },
+     {
+      "end": 2744,
+      "frame": 2,
+      "length_aa": 59,
+      "length_nt": 180,
+      "open_end": false,
+      "start": 2564,
+      "strand": "-"
+     },
+     {
+      "end": 5547,
+      "frame": 1,
+      "length_aa": 57,
+      "length_nt": 174,
+      "open_end": false,
+      "start": 5373,
+      "strand": "-"
+     },
+     {
+      "end": 9684,
+      "frame": 1,
+      "length_aa": 56,
+      "length_nt": 171,
+      "open_end": false,
+      "start": 9513,
+      "strand": "-"
+     },
+     {
+      "end": 4163,
+      "frame": 2,
+      "length_aa": 54,
+      "length_nt": 165,
+      "open_end": false,
+      "start": 3998,
+      "strand": "-"
+     },
+     {
+      "end": 4818,
+      "frame": 1,
+      "length_aa": 53,
+      "length_nt": 162,
+      "open_end": false,
+      "start": 4656,
+      "strand": "-"
+     },
+     {
+      "end": 796,
+      "frame": 3,
+      "length_aa": 52,
+      "length_nt": 159,
+      "open_end": false,
+      "start": 637,
+      "strand": "-"
+     },
+     {
+      "end": 5377,
+      "frame": 2,
+      "length_aa": 51,
+      "length_nt": 156,
+      "open_end": false,
+      "start": 5221,
+      "strand": "+"
+     },
+     {
+      "end": 606,
+      "frame": 1,
+      "length_aa": 49,
+      "length_nt": 150,
+      "open_end": false,
+      "start": 456,
+      "strand": "-"
+     },
+     {
+      "end": 10154,
+      "frame": 2,
+      "length_aa": 49,
+      "length_nt": 150,
+      "open_end": false,
+      "start": 10004,
+      "strand": "-"
+     },
+     {
+      "end": 416,
+      "frame": 2,
+      "length_aa": 49,
+      "length_nt": 150,
+      "open_end": false,
+      "start": 266,
+      "strand": "-"
+     },
+     {
+      "end": 8961,
+      "frame": 1,
+      "length_aa": 47,
+      "length_nt": 144,
+      "open_end": false,
+      "start": 8817,
+      "strand": "+"
+     },
+     {
+      "end": 5132,
+      "frame": 2,
+      "length_aa": 47,
+      "length_nt": 144,
+      "open_end": false,
+      "start": 4988,
+      "strand": "-"
+     },
+     {
+      "end": 3956,
+      "frame": 2,
+      "length_aa": 47,
+      "length_nt": 144,
+      "open_end": false,
+      "start": 3812,
+      "strand": "-"
+     },
+     {
+      "end": 3835,
+      "frame": 2,
+      "length_aa": 45,
+      "length_nt": 138,
+      "open_end": false,
+      "start": 3697,
+      "strand": "+"
+     },
+     {
+      "end": 1208,
+      "frame": 2,
+      "length_aa": 45,
+      "length_nt": 138,
+      "open_end": false,
+      "start": 1070,
+      "strand": "-"
+     },
+     {
+      "end": 7299,
+      "frame": 1,
+      "length_aa": 44,
+      "length_nt": 135,
+      "open_end": false,
+      "start": 7164,
+      "strand": "-"
+     },
+     {
+      "end": 2229,
+      "frame": 1,
+      "length_aa": 44,
+      "length_nt": 135,
+      "open_end": false,
+      "start": 2094,
+      "strand": "-"
+     },
+     {
+      "end": 2863,
+      "frame": 2,
+      "length_aa": 43,
+      "length_nt": 132,
+      "open_end": false,
+      "start": 2731,
+      "strand": "+"
+     },
+     {
+      "end": 7352,
+      "frame": 2,
+      "length_aa": 43,
+      "length_nt": 132,
+      "open_end": false,
+      "start": 7220,
+      "strand": "-"
+     },
+     {
+      "end": 8074,
+      "frame": 3,
+      "length_aa": 42,
+      "length_nt": 129,
+      "open_end": false,
+      "start": 7945,
+      "strand": "-"
+     },
+     {
+      "end": 8398,
+      "frame": 2,
+      "length_aa": 41,
+      "length_nt": 126,
+      "open_end": false,
+      "start": 8272,
+      "strand": "+"
+     },
+     {
+      "end": 7097,
+      "frame": 2,
+      "length_aa": 40,
+      "length_nt": 123,
+      "open_end": false,
+      "start": 6974,
+      "strand": "-"
+     }
+    ],
+    "retroviral": {
+     "approximate": true,
+     "env_exon": [
+      8543,
+      9404
+     ],
+     "intron": [
+      3885,
+      8543
+     ],
+     "kind": "ERV subgenomic env mRNA (predicted)",
+     "leader_exon": [
+      471,
+      3885
+     ],
+     "note": "env is expressed from a subgenomic mRNA spliced directly from the full-length RNA: the gag-pro-pol region is removed as a single intron and is itself a fused polyprotein (translated by ribosomal frameshift or stop-codon readthrough, the mechanism is genus-dependent), not a set of host exons. The junctions are anchored on the LTR and domain positions and are approximate — the true splice donor lies within the drawn leader (upstream of gag) and the acceptor upstream of the env domain, so the leader exon is an upper bound; exact splice bases need a supplied env transcript or RNA-seq.",
+     "polyprotein": [
+      3885,
+      8543
+     ],
+     "strand": "+",
+     "subsplice_note": "Some ERV lineages additionally sub-splice the env mRNA to accessory transcripts (e.g. HERV-K/HML-2 rec and np9); such a second splice is noted, not drawn, as it needs a transcript to place."
+    },
+    "seq": "ATTGTCAAGGTAAAAATATATATATTTTTCTATTCTTTGTACTTTATGCTGTGAAACAATAAGCTTTCCCCTGTAGCTTGCTGACACAAAGGAAATTGTAACTAAGATGGCTGCCAGTATCGACCTATGCCCTGGTTGCTGAGAAATTAAGCTGGACTTCTCCCTAAAAGGCAAAGCTTGAAAGATGAGAAGACGAGGAGAGGAAGAACAAACAGATGACTTCAAGATAAGACCAGACACTAGACATATATTTGCTTAACCCCCCTTTAGCACGCCCTCCCTTGTAAAGTATAGAATACTGAAAACCAGGTAATAAAGTTAGTTGCTGCGACTGTTGCTTGGAGAAGCACACGCATGCACTGAGATTGAACCAGCATTGTGTCTGACTCTTTCTTATTCCGGTACCACATGCACATAATCTGATTTGGAGTGACTGGTGGACGAAGGGTATTGTCGTTACGACCCCGACATATTTGGCGCCAGCAACGTGGGGCGCGGCCAGCGATCCGAGACCCCCTGGACCCATCCCTGGACGTCCATGGACGACACCCGTAGTGGCTGACCTCGAGGACTGATCACCCTCCAAACACGGTAAGTGGAGATCATATACTTTGTATGTGTCACCCTTACTAGTGTCTCAGCCGTTATTGGTTTGTCTGTGGTGTCTTTTGGGTCTGGGAGGTGATCGGTCGAGTGGTGAGATCGAGCGCGATCCTGTGCCACGCTCCGAACCAGCAACTGAGAGACGTCGCGTTTCGCACATCCTCGTGTACACCACACTTCCTCCACCGGTCATTGTTCTCTGCTCAACCACCCTACCCGTGACTGTTATTTGATAATAAAGTAGAATGAAAGATTGAGGGAGTTGTAGATCGGGAGGACGGCTTAGAGAGAGGGATAGGAGACGTAACCTCTGTGATATTTAAAGGGGTCCCGCGAGGGGACCGCCTGTATTTTCACGGAGAGGATCTCATTAGGAGATTGCTCCCCGACGGGTTGGAATATCGTGACAGGATAGTCTGTAATCACTGTTGTCCAGGTTAGGGAAAGGATATATTGAGCGTGAGGCTCTATATCAACAGTGTTTTGAATGCGAAGTTCAGCACTAACAGTACGTTGAACGCGAGGTTCCGTACTGGAGGGACGCAGTGTTGATTATCGTTGTCAGCGGACTGAGCTGCAGCAGGACGTAGTATTCTGTGAGTCATGTTACGTTTCTTAAAACAGAAGAAGTCCGTCCCCCACAAGTTGCCTGAAGGTGCTGTGGCAGTTAGAGTGTTAGTAGAGTCACGGGAGGGCAAGAAGGTAGTCAAGAATGTTGAGAAGCTGTATAAGCTTGTAGGATTGCCCTCTTCAGGGAGATTACAGCCATCAGTATGGCAGGATCTCACAGTGAAGGAGAAGGGCAGACTGACAGATAAAGGGTTGTTTGAACATGCGCAAGCTCATCTGCGAGTTGCGCGAGACTTAAAGAAGGAAGGATGGAAAGAGGTTGATGGAGAGGGTGGCTCAGAAGATGCAGAGCCTGTGTTTGGTTATAAGATGCCTTCGAACTGTGACCCCATAGATTGTAAAATGGCCGCCGCGCCGTTGATGACGAACACTCAGCCCCAGCCGCCACCCTATAATGGCGGTAACGTGAGGCCTCCGGAAGTTTGGGTTTGTCCTGTTTGTGGTGTGCAGAATCCGCCCTGTGTGGAAACCTGCCGTGAGTGTGGGGCGGCCCATCCTTGGGACTCCGCCCATGTCACGGACGGAAGTGGGGCACGCCTTACTTCCTCCGGCGGCCATCTTGGTGTACCCGGAAGTCCTCCCCAGCCGTTATATCCGCTGGTGACGTCTTCCGGCGAGTACTATCAGGGACAGCCTCTTCCTGAGAAACCTCCGGCGCCGGCCGATGTTGTTTCCGCTTCCGCTGCCTCGGTTTCTGCTCTGGCCTCCGGGCCTAGTCTTCCGGTACAACCAACTGTGATATTTGTAAATACTCCTACCCAGGCCCAGGGCGGTGCTATGCCTGACATCCAGGCCTTGATTAGTAGTCCTGCCTTCCAGAATGCTATACGGATGAGACGCCAGGACATGGGTCTTGCGGGATCACATGATGGAGACGATTCCCCTCCGATGCCCTCTGGGGTGATCCTTGACGCTCCACCACCACCTCCAGCCCCGATCCAGGCCCCCCAGCCTACTAGTGTCCCCAAACCTCCCCTCCCAGTAAAGCCTCAACATTTACAAGGCCAGACTCCTCAGGAGCCAGAAATCTGGTATCCCTGTTACTCACGTTATTACACTATGCCCCAGGGATTCCAGGTTTTGTTCTCTGTAGGTTATGGAGATATCACTACTCACCGAGTAGGAGCCATAGTAAACCCAGCCAATTCTACCCTGGCACACAGGGCTGGCGTAGCCCGACAGATAGCCGACAAGGGGGGCCCAGCGATTGAGCAAGAGTGTCAGGCATACCTTGCTCAGTATGGCCCAATGCAACCAGGACAGGTCATGGTTACCGGGGGAGGGAATTTACCGTGTGATAGGATACTACATGCCGTAGGTCCCATATACGATCACAGGACACCCGAGCACTGCCGTACCATGTTACAGACTACCCTACAGACAGTGCTCACTTTTGCAGGACAGCTAGGGATAGGTACACTTCCTCGTAGAACTCTGGCTATGCCCTTGATATCCTCCGGTATCTTTGGGTATCCACTAGGCCCCTGCATGAAGGACCATGTTGAAGTCATCAAGCACTGCCTCCAGTCAGTCCACAACCTCGACTTGCAGGAAGTCAGGATTGTCTGCTATTATGAGGCCGGGATGGATAGCGTCATGCCCCTGGTGGCCCAACACATGGTGCCCTTAATGCATACAGGTACCAGGCAAGAGAGCGAACCCACTCCTCCAGAAGCACCCTTGCCACCGCCCTCTGTGGCACCAAGAGATGCTACCGAAGGCCGAGGAGAGGAGGGCCTACAGTTGAAATACATGCCTTTCACCCCAGTCCAAGTTGATGCTATCGTCACGAAGCTACCTGACCCAGACAAGCATCCTATGCAATATGCAAGGAAGCTAGAACAAATTAGGCAAATTTATGGTGCCACATGGGCTGATCTTTCAGGCATTACCTCTATAAAGGCTTCTGAATATTTCCTCCCCACTATCATGAAGGAACTGGACCCCACCAAGGCGGGACCCCTCAATCAGTTCAAGTCCGGAGAAGAGTACATGGCTCAACTTATGAAGTGGGCTCAGAACCGTCTCTCCGACCAAGCAGGATCGATACAGGATGTACAGCAAGAACCTGGAGAAGCTGTAGAGAAATACGCTGCTAGGCTAACTATGCAGTTTGAAGATCTTGGCTATTCAACCCATGTGAAGACACAAGCAGCCCTGCTGGTCCGTGCTTTCATTGATGGCCTGGAAGACTCACTAAAGGATAAGGTCATGAAGCTCCGTCCTGAACTACCTGATGGTCCTCTTCAACAGGCCCTCACCGTGGTGAAAAGTTATCAAAGATTACTCCAGAGGGAGGAGAAAGAAGCACAAAAAGACAAAGGCAAAAAGAAGCCAGCCATGTACATGGCAGAGGCCTCAGAAGTACCTATCATGGTATACCAGGCCCAGGACCGGTACGGGCAGCCGCCCTCTGGACCAAGAAGGTCACGAGGCCAAGGCTACAGGACCAGACCGGAACGTGATGACCAAGGAAGGCCTCTATGTTGGGAATGTGGCAGTCCTAACCACCTTAGAAGAGACTGTCCTCACAGGGAGCGTGGGCGAGGCCAAGGCTATGACAGCCAACAGAGGCCTCCTCACCCTCGTTCCTGAAGTTTAGGCCAACCGGTGCCCACCTTCCCTGCTACTCGTGCTTCTTCCTTTTGTGGCATGGTGACCTTGGAAGTGGACAACCATCCTCTCAAGTTCCTGGTGGACACTGGGGCGGCCACCTCAGTCATCTCCTCTTCCCAGCTACCTCCTTCTGTTTCGTTGTCCTCGGACTACCTTACATGTGTTGGAGTCAAAGGCCAACAAACCTCGTCTCCACTCACAGTTCCTGTTCCAGCTGGTCCTTTTTCTGGTGTCTTGACCAAGTTCTTGGTGTCTGATACCTGCCCAGTCAATCTCTTGGGAGCTGACCTTCTCCAAAGGCTTCGTGCTACCATCACCTTCGGTGATCATGGACTGGAACTGCAACTACAAGACCCTGTCTCACAACAAGGTGCTGAAGACCGATGTGTCCTCAAGGCTTTCCCTTTAATGATGATGACCCTACAGCCAACATCTCCTCAAGATTTGCCCGACTTACCTGCTGCCCTGTGGTCAACTGGACCTGAAGATGTTGGCCTGCTCCGAGTGCCTCCCGTACAGGTTTACCTCAAACCCGGACACCCGTACCCTAGGTTACCTCAATATCCACTGAAAGCTGCTCAAGAGCAAAGCCTCGGAACTCAAATTGCCTCCCTCCTACGCTCTGGAGTCCTCATCAGGTGTGTGTCCCCTTGTAACACACCGTTGTTCCCAGTAAAAAAGAAGACCCTCCCTGGAGAACCCCCAAAATACAGACTTGTCCAGGACCTGAGAGCTGTTAACACTGCCACTATCTTGGAAACTCCTGTGGTACCCAACCCAAACACTTTGCTTTCTCAAGTGCCTACCTCAGCTACACTCTTTACTGTCATTGACCTGGCCAATGCCTTCTTCAGCGTCCCACTTCACGAAGATTCCCAGTTCCTCTTTGCTTTCACATTCCAGGGTACCCAGATGACCTGGACCCGGACCCCACAAGGAGCCCAGAATTCGCCCAATCAATTTACCCATGCAATGAAGATGGTCTTGGACCCGTGGATTCAAGAAAATCTTCACGTGACCCTTCTCCAGTATGTTGACGACTTACTTCTCTGTGGAACTGAAGAGAACCTGTCTGCAGCTTCGGAGTCTTTACTCCGTTTCCTCCATTCTGCTAACTGCAAAGTCTCAAAGTCCAAAGTTCAATGGTGCCAAGAGAAAGTTGTCTTCCTTGGCCACTGCATCTCCCAAGGTTCAAGACATCTCACGGAGGATAGAAAGCATGCCATAAGAGACCTTGCATACCCGAAGACACACTCTGCTATGCAGACTTTCCTGGGCCTCATTACTTACTGTAGACAATGGATCCCGGAAGCCTCCAGGCTCATGCAGCCCTTGTATGATTGTCTAAAAACTGGAGGCCCTGATTGGGATCATGCACGAAATCCCTACATCTATGCCCAACAAAAGGTGTGTTTTAGGGCCCTCAAACAAGCTGTTATCTCGGCACCAGCTCTTGGCTTACCTGACTATACTCAACCCTTTCACCTCTTTGTGTCAGAATCCGAGGGGCATGCTTCCGGTGTTCTAGCCCAGAAACACTGTGATCGTTTCCGGCCGCTGGCCTACTACTCTGCAAGACTGGATCCTGTTGCACGAACTGCCCCTCTTTGTCTCAAAGCTGTACATGCAGCTCATGTTCTCTTGGATAAGTCTGCTGATATAGTGCTTGGACATGATTTGGTCATTCAAGCTGGACATGACCTCTCTGCTGTTCTACAGCACACGTCTCCTAAGCATCTGACGAGTCAAAGACACCTCAGGCTACAGTGTTCTCTGCTCCTACCCTCCAACATCACCTTCCAAAAATGTACTACCATCAATCCAGCCACTTTGCTTCCACATTCTAGGGGGGAATTACCCTGGTGGATGTCTAAAGACCTACCAGACTGCAGATCACCTGATGATCCACATGACTGTGTCCAAGCATTGGAACAAGACACCTCCGCCCCACAGAATGTGGTAACTCACGAAATCCCCAACCCTGACTTACAATTATGGACTGACGGATCTCGATTTGCAGACTCTCATGGCAAGTTTCACACTGGATATGCTGTTACCACTGAAACAGAAGTTCTTTTAGCTGAAGCCCTACCACCTCACCTGTCAGCACAAGAAGCTGAACTGGTGGCCCTTCAACAAGCATGCTACCTAGCAGAAGGGAAAACAGTCAACGTTTACACTGACTCAAGGTATGGCTATGGAATTTGCCATGACTTTGGATTCTTGTGGAAATCCCGAGGGTTTATTACAGCTACAGGAACCCCGGTTAAACATGCACTAAGGATCAAGGCCTTGATGAAGGCACTGGAGCTACCCACACAAATTGCTGTGATCAAGGTCAAAGCCCATGGGAAGGTCAATTCGAAAGAGACTAGAGGAAATCACCTAGCAGACCAAGCTGCCAAAGCTGCTGCCATGAAGAATGTCTCAGCAAAGTGGGAGGAAGAAGAGATAGCTCCAGAAGAACCTTACTGGGAAGACGCCCCAAGACCTGTGATGCCGGCGCTCACCAGAGCGCAAGCAAAGAAACAAGCAGCCACAGAGGAAAAACTGGAACGAGACTATGAAAAGTCTGAAGCTCGGAGTAAAAAGAAGAGACTCATAGAGGACATGGAAATGGAATACCCAGCCCCCGAATCCACCTGCAAACCGGCCAGGCCTCCTGAGGAGAGACTGTGGGAGGAGCAGAAGATGATCTCTGAGGCTGAAAAGAAACAATGGAAGGCTGCGGGAGCAACTTACAAGGACCCCCAGTACCCGACCGATACCCAGTTTCCACGATTGTACAAAGTAGATGGTAAACCGTGCCTGCCCAGAAGAATGTACCCTGCTGTTGCAGCATGGGCACACGGACCAACTCATCGGGGGAAGAATCAGGCCTTGGCCTGCATTAAGAAACTTTACTGGGCCCCTGGGATCTCGACCACTGTTGCGGCGTATTCAAGAGCCTGTCCAGTCTGTGCTGTCTGTAACCCCACAGCCACCGCCAAGGTCCCACTTCAACACCTTGCAAAACCAGACTACCCTTGGCAAAGGATCCAAGTTGATCATATTCAGATGCCAAAGTCAGGAAAGTACGAATATGTCCTAGTGGCTGTGGACATGTTCTCAGGATGGCCAGAAGCCTACCCAGTGACCAATATGACTGCCAAGACCACTGCGAAGAAGCTTATCACTGAAATTTCGTGCCGGTTCGGAATCCCGGAAGTGATTGAATCGGACCAAGGCCCGGCCTTTACTGCCAGCATCTATGAGGAATTGTGGTCCATGTTAGGGACAGGTTTGGGCCTACATACTCCTTACCATCCCTCCAGTTCAGCTAAAGTGGAGAGAATGAACTCCACGGTCAAGACCCAGTTGCTTAAAATGAGTCAAGACCATCCCCTCCCATGGCCTGACTTGCTTCCTGTGGTTCTGTACCACATCAGACATACCCCACAAGCTAAACATGGTTTGACCCCGTTTGAGATTCTCTTTGGTGCGCCACCTAAGATAGGAGACATCAGGCCCCAAGAATTATCAGAGACCAATGATAGAGTTGTACAATTTGTGATTGCATTGTGTAAGGAACTGTCTAACACCCATTCTACAGTTTCTGCTTCTCTCCCAGAATCTACAGGTGACGTGGTCCATGACTTCGTGCCAGGTGACCTGGTGTACGTGAAGAAGTTTGTCCGTAGAGATTGTCTCCAGCCAAGATTTGAAGGGCCTTACACTGTGATTCTGTTCACACCCACTGCTGTGAAGCTCGAAGGGAAAAACACCTGGATCCACGCCTCCCATTGTAAAAGGGACCACACCAGCCCCTACGTGGAATCATGTCCTTCCTGATATTCCTGGTATTGGGGGTGTATACCACGGAAGTGGCCTCTCGAAATTCTGCTATATTCTGGGTTAACATGTCAGCCCCCGTTGTTACGTATAAATTTGATTTTTGTGACGTAGCGAGATGTACAGGGGCCATAGAGACTCAATTCGACTATGAATCGATAATTCAAGGAGAATTTTATATATGTGTGACTCACCCGGGTGATGAGTGGTGTTCCTACTGGTCAGATGCGGGTTGGAATACAGGGAAGGATTGGGGGTACAAACCTCAGGAGGGGAGGGATCGGAAAGATAAGAATGGGGTATCTCTGCTTACCAGAATGACCCTGACTAGGGGAAAGGCAATAACAGGCCGTTGCCAGCCCAGGCGGGACTGCTTCCCCTTGTGCCTAAACATAGTAAACCCTTCACCAGGTGATTTGGGAAAATATGTTTTAGGGAGCTGGGACCGTAGTATAACTCCTTTCCTAGGTCAATTCGTACTAAAAGACATCAACACTAGACCCACAAAGCTCCCCCCCCCTATTAAAAGAGTGACACCAGGTGGGAAGCTACAGGCTGTGGTCGATGAGGTCATCCCCATACCAGGGCTTAGATGGGAAGAAGTTTTCTCTATAGAGACACAAACTGCCCCAAGGAAAAACTTGTGGTTAGAATGGGTAAGGTACAATGTGAGAGTCCAGAACATTTCTGTAGGATGTATTGCCTGTGCTGCTGCTAACACACACCTGTACACACATGCCCTGGCCCTTCCAGATGACAACATAACCACTTGCATGATGAGTTTGCTGAAAGGTTTCAACTCCTCTGATTGCCTAGATTATGTACCACTTGTACACGAGAGACCCAGGGTAAGAGTACCAGGGGAAGTAACCGTTCTAGCTGATAATTATACTTGCTACAGCTCGGACGACAGGTCAGGTACACCTGTAGGGGTCTTTGAGCCAGGCTTCTGCAAAGGAAACAGCACTGTGAATGCTGACCTGTTAGTCGACCACATACGATACATGTATGACATTTATTGGTTATGTGGAGACGGTAAGCTCCGCTCTAGGTTGCCCACCGCTTGGATGGGCCAATGCACTCTCATTAAGCTGGCTATGCAGTTCAGAATCCTACCATGGGATCTAGAGACACCCGATGAACCTACCCGAAAGAAGAGAAGCTTCGATCAGCTTCACATGGGCTATGAAGAAGATCCACAAGTATACATTGATGCTATCGGGGTGCCAAGGGGGGTGCCTGACCAGTTTAAAGCCCAAAACCAGGTCTATGCTGGTCTAGCTTCTTTAATTCCACAGGTGCAGATTAATAAAAATGTTGACTGGATCAATTACGTGTATTACAGCGAACAAAGATTTATCAACTACAGCCATGATGCCTTTCAGGGAATAGTTGAAGAGCTAGGTCCTAATACCAGGATGACCCTCCAGAACAGATTGGCCCTAGACATGATCCTAGCAGAGAAAGGTGGAGTCTGTGGGATGGTGGGAGAAGAGTGCTGCACCTACATCCCCCAGAACTCTGGAGTAAAGGGAAAAACTATGATAGCCCTTAGAAAGATTATTGGCTTGGCAGCAGAATTGAAAACTAATGCTGGGGTAGACACATCTTTCTTTTCCAGTTGGTTGGGTGGTTTTAAGGGATTCCTTCAACAAGCTTGTCTGGTATTAATTGGCCTCATTGTAGTTGGATTGATGATCCTCTGTTGTGTTATTCCCTTGTATAAGAAGGCCATAGCCAAGGCAACTCCGACTGGGACCTTCCTCAATCAGGAAGCGGATCTACTTGAGGGTATTTACACTGACCTAAGGGAGATTCCTAAGTATGTTCCTCTCAAGAAACTAAATGATGCCCCCTACTCTCAGATGAAGCTGAGAGACCTAGTTTAGGGACAGCAGGAGAACTCCATGTGAGGCTAGTGTAGGGTTCAGTTGCCTGGAGGCCTTTCACAAGGAGAGAGCCTCTAAGGTGTCTGGATGAAGAAATCCACCTCCCCTCTCCCATCACATGGATAGTCTCGAAGGATTTTCTCAGGGAAAAACTTAGTGTTTAGGGGGGATTGTCAAGGTAAAAATATATATATTTTTCTATTCTTTGTACTTTATGCTGTGAAACAATAAGCTTTCCCCTGTAGCTTGCTGACACAAAGGAAATTGTAACTAAGATGGCTGCCAGTATCGACCTATGCCCTGGTTGCTGAGAAATTAAGCTGGACTTCTCCCTAAAAGGCAAAGCTTGAAAGATGAGAAGACGAGGAGAGGAAGAACAAACAGATGACTTCAAGATAAGACCAGACACTAGACATATATTTGCTTAACCCCCCTTTAGCACGCCCTCCCTTGTAAAGTATAGAATACTGAAAACCAGGTAATAAAGTTAGTTGCTGCGACTGTTGCTTGGAGAAGCACACGCATGCACTGAGATTGAACCAGCATTGTGTCTGACTCTTTCTTATTCCGGTACCACATGCACATAATCTGATTTGGAGTGACTGGTGGACGAAGGGTATTGTCGTTACGACCCCGACAT",
+    "seq_preview": "ATTGTCAAGGTAAAAATATATATATTTTTCTATTCTTTGTACTTTATGCTGTGAAACAATAAGCTTTCCCCTGTAGCTTGCTGACACAAAGGAAATTGTAACTAAGATGGCTGCCAGTAT",
+    "structural": [
+     {
+      "bound_reason": "the repeat still matched where the record ends, so the copies may extend beyond it — the length is a lower bound, not a measurement",
+      "element_span": [
+       0,
+       10209
+      ],
+      "five_prime": [
+       0,
+       471
+      ],
+      "identity": 100.0,
+      "length_is_lower_bound": true,
+      "ltr_len": 471,
+      "method": "k-mer seed (k=13, 5104 bp window) + X-drop diagonal extension",
+      "termini": {
+       "canonical": false,
+       "five_end": "AT",
+       "five_start": "AT",
+       "mismatches": 4,
+       "motif_tier": "none",
+       "noncanonical_motif": null,
+       "note": "termini match neither TG…CA nor any of the seven known non-canonical motifs; the motif is common but not universal among LTR retrotransposons, so its absence is not evidence against the call",
+       "three_end": "AT",
+       "three_start": "AT",
+       "within_ltrharvest_tolerance": false
+      },
+      "three_prime": [
+       9738,
+       10209
+      ],
+      "tsd_state": "not assessable (no flanking sequence in the record)",
+      "type": "LTR (terminal direct repeat)"
+     },
+     {
+      "best_match": "tRNA-Lys3",
+      "confident": false,
+      "identity": 66.7,
+      "motif": "TGGGGCGCGGCCAGCGAT",
+      "note": "priming tRNA undetermined — closest panel match tRNA-Lys3 (66.7%), below the confident threshold; endogenised PBS is often diverged",
+      "pos": [
+       488,
+       506
+      ],
+      "priming_trna": "undetermined",
+      "type": "PBS (primer-binding site)"
+     }
+    ],
+    "valid": true
+   }
+  ],
+  "references": [
+   {
+    "citation": "Wicker T, Sabot F, Hua-Van A, et al. (2007) A unified classification system for eukaryotic transposable elements. Nat Rev Genet 8(12):973-982.",
+    "doi": "10.1038/nrg2165",
+    "key": "Wicker2007",
+    "license": "",
+    "name": "TE classification framework",
+    "url": "https://doi.org/10.1038/nrg2165"
+   },
+   {
+    "citation": "Zhang RG, Li GY, Wang XL, et al. (2022) TEsorter: an accurate and fast method to classify LTR-retrotransposons in plant genomes. Horticulture Research 9:uhac017.",
+    "doi": "10.1093/hr/uhac017",
+    "key": "TEsorter",
+    "license": "",
+    "name": "Domain-architecture completeness (domain-completeness basis)",
+    "url": "https://doi.org/10.1093/hr/uhac017"
+   },
+   {
+    "citation": "Ou S, Jiang N (2018) LTR_retriever: a highly accurate and sensitive program for identification of long terminal repeat retrotransposons. Plant Physiology 176(2):1410-1422.",
+    "doi": "10.1104/pp.17.01310",
+    "key": "LTRretriever",
+    "license": "",
+    "name": "Intact LTR-retrotransposon criteria (domain-completeness basis)",
+    "url": "https://doi.org/10.1104/pp.17.01310"
+   },
+   {
+    "citation": "Eddy SR (2011) Accelerated Profile HMM Searches. PLoS Comput Biol 7(10):e1002195.",
+    "doi": "10.1371/journal.pcbi.1002195",
+    "key": "HMMER",
+    "license": "BSD-3-Clause",
+    "name": "HMMER (via pyhmmer 0.12.1)",
+    "url": "http://hmmer.org"
+   },
+   {
+    "citation": "Mistry J, Chuguransky S, Williams L, et al. (2021) Pfam: The protein families database in 2021. Nucleic Acids Res 49(D1):D412-D419.",
+    "doi": "10.1093/nar/gkaa913",
+    "key": "Pfam",
+    "license": "CC0",
+    "name": "Pfam-A profiles (via InterPro, retrieved 2026-07-17)",
+    "url": "https://www.ebi.ac.uk/interpro/"
+   }
+  ]
+ }
+}

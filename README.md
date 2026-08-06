@@ -4,7 +4,7 @@
   <img alt="TEagle" src="docs/img/teagle-banner-light.png" width="460">
 </picture>
 
-![Version](https://img.shields.io/badge/version-3.4.0-0A7259) ![Platform](https://img.shields.io/badge/platform-Windows%20x64-1FB89C) ![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-0A7259) ![Built with](https://img.shields.io/badge/built%20with-PySide6%20%C2%B7%20Primer3%20%C2%B7%20HMMER-2B3740)
+![Version](https://img.shields.io/badge/version-3.6.0-0A7259) ![Platform](https://img.shields.io/badge/platform-Windows%20x64-1FB89C) ![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-0A7259) ![Built with](https://img.shields.io/badge/built%20with-PySide6%20%C2%B7%20Primer3%20%C2%B7%20HMMER-2B3740)
 </div>
 
 **TEagle** takes one transposable element and tells you what it is, how it is built, and how to amplify it — in one window, without a command line, and with every result carrying the exact software and database versions that produced it.
@@ -76,7 +76,7 @@ Short version — the manual explains each in full.
 
 **Calls a superfamily, with its reasons — and declines when it cannot.** Copia versus Gypsy from strand-aware integrase-vs-RT order, LINE, DIRS, ERV, and the DNA-transposon superfamilies — under the Wicker 2007 scheme, with the domains that support the call listed beside it. Where the evidence cannot carry a call the element is reported as undetermined rather than guessed: an integrase and RT on opposite strands, or on overlapping spans, leave the order unreadable, so no Copia/Gypsy call is made.
 
-**States how much to trust it.** A per-domain confidence from the HMMER E-value, and a categorical completeness tier (*intact / near-complete / partial / structural-only*) — always scoped to the models actually tested. An endogenous retrovirus is read as a retrovirus, with env from a spliced subgenomic mRNA rather than a misleading host gene model.
+**States how much to trust it.** A per-domain confidence from the HMMER E-value, and a categorical domain-completeness class (*intact / near-complete / partial / structural-only*) — always scoped to the models actually tested. An endogenous retrovirus is read as a retrovirus, with env from a spliced subgenomic mRNA rather than a misleading host gene model.
 
 **Names the family** against Dfam, and **resolves exons and introns** from a transcript (both optional, via the Linux backend).
 
@@ -86,7 +86,7 @@ Short version — the manual explains each in full.
 
 **Exports everything.** Tables to XLSX/CSV/TSV, figures to SVG/PNG (the self-similarity dot plot also exports vector PDF), sequence to FASTA, annotation to GFF3/BED with verified Sequence Ontology terms, and a provenance manifest sealing the versions, parameters and checksums behind the result.
 
-![HERV-K endogenous retrovirus: the full GAG–PR–RT–RNaseH–INT–ENV architecture with per-domain confidence and an intact structural-completeness tier](docs/img/screenshots/herv_k_domains.png)
+![HERV-K endogenous retrovirus: the full GAG–PR–RT–RNaseH–INT–ENV architecture with per-domain confidence and intact domain completeness](docs/img/screenshots/herv_k_domains.png)
 
 ![Primer design with secondary-structure columns (hairpin / self-dimer / cross-dimer / 3′-end ΔG), colour-flagged, with the optional ViennaRNA cross-check installed](docs/img/primers.png)
 
@@ -110,3 +110,38 @@ powershell -File installer/build_installer.ps1   # freeze + bundle guard + self-
 ## Reproducibility
 
 Every analysis packs the databases and package versions plus input checksums that produced it, so a run reproduces byte-for-byte on another machine. The seal excludes volatile fields (retrieval timestamps, unused-tool versions), and derived/advisory annotations (the primer QC, the on/off-target labelling) are recorded but kept out of the seal so they never change a result's identity.
+
+This is measured, not asserted. `python benchmarks/reproducibility.py` re-analyses the same input ten times and checks the seals are identical, checks that different inputs — down to a single base substitution — give different seals, and enumerates every numeric threshold in the detectors to confirm none is applied without being recorded. The last of those three found a real gap in 3.4.0 and is why 3.5.0 exists.
+
+## Benchmarks
+
+`benchmarks/` holds the evidence behind the claims above, as runnable scripts rather than a table of
+remembered numbers. Every figure and table regenerates from raw output with one command, and no value is
+typed into a plotting script.
+
+Measured on an independent validation corpus of 44 records from 36 species, each labelled from the
+publication that described it: TEagle named the Wicker order for 35 of the 36 transposable elements and was
+correct on all 35, and declined to name an order on all 8 negative controls. Across a broader corpus of 136
+entries from 122 accessions, order-level accuracy was 0.990 (Wilson 95% CI 0.943–0.998). Compared against
+TEsorter 1.5.1 on byte-identical input, neither tool made an incorrect order call on any of 98 shared
+cases; they differ only in how often they commit.
+
+The assay half is measured the same way, against 17 published assays from 8 sources whose product sizes
+were determined at the bench. Every one returned a product on its cited template; of the 16 targeting a
+single locus, all 16 fell within tolerance and 14 reproduced the published size exactly, with a median
+absolute difference of 0 bp and all 16 binding with no mismatch in either primer.
+
+```powershell
+python benchmarks/sim_divergence.py    # where age censors terminal-repeat detection (600 runs)
+python benchmarks/reproducibility.py   # seal stability, sensitivity and threshold coverage
+python benchmarks/run_teagle.py        # the classification corpus
+python benchmarks/score.py             # scoring, with abstention reported separately from accuracy
+python benchmarks/run_tesorter.py      # the external comparator, both database passes
+python benchmarks/head_to_head.py      # paired comparison, McNemar exact
+python benchmarks/run_assay.py         # in-silico PCR against published product sizes
+python benchmarks/testsuite.py         # the test suite, counts recorded like any other result
+python benchmarks/figures.py           # figures, from benchmarks/raw/ only
+python benchmarks/make_tables.py       # capability comparison against 15 other tools
+```
+
+`benchmarks/CORPUS_SCOPE.md` records what each corpus can and cannot support, including the panel that cannot be scored as assembled and the repeated-accession structure of the broader corpus.

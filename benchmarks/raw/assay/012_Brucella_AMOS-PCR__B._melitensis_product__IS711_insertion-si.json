@@ -1,0 +1,148 @@
+{
+ "case": {
+  "caveats": "Same five-primer AMOS cocktail. Here the productive orientation is the reverse of the B. ovis and B. suis cases: the B. melitensis-specific primer is the forward primer and the IS711 primer is the reverse. Measured in silico as 733 bp at 1209132..1209864 on AE008917.1, i.e. 2 bp above the paper's gel estimate of 731 bp - agarose-gel resolution, not a mismatch, since strain 16M is the exact strain the paper tested. Useful precisely because the expected value is gel-derived and therefore genuinely independent of the template sequence. The IS711 primer matches 5 sites on AE008917.1; only one pairs with the B. melitensis primer.",
+  "citation": "Bricker BJ, Halling SM. Differentiation of Brucella abortus bv. 1, 2, and 4, Brucella melitensis, Brucella ovis, and Brucella suis bv. 1 by PCR. J Clin Microbiol. 1994;32(11):2660-2666. doi:10.1128/jcm.32.11.2660-2666.1994. PMID 7852552.",
+  "confidence": "high",
+  "element": "IS711 - species-specific IS711 insertion-site PCR",
+  "expected_amplicon_bp": 731,
+  "expected_bp_provenance": "stated_in_source",
+  "forward_primer": "AAATCGCGTCCTTGCTGGTCTGA",
+  "loci_justification": "AMOS-PCR is run at the bench as a five-primer multiplex; the pair scored here is the species-specific pair for this template, and the IS711 copy it reports is a single chromosomal locus. Filed under the 'irap-remap' panel for convenience, which is a label and not a statement about locus multiplicity.",
+  "loci_on_template": "single",
+  "name": "Brucella AMOS-PCR, B. melitensis product (IS711 insertion-site PCR)",
+  "organism": "Brucella melitensis biovar 1 (strain 16M, listed in Table 1 of the paper)",
+  "panel": "irap-remap",
+  "reverse_primer": "TGCCGATCACTTAAGGGCCTTCAT",
+  "template_accession": "AE008917.1",
+  "where_in_paper": "Table 2 (primer sequences); Results / Fig. 2 for the 731-bp size.",
+  "worked_prediction_in_entry": true,
+  "worked_prediction_note": "The entry records a worked prediction — a coordinate range, an in-silico check, or a sequence-derived length — so the expected answer was written down before the engine ran. The published size remains external, but this case was not scored blind."
+ },
+ "result": {
+  "amplicons": [
+   {
+    "amplicon_5p": "AAATCGCGTCCTTGCTGGTCTGATTAAGTT…",
+    "end": 1209864,
+    "fwd_anneal_len": 23,
+    "fwd_mm": 0,
+    "fwd_primer": "F",
+    "fwd_tail5": 0,
+    "length": 733,
+    "on_target": false,
+    "product_length": 733,
+    "rev_anneal_len": 24,
+    "rev_mm": 0,
+    "rev_primer": "R",
+    "rev_tail5": 0,
+    "seq": "AAATCGCGTCCTTGCTGGTCTGATTAAGTTTTTCACCAACAGCTTCGATATCGTTATAAATTTCTTCATAACCCCGGATATGAATCTGAACCAGCTTATTTGTCTGAACGTTTACTACCTCTCCGGTGCACACAAGCCGCTCATATTCACCGTCTTTGACGTAAATCGCGGTCATGACACCCAAACTTAGCCATGGTGCACCATCGACTATAAGAAGTTTCTTGTCGTGAATCGCCTTAACAAGCGGCACCCCTAAAAAATCAGGAGTGTTTCGGCTCAGAATAATCCACAGAAGGTAGAGCAGTAATATCCAATAGACGCCATTAACAATAGCGAGATTGGAATAGCTTACCCGCCAATCTTCGCCCTGCCACCAGCCAATAACGGCAATTATCGCTGTCACTGTTGCAAGTATGGCAGCGAGCGCTCTAGCGTGACGAAGCACTGTCTTTCTGACAATTTCCAGATTCACCCCTAGGGCGTGTCTGCATTCAACGTAACCAGATCATAGCGCATGCGAGATGGACGAAGCCCATGAATGCGGTCAATGTTTTCTCGCATCGCAGCGCAATACGACGATAGCGTTTCAACTTGTTAAAAAAGCATTCAATCTAATGGCGTTCCTTGTACAGCCTCCAGTCGATTGTTGGGACACTGGAACGTGTTGGATTGGCCTTGGATCTGAGCCGTTGCCTTGAGATCGCTGGCAATGAAGGCCCTTAAGTGATCGGCA",
+    "single_primer": false,
+    "source": "AE008917.1 Brucella melitensis bv. 1 str. 16M chromosome I, complete sequence (input)",
+    "start": 1209131
+   }
+  ],
+  "backgroundsSearched": [
+   "AE008917.1 Brucella melitensis bv. 1 str. 16M chromosome I, complete sequence (input)"
+  ],
+  "criteria": {
+   "max_mismatch": 2,
+   "min_anneal": 18,
+   "product_size": [
+    28,
+    3825
+   ],
+   "three_prime_strict": 5
+  },
+  "notSearched": [
+   "Reference assembly (needs WSL/NCBI)",
+   "External NCBI Primer-BLAST",
+   "IUPAC-ambiguous template bases"
+  ],
+  "provenance": {
+   "createdUtc": "2026-08-06T03:58:36+00:00",
+   "databases": [],
+   "environment": {
+    "machine": "AMD64",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10"
+   },
+   "input": {
+    "id": "AE008917.1 Brucella melitensis bv. 1 str. 16M chromosome I, complete sequence",
+    "length": 2117144,
+    "sha256": "140aacc78a544d7a0dcbc8ca62c4a6b25761d96cd0a51be0f593e61aca4492c7"
+   },
+   "manifestSha256": "2ac1368a694c7aea6067f90ba91a45460fde981e39fd62b144d15645f553d710",
+   "notRun": [
+    "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
+    "External NCBI Primer-BLAST",
+    "De novo family discovery"
+   ],
+   "parameters": {
+    "background_sha256": null,
+    "fwd": "AAATCGCGTCCTTGCTGGTCTGA",
+    "max_mm": 2,
+    "min_anneal": 18,
+    "prod_max": 3825,
+    "prod_min": 28,
+    "rev": "TGCCGATCACTTAAGGGCCTTCAT",
+    "target_span": null,
+    "tp": 5
+   },
+   "references": [],
+   "runType": "in-silico-pcr",
+   "schemaVersion": "0.1",
+   "software": [
+    {
+     "name": "python",
+     "version": "3.12.10"
+    },
+    {
+     "name": "TEagle core",
+     "version": "3.6.0"
+    }
+   ],
+   "teagleVersion": "3.6.0"
+  },
+  "references": [],
+  "truncated": false,
+  "truncatedOn": [],
+  "warning": null
+ },
+ "scored": {
+  "accession": "AE008917.1",
+  "caveats": "Same five-primer AMOS cocktail. Here the productive orientation is the reverse of the B. ovis and B. suis cases: the B. melitensis-specific primer is the forward primer and the IS711 primer is the reverse. Measured in silico as 733 bp at 1209132..1209864 on AE008917.1, i.e. 2 bp above the paper's gel estimate of 731 bp - agarose-gel resolution, not a mismatch, since strain 16M is the exact strain the paper tested. Useful precisely because the expected value is gel-derived and therefore genuinely independent of the template sequence. The IS711 primer matches 5 sites on AE008917.1; only one pairs with the B. melitensis primer.",
+  "citation": "Bricker BJ, Halling SM. Differentiation of Brucella abortus bv. 1, 2, and 4, Brucella melitensis, Brucella ovis, and Brucella suis bv. 1 by PCR. J Clin Microbiol. 1994;32(11):2660-2666. doi:10.1128/jcm.32.11.2660-2666.1994. PMID 7852552.",
+  "closest_bp": 733,
+  "difference_bp": 2,
+  "elapsed_s": 5.368,
+  "element": "IS711 - species-specific IS711 insertion-site PCR",
+  "expected_bp": 731,
+  "found": true,
+  "ground_truth": "stated_in_source",
+  "loci_on_template": "single",
+  "multilocus_by_design": false,
+  "n_products": 1,
+  "name": "Brucella AMOS-PCR, B. melitensis product (IS711 insertion-site PCR)",
+  "organism": "Brucella melitensis biovar 1 (strain 16M, listed in Table 1 of the paper)",
+  "panel": "irap-remap",
+  "preworked_in_corpus": true,
+  "primer_degenerate": false,
+  "primer_fwd_as_published": "AAATCGCGTCCTTGCTGGTCTGA",
+  "primer_rev_as_published": "TGCCGATCACTTAAGGGCCTTCAT",
+  "product_sizes": [
+   733
+  ],
+  "scored_product_anneal_bp": [
+   23,
+   24
+  ],
+  "scored_product_tail_bp": 0,
+  "search_window_bp": [
+   28,
+   3825
+  ],
+  "source_confidence": "high",
+  "template_sha256": "f01723313e6a2c09",
+  "tolerance_bp": 73.1,
+  "within_tolerance": true
+ }
+}

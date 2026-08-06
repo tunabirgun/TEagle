@@ -1,0 +1,149 @@
+{
+ "case": {
+  "amplicon_range_bp": "485 bp (revertant / excised allele) vs 717 bp (transformant / mimp1-containing allele); only the 485 bp product lies in a public accession",
+  "caveats": "1) The 485 bp figure is the REVERTANT (post-excision) product. The 717 bp transformant allele carries the mimp1 copy in niaD intron 1 inside engineered plasmid pNm1H18/pAN301 and is NOT represented in any public accession - do not expect 717 bp from M58291.1. 2) The reporter is an A. nidulans niaD gene deployed heterologously; the transposition experiment itself was run in Fusarium oxysporum, so the experimental host organism differs from the amplicon's template organism. 3) The paper reports 485 bp for a revertant, and excision footprints can in principle differ from wild type by a few bp; the exact, zero-mismatch 485 bp match against wild-type niaD is what makes this case externally verifiable. 4) No degenerate bases; neither primer spans a junction; single-locus, non-nested assay.",
+  "citation": "Dufresne M, Hua-Van A, Abd El Wahab H, Ben M'Barek S, Vasnier C, Teysset L, Kema GHJ, Daboussi M-J. Transposition of a fungal miniature inverted-repeat transposable element through the action of a Tc1-like transposase. Genetics. 2007;175(1):441-452. doi:10.1534/genetics.106.064360. PMID 17179071; PMCID PMC1775018.",
+  "confidence": "high",
+  "element": "mimp1 (miniature inverted-repeat transposable element, MITE) mobilised in trans by the impala Tc1/mariner-family transposase",
+  "expected_amplicon_bp": 485,
+  "expected_bp_provenance": "stated_in_source",
+  "forward_primer": "GTTCATGCCGTGGTCGCTGC",
+  "loci_justification": "The pair flanks one locus on the cited template: a single insertion site, a single excision site, or a single transcript. A second product on this template would be an off-target prediction.",
+  "loci_on_template": "single",
+  "name": "mimp1/impala niaD excision assay - revertant (excised) product",
+  "organism": "Aspergillus nidulans (organism of the amplicon's template, the niaD reporter gene)",
+  "panel": "tir-assays",
+  "reverse_primer": "AGTTGGGAATGTCCTCGTCG",
+  "template_accession": "M58291.1",
+  "where_in_paper": "Materials and Methods, 'PCR amplifications' paragraph. Primer names and sequences printed inline: 'primers niaD144 (5'-GTTCATGCCGTGGTCGCTGC-3') and niaD754r (5'-AGTTGGGAATGTCCTCGTCG-3')'. Size in the immediately following sentence: 'The sizes of the expected PCR products are 717 bp for a transformant and 485 bp for a revertant.'",
+  "worked_prediction_in_entry": false,
+  "worked_prediction_note": "The entry records only the published primers, template and size; no worked prediction appears in it, so this case was scored blind."
+ },
+ "result": {
+  "amplicons": [
+   {
+    "amplicon_5p": "GTTCATGCCGTGGTCGCTGCGAATTCTTCA…",
+    "end": 755,
+    "fwd_anneal_len": 20,
+    "fwd_mm": 0,
+    "fwd_primer": "F",
+    "fwd_tail5": 0,
+    "length": 485,
+    "on_target": false,
+    "product_length": 485,
+    "rev_anneal_len": 20,
+    "rev_mm": 0,
+    "rev_primer": "R",
+    "rev_tail5": 0,
+    "seq": "GTTCATGCCGTGGTCGCTGCGAATTCTTCAGTAATCTGTACCTCTATATTATTTTCCTATCCCATACTCTCACAATGTCTACAACCGTCACACAAGTGCGGACGGGCTCCATACCCAAGACTCTCAAGACTTCCCAGATCAGGGTCGAAGAGCAAGAGATCACAGAGCTCGATACTGCAGATATTCCTTTACCTCCTCCTTCGAAAGAACCAACCGAGGTTCTAAGTCTAGATAAAACTACACCAGATAGCCATGTCCCCCGAGATCCCCGGCTGATCCGGCTCACTGGCGTTCACCCGTTCAATGTCGAGCCTCCATTGACAGCACTCTTTCAGCAAGGTACGCTCTATGGATCTATGGTATATCCTTACCTTGTCTTCGAATCGAAAAGCTTACAGTCTTAGGCTTCTTGACGCCTCCTGAGCTATTCTACGTCCGGAATCATGGCCCAGTGCCCCATGTTCGCGACGAGGACATTCCCAACT",
+    "single_primer": false,
+    "source": "M58291.1 6. Structure of the niiA and niaD genes:nt (input)",
+    "start": 270
+   }
+  ],
+  "backgroundsSearched": [
+   "M58291.1 6. Structure of the niiA and niaD genes:nt (input)"
+  ],
+  "criteria": {
+   "max_mismatch": 2,
+   "min_anneal": 18,
+   "product_size": [
+    28,
+    3825
+   ],
+   "three_prime_strict": 5
+  },
+  "notSearched": [
+   "Reference assembly (needs WSL/NCBI)",
+   "External NCBI Primer-BLAST",
+   "IUPAC-ambiguous template bases"
+  ],
+  "provenance": {
+   "createdUtc": "2026-08-06T03:58:20+00:00",
+   "databases": [],
+   "environment": {
+    "machine": "AMD64",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10"
+   },
+   "input": {
+    "id": "M58291.1 6. Structure of the niiA and niaD genes:nt",
+    "length": 3618,
+    "sha256": "43c2cb300ecbab57e1c9c30a25959964ae25f13e4ba36a0123883b73e9fe20c6"
+   },
+   "manifestSha256": "e16465999c471d37202c0c9fc14181d1ae7474789d663d5f173095143e702d91",
+   "notRun": [
+    "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
+    "External NCBI Primer-BLAST",
+    "De novo family discovery"
+   ],
+   "parameters": {
+    "background_sha256": null,
+    "fwd": "GTTCATGCCGTGGTCGCTGC",
+    "max_mm": 2,
+    "min_anneal": 18,
+    "prod_max": 3825,
+    "prod_min": 28,
+    "rev": "AGTTGGGAATGTCCTCGTCG",
+    "target_span": null,
+    "tp": 5
+   },
+   "references": [],
+   "runType": "in-silico-pcr",
+   "schemaVersion": "0.1",
+   "software": [
+    {
+     "name": "python",
+     "version": "3.12.10"
+    },
+    {
+     "name": "TEagle core",
+     "version": "3.6.0"
+    }
+   ],
+   "teagleVersion": "3.6.0"
+  },
+  "references": [],
+  "truncated": false,
+  "truncatedOn": [],
+  "warning": null
+ },
+ "scored": {
+  "accession": "M58291.1",
+  "caveats": "1) The 485 bp figure is the REVERTANT (post-excision) product. The 717 bp transformant allele carries the mimp1 copy in niaD intron 1 inside engineered plasmid pNm1H18/pAN301 and is NOT represented in any public accession - do not expect 717 bp from M58291.1. 2) The reporter is an A. nidulans niaD gene deployed heterologously; the transposition experiment itself was run in Fusarium oxysporum, so the experimental host organism differs from the amplicon's template organism. 3) The paper reports 485 bp for a revertant, and excision footprints can in principle differ from wild type by a few bp; the exact, zero-mismatch 485 bp match against wild-type niaD is what makes this case externally verifiable. 4) No degenerate bases; neither primer spans a junction; single-locus, non-nested assay.",
+  "citation": "Dufresne M, Hua-Van A, Abd El Wahab H, Ben M'Barek S, Vasnier C, Teysset L, Kema GHJ, Daboussi M-J. Transposition of a fungal miniature inverted-repeat transposable element through the action of a Tc1-like transposase. Genetics. 2007;175(1):441-452. doi:10.1534/genetics.106.064360. PMID 17179071; PMCID PMC1775018.",
+  "closest_bp": 485,
+  "difference_bp": 0,
+  "elapsed_s": 0.014,
+  "element": "mimp1 (miniature inverted-repeat transposable element, MITE) mobilised in trans by the impala Tc1/mariner-family transposase",
+  "expected_bp": 485,
+  "found": true,
+  "ground_truth": "stated_in_source",
+  "loci_on_template": "single",
+  "multilocus_by_design": false,
+  "n_products": 1,
+  "name": "mimp1/impala niaD excision assay - revertant (excised) product",
+  "organism": "Aspergillus nidulans (organism of the amplicon's template, the niaD reporter gene)",
+  "panel": "tir-assays",
+  "preworked_in_corpus": false,
+  "primer_degenerate": false,
+  "primer_fwd_as_published": "GTTCATGCCGTGGTCGCTGC",
+  "primer_rev_as_published": "AGTTGGGAATGTCCTCGTCG",
+  "product_sizes": [
+   485
+  ],
+  "scored_product_anneal_bp": [
+   20,
+   20
+  ],
+  "scored_product_tail_bp": 0,
+  "search_window_bp": [
+   28,
+   3825
+  ],
+  "source_confidence": "high",
+  "template_sha256": "3f600cd61c0df7db",
+  "tolerance_bp": 48.5,
+  "within_tolerance": true
+ }
+}

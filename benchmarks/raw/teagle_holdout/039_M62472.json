@@ -1,0 +1,362 @@
+{
+ "accession": "M62472",
+ "corpus_row": {
+  "accession": "M62472",
+  "citation": "Sander M, Lowenhaupt K, Lane WS, Rich A (1991) Cloning and characterization of Rrp1, the gene encoding Drosophila strand transferase: carboxy-terminal homology to DNA repair endo/exonucleases. Nucleic Acids Res 19(16):4523-4529 (sequence-of-record for this deposit; establishes the C-terminal homology to ExoIII/APE-family repair endo/exonucleases). Sander M, Lowenhaupt K, Rich A (1991) Drosophila Rrp1 protein: an apurinic endonuclease with homologous recombination activities. Proc Natl Acad Sci USA 88(15):6780-6784, PMID 1713691 (establishes AP-endonuclease activity biochemically).",
+  "confidence": "high",
+  "coords": "",
+  "evidence_type": "primary literature",
+  "expected_class": "not a TE - host AP (apurinic/apyrimidinic) endonuclease and strand transferase Rrp1, a single-copy DNA-repair gene",
+  "expected_superfamily": "",
+  "organism": "Drosophila melanogaster",
+  "panel": "negative",
+  "why_safe": "Confusion axis: the Rrp1 C-terminal domain belongs to the Exo_endo_phos / DNase-I-like nuclease superfamily - the same fold as E. coli exonuclease III, human APE1 and the endonuclease (EN) domain of LINE-1 ORF2p - so an EN-domain-keyed TE caller is at genuine risk of flagging it. Tool-independence: AP-endonuclease and strand-transfer activities were measured on purified protein in vitro; the label rests on enzymology, not on similarity to a TE library. The record is an mRNA (complete cds) of a single-copy nuclear repair gene, so it cannot harbour an intronic element, and it carries no RT, no transposase and no terminal repeats. Complements the excluded human APEX1 row (NG_008718) with an invertebrate representative of the same fold."
+ },
+ "elapsed_s": 0.026,
+ "fetch_source": {
+  "accession": "M62472.1",
+  "coords_applied": null,
+  "length": 2389,
+  "organism": "Drosophila melanogaster",
+  "title": "Drosophila melanogaster recombination repair protein (RRP1) mRNA, complete cds"
+ },
+ "input_length": 2389,
+ "input_sha256": "b7d5f18f95e2cc10864ca7a0b5daab658f3847f517168a09a149c54084cf0c41",
+ "result": {
+  "provenance": {
+   "createdUtc": "2026-08-05T20:39:51+00:00",
+   "databases": [
+    {
+     "file": "data/te_domains.hmm",
+     "name": "Pfam TE-domain profiles (bundled, CC0)",
+     "sha256": "57f2b7881f35e2aeb2885430c80d7d514005d32b9f1f782e362189b3207858ac"
+    }
+   ],
+   "environment": {
+    "machine": "AMD64",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10"
+   },
+   "input": {
+    "id": "M62472.1 Drosophila melanogaster recombination repair protein (RRP1) mRNA, complete cds",
+    "length": 2389,
+    "sha256": "2a9bd6cc9f477784bb37672005c6397a67fc6f11eaacb148a5a1f99c53c499ba"
+   },
+   "manifestSha256": "d2c3492c1cd1ff72a89f0409603a8de595b035a6b94f075fa5c331ebed226cfc",
+   "notRun": [
+    "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
+    "External NCBI Primer-BLAST",
+    "De novo family discovery"
+   ],
+   "parameters": {
+    "domain_evalue_max": 0.001,
+    "domain_orfs_scanned_max": 12,
+    "ltr_min_anchors": 4,
+    "ltr_min_identity_pct": 80.0,
+    "ltr_min_len": 80,
+    "ltr_seed_k": 13,
+    "orf_min_aa": 40,
+    "pbs_min_identity": 0.55,
+    "pbs_search_window": 44,
+    "polya_min_run": 8,
+    "ppt_max_defects": 2,
+    "ppt_min_len": 9,
+    "ppt_min_purine": 0.82,
+    "ppt_window": 30,
+    "tir_max_len": 1000,
+    "tir_min_anchors": 3,
+    "tir_min_identity_pct": 80,
+    "tir_min_len": 10,
+    "tir_seed_k": 11,
+    "tsd_max_len": 12,
+    "tsd_min_len": 2
+   },
+   "references": [
+    {
+     "citation": "Wicker T, Sabot F, Hua-Van A, et al. (2007) A unified classification system for eukaryotic transposable elements. Nat Rev Genet 8(12):973-982.",
+     "doi": "10.1038/nrg2165",
+     "key": "Wicker2007",
+     "license": "",
+     "name": "TE classification framework",
+     "url": "https://doi.org/10.1038/nrg2165"
+    },
+    {
+     "citation": "Zhang RG, Li GY, Wang XL, et al. (2022) TEsorter: an accurate and fast method to classify LTR-retrotransposons in plant genomes. Horticulture Research 9:uhac017.",
+     "doi": "10.1093/hr/uhac017",
+     "key": "TEsorter",
+     "license": "",
+     "name": "Domain-architecture completeness (domain-completeness basis)",
+     "url": "https://doi.org/10.1093/hr/uhac017"
+    },
+    {
+     "citation": "Ou S, Jiang N (2018) LTR_retriever: a highly accurate and sensitive program for identification of long terminal repeat retrotransposons. Plant Physiology 176(2):1410-1422.",
+     "doi": "10.1104/pp.17.01310",
+     "key": "LTRretriever",
+     "license": "",
+     "name": "Intact LTR-retrotransposon criteria (domain-completeness basis)",
+     "url": "https://doi.org/10.1104/pp.17.01310"
+    },
+    {
+     "citation": "Eddy SR (2011) Accelerated Profile HMM Searches. PLoS Comput Biol 7(10):e1002195.",
+     "doi": "10.1371/journal.pcbi.1002195",
+     "key": "HMMER",
+     "license": "BSD-3-Clause",
+     "name": "HMMER (via pyhmmer 0.12.1)",
+     "url": "http://hmmer.org"
+    },
+    {
+     "citation": "Mistry J, Chuguransky S, Williams L, et al. (2021) Pfam: The protein families database in 2021. Nucleic Acids Res 49(D1):D412-D419.",
+     "doi": "10.1093/nar/gkaa913",
+     "key": "Pfam",
+     "license": "CC0",
+     "name": "Pfam-A profiles (via InterPro, retrieved 2026-07-17)",
+     "url": "https://www.ebi.ac.uk/interpro/"
+    }
+   ],
+   "runType": "analysis",
+   "schemaVersion": "0.1",
+   "software": [
+    {
+     "name": "HMMER (pyhmmer)",
+     "version": "0.12.1"
+    },
+    {
+     "name": "python",
+     "version": "3.12.10"
+    },
+    {
+     "name": "TEagle core",
+     "version": "3.6.0"
+    }
+   ],
+   "teagleVersion": "3.6.0"
+  },
+  "records": [
+   {
+    "classification": {
+     "class": "unclassified",
+     "completeness": {
+      "coding": {
+       "frames": 1,
+       "note": "all 1 detected domain(s) lie in ONE uninterrupted ORF — the coding structure of what was found is intact, whatever the domain ledger above lists as not detected",
+       "state": "single reading frame",
+       "truncated_frame": false,
+       "unplaced": 0
+      },
+      "expected": [
+       "EN"
+      ],
+      "kind": "coding fragment",
+      "missing": [],
+      "present": [
+       "EN"
+      ],
+      "scope": "gag (matrix/capsid/nucleocapsid), protease, RT, RNase H, DDE integrase, envelope, chromodomain, LINE ORF1p and apurinic-like endonuclease, tyrosine recombinase, Helitron helicase, and transposases of the CACTA, hAT, IS4, MULE, Tc1/Mariner and unclassified DDE groups",
+      "tier": "coding fragment (EN detected; no structural context)"
+     },
+     "confidence": "Candidate",
+     "domains_unavailable": false,
+     "evidence": [
+      "the only coding evidence is EN, which host genes also carry — an endonuclease model matches apurinic endonucleases and DNase I, and a tyrosine recombinase matches phage, plasmid and host site-specific recombinases. Without a reverse transcriptase, a transposase, a capsid, an envelope or an integrase there is no element-specific evidence, so no class is assigned"
+     ],
+     "explanation": "Classified as unclassified (candidate confidence). Structural: none. Domains: EN. the only coding evidence is EN, which host genes also carry — an endonuclease model matches apurinic endonucleases and DNase I, and a tyrosine recombinase matches phage, plasmid and host site-specific recombinases. Without a reverse transcriptase, a transposase, a capsid, an envelope or an integrase there is no element-specific evidence, so no class is assigned.",
+     "is_erv": false,
+     "n_domains": 1,
+     "order": null,
+     "orfs_unscanned": 0,
+     "superfamily": "EN domain(s) detected; no transposable-element assignment",
+     "te_class": "unclassified"
+    },
+    "composition": {
+     "ambiguous": 0.0,
+     "ambiguous_counts": {},
+     "counts": {
+      "A": 743,
+      "C": 566,
+      "G": 651,
+      "N": 0,
+      "T": 429
+     },
+     "gc": 50.9,
+     "length": 2389,
+     "n": 0.0
+    },
+    "domains": [
+     {
+      "aa": [
+       430,
+       670
+      ],
+      "class": "retro:LINE?",
+      "confidence": "high",
+      "dna": "TGCAGCTGGAACGTGGCCGGTCTGAGGGCCTGGTTGAAAAAGGATGGTCTGCAGTTGATTGACCTCGAGGAACCAGACATTTTCTGCCTGCAGGAAACCAAGTGCGCAAACGATCAGTTGCCAGAGGAGGTGACCCGACTGCCGGGATATCATCCCTATTGGCTGTGCATGCCAGGAGGCTATGCCGGCGTCGCTATTTACAGCAAGATAATGCCCATACACGTGGAATACGGCATTGGCAATGAGGAGTTCGACGATGTCGGGCGCATGATTACGGCTGAGTACGAAAAGTTTTACTTGATCAATGTGTACGTGCCGAATTCAGGCCGAAAGCTGGTTAACTTGGAGCCCCGCATGCGCTGGGAAAAGCTCTTCCAGGCGTACGTGAAGAAACTGGACGCTCTAAAACCGGTGGTCATCTGCGGCGACATGAACGTTTCCCATATGCCCATTGATCTGGAAAACCCGAAGAATAACACCAAGAATGCCGGCTTCACCCAGGAGGAGCGTGACAAAATGACAGAGCTGCTGGGCCTCGGCTTTGTGGACACGTTTAGGCATTTATATCCCGATCGCAAGGGCGCCTACACCTTCTGGACATACATGGCCAATGCGCGAGCACGCAACGTTGGATGGCGTCTGGACTATTGTCTCGTCTCGGAGAGATTCGTGCCCAAGGTGGTGGAGCACGAGATACGCAGCCAATGCCTTGGAAGCGACCAC",
+      "domain": "EN",
+      "evalue": 6.633658234288515e-38,
+      "hmm": "Exo_endo_phos",
+      "label": "apurinic-like endonuclease (ORF2p)",
+      "nt": [
+       1419,
+       2142
+      ],
+      "orf": 0,
+      "pfam": "PF03372",
+      "protein": "CSWNVAGLRAWLKKDGLQLIDLEEPDIFCLQETKCANDQLPEEVTRLPGYHPYWLCMPGGYAGVAIYSKIMPIHVEYGIGNEEFDDVGRMITAEYEKFYLINVYVPNSGRKLVNLEPRMRWEKLFQAYVKKLDALKPVVICGDMNVSHMPIDLENPKNNTKNAGFTQEERDKMTELLGLGFVDTFRHLYPDRKGAYTFWTYMANARARNVGWRLDYCLVSERFVPKVVEHEIRSQCLGSDH",
+      "score": 120.1,
+      "strand": "+"
+     }
+    ],
+    "id": "M62472.1 Drosophila melanogaster recombination repair protein (RRP1) mRNA, complete cds",
+    "invalid": [],
+    "notes": [],
+    "orfs": [
+     {
+      "end": 2172,
+      "frame": 1,
+      "length_aa": 679,
+      "length_nt": 2040,
+      "open_end": false,
+      "start": 132,
+      "strand": "+"
+     },
+     {
+      "end": 1572,
+      "frame": 2,
+      "length_aa": 213,
+      "length_nt": 642,
+      "open_end": false,
+      "start": 930,
+      "strand": "-"
+     },
+     {
+      "end": 1499,
+      "frame": 3,
+      "length_aa": 190,
+      "length_nt": 573,
+      "open_end": false,
+      "start": 926,
+      "strand": "-"
+     },
+     {
+      "end": 550,
+      "frame": 2,
+      "length_aa": 115,
+      "length_nt": 348,
+      "open_end": false,
+      "start": 202,
+      "strand": "+"
+     },
+     {
+      "end": 2338,
+      "frame": 2,
+      "length_aa": 102,
+      "length_nt": 309,
+      "open_end": false,
+      "start": 2029,
+      "strand": "+"
+     },
+     {
+      "end": 2217,
+      "frame": 2,
+      "length_aa": 78,
+      "length_nt": 237,
+      "open_end": false,
+      "start": 1980,
+      "strand": "-"
+     },
+     {
+      "end": 2261,
+      "frame": 3,
+      "length_aa": 69,
+      "length_nt": 210,
+      "open_end": false,
+      "start": 2051,
+      "strand": "+"
+     },
+     {
+      "end": 1366,
+      "frame": 1,
+      "length_aa": 55,
+      "length_nt": 168,
+      "open_end": false,
+      "start": 1198,
+      "strand": "-"
+     },
+     {
+      "end": 1980,
+      "frame": 2,
+      "length_aa": 52,
+      "length_nt": 159,
+      "open_end": false,
+      "start": 1821,
+      "strand": "-"
+     },
+     {
+      "end": 1871,
+      "frame": 3,
+      "length_aa": 52,
+      "length_nt": 159,
+      "open_end": false,
+      "start": 1712,
+      "strand": "-"
+     },
+     {
+      "end": 1363,
+      "frame": 2,
+      "length_aa": 50,
+      "length_nt": 153,
+      "open_end": false,
+      "start": 1210,
+      "strand": "+"
+     }
+    ],
+    "retroviral": null,
+    "seq": "TTTTGTTGATATCGGGTGCTGAACCAAGCGACAGTGGCTCTGCAAAACGAGCAAAAGAAAAAGCTGGAAATCTGTGGAAGTAAATACAAGTCATTTTTGAGAACCTATCAGTCCGAGCAGTAGAACTCCATAATGCCGCGTGTCAAGGCCGTGAAAAAACAAGCAGAGGCGTTGGCATCTGAACCCACTGACCCCACTCCAAATGCCAATGGGAATGGAGTCGACGAAAACGCAGACTCTGCCGCTGAGGAACTCAAGGTGCCGGCAAAAGGAAAGCCGCGCGCGAGGAAAGCCACCAAGACGGCTGTATCTGCGGAAAACTCCGAGGAAGTCGAGCCACAAAAGGCGCCCACTGCAGTCGCGCGTGGCAAGAAGAAGCAGCCGAAGGATACAGACGAAAACGGCCAGATGGAGGTGGTGGCCAAGCCGAAGGGACGCGCCAAGAAGGCAACTGCAGAAGCAGAACCAGAACCCAAAGTCGATCTACCAGCTGGAAAGGCAACTAAGCCACGTGCCAAAAAAGAGCCCACTCCTGCTCCTGACGAAGTGACGTCTTCACCGCCTAAGGGACGCGCTAAGGCTGAGAAACCAACGAATGCCCAGGCCAAAGGACGGAAGCGAAAGGAGCTGCCGGCAGAAGCAAATGGAGGGGCCGAGGAAGCAGCAGAGCCGCCGAAACAACGGGCAAGAAAGGAAGCAGTACCAACGTTAAAGGAGCAAGCTGAACCAGGGACAATAAGCAAAGAGAAGGTGCAGAAAGCTGAGACAGCTGCCAAGCGGGCACGCGGAACCAAGCGTTTGGCAGATTCTGAGATCGCAGCTGCTCTCGATGAGCCGGAAGTGGATGAGGTGCCGCCAAAGGCTGCTAGCAAGCGAGCAAAGAAGGGAAAGATGGTTGAGCCATCGCCCGAGACTGTAGGAGATTTTCAATCAGTACAAGAAGAAGTGGAATCGCCTCCAAAAACTGCAGCTGCACCCAAGAAACGCGCCAAGAAAACAACCAATGGTGAGACTGCGGTAGAACTTGAGCCAAAGACCAAGGCAAAGCCCACTAAACAGCGCGCTAAGAAGGAAGGCAAGGAGCCAGCACCCGGGAAGAAGCAGAAGAAATCCGCCGATAAGGAAAACGGTGTAGTTGAAGAAGAAGCCAAGCCCTCTACTGAAACCAAGCCAGCTAAAGGACGGAAAAAGGCTCCAGTCAAGGCAGAGGATGTCGAAGATATTGAGGAGGCAGCAGAGGAAAGTAAACCAGCTCGAGGCCGAAAAAAGGCGGCTGCGAAGGCTGAAGAACCCGATGTCGATGAGGAGAGTGGATCGAAAACCACCAAAAAAGCCAAGAAGGCCGAGACCAAAACCACTGTAACATTGGATAAAGACGCTTTTGCCTTGCCAGCAGACAAAGAATTCAACTTGAAAATCTGCAGCTGGAACGTGGCCGGTCTGAGGGCCTGGTTGAAAAAGGATGGTCTGCAGTTGATTGACCTCGAGGAACCAGACATTTTCTGCCTGCAGGAAACCAAGTGCGCAAACGATCAGTTGCCAGAGGAGGTGACCCGACTGCCGGGATATCATCCCTATTGGCTGTGCATGCCAGGAGGCTATGCCGGCGTCGCTATTTACAGCAAGATAATGCCCATACACGTGGAATACGGCATTGGCAATGAGGAGTTCGACGATGTCGGGCGCATGATTACGGCTGAGTACGAAAAGTTTTACTTGATCAATGTGTACGTGCCGAATTCAGGCCGAAAGCTGGTTAACTTGGAGCCCCGCATGCGCTGGGAAAAGCTCTTCCAGGCGTACGTGAAGAAACTGGACGCTCTAAAACCGGTGGTCATCTGCGGCGACATGAACGTTTCCCATATGCCCATTGATCTGGAAAACCCGAAGAATAACACCAAGAATGCCGGCTTCACCCAGGAGGAGCGTGACAAAATGACAGAGCTGCTGGGCCTCGGCTTTGTGGACACGTTTAGGCATTTATATCCCGATCGCAAGGGCGCCTACACCTTCTGGACATACATGGCCAATGCGCGAGCACGCAACGTTGGATGGCGTCTGGACTATTGTCTCGTCTCGGAGAGATTCGTGCCCAAGGTGGTGGAGCACGAGATACGCAGCCAATGCCTTGGAAGCGACCACTGCCCGATCACAATATTCTTCAATATATAAGATGTACACTTCGTTTGTGTTTAAATGTACTTCTGGATTCGTCATTATTACTTTGTTTCCTCTCCATATATGGTTTTTATTGTATTTGATTATCCATCGCTGTAGAAATTGTACGTCCCTATCTAATCATTTCAAAATGCCATTACTCTATTACATTCTGTCATAGATCCACCATCAAAATTCGTATTTTTTTAATAAAGAGCTACTGCCCCACGTT",
+    "seq_preview": "TTTTGTTGATATCGGGTGCTGAACCAAGCGACAGTGGCTCTGCAAAACGAGCAAAAGAAAAAGCTGGAAATCTGTGGAAGTAAATACAAGTCATTTTTGAGAACCTATCAGTCCGAGCAG",
+    "structural": [],
+    "valid": true
+   }
+  ],
+  "references": [
+   {
+    "citation": "Wicker T, Sabot F, Hua-Van A, et al. (2007) A unified classification system for eukaryotic transposable elements. Nat Rev Genet 8(12):973-982.",
+    "doi": "10.1038/nrg2165",
+    "key": "Wicker2007",
+    "license": "",
+    "name": "TE classification framework",
+    "url": "https://doi.org/10.1038/nrg2165"
+   },
+   {
+    "citation": "Zhang RG, Li GY, Wang XL, et al. (2022) TEsorter: an accurate and fast method to classify LTR-retrotransposons in plant genomes. Horticulture Research 9:uhac017.",
+    "doi": "10.1093/hr/uhac017",
+    "key": "TEsorter",
+    "license": "",
+    "name": "Domain-architecture completeness (domain-completeness basis)",
+    "url": "https://doi.org/10.1093/hr/uhac017"
+   },
+   {
+    "citation": "Ou S, Jiang N (2018) LTR_retriever: a highly accurate and sensitive program for identification of long terminal repeat retrotransposons. Plant Physiology 176(2):1410-1422.",
+    "doi": "10.1104/pp.17.01310",
+    "key": "LTRretriever",
+    "license": "",
+    "name": "Intact LTR-retrotransposon criteria (domain-completeness basis)",
+    "url": "https://doi.org/10.1104/pp.17.01310"
+   },
+   {
+    "citation": "Eddy SR (2011) Accelerated Profile HMM Searches. PLoS Comput Biol 7(10):e1002195.",
+    "doi": "10.1371/journal.pcbi.1002195",
+    "key": "HMMER",
+    "license": "BSD-3-Clause",
+    "name": "HMMER (via pyhmmer 0.12.1)",
+    "url": "http://hmmer.org"
+   },
+   {
+    "citation": "Mistry J, Chuguransky S, Williams L, et al. (2021) Pfam: The protein families database in 2021. Nucleic Acids Res 49(D1):D412-D419.",
+    "doi": "10.1093/nar/gkaa913",
+    "key": "Pfam",
+    "license": "CC0",
+    "name": "Pfam-A profiles (via InterPro, retrieved 2026-07-17)",
+    "url": "https://www.ebi.ac.uk/interpro/"
+   }
+  ]
+ }
+}

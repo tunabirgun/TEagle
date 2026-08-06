@@ -1,0 +1,473 @@
+{
+ "accession": "Z86116",
+ "corpus_row": {
+  "accession": "Z86116",
+  "citation": "Warren AM, Hughes MA, Crampton JM (1997) Zebedee: a novel copia-Ty1 family of transposable elements in the genome of the medically important mosquito Aedes aegypti. Mol Gen Genet 254(5):505-513. PMID 9197409. Title assigns the family to copia-Ty1; abstract reports phylogenetic placement of 'Zebedee within this group, showing considerable homology to copia from Drosophila melanogaster'.",
+  "confidence": "medium",
+  "coords": "",
+  "evidence_type": "primary literature",
+  "expected_class": "Class I / LTR",
+  "expected_superfamily": "Copia (Ty1)",
+  "organism": "Aedes aegypti",
+  "panel": "ltr-copia",
+  "why_safe": "The copia-Ty1 assignment is in the primary paper's title and is supported there by an explicit phylogenetic placement against Drosophila copia; that paper is REFERENCE 1 of the deposit (verified in the flatfile, PUBMED 9197409). Only invertebrate case in this batch and a new order relative to the corpus (Diptera: Culicidae, Aedes). CONFIDENCE MEDIUM, and the reason matters for a panel named ltr-copia: the same abstract states Zebedee elements lack the typical LTR features and gag homologues found in previously characterised copia elements. The superfamily label is published, but this record is a poor exemplar for LTR-boundary or gag-domain testing and should be treated as an atypical member, not a canonical one."
+ },
+ "elapsed_s": 0.03,
+ "fetch_source": {
+  "accession": "Z86116.1",
+  "coords_applied": null,
+  "length": 4085,
+  "organism": "Aedes aegypti",
+  "title": "A.aegypti DNA, copia-like transposable element ZebedeeII"
+ },
+ "input_length": 4085,
+ "input_sha256": "b4d63fa259e11ac5dd0534710e2091b2c376ccea628138c9f8095b394d5b66be",
+ "result": {
+  "provenance": {
+   "createdUtc": "2026-08-05T20:39:49+00:00",
+   "databases": [
+    {
+     "file": "data/te_domains.hmm",
+     "name": "Pfam TE-domain profiles (bundled, CC0)",
+     "sha256": "57f2b7881f35e2aeb2885430c80d7d514005d32b9f1f782e362189b3207858ac"
+    }
+   ],
+   "environment": {
+    "machine": "AMD64",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10"
+   },
+   "input": {
+    "id": "Z86116.1 A.aegypti DNA, copia-like transposable element ZebedeeII",
+    "length": 4085,
+    "sha256": "6fb8647df65bc2d5eddfdbcc851375b5bb30b358971bc2c00459c1adb4d8173c"
+   },
+   "manifestSha256": "c0d92ffc64179040882a19631fbd683487eaa3a994930c29cd282b57762af414",
+   "notRun": [
+    "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
+    "External NCBI Primer-BLAST",
+    "De novo family discovery"
+   ],
+   "parameters": {
+    "domain_evalue_max": 0.001,
+    "domain_orfs_scanned_max": 12,
+    "ltr_min_anchors": 4,
+    "ltr_min_identity_pct": 80.0,
+    "ltr_min_len": 80,
+    "ltr_seed_k": 13,
+    "orf_min_aa": 40,
+    "pbs_min_identity": 0.55,
+    "pbs_search_window": 44,
+    "polya_min_run": 8,
+    "ppt_max_defects": 2,
+    "ppt_min_len": 9,
+    "ppt_min_purine": 0.82,
+    "ppt_window": 30,
+    "tir_max_len": 1000,
+    "tir_min_anchors": 3,
+    "tir_min_identity_pct": 80,
+    "tir_min_len": 10,
+    "tir_seed_k": 11,
+    "tsd_max_len": 12,
+    "tsd_min_len": 2
+   },
+   "references": [
+    {
+     "citation": "Wicker T, Sabot F, Hua-Van A, et al. (2007) A unified classification system for eukaryotic transposable elements. Nat Rev Genet 8(12):973-982.",
+     "doi": "10.1038/nrg2165",
+     "key": "Wicker2007",
+     "license": "",
+     "name": "TE classification framework",
+     "url": "https://doi.org/10.1038/nrg2165"
+    },
+    {
+     "citation": "Zhang RG, Li GY, Wang XL, et al. (2022) TEsorter: an accurate and fast method to classify LTR-retrotransposons in plant genomes. Horticulture Research 9:uhac017.",
+     "doi": "10.1093/hr/uhac017",
+     "key": "TEsorter",
+     "license": "",
+     "name": "Domain-architecture completeness (domain-completeness basis)",
+     "url": "https://doi.org/10.1093/hr/uhac017"
+    },
+    {
+     "citation": "Ou S, Jiang N (2018) LTR_retriever: a highly accurate and sensitive program for identification of long terminal repeat retrotransposons. Plant Physiology 176(2):1410-1422.",
+     "doi": "10.1104/pp.17.01310",
+     "key": "LTRretriever",
+     "license": "",
+     "name": "Intact LTR-retrotransposon criteria (domain-completeness basis)",
+     "url": "https://doi.org/10.1104/pp.17.01310"
+    },
+    {
+     "citation": "Eddy SR (2011) Accelerated Profile HMM Searches. PLoS Comput Biol 7(10):e1002195.",
+     "doi": "10.1371/journal.pcbi.1002195",
+     "key": "HMMER",
+     "license": "BSD-3-Clause",
+     "name": "HMMER (via pyhmmer 0.12.1)",
+     "url": "http://hmmer.org"
+    },
+    {
+     "citation": "Mistry J, Chuguransky S, Williams L, et al. (2021) Pfam: The protein families database in 2021. Nucleic Acids Res 49(D1):D412-D419.",
+     "doi": "10.1093/nar/gkaa913",
+     "key": "Pfam",
+     "license": "CC0",
+     "name": "Pfam-A profiles (via InterPro, retrieved 2026-07-17)",
+     "url": "https://www.ebi.ac.uk/interpro/"
+    }
+   ],
+   "runType": "analysis",
+   "schemaVersion": "0.1",
+   "software": [
+    {
+     "name": "HMMER (pyhmmer)",
+     "version": "0.12.1"
+    },
+    {
+     "name": "python",
+     "version": "3.12.10"
+    },
+    {
+     "name": "TEagle core",
+     "version": "3.6.0"
+    }
+   ],
+   "teagleVersion": "3.6.0"
+  },
+  "records": [
+   {
+    "classification": {
+     "class": "Class I · retrotransposon",
+     "completeness": {
+      "coding": {
+       "frames": 3,
+       "note": "the detected domains fall in 3 separate reading frame(s) — consistent with an interrupted, rearranged or degenerate copy, though a genuine multi-ORF architecture (LINE ORF1/ORF2, some ERVs) also looks like this",
+       "state": "split across reading frames",
+       "truncated_frame": false,
+       "unplaced": 0
+      },
+      "expected": [
+       "GAG",
+       "PR",
+       "RT",
+       "RNaseH",
+       "INT"
+      ],
+      "kind": "retroelement (LTR not confirmed)",
+      "missing": [
+       "GAG",
+       "PR",
+       "RNaseH"
+      ],
+      "present": [
+       "RT",
+       "INT"
+      ],
+      "scope": "gag (matrix/capsid/nucleocapsid), protease, RT, RNase H, DDE integrase, envelope, chromodomain, LINE ORF1p and apurinic-like endonuclease, tyrosine recombinase, Helitron helicase, and transposases of the CACTA, hAT, IS4, MULE, Tc1/Mariner and unclassified DDE groups",
+      "tier": "partial (pol core present)"
+     },
+     "confidence": "Moderate",
+     "domains_unavailable": false,
+     "evidence": [
+      "reverse-transcriptase domain present",
+      "RT + DDE integrase present → LTR order, from domain architecture; no terminal repeat was accepted, so the assignment does not rest on structural evidence",
+      "5 shorter ORF(s) were outside the profile search's ORF budget and were not searched — a domain listed as not detected was not tested on those"
+     ],
+     "explanation": "Classified as LTR/unclassified (moderate confidence). Structural: none. Domains: INT · RT · RT. reverse-transcriptase domain present; RT + DDE integrase present → LTR order, from domain architecture; no terminal repeat was accepted, so the assignment does not rest on structural evidence.",
+     "is_erv": false,
+     "n_domains": 2,
+     "order": null,
+     "orfs_unscanned": 5,
+     "superfamily": "LTR retrotransposon (superfamily undetermined)",
+     "te_class": "LTR/unclassified"
+    },
+    "composition": {
+     "ambiguous": 0.0,
+     "ambiguous_counts": {},
+     "counts": {
+      "A": 1149,
+      "C": 941,
+      "G": 1045,
+      "N": 0,
+      "T": 950
+     },
+     "gc": 48.6,
+     "length": 4085,
+     "n": 0.0
+    },
+    "domains": [
+     {
+      "aa": [
+       1,
+       45
+      ],
+      "class": "retro",
+      "confidence": "moderate",
+      "dna": "ATGGCGACTGCGGCTTGTGGCACGAAGATTTCAAAACTGACCGTAGACCAGGGACGTGAGTACTTCTCAACCAGCCAGAAGAACTACTACAAAGCGAAGGGGATTCAGGTCGAGCCAACTATAGCCTACTCTCCG",
+      "domain": "INT",
+      "evalue": 4.051530985313623e-06,
+      "hmm": "rve",
+      "label": "integrase",
+      "nt": [
+       1253,
+       1388
+      ],
+      "orf": 3,
+      "pfam": "PF00665",
+      "protein": "MATAACGTKISKLTVDQGREYFSTSQKNYYKAKGIQVEPTIAYSP",
+      "score": 16.8,
+      "strand": "+"
+     },
+     {
+      "aa": [
+       9,
+       195
+      ],
+      "class": "retro",
+      "confidence": "high",
+      "dna": "GAGTGGTGGGCGTGCCCCCGCCGGCGTGAAGCTACTCAAAACGAAATGGTCTTCCGACTCAAGGAGAACGAGGCTGGACGATCGGTTCGGCATAAGGCGCGACTGGTGGTCAAGGGTTTCCTTCAACGTCCTGGAATCGATTTCGAGGACACGTTCGCACCAGTGGCTAAGCTGTCTACCGTGCGAGTGGTGCTAGCCGTTGCGGTTCATCATGGTTTCAAGGTGCACCAGATAGACGTAAGCACAGCGTTCCTCCACGGTATGCTGAAGGAAGATTTGTTCATGGAAGAACCTGAAGACGTGAAGGCGAAGCCCGGCAGTGTGTGCAAGCTGCAGAGGTCGTTGTACGGGTTGAAGCAAGCACCACGTTGCTGGAACGAAAGGTTCAACTCAGCGCTTCTGAAGCTGGGATTCAGCAGATCCCACCGTGCCTACTGTCTCTACGTGTGCAACACTGAAGGGGATGAAGTTTTCTTAGTGCTGTACGTCGACGACCTCCTGATAGCCGGACGGAACATTCGAACAATTCAGAAGCTGAAGCGCCGTCTTTCCGATGAGTTC",
+      "domain": "RT",
+      "evalue": 1.1022353177687314e-58,
+      "hmm": "RVT_2",
+      "label": "reverse transcriptase",
+      "nt": [
+       2256,
+       2817
+      ],
+      "orf": 1,
+      "pfam": "PF07727",
+      "protein": "EWWACPRRREATQNEMVFRLKENEAGRSVRHKARLVVKGFLQRPGIDFEDTFAPVAKLSTVRVVLAVAVHHGFKVHQIDVSTAFLHGMLKEDLFMEEPEDVKAKPGSVCKLQRSLYGLKQAPRCWNERFNSALLKLGFSRSHRAYCLYVCNTEGDEVFLVLYVDDLLIAGRNIRTIQKLKRRLSDEF",
+      "score": 188.3,
+      "strand": "+"
+     },
+     {
+      "aa": [
+       3,
+       41
+      ],
+      "class": "retro",
+      "confidence": "moderate",
+      "dna": "CTCGCTTACAATCCGGAGCATGGTGACCTGAAGTTGACCCAAGAAACAGCTGCCACGAAGATCTTGGAGAAGTTCGCTATGACTGAATGTTACCCCGCCAAGAATCCGATGGAGAAA",
+      "domain": "RT",
+      "evalue": 6.06901634300766e-06,
+      "hmm": "RVT_2",
+      "label": "reverse transcriptase",
+      "nt": [
+       2861,
+       2978
+      ],
+      "orf": 7,
+      "pfam": "PF07727",
+      "protein": "LAYNPEHGDLKLTQETAATKILEKFAMTECYPAKNPMEK",
+      "score": 15.6,
+      "strand": "+"
+     }
+    ],
+    "id": "Z86116.1 A.aegypti DNA, copia-like transposable element ZebedeeII",
+    "invalid": [],
+    "notes": [
+     "protein-domain search read the 12 longest ORFs of 17; 5 shorter ORF(s) were not searched, so a domain listed as not detected was not necessarily absent from the whole sequence"
+    ],
+    "orfs": [
+     {
+      "end": 2236,
+      "frame": 2,
+      "length_aa": 223,
+      "length_nt": 672,
+      "open_end": false,
+      "start": 1564,
+      "strand": "+"
+     },
+     {
+      "end": 2820,
+      "frame": 1,
+      "length_aa": 195,
+      "length_nt": 588,
+      "open_end": false,
+      "start": 2232,
+      "strand": "+"
+     },
+     {
+      "end": 3561,
+      "frame": 3,
+      "length_aa": 141,
+      "length_nt": 426,
+      "open_end": false,
+      "start": 3135,
+      "strand": "-"
+     },
+     {
+      "end": 1676,
+      "frame": 3,
+      "length_aa": 140,
+      "length_nt": 423,
+      "open_end": false,
+      "start": 1253,
+      "strand": "+"
+     },
+     {
+      "end": 3267,
+      "frame": 1,
+      "length_aa": 91,
+      "length_nt": 276,
+      "open_end": false,
+      "start": 2991,
+      "strand": "+"
+     },
+     {
+      "end": 654,
+      "frame": 3,
+      "length_aa": 86,
+      "length_nt": 261,
+      "open_end": false,
+      "start": 393,
+      "strand": "-"
+     },
+     {
+      "end": 1855,
+      "frame": 2,
+      "length_aa": 78,
+      "length_nt": 237,
+      "open_end": false,
+      "start": 1618,
+      "strand": "-"
+     },
+     {
+      "end": 3089,
+      "frame": 3,
+      "length_aa": 77,
+      "length_nt": 234,
+      "open_end": false,
+      "start": 2855,
+      "strand": "+"
+     },
+     {
+      "end": 977,
+      "frame": 1,
+      "length_aa": 77,
+      "length_nt": 234,
+      "open_end": false,
+      "start": 743,
+      "strand": "-"
+     },
+     {
+      "end": 684,
+      "frame": 1,
+      "length_aa": 75,
+      "length_nt": 228,
+      "open_end": false,
+      "start": 456,
+      "strand": "+"
+     },
+     {
+      "end": 2022,
+      "frame": 3,
+      "length_aa": 63,
+      "length_nt": 192,
+      "open_end": false,
+      "start": 1830,
+      "strand": "-"
+     },
+     {
+      "end": 712,
+      "frame": 2,
+      "length_aa": 61,
+      "length_nt": 186,
+      "open_end": false,
+      "start": 526,
+      "strand": "+"
+     },
+     {
+      "end": 1946,
+      "frame": 3,
+      "length_aa": 61,
+      "length_nt": 186,
+      "open_end": false,
+      "start": 1760,
+      "strand": "+"
+     },
+     {
+      "end": 4072,
+      "frame": 2,
+      "length_aa": 56,
+      "length_nt": 171,
+      "open_end": false,
+      "start": 3901,
+      "strand": "+"
+     },
+     {
+      "end": 1749,
+      "frame": 1,
+      "length_aa": 42,
+      "length_nt": 129,
+      "open_end": false,
+      "start": 1620,
+      "strand": "+"
+     },
+     {
+      "end": 3323,
+      "frame": 3,
+      "length_aa": 41,
+      "length_nt": 126,
+      "open_end": false,
+      "start": 3197,
+      "strand": "+"
+     },
+     {
+      "end": 640,
+      "frame": 2,
+      "length_aa": 41,
+      "length_nt": 126,
+      "open_end": false,
+      "start": 514,
+      "strand": "-"
+     }
+    ],
+    "retroviral": null,
+    "seq": "TCAGCAAGCTTCTAGGAGAGCTCAGCAAGCTTCTAGGAGAGCTCAGCAAGCTTCTAGGAGAAGCTCAGCAAGCTTCTAGAAGAAGCTCAGCAAGCTTCTAGAAGAAGCTCAGCAAGCTTCTAGAAGAAGCTCAGCAAGCTTCTAGAAGAAGCTCAGCAAGCTTCTAGAAGAAGCTAGCAAGCTTCTAGAAGAAGCTCAGCAAGCTTCTAGAAGAAGCTCAGCAAGCTTCTAGAAGAAGCTCAGCAAGCTTCTAGAAGAAGCTCAGCAAGCTTCTAGAAGAAGCTCAGCAAGCTTCTAGAAGAAGCTCAGCAAGCTTCTAGGAGAAACTCAGCAAACTTCTAGAAGAAGCTCAGCAAGCTTCTAGGAGAAGCTCAGCAAGCTTCTAGAAGAAGCTCAGCAAGCTTCTAGGAGAAACTCAGAAAGCTTCGTTGTCTCGGTCATATCAGTGAAAGTGGAATGGCCTCTCTGGTGCGTGAGAACCTGGCCCTTGGTGTGCGTTTCAAGCCGGAGAAGATTAAGTTCTGCGATGTGTGTGTCCCGGAAAAACACAGCCGGGACCCGTTCGATGGTGCAAGAGACCGGGCGACCAGATCGTTGGAGCGTATCCATTCGGACGTGTGTGGGCCGATTGAGCCTGCATCCTGGGAAGGTCATCGCTATCTGGTCTCGTTCATTGATGACTAGGGTAACGGTCGTATTTTGGACCCCCTAAGGAAGTGATTTTAGTTTTTTGTCCCAATTAATTAATTGCACAGCGTAACCAAGTCAAAGAACATGCCAAAATGTAGAGAAAAACTTCTCCTACGAGATAAAAATGCCCCTACGATCATGAAGGATCCAAAAAATGTCGAAAATAATTGAATTGTGAAGAACTGTTTCTCATTATTTTGGACACACCAATATATTTTGGACCCCTGGAATTTTTTTATCGTTTGGCGAAAAGTCCACGACACTGGTTGTATAATATGCTCGCCCATAGTCTAATCAATCGATTGACATTGGAAAACCGAAGAAATTCTACGCTTTTAGTGCAGAAATTTGAAAAACGTTCTTGTTTACATTTAAAAAAATTCTGACGGCTTCAATTTCTGTGTGTAACGTTTTGTAACGGTTGCATGGATGAACCGATTAAATTAAATTAATTTCAGATAAAATAAACACAATTTCTATGTATAAACGGTTGATGCAAATGCGGAATAGTCCTATCTTTCCAAATGGCATGCGAATTGAGTTGAAGGAAGGAAATTGAAGCGATGGCGACTGCGGCTTGTGGCACGAAGATTTCAAAACTGACCGTAGACCAGGGACGTGAGTACTTCTCAACCAGCCAGAAGAACTACTACAAAGCGAAGGGGATTCAGGTCGAGCCAACTATAGCCTACTCTCCGCAACAAAATGAAGTGGCGGAGAGATTCAACAGGACCCTAATCGAGAAGGTACGTACCATGCAAATTGAATCTCATGCTCCAAAATCGTTCTGGTGTGAAGCGGTGCTGTCGGCCGTGTTCCTGATCAATCGGAGCCCAACCTCGGCTGTTTTAAGAAACGTTACGCCTGCTGAACTATGGTACGGTCGGAAGCCAAGTCTGGAGAAGGCGCGCGTTTTTGGTTGTCAAGTCTATGCCTGGATACCGATCAACGGAGGAAGAAGTCGGACACGAAGAGTCGACAGCTGATCATGGTTGGTTACGCGCCCAATGGCTACCGGCTGTGGGACAAGGACGAGAGGAGAATCGTAATTGCTCGTGACGTCAAGTTCAATGAAAACTACTTTCCGTGGGCCAACAATGCAAGAGATCGCGCGGAAGAGAGACTGGTGGTACCCTTGGTCTACGAGCAAGAGGGGGAAGAACATGCCAAGGAAGCCATTGATGAGGACGCCATCCAACCTGATGATGCGGCGGTCGGTCCGTTCGACCCGTCCGACCACGAAGGCGAACTTCTAACCGAGGATGATACCGATGACGAAGCTGCGACGGAACTAGCCAACCCTGCGCTCCCTTCGCAATCAGATCTGGACATGTCCTCCGGCCCTAGAGGCGAGCAGTCCGAGAGGCGCAGGAAACGGGAGCGCCGTTTTCCGGGTAAGTTCCTTGATTATCTTACTGGATTTAGAGCTAGTGCTGTTGGTCCTCCCTCCCCTTCAGACGTTCCCGAAACATACGATGAAATCCGTACCCGTGAGGAATCGTGCCCTCTGGAACCAGGCGGTGCAGGAACGAGCTCCGTTCAATGAAGGCCAAACGATGTCTGGAAGAGTGGTGGGCGTGCCCCCGCCGGCGTGAAGCTACTCAAAACGAAATGGTCTTCCGACTCAAGGAGAACGAGGCTGGACGATCGGTTCGGCATAAGGCGCGACTGGTGGTCAAGGGTTTCCTTCAACGTCCTGGAATCGATTTCGAGGACACGTTCGCACCAGTGGCTAAGCTGTCTACCGTGCGAGTGGTGCTAGCCGTTGCGGTTCATCATGGTTTCAAGGTGCACCAGATAGACGTAAGCACAGCGTTCCTCCACGGTATGCTGAAGGAAGATTTGTTCATGGAAGAACCTGAAGACGTGAAGGCGAAGCCCGGCAGTGTGTGCAAGCTGCAGAGGTCGTTGTACGGGTTGAAGCAAGCACCACGTTGCTGGAACGAAAGGTTCAACTCAGCGCTTCTGAAGCTGGGATTCAGCAGATCCCACCGTGCCTACTGTCTCTACGTGTGCAACACTGAAGGGGATGAAGTTTTCTTAGTGCTGTACGTCGACGACCTCCTGATAGCCGGACGGAACATTCGAACAATTCAGAAGCTGAAGCGCCGTCTTTCCGATGAGTTCTAAATGACCGATTGCGGCGACGAGGTTTTTCTTTGGGGATGCGGCTCGCTTACAATCCGGAGCATGGTGACCTGAAGTTGACCCAAGAAACAGCTGCCACGAAGATCTTGGAGAAGTTCGCTATGACTGAATGTTACCCCGCCAAGAATCCGATGGAGAAAGGATTGCAGCCTGATGTATCAAATGCTGTGTGCGCCCGGATTTGTGCTACCCGGTCAGCTACTTGGGAAGGTTCCAGCAATCATCAACGAACAATCACTGGCAGGCGCTGAAGCGAGTTGTCAGATACCTCTAAGGGACGGCTACCCTGGGACTACTCTACAAGAGAAACGAGAACAGCAGACCGCTCGTCGGATACGTGGACGCCGACTGGGCATCCGATGCGGAAGATCGGAATCGGTAACAGGTTTCCTGTTCAAAGTCTACGGCATCGACGGTATCCTGGGCTAGTCGGAAGCAGCCAACAGTCTCCATATCGTCAAGCGAGGCCGAATACGTCGCGCTGAGTGCAGCCGTATCGGAAGCTATCTGGTTGTCCGGAATTTTAGAAGACCTCAACTGCAAGAAGCTGACGGACCCTGTATCAATATACGAAGACAACCGTGGCTGCATAGGGCTGCCCAAAAATGCTGAATCGAAGCGCATCAAGCACGTAAATATCAAGCACCACTTTATCAAGGACCATGTGGCTGCCGGGACCATCAAAATCGAACCGATCAGCACCCCCGAGCAGCAAGCAGACATTTTCACGAAGGCGTTAGATGTCACCCGGTTCCAATCCCTCAGGAGCAAGATCGGGGTCACCGATTGAGAGAGGGTGTTAGAAATCTAGCACTCGCTGACTGCTGGATTTACATCACAGCAACCATAGACTTATAAACTGTAATGTAATTTATTCATTCCAATCTTAACCGTCATCCAATAAAGACGTTTGTAATAAAGCTCCAGTTCTTCAAGCTGCTTTTTACTCAAGATTCAAAAACTTTTGAATAAATCTTCCAAACATTTAATGAAATTAACATAAAACGGGCTCATCATGTTACCGTAATAGTTCTGCCTCACGATTCCTTGAGTTAAATTTGAGATGGAACGCTGGTTGACTATTCCCCTTGTTAACTTCCCAATAGGTTCGAAAAGCAGTACATCAAGGTTCCGTTCGACATCGAGGATGCCAAACAGCTGGGACGTGTTCTGGATCGCTACAAAGATCTCTAACTTACCTGGAGGTGATGTTCCGGCGTTAGTCCTCGTCTAACATATTTGTTAAG",
+    "seq_preview": "TCAGCAAGCTTCTAGGAGAGCTCAGCAAGCTTCTAGGAGAGCTCAGCAAGCTTCTAGGAGAAGCTCAGCAAGCTTCTAGAAGAAGCTCAGCAAGCTTCTAGAAGAAGCTCAGCAAGCTTC",
+    "structural": [],
+    "valid": true
+   }
+  ],
+  "references": [
+   {
+    "citation": "Wicker T, Sabot F, Hua-Van A, et al. (2007) A unified classification system for eukaryotic transposable elements. Nat Rev Genet 8(12):973-982.",
+    "doi": "10.1038/nrg2165",
+    "key": "Wicker2007",
+    "license": "",
+    "name": "TE classification framework",
+    "url": "https://doi.org/10.1038/nrg2165"
+   },
+   {
+    "citation": "Zhang RG, Li GY, Wang XL, et al. (2022) TEsorter: an accurate and fast method to classify LTR-retrotransposons in plant genomes. Horticulture Research 9:uhac017.",
+    "doi": "10.1093/hr/uhac017",
+    "key": "TEsorter",
+    "license": "",
+    "name": "Domain-architecture completeness (domain-completeness basis)",
+    "url": "https://doi.org/10.1093/hr/uhac017"
+   },
+   {
+    "citation": "Ou S, Jiang N (2018) LTR_retriever: a highly accurate and sensitive program for identification of long terminal repeat retrotransposons. Plant Physiology 176(2):1410-1422.",
+    "doi": "10.1104/pp.17.01310",
+    "key": "LTRretriever",
+    "license": "",
+    "name": "Intact LTR-retrotransposon criteria (domain-completeness basis)",
+    "url": "https://doi.org/10.1104/pp.17.01310"
+   },
+   {
+    "citation": "Eddy SR (2011) Accelerated Profile HMM Searches. PLoS Comput Biol 7(10):e1002195.",
+    "doi": "10.1371/journal.pcbi.1002195",
+    "key": "HMMER",
+    "license": "BSD-3-Clause",
+    "name": "HMMER (via pyhmmer 0.12.1)",
+    "url": "http://hmmer.org"
+   },
+   {
+    "citation": "Mistry J, Chuguransky S, Williams L, et al. (2021) Pfam: The protein families database in 2021. Nucleic Acids Res 49(D1):D412-D419.",
+    "doi": "10.1093/nar/gkaa913",
+    "key": "Pfam",
+    "license": "CC0",
+    "name": "Pfam-A profiles (via InterPro, retrieved 2026-07-17)",
+    "url": "https://www.ebi.ac.uk/interpro/"
+   }
+  ]
+ }
+}

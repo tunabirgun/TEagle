@@ -1,0 +1,106 @@
+{
+ "at_least": {
+  "13": 0.01178,
+  "14": 0.002,
+  "15": 0.00067
+ },
+ "conditions": {
+  "find_tir_defaults": {
+   "k": 11,
+   "max_tir": 1000,
+   "min_anchors": 3,
+   "min_tir": 10
+  },
+  "identity_floor": 80,
+  "note": "reported lengths are conditioned on find_tir's own detection floor, its identity gate and its low-complexity guard; sequences are uniform in base composition, and an AT-rich background would yield longer chance repeats than this measures"
+ },
+ "elapsed_s": 3.9,
+ "generated": "2026-08-06T07:33:47",
+ "hit_rate": 0.01178,
+ "hits": 53,
+ "length_histogram": {
+  "13": 44,
+  "14": 6,
+  "15": 3
+ },
+ "lengths_bp": [
+  1500,
+  4000,
+  9000
+ ],
+ "longest_chance_tir_bp": 15,
+ "margin_bp": 5,
+ "min_tir_standalone": 20,
+ "per_length": {
+  "1500": {
+   "at_least": {
+    "13": 0.006,
+    "14": 0.00133
+   },
+   "hit_rate": 0.006,
+   "hits": 9,
+   "length_histogram": {
+    "13": 7,
+    "14": 2
+   },
+   "longest": 14,
+   "median_when_found": 13,
+   "trials": 1500
+  },
+  "4000": {
+   "at_least": {
+    "13": 0.01333,
+    "14": 0.00267,
+    "15": 0.00067
+   },
+   "hit_rate": 0.01333,
+   "hits": 20,
+   "length_histogram": {
+    "13": 16,
+    "14": 3,
+    "15": 1
+   },
+   "longest": 15,
+   "median_when_found": 13,
+   "trials": 1500
+  },
+  "9000": {
+   "at_least": {
+    "13": 0.016,
+    "14": 0.002,
+    "15": 0.00133
+   },
+   "hit_rate": 0.016,
+   "hits": 24,
+   "length_histogram": {
+    "13": 21,
+    "14": 1,
+    "15": 2
+   },
+   "longest": 15,
+   "median_when_found": 13,
+   "trials": 1500
+  }
+ },
+ "python": "3.12.10",
+ "seed": 20260806,
+ "seed_sensitivity": {
+  "ceilings_bp": [
+   15,
+   17,
+   16,
+   17,
+   17
+  ],
+  "elapsed_s": 18.9,
+  "first_seed": 20260806,
+  "max_bp": 17,
+  "min_bp": 15,
+  "n_seeds": 5,
+  "sequences_total": 22500
+ },
+ "supports_min_tir_standalone": true,
+ "teagle_version": "3.6.0",
+ "trials": 4500,
+ "trials_per_length": 1500
+}

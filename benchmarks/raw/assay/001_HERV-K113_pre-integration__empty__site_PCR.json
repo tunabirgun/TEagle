@@ -1,0 +1,149 @@
+{
+ "case": {
+  "amplicon_range_bp": "303 bp exactly; verified span CM000681.2:21,658,631-21,658,933 (GRCh38 chr19)",
+  "caveats": "303 bp is the NULL (unoccupied) allele, not a provirus amplicon - the paper is explicit that homozygous-insertion individuals give no band, because the occupied allele adds ~9.5 kb. GRCh38 lacks K113, so the reference chromosome carries the empty site and the assay is contained. On the plus strand of CM000681.2 the primer listed as 'reverse' (K113-r) reads forward; orientation must be handled. Both 20-mers are unique in the GRCh38 primary assembly (BLAT: one primary hit each, plus one alt contig chr19_GL383575v2_alt). Template is a whole chromosome (58.6 Mb).",
+  "citation": "Jha AR, Pillai SK, York VA, Sharp ER, Storm EC, Wachter DJ, Martin JN, Deeks SG, Rosenberg MG, Nixon DF, Garrison KE. Cross-sectional dating of novel haplotypes of HERV-K 113 and HERV-K 115 indicate these proviruses originated in Africa before Homo sapiens. Mol Biol Evol. 2009;26(11):2617-2626. doi:10.1093/molbev/msp180. PMID 19666991; PMCID PMC2760466.",
+  "confidence": "high",
+  "element": "HERV-K(HML-2) provirus K113 - LTR retroelement (betaretrovirus-like ERV); insertion-site / empty-allele PCR at 19p13.11",
+  "expected_amplicon_bp": 303,
+  "expected_bp_provenance": "stated_in_source",
+  "forward_primer": "GCATGGGGAGATTCAGAACC",
+  "loci_justification": "The pair flanks one locus on the cited template: a single insertion site, a single excision site, or a single transcript. A second product on this template would be an off-target prediction.",
+  "loci_on_template": "single",
+  "name": "HERV-K113 pre-integration (empty) site PCR",
+  "organism": "Homo sapiens",
+  "panel": "ltr-assays",
+  "reverse_primer": "CATGTTTCCTGTCTGCCCAC",
+  "template_accession": "CM000681.2",
+  "where_in_paper": "Primer sequences: Supplementary table 2 ('PCR primers and annealing temperatures'), row 'K113 insertion site', primers K113-f / K113-r (attributed there to Turner et al. 2001 and Burmeister et al. 2004). Amplicon size: Materials and Methods, PCR paragraph - 'The K113 integration site was detected by primer pairs K113-f/K113-r, which amplified a band of 303 bp in K113 null and heterozygous individuals'. Gel-derived on 1-2% agarose against a 100-bp ladder.",
+  "worked_prediction_in_entry": true,
+  "worked_prediction_note": "The entry records a worked prediction — a coordinate range, an in-silico check, or a sequence-derived length — so the expected answer was written down before the engine ran. The published size remains external, but this case was not scored blind."
+ },
+ "result": {
+  "amplicons": [
+   {
+    "amplicon_5p": "CATGTTTCCTGTCTGCCCACAAACACATGC…",
+    "end": 21658933,
+    "fwd_anneal_len": 20,
+    "fwd_mm": 0,
+    "fwd_primer": "R",
+    "fwd_tail5": 0,
+    "length": 303,
+    "on_target": false,
+    "product_length": 303,
+    "rev_anneal_len": 20,
+    "rev_mm": 0,
+    "rev_primer": "F",
+    "rev_tail5": 0,
+    "seq": "CATGTTTCCTGTCTGCCCACAAACACATGCAGACGTTTAGTTTTGATTTACATAGAGTTCAATATATGTTAGTCTAAAGATAAACCTTAGGTGTAAGAAAATTATAGAGTAAGTGAGTTTGTGTAAGTATGAATTTGTAACTATTTTCAGAAGAAGACAATATTGAACAAGGCAAATCATTTCAACAAGATGACTACTAGAAAACTAAAAACCTTAAAAATGCTGAAAGCAAGTATATTCTCTGCTTTGTATTGAATTTATTACTGTACAATCGATGGCTTTTGGTTCTGAATCTCCCCATGC",
+    "single_primer": false,
+    "source": "CM000681.2 Homo sapiens chromosome 19, GRCh38 reference primary assembly (input)",
+    "start": 21658630
+   }
+  ],
+  "backgroundsSearched": [
+   "CM000681.2 Homo sapiens chromosome 19, GRCh38 reference primary assembly (input)"
+  ],
+  "criteria": {
+   "max_mismatch": 2,
+   "min_anneal": 18,
+   "product_size": [
+    28,
+    3825
+   ],
+   "three_prime_strict": 5
+  },
+  "notSearched": [
+   "Reference assembly (needs WSL/NCBI)",
+   "External NCBI Primer-BLAST",
+   "IUPAC-ambiguous template bases"
+  ],
+  "provenance": {
+   "createdUtc": "2026-08-06T03:52:24+00:00",
+   "databases": [],
+   "environment": {
+    "machine": "AMD64",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10"
+   },
+   "input": {
+    "id": "CM000681.2 Homo sapiens chromosome 19, GRCh38 reference primary assembly",
+    "length": 58617616,
+    "sha256": "accf9a2898dcaa3f135d9b68179900f3fabe7d42db78bc43328b65e844b63347"
+   },
+   "manifestSha256": "59096f208d471ae4f1ceb48e1cb91ffeb607177d63068093574194740ccf3b97",
+   "notRun": [
+    "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
+    "External NCBI Primer-BLAST",
+    "De novo family discovery"
+   ],
+   "parameters": {
+    "background_sha256": null,
+    "fwd": "GCATGGGGAGATTCAGAACC",
+    "max_mm": 2,
+    "min_anneal": 18,
+    "prod_max": 3825,
+    "prod_min": 28,
+    "rev": "CATGTTTCCTGTCTGCCCAC",
+    "target_span": null,
+    "tp": 5
+   },
+   "references": [],
+   "runType": "in-silico-pcr",
+   "schemaVersion": "0.1",
+   "software": [
+    {
+     "name": "python",
+     "version": "3.12.10"
+    },
+    {
+     "name": "TEagle core",
+     "version": "3.6.0"
+    }
+   ],
+   "teagleVersion": "3.6.0"
+  },
+  "references": [],
+  "truncated": false,
+  "truncatedOn": [],
+  "warning": null
+ },
+ "scored": {
+  "accession": "CM000681.2",
+  "caveats": "303 bp is the NULL (unoccupied) allele, not a provirus amplicon - the paper is explicit that homozygous-insertion individuals give no band, because the occupied allele adds ~9.5 kb. GRCh38 lacks K113, so the reference chromosome carries the empty site and the assay is contained. On the plus strand of CM000681.2 the primer listed as 'reverse' (K113-r) reads forward; orientation must be handled. Both 20-mers are unique in the GRCh38 primary assembly (BLAT: one primary hit each, plus one alt contig chr19_GL383575v2_alt). Template is a whole chromosome (58.6 Mb).",
+  "citation": "Jha AR, Pillai SK, York VA, Sharp ER, Storm EC, Wachter DJ, Martin JN, Deeks SG, Rosenberg MG, Nixon DF, Garrison KE. Cross-sectional dating of novel haplotypes of HERV-K 113 and HERV-K 115 indicate these proviruses originated in Africa before Homo sapiens. Mol Biol Evol. 2009;26(11):2617-2626. doi:10.1093/molbev/msp180. PMID 19666991; PMCID PMC2760466.",
+  "closest_bp": 303,
+  "difference_bp": 0,
+  "elapsed_s": 153.608,
+  "element": "HERV-K(HML-2) provirus K113 - LTR retroelement (betaretrovirus-like ERV); insertion-site / empty-allele PCR at 19p13.11",
+  "expected_bp": 303,
+  "found": true,
+  "ground_truth": "stated_in_source",
+  "loci_on_template": "single",
+  "multilocus_by_design": false,
+  "n_products": 1,
+  "name": "HERV-K113 pre-integration (empty) site PCR",
+  "organism": "Homo sapiens",
+  "panel": "ltr-assays",
+  "preworked_in_corpus": true,
+  "primer_degenerate": false,
+  "primer_fwd_as_published": "GCATGGGGAGATTCAGAACC",
+  "primer_rev_as_published": "CATGTTTCCTGTCTGCCCAC",
+  "product_sizes": [
+   303
+  ],
+  "scored_product_anneal_bp": [
+   20,
+   20
+  ],
+  "scored_product_tail_bp": 0,
+  "search_window_bp": [
+   28,
+   3825
+  ],
+  "source_confidence": "high",
+  "template_sha256": "24c53dd48e5a2920",
+  "tolerance_bp": 30.3,
+  "within_tolerance": true
+ }
+}

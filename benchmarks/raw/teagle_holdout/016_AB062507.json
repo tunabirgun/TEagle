@@ -1,0 +1,611 @@
+{
+ "accession": "AB062507",
+ "corpus_row": {
+  "accession": "AB062507",
+  "citation": "Nakayashiki H, Matsuo H, Chuma I, Ikeda K, Betsuyaku S, Kusaba M, Tosa Y, Mayama S (2001) Nucleic Acids Res 29(20):4106-4113, \"Pyret, a Ty3/Gypsy retrotransposon in Magnaporthe grisea contains an extra domain between the nucleocapsid and protease domains\" (PMID 11600699). The Ty3/Gypsy assignment is stated in the title of the paper that describes and deposits this element.",
+  "confidence": "high",
+  "coords": "",
+  "evidence_type": "primary literature",
+  "expected_class": "Class I / LTR",
+  "expected_superfamily": "Gypsy (Ty3)",
+  "organism": "Pyricularia grisea",
+  "panel": "ltr-gypsy",
+  "why_safe": "The label is the discovery paper's own, based on its analysis of the polyprotein domain organisation, and predates the annotation tools under test. The deposit is the element: mobile_element 1..7250 spans the whole record. Pyret is a useful stress case because the paper's headline finding is a non-canonical extra domain inserted between the nucleocapsid and protease domains - a structure that domain-order heuristics can misread while the published superfamily label stays fixed. Note on overlap: the species (Magnaporthe/Pyricularia grisea) already appears in the existing corpus via MAGGY and grasshopper, but this accession and element family are distinct and not on the exclusion list."
+ },
+ "elapsed_s": 0.046,
+ "fetch_source": {
+  "accession": "AB062507.1",
+  "coords_applied": null,
+  "length": 7250,
+  "organism": "Pyricularia grisea",
+  "title": "Pyricularia grisea retrotransposon Pyret gag-pol pseudogene for polyprotein"
+ },
+ "input_length": 7250,
+ "input_sha256": "00833b17ab07c5ec785e39c9c01eca643374ad67fe847aed2b61d0a664c65d2a",
+ "result": {
+  "provenance": {
+   "createdUtc": "2026-08-05T20:39:50+00:00",
+   "databases": [
+    {
+     "file": "data/te_domains.hmm",
+     "name": "Pfam TE-domain profiles (bundled, CC0)",
+     "sha256": "57f2b7881f35e2aeb2885430c80d7d514005d32b9f1f782e362189b3207858ac"
+    }
+   ],
+   "environment": {
+    "machine": "AMD64",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10"
+   },
+   "input": {
+    "id": "AB062507.1 Pyricularia grisea retrotransposon Pyret gag-pol pseudogene for polyprotein",
+    "length": 7250,
+    "sha256": "f2b3131e81c6dd8268c8ea392902b17a971df1ac940aeb9ae722e4db20b89310"
+   },
+   "manifestSha256": "46e1c12556d3c0ec04cfe961d8da2c34bf0deb6c7441ab0646515157f9b893a8",
+   "notRun": [
+    "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
+    "External NCBI Primer-BLAST",
+    "De novo family discovery"
+   ],
+   "parameters": {
+    "domain_evalue_max": 0.001,
+    "domain_orfs_scanned_max": 12,
+    "ltr_min_anchors": 4,
+    "ltr_min_identity_pct": 80.0,
+    "ltr_min_len": 80,
+    "ltr_seed_k": 13,
+    "orf_min_aa": 40,
+    "pbs_min_identity": 0.55,
+    "pbs_search_window": 44,
+    "polya_min_run": 8,
+    "ppt_max_defects": 2,
+    "ppt_min_len": 9,
+    "ppt_min_purine": 0.82,
+    "ppt_window": 30,
+    "tir_max_len": 1000,
+    "tir_min_anchors": 3,
+    "tir_min_identity_pct": 80,
+    "tir_min_len": 10,
+    "tir_seed_k": 11,
+    "tsd_max_len": 12,
+    "tsd_min_len": 2
+   },
+   "references": [
+    {
+     "citation": "Wicker T, Sabot F, Hua-Van A, et al. (2007) A unified classification system for eukaryotic transposable elements. Nat Rev Genet 8(12):973-982.",
+     "doi": "10.1038/nrg2165",
+     "key": "Wicker2007",
+     "license": "",
+     "name": "TE classification framework",
+     "url": "https://doi.org/10.1038/nrg2165"
+    },
+    {
+     "citation": "Zhang RG, Li GY, Wang XL, et al. (2022) TEsorter: an accurate and fast method to classify LTR-retrotransposons in plant genomes. Horticulture Research 9:uhac017.",
+     "doi": "10.1093/hr/uhac017",
+     "key": "TEsorter",
+     "license": "",
+     "name": "Domain-architecture completeness (domain-completeness basis)",
+     "url": "https://doi.org/10.1093/hr/uhac017"
+    },
+    {
+     "citation": "Ou S, Jiang N (2018) LTR_retriever: a highly accurate and sensitive program for identification of long terminal repeat retrotransposons. Plant Physiology 176(2):1410-1422.",
+     "doi": "10.1104/pp.17.01310",
+     "key": "LTRretriever",
+     "license": "",
+     "name": "Intact LTR-retrotransposon criteria (domain-completeness basis)",
+     "url": "https://doi.org/10.1104/pp.17.01310"
+    },
+    {
+     "citation": "Eddy SR (2011) Accelerated Profile HMM Searches. PLoS Comput Biol 7(10):e1002195.",
+     "doi": "10.1371/journal.pcbi.1002195",
+     "key": "HMMER",
+     "license": "BSD-3-Clause",
+     "name": "HMMER (via pyhmmer 0.12.1)",
+     "url": "http://hmmer.org"
+    },
+    {
+     "citation": "Mistry J, Chuguransky S, Williams L, et al. (2021) Pfam: The protein families database in 2021. Nucleic Acids Res 49(D1):D412-D419.",
+     "doi": "10.1093/nar/gkaa913",
+     "key": "Pfam",
+     "license": "CC0",
+     "name": "Pfam-A profiles (via InterPro, retrieved 2026-07-17)",
+     "url": "https://www.ebi.ac.uk/interpro/"
+    }
+   ],
+   "runType": "analysis",
+   "schemaVersion": "0.1",
+   "software": [
+    {
+     "name": "HMMER (pyhmmer)",
+     "version": "0.12.1"
+    },
+    {
+     "name": "python",
+     "version": "3.12.10"
+    },
+    {
+     "name": "TEagle core",
+     "version": "3.6.0"
+    }
+   ],
+   "teagleVersion": "3.6.0"
+  },
+  "records": [
+   {
+    "classification": {
+     "class": "Class I · retrotransposon",
+     "completeness": {
+      "coding": {
+       "frames": 3,
+       "note": "the detected domains fall in 3 separate reading frame(s) — consistent with an interrupted, rearranged or degenerate copy, though a genuine multi-ORF architecture (LINE ORF1/ORF2, some ERVs) also looks like this",
+       "state": "split across reading frames",
+       "truncated_frame": false,
+       "unplaced": 0
+      },
+      "expected": [
+       "GAG",
+       "PR",
+       "RT",
+       "RNaseH",
+       "INT"
+      ],
+      "kind": "LTR retroelement",
+      "missing": [
+       "GAG",
+       "RNaseH"
+      ],
+      "present": [
+       "PR",
+       "RT",
+       "INT"
+      ],
+      "scope": "gag (matrix/capsid/nucleocapsid), protease, RT, RNase H, DDE integrase, envelope, chromodomain, LINE ORF1p and apurinic-like endonuclease, tyrosine recombinase, Helitron helicase, and transposases of the CACTA, hAT, IS4, MULE, Tc1/Mariner and unclassified DDE groups",
+      "tier": "partial (pol core present)"
+     },
+     "confidence": "High",
+     "domains_unavailable": false,
+     "evidence": [
+      "reverse-transcriptase domain present",
+      "integrase C-terminal to RT + paired LTRs → Gypsy/Ty3 order",
+      "aspartic-protease domain present",
+      "14 shorter ORF(s) were outside the profile search's ORF budget and were not searched — a domain listed as not detected was not tested on those"
+     ],
+     "explanation": "Classified as LTR/Gypsy (high confidence). Structural: LTR. Domains: PR · RT · INT · CHR. reverse-transcriptase domain present; integrase C-terminal to RT + paired LTRs → Gypsy/Ty3 order; aspartic-protease domain present.",
+     "is_erv": false,
+     "n_domains": 4,
+     "order": "PR–RT–INT–CHR",
+     "orfs_unscanned": 14,
+     "superfamily": "Gypsy (Ty3) · chromovirus",
+     "te_class": "LTR/Gypsy"
+    },
+    "composition": {
+     "ambiguous": 0.0,
+     "ambiguous_counts": {},
+     "counts": {
+      "A": 2702,
+      "C": 1845,
+      "G": 1279,
+      "N": 0,
+      "T": 1424
+     },
+     "gc": 43.1,
+     "length": 7250,
+     "n": 0.0
+    },
+    "domains": [
+     {
+      "aa": [
+       106,
+       212
+      ],
+      "class": "retro",
+      "confidence": "moderate",
+      "dna": "GAACACATATTTCTCGACATACGACTCGATGGCAAACCCATACGAGCACTCCTCGACAATGGAGCACAAGGCAACTATATCTCACCAAGGGTCGTAGCGAAACGACGGATACCTTGGCAGCAAAAGAAGGAACCATACCAGTTGCAAACCGTGGAAAAAAAGGCAGTTTTATACGGGAACGGCACCATCAAAATAGAGACCGTACACCTTTGGATGGAAAGCTATGGACGAAAGGAACAAATCACCTTAAACATTACGGAAATAGGGGACAAAAACGTGATATTAGGAATCCCCTGGCTTAAAAAGAGTAACCCCCGGATA",
+      "domain": "PR",
+      "evalue": 9.541964446483819e-06,
+      "hmm": "RVP",
+      "label": "aspartic protease",
+      "nt": [
+       2732,
+       3053
+      ],
+      "orf": 1,
+      "pfam": "PF00077",
+      "protein": "EHIFLDIRLDGKPIRALLDNGAQGNYISPRVVAKRRIPWQQKKEPYQLQTVEKKAVLYGNGTIKIETVHLWMESYGRKEQITLNITEIGDKNVILGIPWLKKSNPRI",
+      "score": 15.6,
+      "strand": "+"
+     },
+     {
+      "aa": [
+       116,
+       276
+      ],
+      "class": "retro",
+      "confidence": "high",
+      "dna": "GTACCAAAAAAGAACGGAAAATTACGACTATGCGTGGATTACAGACAATTAAACGACATTACCATAAAAAATTGCTACCCACTCCCACTAATAAGAGAATTCCGAAACATGCTTTACCAAACACAATGGTTTACGACATTAAACCTCAAAGGAGCATACAATTTGATCCGCATAAAGGAAGGCGAAAAATGGAAAACCGCGTTTCGCACCAAACGAGGATATTATGAGTACCTAATAATGCCCTTCGGTCTTACCAACGCCCCAGCAACCTTCCAAACCATAATCAACCACGTTCTCAGGGAATGCCTAAACATTTTCGTCGTTATTTACCTGGACGACATCCTTGTCTTTTCCAAGACGTTGGAAAAACATAAGCAACACGTTCACACAATCTTACAAAAGCTGCAAAACGCTAAACTCTTAGTTGAGCCCGAAAAATATCTCTTTCACAGCAAACAAATCAATTTCCTAGGATACATTATC",
+      "domain": "RT",
+      "evalue": 1.4330456625293913e-40,
+      "hmm": "RVT_1",
+      "label": "reverse transcriptase",
+      "nt": [
+       3512,
+       3995
+      ],
+      "orf": 0,
+      "pfam": "PF00078",
+      "protein": "VPKKNGKLRLCVDYRQLNDITIKNCYPLPLIREFRNMLYQTQWFTTLNLKGAYNLIRIKEGEKWKTAFRTKRGYYEYLIMPFGLTNAPATFQTIINHVLRECLNIFVVIYLDDILVFSKTLEKHKQHVHTILQKLQNAKLLVEPEKYLFHSKQINFLGYII",
+      "score": 128.9,
+      "strand": "+"
+     },
+     {
+      "aa": [
+       557,
+       664
+      ],
+      "class": "retro",
+      "confidence": "moderate",
+      "dna": "GCCCCCAGCAAAGTATGGCAGACCATCACAATGGACTTTATCGTCAAATTACCTCTTTCGGAAAAACCATTCACTAAAACCAAATACGACAGCATATTGGTTATAATGGACAAATTCACCAAATACGCCTACTTTCTACCATACAAAAAAAGCAGCAACGCCGAAGAAATCGCTTATTATACATTCCTACAAATAATTGTCAGCAATTACGGACTTCCAAAAAACATCATCACAAATAGAGACAAACTTTTCATATCAAGATTTTGGAAATCCCTGATGGAACAATTAGGAACAAACCACAAATTATCCACAGCATTCCACCCC",
+      "domain": "INT",
+      "evalue": 1.5113766630835577e-06,
+      "hmm": "rve",
+      "label": "integrase",
+      "nt": [
+       4835,
+       5159
+      ],
+      "orf": 0,
+      "pfam": "PF00665",
+      "protein": "APSKVWQTITMDFIVKLPLSEKPFTKTKYDSILVIMDKFTKYAYFLPYKKSSNAEEIAYYTFLQIIVSNYGLPKNIITNRDKLFISRFWKSLMEQLGTNHKLSTAFHP",
+      "score": 18.2,
+      "strand": "+"
+     },
+     {
+      "aa": [
+       33,
+       83
+      ],
+      "class": "retro",
+      "confidence": "high",
+      "dna": "TATAACGTTAAACAAATATTCGACCATAGACGAAACCACGGCAAAATAAAGTACTTTATTAAATGGGAAAACTATGGGCATGAAAAAAACATTTGGGAACCCCTTAACCACCTCCAGGATTGCCAGGAACCGCTCCGCCAATACTATCAGGAG",
+      "domain": "CHR",
+      "evalue": 7.185399389858537e-16,
+      "hmm": "Chromo",
+      "label": "chromodomain",
+      "nt": [
+       5741,
+       5894
+      ],
+      "orf": 6,
+      "pfam": "PF00385",
+      "protein": "YNVKQIFDHRRNHGKIKYFIKWENYGHEKNIWEPLNHLQDCQEPLRQYYQE",
+      "score": 47.7,
+      "strand": "+"
+     }
+    ],
+    "id": "AB062507.1 Pyricularia grisea retrotransposon Pyret gag-pol pseudogene for polyprotein",
+    "invalid": [],
+    "notes": [
+     "protein-domain search read the 12 longest ORFs of 26; 14 shorter ORF(s) were not searched, so a domain listed as not detected was not necessarily absent from the whole sequence"
+    ],
+    "orfs": [
+     {
+      "end": 5174,
+      "frame": 3,
+      "length_aa": 668,
+      "length_nt": 2007,
+      "open_end": false,
+      "start": 3167,
+      "strand": "+"
+     },
+     {
+      "end": 3146,
+      "frame": 3,
+      "length_aa": 242,
+      "length_nt": 729,
+      "open_end": false,
+      "start": 2417,
+      "strand": "+"
+     },
+     {
+      "end": 6308,
+      "frame": 1,
+      "length_aa": 210,
+      "length_nt": 633,
+      "open_end": false,
+      "start": 5675,
+      "strand": "-"
+     },
+     {
+      "end": 1164,
+      "frame": 1,
+      "length_aa": 180,
+      "length_nt": 543,
+      "open_end": false,
+      "start": 621,
+      "strand": "+"
+     },
+     {
+      "end": 1841,
+      "frame": 3,
+      "length_aa": 129,
+      "length_nt": 390,
+      "open_end": false,
+      "start": 1451,
+      "strand": "+"
+     },
+     {
+      "end": 2773,
+      "frame": 2,
+      "length_aa": 120,
+      "length_nt": 363,
+      "open_end": false,
+      "start": 2410,
+      "strand": "-"
+     },
+     {
+      "end": 5969,
+      "frame": 3,
+      "length_aa": 107,
+      "length_nt": 324,
+      "open_end": false,
+      "start": 5645,
+      "strand": "+"
+     },
+     {
+      "end": 854,
+      "frame": 3,
+      "length_aa": 106,
+      "length_nt": 321,
+      "open_end": false,
+      "start": 533,
+      "strand": "+"
+     },
+     {
+      "end": 1707,
+      "frame": 1,
+      "length_aa": 93,
+      "length_nt": 282,
+      "open_end": false,
+      "start": 1425,
+      "strand": "+"
+     },
+     {
+      "end": 6576,
+      "frame": 3,
+      "length_aa": 92,
+      "length_nt": 279,
+      "open_end": false,
+      "start": 6297,
+      "strand": "-"
+     },
+     {
+      "end": 6535,
+      "frame": 2,
+      "length_aa": 81,
+      "length_nt": 246,
+      "open_end": false,
+      "start": 6289,
+      "strand": "-"
+     },
+     {
+      "end": 6042,
+      "frame": 1,
+      "length_aa": 75,
+      "length_nt": 228,
+      "open_end": false,
+      "start": 5814,
+      "strand": "+"
+     },
+     {
+      "end": 3739,
+      "frame": 2,
+      "length_aa": 65,
+      "length_nt": 198,
+      "open_end": false,
+      "start": 3541,
+      "strand": "+"
+     },
+     {
+      "end": 2210,
+      "frame": 3,
+      "length_aa": 64,
+      "length_nt": 195,
+      "open_end": false,
+      "start": 2015,
+      "strand": "+"
+     },
+     {
+      "end": 862,
+      "frame": 2,
+      "length_aa": 63,
+      "length_nt": 192,
+      "open_end": false,
+      "start": 670,
+      "strand": "-"
+     },
+     {
+      "end": 2127,
+      "frame": 3,
+      "length_aa": 61,
+      "length_nt": 186,
+      "open_end": false,
+      "start": 1941,
+      "strand": "-"
+     },
+     {
+      "end": 6203,
+      "frame": 3,
+      "length_aa": 58,
+      "length_nt": 177,
+      "open_end": false,
+      "start": 6026,
+      "strand": "+"
+     },
+     {
+      "end": 2868,
+      "frame": 3,
+      "length_aa": 53,
+      "length_nt": 162,
+      "open_end": false,
+      "start": 2706,
+      "strand": "-"
+     },
+     {
+      "end": 2261,
+      "frame": 1,
+      "length_aa": 52,
+      "length_nt": 159,
+      "open_end": false,
+      "start": 2102,
+      "strand": "-"
+     },
+     {
+      "end": 1021,
+      "frame": 2,
+      "length_aa": 52,
+      "length_nt": 159,
+      "open_end": false,
+      "start": 862,
+      "strand": "-"
+     },
+     {
+      "end": 1915,
+      "frame": 2,
+      "length_aa": 48,
+      "length_nt": 147,
+      "open_end": false,
+      "start": 1768,
+      "strand": "+"
+     },
+     {
+      "end": 2483,
+      "frame": 1,
+      "length_aa": 46,
+      "length_nt": 141,
+      "open_end": false,
+      "start": 2342,
+      "strand": "-"
+     },
+     {
+      "end": 4232,
+      "frame": 1,
+      "length_aa": 44,
+      "length_nt": 135,
+      "open_end": false,
+      "start": 4097,
+      "strand": "-"
+     },
+     {
+      "end": 2362,
+      "frame": 2,
+      "length_aa": 42,
+      "length_nt": 129,
+      "open_end": false,
+      "start": 2233,
+      "strand": "+"
+     },
+     {
+      "end": 5496,
+      "frame": 3,
+      "length_aa": 42,
+      "length_nt": 129,
+      "open_end": false,
+      "start": 5367,
+      "strand": "-"
+     },
+     {
+      "end": 2581,
+      "frame": 2,
+      "length_aa": 41,
+      "length_nt": 126,
+      "open_end": false,
+      "start": 2455,
+      "strand": "+"
+     }
+    ],
+    "retroviral": null,
+    "seq": "TGTTACGACCAGACAGTTGGGCCGGTACCAGGGAGGCCAGGTGGGGTCGTGCCCCTCCTGACGACACTCGCCCAAAAAAAGTCACCGACCGGCAAAACAGGGATTACGTAAGGACAAAACCACGTGACAGCACGTGACTGCCAAGACAATTGATCTCAAACGGACAAGGGATGATCTCAAAGATCACAACCTGATCTCCAGAGACCCTGGGGAGTCTTTAAGATCAGAGACCTTTCAGGAGAGATCACATTCGGAATATAATTTATATAAGGCACGCTCATTACCATATAAATAAATTCGATTTTAGGATTGTTTAGCAGCAATTAAACTTTAATTAACCTCAATATTTATTTGAGAACGATTATAATTTCACCCCCAATTATTAAAAACCCCAGTTACCCAATTAGACGCTCAATTGCTTCAACCCACTGTACTTTACCCTAAGAACAGGTTACCCGATACCTTGATCGTAACATTTTGATCGCTCCTGTTCAGTACTTTGCTTTAAAATATACCGAGCAATATCCGACAACATGTCTTCCCAGACGTCCAAAAACAACACCCCCAACACCCCGGCTACGAACAGCAAAGCGGCCCAGAAGGCCCCTGTTCGGCCCAAGGATGATAACGATAATAAGGACGAGGAAGACCAATTCCGTAGGCAGGTTGCTCAGACCAACCAGAAGCTCCACGAACAAACGTTCCGCGCAACCCAACTCCAAAAGGAATTACAGGCTTTCCGAATTAGTGCTAACGTTACCTCAACCCCTTTTAATGGGCGCGAAAAACTCAAACTTAACCCCCCAACCACATTCGATAGCACACCTGGACAATTTAAAAGGTACCTTATATAGGTACGCATTTACCAAACATTCCATTTGGAAATTTTCCGCAGTAAAACAAAAAAGGTGGTACACGCGGCCATTTTCCTCCGAGGACGAACCTTGTCTTGGTTCGAACCTCTGTTACAAAAATGGCTTAATATACCCCCCGAAAAACGACGCCAAAAAGTCACCGACATTTTTTCAACCTTCGCAGGGTATAAACGCACCTTCCGTTCCTTGTTCCAGGAACCCGATAAAAAACGACAAGCCGAACGAAATTTGGCCAACCTACGACAAACCAAGTCAGCCTCCGCTTATACAACCGAATTTAAAAGGCTAGCAACAAGGCTGGATATAACTGAAAAAACCAAAATCCTCCAATTCTACCAGGGACTGAAATTAAGAATAAAAGACGAGGTATCCAAGCTCGACCGACCCGAGGATTTCCTCGAATACGTCGAACTTGCCATCAAACTTGACAACCGGATTTACGAACGCCGACAGGAAAAACAAGGCGGACAGCGAATATTCGTCACCTTAATTCGACAAACCAATACGGGACGCAAGTACCAACACCCCCAACCCACATACCACAGAAACAATGGTGGATGGCAGCAGCCCCGTCATATGGCACCCCAAACCTACAATACAGCTTATAGTACCCACAATGGACCCATGGACCTCAGTGCCACACAACACAAAAAGCCCCGTAAAGACCCCAAAAGCGGCAAGTGTTTCAAATGCGGCAAAACAGGGTATATCGCCAAAAACTGTCCGAGAAACCAGGAAAATGTCCCTAATTTTAGGGGCAAGACCGAAAAACCACGAGGATTTAATGCCACCAATTACCAGCAATTACGGCCTAACCAACACAGCACGATAAACTGGACCACCTGCTACAATGACAATTGTATGGTACATAACAGTTCCAAAAACGACGCAGGATGGTACCCACAAAAGCCCCGAGGCATTCGAACCCTAACAGTAAAAAACCGAGTACCCCTAGGGACAGGATAACCAACGAAATTATACCGACAAAAGACCCAATTACCCGAATTTACGGACTCGGATGCCTCCGGAAAATCGGATGAGGAACCTTTGGGACAAACCCACCATATTAGAACAACCAATCAATCCTTAATACAAAAATTAAGCGAGGATTCCGAGGGAAAGTCCAGCGAGGAAGAGACCATGCCCTCGAGCCAGTATAACGTAACAAAGGAAAACAACCCCTACATATACGAAAAAAAGCATATCGATTTATACCGAGACGACCAATCAGTACAATTTCCCGGATTGCCATTTCAGGCACAAATCCGACATCCTACAGGACCAGTTAATGCAATTTTTGGAGACCACCCGACCTTGGACACCAAACACCCTTAATACGCAGAAATCTTTTGGGCAAAATGTTTCCGAAACAATTGTGGACTCCATTTAAGCAGGAAGATAGTCCACAATTTTTTCCCACGACGACGCAAAGCAACAGGCATTTACGAAATATATACCACAACCGACCTACCAAATTGGGAAATTAAGATAAAACTCAATATTGAACCAGCCGCAATTTTCACGCCTAACGACAATTATCCCATGGCGTGTTGCAACCAAAAACAATTCCCATGGTATAAATGCACCCGAAGCGTATGCAAAGTACATATGTTAGCCAAAGCACAGGCCTGGCACGAACAGAAATCACGGCAACCAGGACCTGCACCAATGACCAGAATTATGTGGAACCCCAACGTACGAGATAACGAGATAACCACGAACGCACGCAAGACACCCGTGCCAGCGAAGCACCCACTTGACCTAGTCGAAACAAGAAACGGCACAGGGCACCGAACGGCGACAACAGGAACGAAACAAAGAACCCTGAACGCTACACAAAACACCATAGCAGCATATGAACACATATTTCTCGACATACGACTCGATGGCAAACCCATACGAGCACTCCTCGACAATGGAGCACAAGGCAACTATATCTCACCAAGGGTCGTAGCGAAACGACGGATACCTTGGCAGCAAAAGAAGGAACCATACCAGTTGCAAACCGTGGAAAAAAAGGCAGTTTTATACGGGAACGGCACCATCAAAATAGAGACCGTACACCTTTGGATGGAAAGCTATGGACGAAAGGAACAAATCACCTTAAACATTACGGAAATAGGGGACAAAAACGTGATATTAGGAATCCCCTGGCTTAAAAAGAGTAACCCCCGGATAGATTGGACAACCGGCCAAATCCAATGGGAAGAACCGTTAGCCTTTAAAGGAAAATCCGAGAAACGGACTTCACGCAACGAACGTAGGGCATAGGAACGAAATCAACAAAAAATTATGGCGCTATTGAGGAAAAGCGAGCCACGCCTGGAACCAATATCGGAAGAATCGCGACTATCCATGAGCGAAAAACGATCGAACTTTACTACATTGATCGACAATATCCCGGCCGAATACCGGATATATAAACGATTATTCAGCCCCGAATTCGAAACAGGATTACCCGAGCATAGTCCGTTCGACCACGAAATACCATTGAAAAAAGGAACACAGCCCAAATTCCACAAAATATACGGCTTAAACCCGACACAAATGGAGGCACTAAACGAATACCTCGCAAAAAACTTCAAAAAAGATTATATCAGACCATCGATATCACCAGCAGGATACCCAATCCTCTTCGTACCAAAAAAGAACGGAAAATTACGACTATGCGTGGATTACAGACAATTAAACGACATTACCATAAAAAATTGCTACCCACTCCCACTAATAAGAGAATTCCGAAACATGCTTTACCAAACACAATGGTTTACGACATTAAACCTCAAAGGAGCATACAATTTGATCCGCATAAAGGAAGGCGAAAAATGGAAAACCGCGTTTCGCACCAAACGAGGATATTATGAGTACCTAATAATGCCCTTCGGTCTTACCAACGCCCCAGCAACCTTCCAAACCATAATCAACCACGTTCTCAGGGAATGCCTAAACATTTTCGTCGTTATTTACCTGGACGACATCCTTGTCTTTTCCAAGACGTTGGAAAAACATAAGCAACACGTTCACACAATCTTACAAAAGCTGCAAAACGCTAAACTCTTAGTTGAGCCCGAAAAATATCTCTTTCACAGCAAACAAATCAATTTCCTAGGATACATTATCGCTCCTGGAGAAATTAGGATGGAGAAATCGAAAATCCAAGCGGTAAAGGAATGGCCTCAACCACAAAACTGGACGGAACAGACACAACAGGCCTTTGAACAGCTACGAGACGCAATAACCAGAGAACCAATCCTCAAAATACCAGACCCAACGAAACCTTTCGAAGTCGAAACCGACGCATCGGATTATACGATCGGAGGACAACTTAATCAGCGAGACGAAAAAGGACGGTTGCATCCTTGCGCCTTCTTTTCACAAAAATTACATGGACCAGAATTCAATTACCAAATTTACGACAAAAAATTTATAGCCATCATTCGAACATTTGAAAAATGGAAACCACAATTATCCGGAACTAAACACGAAATGTTAATTTACACGGACCACAAAAACCTGACCCATTTCACCATTAGCAAAATATTGAACAAACGACAAATTAAATGGTCAGAATTCCTGTCAAAATTCCATTTTAGGATTATCTACCGAAAAAGAACAGAAAACGGCAGGGCCGACGCCCTTAACCGAAGACCAGATCACGAAAACATAGTGCCAAAAGAAATACGGGTTATCCTCACCACAGACGGAAACGGAAACCTTTTACCAACATACCGGAGCCTTATAACAACAAATACGGTAACCACACCAAAAAAGATACGGAAGATCCACGGAAATAAAGCCCACGGACACCAAGGAATTTCCAAAACATGGAAACGGCTAAAACAGCATTACAATTTTAAAAGAACACGACAAAAAATACGAAAAACCATCAAAGATTGCGAACTTTGTACCAAAAGCAAGTCCGCAAAACACAAATTTTACGGACTCTTACAACCCTTACCAGCCCCCAGCAAAGTATGGCAGACCATCACAATGGACTTTATCGTCAAATTACCTCTTTCGGAAAAACCATTCACTAAAACCAAATACGACAGCATATTGGTTATAATGGACAAATTCACCAAATACGCCTACTTTCTACCATACAAAAAAAGCAGCAACGCCGAAGAAATCGCTTATTATACATTCCTACAAATAATTGTCAGCAATTACGGACTTCCAAAAAACATCATCACAAATAGAGACAAACTTTTCATATCAAGATTTTGGAAATCCCTGATGGAACAATTAGGAACAAACCACAAATTATCCACAGCATTCCACCCCCAGACAGACGGATAAACAAAGCGAACCAACCAAACACTGGAACAATACCTAAAATATTATGTGAACCACAAGTAAGACAATTGGGTACGGTTATTACCCACAGCACAATTCGTTTACAACAGTTTAAAAAACGAAAATACCAAGACAACCCCGTTTTACGCCAATTATGGATTTAACCCTACAGCGTACGGAGAACCAAGAACCACGATTACGGCACCGCGAGCCGATAAACAAGCGAGCGAATTACGGCAATTATACAAAAAACTCCAGCAGGAATTAAAGTTCGTACGAAAAAGAATAATGAAATACGCCAATTAGCATCGAATAAAGGGACCATCCTTCAAAAAGGGAAATAGCGTCTACCTTATTCGACGCAATATCAAAACACAACGACCTAATAACAAATTCGATTTTAAAAAGCTTGGACCTTTTAAAATTAGCAAAAAAATCAGCGATACCAACTACAGACTGTCATTACCAGACACCATGAAAATTCACCCCACATTTCACGTATTATTACTGGAACCAGCACCATACGGCACTAGCATACAAAAAACGATCGAGATCGACGCAGAACAGACCTATAACGTTAAACAAATATTCGACCATAGACGAAACCACGGCAAAATAAAGTACTTTATTAAATGGGAAAACTATGGGCATGAAAAAAACATTTGGGAACCCCTTAACCACCTCCAGGATTGCCAGGAACCGCTCCGCCAATACTATCAGGAGTTGGATCTGCGAGCAAATCAACCAAAAAAAAGAGGACGACCTAAAAAAACACCACCTACCATTCCCAAAAATTAAAGGCCGACCAGGATTCGAAACCATACCACCAGACGAACTTACAAAAGAACGATCAATATGCAATATAAAATAAAAACACCAGAAAAACGACGTACCAACGGAATGTTGCGCAAAAACATTCATCTCATCCAACAACGAAGGATTCAGAGGATCCATCGGGAAAATCGAATCCCAGACAAAATTGGAATCCGGAAAAAGCGACTCCAAGGACATTTCAGGCAGGACCTCGGCTGATCGTCGACGTTCCTCCTGTTCCGCCTCCTCACGTTCCACCCGATCCAATTCCTCCAAATTATCAATTCCGCGAGACACAGCTCGCATTATTTTTTCAAACCACATCTTCTTTTATTTGCGAAAACGCTCGACCTTCGCATCGGCCAAACGAATTTTTTCGTCGCGCCCGGCGACGAGCCTCCTCCGCAGCCTTTAATTCCTCCTCCAATTTGGTATACTGTTGGCCAATCGTGCGAAACTGAACAGGCGAAATTCCAAGGACATCGCACCCCGAACGGTTCGACCGCAAACACTCGACATACCGAGAGGAATTTTGAGGAGAAACCGCACATTTGGGTATTCCCCTCGATTTACAAGCAAAACAAACAACCATCTCCAACCGTCGACAAAAACAAAAAAAAAAGAAGGGCAAAACGACGCTCTGTCGACGAGCGACCAAATTTCGGTTTGGCTACACGATTAAATATGGCGCAAAAAAGTTAGCCAAAAAGGAAGGAAACCCAAAACAGGGATCAAGGGAATACGGACTATTTAAAGGCCAAAAGAATTTGGCCAAAGGAAAGGAAACCTGATATTACGACCAAACAGTTGGGCCGGTACCAGGGAGGCCAGGTGGGGTCGTGCCCCTCCTGACGACATTCGCCCAAAAAAAGTCACCGACCGGCAGAACAGGGATTATATAAGGACAAAACCACGTAACAGCACGTAATTGCCAAAACAATTGATCTCAAACGGATAAGGGATAATCTCAAAAATCACAACCTGATCTCCAAAGACCCTGGGGAGTTTTTAAGATCAGAGACCTTTCAGGAGAGATCATATTCAGAACATAGTTTATATAAGGCACGCTTATTACCATATAAATAGATTCGATTTTAGGATTGTTTAGCAACAATCAAATTTTAGTTAACCTCAATATTTATTTGAGAACGATTATAATTTCACCCCCAGTTATTGAGAACCCCAGTTACCCAGTTAGACGCTCAGTTGCTTTAACCCACTGTACTTTACCCTAAGAACAGGTTACCCGATACCTTGATCGTAACA",
+    "seq_preview": "TGTTACGACCAGACAGTTGGGCCGGTACCAGGGAGGCCAGGTGGGGTCGTGCCCCTCCTGACGACACTCGCCCAAAAAAAGTCACCGACCGGCAAAACAGGGATTACGTAAGGACAAAAC",
+    "structural": [
+     {
+      "bound_reason": "the repeat still matched where the record ends, so the copies may extend beyond it — the length is a lower bound, not a measurement",
+      "element_span": [
+       2,
+       7250
+      ],
+      "five_prime": [
+       2,
+       475
+      ],
+      "identity": 93.7,
+      "length_is_lower_bound": true,
+      "ltr_len": 473,
+      "method": "k-mer seed (k=13, 3625 bp window) + X-drop diagonal extension",
+      "termini": {
+       "canonical": false,
+       "five_end": "CA",
+       "five_start": "TT",
+       "mismatches": 2,
+       "motif_tier": "none",
+       "noncanonical_motif": null,
+       "note": "termini match neither TG…CA nor any of the seven known non-canonical motifs; the motif is common but not universal among LTR retrotransposons, so its absence is not evidence against the call",
+       "three_end": "CA",
+       "three_start": "TT",
+       "within_ltrharvest_tolerance": false
+      },
+      "three_prime": [
+       6777,
+       7250
+      ],
+      "tsd_state": "not assessable (no flanking sequence in the record)",
+      "type": "LTR (terminal direct repeat)"
+     }
+    ],
+    "valid": true
+   }
+  ],
+  "references": [
+   {
+    "citation": "Wicker T, Sabot F, Hua-Van A, et al. (2007) A unified classification system for eukaryotic transposable elements. Nat Rev Genet 8(12):973-982.",
+    "doi": "10.1038/nrg2165",
+    "key": "Wicker2007",
+    "license": "",
+    "name": "TE classification framework",
+    "url": "https://doi.org/10.1038/nrg2165"
+   },
+   {
+    "citation": "Zhang RG, Li GY, Wang XL, et al. (2022) TEsorter: an accurate and fast method to classify LTR-retrotransposons in plant genomes. Horticulture Research 9:uhac017.",
+    "doi": "10.1093/hr/uhac017",
+    "key": "TEsorter",
+    "license": "",
+    "name": "Domain-architecture completeness (domain-completeness basis)",
+    "url": "https://doi.org/10.1093/hr/uhac017"
+   },
+   {
+    "citation": "Ou S, Jiang N (2018) LTR_retriever: a highly accurate and sensitive program for identification of long terminal repeat retrotransposons. Plant Physiology 176(2):1410-1422.",
+    "doi": "10.1104/pp.17.01310",
+    "key": "LTRretriever",
+    "license": "",
+    "name": "Intact LTR-retrotransposon criteria (domain-completeness basis)",
+    "url": "https://doi.org/10.1104/pp.17.01310"
+   },
+   {
+    "citation": "Eddy SR (2011) Accelerated Profile HMM Searches. PLoS Comput Biol 7(10):e1002195.",
+    "doi": "10.1371/journal.pcbi.1002195",
+    "key": "HMMER",
+    "license": "BSD-3-Clause",
+    "name": "HMMER (via pyhmmer 0.12.1)",
+    "url": "http://hmmer.org"
+   },
+   {
+    "citation": "Mistry J, Chuguransky S, Williams L, et al. (2021) Pfam: The protein families database in 2021. Nucleic Acids Res 49(D1):D412-D419.",
+    "doi": "10.1093/nar/gkaa913",
+    "key": "Pfam",
+    "license": "CC0",
+    "name": "Pfam-A profiles (via InterPro, retrieved 2026-07-17)",
+    "url": "https://www.ebi.ac.uk/interpro/"
+   }
+  ]
+ }
+}

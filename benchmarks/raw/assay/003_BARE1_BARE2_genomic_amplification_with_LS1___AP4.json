@@ -1,0 +1,149 @@
+{
+ "case": {
+  "amplicon_range_bp": "Paper states '1.3 kb' (gel). Templated footprint on Z17327 = 3234..4508 = 1275 bp; adding the 11-nt (LS1) and 17-nt (AP4) non-templated 5' tails gives a 1303 bp full product. Accept 1275-1303 depending on whether the engine counts 5' tails.",
+  "caveats": "(1) 5' TAILS: neither primer anneals over its full length. LS1's templated core is the 25-nt ACCGGACTTGAGCTAGTGGAATTGG (matches Z17327 3234-3258 exactly, as the table states); AP4's is the 22-nt ATATAATGTTCATGCTYAACGC (matches 4487-4508). A full-length exact-match search returns NO product - this case is specifically useful for testing 3'-anchored / tailed-primer handling. (2) The table's AP4 coordinate 4486 is off by one: a 23-nt core was tested and fails because Z17327 position 4486 is T, not C. (3) DEGENERATE: AP4 carries (TC) = Y at one position. (4) MULTI-LOCUS BY DESIGN: BARE1 is present at ~10^4 copies in barley, and the paper states the pair amplifies BARE2 equally well - but no exact core site exists in the BARE2 accession AJ279072, so exact matching finds the amplicon only in Z17327. (5) Size is an approximate gel estimate, hence medium confidence.",
+  "citation": "Chang W, Jääskeläinen M, Li S-P, Schulman AH. BARE retrotransposons are translated and replicated via distinct RNA pools. PLoS One. 2013;8(8):e72270. doi:10.1371/journal.pone.0072270. PMID 23940808; PMCID PMC3735527.",
+  "confidence": "medium",
+  "element": "BARE1 (BARE-1) Ty1/copia-group LTR retrotransposon; gag-PR region, element-internal",
+  "expected_amplicon_bp": 1275,
+  "expected_bp_provenance": "derived_from_source",
+  "forward_primer": "CTGCCTCGCCCACCGGACTTGAGCTAGTGGAATTGG",
+  "loci_justification": "BARE1 is present at roughly 10^4 copies in the barley genome and the source states the pair amplifies BARE2 equally well, so the named band is the one the authors chose to report rather than the only product. A product count is not a specificity result for this assay.",
+  "loci_on_template": "multiple",
+  "name": "BARE1/BARE2 genomic amplification with LS1 + AP4",
+  "organism": "Hordeum vulgare (barley)",
+  "panel": "ltr-assays",
+  "reverse_primer": "CTGGTTCGGCCCACCAGATATAATGTTCATGCT(TC)AACGC",
+  "template_accession": "Z17327.1",
+  "where_in_paper": "Primer sequences: supplementary Table S1 'Primer list' (pone.0072270.s002.pdf), rows LS1 and AP4, which also give the matching regions IN ACCESSION Z17327 (LS1 3234-3258 F; AP4 4508-4486 R). Amplicon size: Figure 1 legend - 'The upper band (arrow, 1.3 kb) contains products from both BARE1 and BARE2 and is the same size as the amplification product from genomic DNA using the same primer pair (B)'. NOTE: the paper prints only a kb-scale gel estimate ('1.3 kb'); no bp integer is stated anywhere.",
+  "worked_prediction_in_entry": true,
+  "worked_prediction_note": "The entry records a worked prediction — a coordinate range, an in-silico check, or a sequence-derived length — so the expected answer was written down before the engine ran. The published size remains external, but this case was not scored blind."
+ },
+ "result": {
+  "amplicons": [
+   {
+    "amplicon_5p": "TGACCGGACTTGAGCTAGTGGAATTGGATC…",
+    "end": 4510,
+    "fwd_anneal_len": 27,
+    "fwd_mm": 2,
+    "fwd_primer": "F",
+    "fwd_tail5": 9,
+    "length": 1279,
+    "on_target": false,
+    "product_length": 1303,
+    "rev_anneal_len": 24,
+    "rev_mm": 2,
+    "rev_primer": "R",
+    "rev_tail5": 15,
+    "seq": "TGACCGGACTTGAGCTAGTGGAATTGGATCATGAACCACTCAAATGACTAGAGATATGTACTTTTTGAGTGGGAGTTTAGCAAGTAATTTGATTAAGTTAAACTCTAATTATCTTGAACATAGTCTAAGTCCACTTTGAATATATTTGTGTTGTAGATCAATGGCTCACGCGAGAGTCACCCTGAATTTTAATACGTTCCTAGAGAAAGCTAAGTTGAAAGATGATGGAAGCAACTTTGTAGACTGGGCTCATAATCTAATTAAGTTGCTCCTGCAAGCTGGGAAGAAGGATTATGTCCTTAATGCTGCGCTAGGAGATGAACCACCCGCTACGGCTGACCAAGATGTTAAGAACGCTTGGTTAACACGTAAGGAGGACTACTCAGTAGTTCAACGTGCAGTCTTGTATGGCTTAGAGCCGGGACTTCAACGTCGCTTTGAGCGTCATGGAGCATATGAGATGTTCCAGGAGTTGAAGTTTATCTTTCAGAAGAACACCCGGATCGAGAGGTATGAGACCTTTGATAAATTCTATGCTTGCAAGATGGAGGAGAATTCGTCTGTCAGTGAACATGTGCTCAAAATGGCTGGGTACTCAAGCCGTCTAGCTGAGCTGGGGATTGAACTCCCGCAAGAGGCTATCACTGACAGAATTCTTCAATCACTGCCGCCAAGCTATAAGGGCTTTTTGTTGAACTACAACATGCAAGGGATGAACAAGTCACCCGGCGAGTTGTTTGCGATGCTGAAAGTCGTAGAGTGAGAACTCCGTAAAGAGCATCAAGTGTTGATGGTGAATAAGACCACTAGTTTCAAGAGAAACGACAAAGGAAAGAAGGGTAGTTCGAAGAAGAGCGGCAAGCCTGTTGCCAATCCGACGAAGAAACCCAAAGCTGGTCCTAAGCCTGAAACGGAGTGCTATTATTGCAAGGGTATGGGTCACTGGAAGCGCAACTGCCCCAAGTATCTGGCTGATAAGAAGGCGGCCAAAGAAAAATCAGGTATATTTGATATACATGTTATTGATGTGTACTTAACCAGTTCTCGTAGTAGTGCCTGGGTATTCGATACCGGTTCTGTTGCTCATATTTGCAACTCAAAACAGGAACTGCGGAATAAGCGAAGGCTGGCGAAGGATGAAGTGACGATGCGCGTGGGAAATGGTTCCAAGGTTGATGCAATCGCCGTCGGCACAATTTCACTTCAGTTACCATCAGGATTAGTTATGAACTTAAATAATTGTTATTTAGTGTCTGCGTTAAGCATGAACATTATATGG",
+    "single_primer": false,
+    "source": "Z17327.1 H.vulgare DNA for BARE-1 copia-like retroelement (input)",
+    "start": 3231
+   }
+  ],
+  "backgroundsSearched": [
+   "Z17327.1 H.vulgare DNA for BARE-1 copia-like retroelement (input)"
+  ],
+  "criteria": {
+   "max_mismatch": 2,
+   "min_anneal": 18,
+   "product_size": [
+    28,
+    3825
+   ],
+   "three_prime_strict": 5
+  },
+  "notSearched": [
+   "Reference assembly (needs WSL/NCBI)",
+   "External NCBI Primer-BLAST",
+   "IUPAC-ambiguous template bases"
+  ],
+  "provenance": {
+   "createdUtc": "2026-08-06T03:58:18+00:00",
+   "databases": [],
+   "environment": {
+    "machine": "AMD64",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10"
+   },
+   "input": {
+    "id": "Z17327.1 H.vulgare DNA for BARE-1 copia-like retroelement",
+    "length": 13271,
+    "sha256": "9c4012b471439096cc22d2eb894a4c4a5522d72c76ea3a1e347bc57ef6c7fa1c"
+   },
+   "manifestSha256": "d24cf8ea163f66de8352471f6b58be099ab88661e0318fe1e67d7fe4369ddd38",
+   "notRun": [
+    "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
+    "External NCBI Primer-BLAST",
+    "De novo family discovery"
+   ],
+   "parameters": {
+    "background_sha256": null,
+    "fwd": "CTGCCTCGCCCACCGGACTTGAGCTAGTGGAATTGG",
+    "max_mm": 2,
+    "min_anneal": 18,
+    "prod_max": 3825,
+    "prod_min": 28,
+    "rev": "CTGGTTCGGCCCACCAGATATAATGTTCATGCTYAACGC",
+    "target_span": null,
+    "tp": 5
+   },
+   "references": [],
+   "runType": "in-silico-pcr",
+   "schemaVersion": "0.1",
+   "software": [
+    {
+     "name": "python",
+     "version": "3.12.10"
+    },
+    {
+     "name": "TEagle core",
+     "version": "3.6.0"
+    }
+   ],
+   "teagleVersion": "3.6.0"
+  },
+  "references": [],
+  "truncated": false,
+  "truncatedOn": [],
+  "warning": null
+ },
+ "scored": {
+  "accession": "Z17327.1",
+  "caveats": "(1) 5' TAILS: neither primer anneals over its full length. LS1's templated core is the 25-nt ACCGGACTTGAGCTAGTGGAATTGG (matches Z17327 3234-3258 exactly, as the table states); AP4's is the 22-nt ATATAATGTTCATGCTYAACGC (matches 4487-4508). A full-length exact-match search returns NO product - this case is specifically useful for testing 3'-anchored / tailed-primer handling. (2) The table's AP4 coordinate 4486 is off by one: a 23-nt core was tested and fails because Z17327 position 4486 is T, not C. (3) DEGENERATE: AP4 carries (TC) = Y at one position. (4) MULTI-LOCUS BY DESIGN: BARE1 is present at ~10^4 copies in barley, and the paper states the pair amplifies BARE2 equally well - but no exact core site exists in the BARE2 accession AJ279072, so exact matching finds the amplicon only in Z17327. (5) Size is an approximate gel estimate, hence medium confidence.",
+  "citation": "Chang W, Jääskeläinen M, Li S-P, Schulman AH. BARE retrotransposons are translated and replicated via distinct RNA pools. PLoS One. 2013;8(8):e72270. doi:10.1371/journal.pone.0072270. PMID 23940808; PMCID PMC3735527.",
+  "closest_bp": 1303,
+  "difference_bp": 28,
+  "elapsed_s": 0.031,
+  "element": "BARE1 (BARE-1) Ty1/copia-group LTR retrotransposon; gag-PR region, element-internal",
+  "expected_bp": 1275,
+  "found": true,
+  "ground_truth": "derived_from_source",
+  "loci_on_template": "multiple",
+  "multilocus_by_design": true,
+  "n_products": 1,
+  "name": "BARE1/BARE2 genomic amplification with LS1 + AP4",
+  "organism": "Hordeum vulgare (barley)",
+  "panel": "ltr-assays",
+  "preworked_in_corpus": true,
+  "primer_degenerate": true,
+  "primer_fwd_as_published": "CTGCCTCGCCCACCGGACTTGAGCTAGTGGAATTGG",
+  "primer_rev_as_published": "CTGGTTCGGCCCACCAGATATAATGTTCATGCT(TC)AACGC",
+  "product_sizes": [
+   1303
+  ],
+  "scored_product_anneal_bp": [
+   27,
+   24
+  ],
+  "scored_product_tail_bp": 24,
+  "search_window_bp": [
+   28,
+   3825
+  ],
+  "source_confidence": "medium",
+  "template_sha256": "b0dfe6aa26d5216d",
+  "tolerance_bp": 127.5,
+  "within_tolerance": true
+ }
+}

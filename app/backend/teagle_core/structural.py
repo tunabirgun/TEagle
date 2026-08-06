@@ -118,6 +118,28 @@ MIN_LTR_IDENTITY = 80.0      # named so the panels that describe this detector c
 # cannot see on screen and a reviewer cannot recover from the sealed manifest.
 MIN_TIR_IDENTITY = 80
 
+# The length a terminal inverted repeat must reach before it can carry a Class II call ON ITS OWN, with no
+# transposase to corroborate it. MIN_TIR_IDENTITY above governs whether a repeat is detected at all; this
+# governs whether a detected repeat is strong enough to name an element by itself.
+#
+# Derived, not chosen, and the derivation is a committed script rather than this comment: run
+# `python benchmarks/chance_tir.py`, which runs find_tir over 4,500 random sequences (1.5, 4 and 9 kb,
+# 1,500 each) at a recorded seed and writes benchmarks/raw/chance_tir.json. The chance hit rate is about
+# 1%, and the length distribution falls away steeply — the great majority of chance hits are 13 bp.
+#
+# The ceiling is itself a sampled extreme, so it moves with the seed: the recorded seed gives 15 bp, and
+# the script's own seed-sensitivity pass over five seeds gives a maximum of 17 bp. Twenty is set above the
+# across-seed maximum rather than above any single run, which is the conservative reading, and still sits
+# well below the 31 bp repeats of the real non-autonomous elements in the benchmark corpus. Chance repeat
+# length grows with template length, so this ceiling holds for the lengths sampled and not in general.
+#
+# The floor also has to survive the case that motivated the conservative branch it guards: a solo copia 5'
+# LTR (276 bp) fed alone trips the terminal-inverted-repeat scan and used to be filed as a DNA transposon.
+# Measured, that solo LTR yields a 12 bp repeat, so this floor rejects it. tests/test_structural_bounds.py
+# re-derives both numbers, so a change to find_tir that moves either one fails the suite rather than
+# silently loosening the gate.
+MIN_TIR_STANDALONE = 20
+
 
 def find_ltr(seq: str, k: int = 13, min_ltr: int = 80, min_anchors: int = 4, near_miss: list | None = None):
     """Detect a terminal DIRECT repeat pair (LTR candidate). Coords 0-based half-open.
