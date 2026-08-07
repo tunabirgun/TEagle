@@ -1,6 +1,6 @@
 {
- "elapsed_s": 21.5,
- "generated": "2026-08-05T07:10:37",
+ "elapsed_s": 73.5,
+ "generated": "2026-08-06T23:38:01",
  "min_ltr_identity_floor": 80.0,
  "records": [
   {
@@ -8442,5 +8442,5 @@
   65,
   60
  ],
- "teagle_version": "3.6.0"
+ "teagle_version": "3.7.0"
 }

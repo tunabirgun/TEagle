@@ -58,7 +58,7 @@
    "IUPAC-ambiguous template bases"
   ],
   "provenance": {
-   "createdUtc": "2026-08-06T03:58:36+00:00",
+   "createdUtc": "2026-08-06T20:30:07+00:00",
    "databases": [],
    "environment": {
     "machine": "AMD64",
@@ -70,7 +70,7 @@
     "length": 2226,
     "sha256": "b21aab312fda85c69c363908a278f0216629a01b890005a9bd953c4c983f7684"
    },
-   "manifestSha256": "25b62ce6f62188e790a4b5d66b00b759d31c150a368729b2bddf5f73ff15e96b",
+   "manifestSha256": "2a28377e5c61f4f2d214595e1161a18c80d01e4bb4815e2aa669f5233d621c23",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -97,10 +97,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "references": [],
   "truncated": false,
@@ -113,7 +113,7 @@
   "citation": "Maroufi A, Van Bockstaele E, De Loose M. Validation of reference genes for gene expression analysis in chicory (Cichorium intybus) using quantitative real-time PCR. BMC Mol Biol. 2010;11:15. doi:10.1186/1471-2199-11-15. PMID 20156357; PMCID PMC2830926.",
   "closest_bp": 102,
   "difference_bp": 0,
-  "elapsed_s": 0.007,
+  "elapsed_s": 0.01,
   "element": "Non-TE control assay. Chloroplast ndhF (NADH dehydrogenase subunit F) used as a candidate RT-qPCR reference gene.",
   "expected_bp": 102,
   "found": true,

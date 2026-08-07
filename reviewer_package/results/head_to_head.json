@@ -1063,14 +1063,7 @@
     },
     "negative_controls": {
      "n": 11,
-     "teagle_incorrect_order_calls": [
-      {
-       "accession": "AF018167",
-       "called": "LINE",
-       "te_class": "LINE",
-       "confidence": "Moderate"
-      }
-     ],
+     "teagle_incorrect_order_calls": [],
      "tesorter_incorrect_order_calls": [
       {
        "accession": "U50902",
@@ -1078,7 +1071,7 @@
        "database": "rexdb"
       }
      ],
-     "n_teagle_incorrect": 1,
+     "n_teagle_incorrect": 0,
      "n_tesorter_incorrect": 1
     },
     "expected_order_outside_vocabulary": {
@@ -1389,13 +1382,13 @@
       "reason": "negative_control",
       "stratification_note": null,
       "expected_order": "NOT_TE",
-      "teagle": "LINE",
-      "teagle_te_class": "LINE",
-      "teagle_confidence": "Moderate",
-      "teagle_abstained": false,
+      "teagle": "ABSTAIN",
+      "teagle_te_class": "retro/unassigned",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
       "tesorter": "NO_CALL",
       "database": "rexdb",
-      "teagle_order_call_incorrect": true,
+      "teagle_order_call_incorrect": null,
       "tesorter_order_call_incorrect": null
      },
      {
@@ -1628,7 +1621,7 @@
       "stratification_note": null,
       "expected_order": "NOT_TE",
       "teagle": "ABSTAIN",
-      "teagle_te_class": "retro/partial",
+      "teagle_te_class": "retro/unassigned",
       "teagle_confidence": "Candidate",
       "teagle_abstained": true,
       "tesorter": "LINE",
@@ -1671,31 +1664,30 @@
     "teagle_paired": 0,
     "tesorter_paired": 0,
     "with_negative_controls_denominator": 93,
-    "teagle_with_negative_controls": 1,
+    "teagle_with_negative_controls": 0,
     "tesorter_with_negative_controls": 1,
     "n_out_of_vocabulary_order_calls": {
      "teagle": 0,
      "tesorter": 0
     },
-    "teagle_cases": [
-     "AF018167"
-    ],
+    "teagle_cases": [],
     "tesorter_cases": [
      "U50902"
     ]
    },
-   "both_correct": 65,
+   "both_correct": 64,
    "teagle_only": 2,
-   "tesorter_only": 8,
+   "tesorter_only": 9,
    "neither": 7,
-   "teagle_accuracy": 0.8171,
+   "teagle_accuracy": 0.8049,
    "tesorter_accuracy": 0.8902,
-   "mcnemar_discordant": 10,
-   "mcnemar_p_two_sided_exact": 0.109,
-   "abstention_cost_teagle_silent_tesorter_right": 8,
+   "mcnemar_discordant": 11,
+   "mcnemar_p_two_sided_exact": 0.0654,
+   "abstention_cost_teagle_silent_tesorter_right": 9,
    "abstention_vindicated_teagle_silent_tesorter_wrong": 0,
    "cost_cases": [
     "AB076841",
+    "AY032740",
     "AY101584",
     "AY101587",
     "EU190440.1",
@@ -2009,13 +2001,13 @@
     {
      "accession": "AY032740",
      "expected": "LINE",
-     "teagle": "LINE",
-     "teagle_correct": true,
-     "teagle_abstained": false,
+     "teagle": "ABSTAIN",
+     "teagle_correct": false,
+     "teagle_abstained": true,
      "tesorter": "LINE",
      "tesorter_correct": true,
      "database": "rexdb",
-     "teagle_order_call_incorrect": false,
+     "teagle_order_call_incorrect": null,
      "tesorter_order_call_incorrect": false
     },
     {
@@ -3755,14 +3747,7 @@
     },
     "negative_controls": {
      "n": 11,
-     "teagle_incorrect_order_calls": [
-      {
-       "accession": "AF018167",
-       "called": "LINE",
-       "te_class": "LINE",
-       "confidence": "Moderate"
-      }
-     ],
+     "teagle_incorrect_order_calls": [],
      "tesorter_incorrect_order_calls": [
       {
        "accession": "NG_008718",
@@ -3775,7 +3760,7 @@
        "database": "rexdb"
       }
      ],
-     "n_teagle_incorrect": 1,
+     "n_teagle_incorrect": 0,
      "n_tesorter_incorrect": 2
     },
     "expected_order_outside_vocabulary": {
@@ -4086,13 +4071,13 @@
       "reason": "negative_control",
       "stratification_note": null,
       "expected_order": "NOT_TE",
-      "teagle": "LINE",
-      "teagle_te_class": "LINE",
-      "teagle_confidence": "Moderate",
-      "teagle_abstained": false,
+      "teagle": "ABSTAIN",
+      "teagle_te_class": "retro/unassigned",
+      "teagle_confidence": "Candidate",
+      "teagle_abstained": true,
       "tesorter": "NO_CALL",
       "database": "rexdb-metazoa",
-      "teagle_order_call_incorrect": true,
+      "teagle_order_call_incorrect": null,
       "tesorter_order_call_incorrect": null
      },
      {
@@ -4325,7 +4310,7 @@
       "stratification_note": null,
       "expected_order": "NOT_TE",
       "teagle": "ABSTAIN",
-      "teagle_te_class": "retro/partial",
+      "teagle_te_class": "retro/unassigned",
       "teagle_confidence": "Candidate",
       "teagle_abstained": true,
       "tesorter": "LINE",
@@ -4368,32 +4353,31 @@
     "teagle_paired": 0,
     "tesorter_paired": 0,
     "with_negative_controls_denominator": 93,
-    "teagle_with_negative_controls": 1,
+    "teagle_with_negative_controls": 0,
     "tesorter_with_negative_controls": 2,
     "n_out_of_vocabulary_order_calls": {
      "teagle": 0,
      "tesorter": 0
     },
-    "teagle_cases": [
-     "AF018167"
-    ],
+    "teagle_cases": [],
     "tesorter_cases": [
      "NG_008718",
      "U50902"
     ]
    },
-   "both_correct": 62,
+   "both_correct": 61,
    "teagle_only": 5,
-   "tesorter_only": 8,
+   "tesorter_only": 9,
    "neither": 7,
-   "teagle_accuracy": 0.8171,
+   "teagle_accuracy": 0.8049,
    "tesorter_accuracy": 0.8537,
-   "mcnemar_discordant": 13,
-   "mcnemar_p_two_sided_exact": 0.581,
-   "abstention_cost_teagle_silent_tesorter_right": 8,
+   "mcnemar_discordant": 14,
+   "mcnemar_p_two_sided_exact": 0.424,
+   "abstention_cost_teagle_silent_tesorter_right": 9,
    "abstention_vindicated_teagle_silent_tesorter_wrong": 0,
    "cost_cases": [
     "AB076841",
+    "AY032740",
     "AY101584",
     "AY101587",
     "EU190440.1",
@@ -4707,13 +4691,13 @@
     {
      "accession": "AY032740",
      "expected": "LINE",
-     "teagle": "LINE",
-     "teagle_correct": true,
-     "teagle_abstained": false,
+     "teagle": "ABSTAIN",
+     "teagle_correct": false,
+     "teagle_abstained": true,
      "tesorter": "LINE",
      "tesorter_correct": true,
      "database": "rexdb-metazoa",
-     "teagle_order_call_incorrect": false,
+     "teagle_order_call_incorrect": null,
      "tesorter_order_call_incorrect": false
     },
     {

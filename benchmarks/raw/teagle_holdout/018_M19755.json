@@ -10,9 +10,10 @@
   "expected_superfamily": "R1",
   "organism": "Bombyx mori",
   "panel": "line",
+  "record_scope": "element",
   "why_safe": "The class assignment is the literal claim of the deposit paper's title - R1Bm 'belongs to a class of non-long-terminal-repeat retrotransposons' - and R1Bm is the type element after which the R1 clade is named. Independent of that, the record's feature table carries mobile_element 44..5135 with /mobile_element_type=\"retrotransposon:R1\", flanked by an annotated 5' rDNA insertion target site (30..43), plus a gag CDS (519..1895) and a complete RT/ORF2 CDS (1885..5028): both ORFs are present and the element boundaries are annotated in the deposit, so nothing here depends on an annotation tool. Distinct from the corpus's R1Dm (X51968): different organism, different paper, and this is the original R1 element."
  },
- "elapsed_s": 0.031,
+ "elapsed_s": 0.013,
  "fetch_source": {
   "accession": "M19755.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "2b0009bcca66b7f3f335f070f840f261723d04aba4c48ae3e71474e391d5935d",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:50+00:00",
+   "createdUtc": "2026-08-06T16:16:22+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 5243,
     "sha256": "bce92032ae7b1ab9dca03968f33d027383253c7b1725a573f43cd124c01123b9"
    },
-   "manifestSha256": "ca662db18caa5dc83871f82f2f64d1438fdef5e4921959b07b75ee671e95ca89",
+   "manifestSha256": "bdd7fcbfdf7b1d517b43a1b9c23aff442cb813278f8a4e156cd163497a6148e9",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -126,10 +127,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

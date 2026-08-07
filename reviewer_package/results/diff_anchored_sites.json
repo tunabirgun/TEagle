@@ -76,9 +76,9 @@
   "Y"
  ],
  "disagreements": 0,
- "elapsed_s": 9.6,
+ "elapsed_s": 7.4,
  "examples": [],
- "generated": "2026-08-06T07:31:53",
+ "generated": "2026-08-06T23:22:54",
  "informative": {
   "both_empty": 1486,
   "site_yield": 0.7523,
@@ -176,6 +176,6 @@
   "8": 182,
   "9": 166
  },
- "teagle_version": "3.6.0",
+ "teagle_version": "3.7.0",
  "trials": 6000
 }

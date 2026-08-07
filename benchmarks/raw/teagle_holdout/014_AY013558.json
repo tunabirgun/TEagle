@@ -10,9 +10,10 @@
   "expected_superfamily": "Gypsy (Ty3)",
   "organism": "Clonorchis sinensis",
   "panel": "ltr-gypsy",
+  "record_scope": "element",
   "why_safe": "The label rests on an explicit molecular-phylogenetic analysis published in Mol Biol Evol - the paper's contribution is precisely the placement of CsRn1 within Ty3/gypsy - and is independent of any annotation software applied to this record. The deposit is the element: mobile_element 1..5008 spans the entire record, with the 5' LTR annotated at 1..471. This is the only lophotrochozoan/platyhelminth case in the panel, and one of the few Ty3/Gypsy elements with a published clade-level phylogeny outside plants, fungi and insects."
  },
- "elapsed_s": 0.046,
+ "elapsed_s": 0.022,
  "fetch_source": {
   "accession": "AY013558.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "cf7c996027cf67a6228307c7f5a92d2a37e741e42a1769642f546bad01ba7440",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:49+00:00",
+   "createdUtc": "2026-08-06T16:16:22+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 5008,
     "sha256": "3ebe97c15fd067bedf25b17a4f208f35cab39552b04b25086ffcbb7da09e239a"
    },
-   "manifestSha256": "06692967c976a9239f5ea56a65ddc665968eb5f1dda09908425e55f02697862b",
+   "manifestSha256": "983bc4c0008d41b0c0c2332120e3899ab2c55a6489a0d470bb9e3d7c4b695251",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -126,10 +127,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

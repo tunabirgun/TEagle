@@ -58,7 +58,7 @@
    "IUPAC-ambiguous template bases"
   ],
   "provenance": {
-   "createdUtc": "2026-08-06T03:58:36+00:00",
+   "createdUtc": "2026-08-06T20:30:06+00:00",
    "databases": [],
    "environment": {
     "machine": "AMD64",
@@ -70,7 +70,7 @@
     "length": 2117144,
     "sha256": "140aacc78a544d7a0dcbc8ca62c4a6b25761d96cd0a51be0f593e61aca4492c7"
    },
-   "manifestSha256": "2ac1368a694c7aea6067f90ba91a45460fde981e39fd62b144d15645f553d710",
+   "manifestSha256": "353987d5910e803dfe3af894ef678061f3e8dc15822fe7456335b0cae42b434f",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -97,10 +97,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "references": [],
   "truncated": false,
@@ -113,7 +113,7 @@
   "citation": "Bricker BJ, Halling SM. Differentiation of Brucella abortus bv. 1, 2, and 4, Brucella melitensis, Brucella ovis, and Brucella suis bv. 1 by PCR. J Clin Microbiol. 1994;32(11):2660-2666. doi:10.1128/jcm.32.11.2660-2666.1994. PMID 7852552.",
   "closest_bp": 733,
   "difference_bp": 2,
-  "elapsed_s": 5.368,
+  "elapsed_s": 8.915,
   "element": "IS711 - species-specific IS711 insertion-site PCR",
   "expected_bp": 731,
   "found": true,

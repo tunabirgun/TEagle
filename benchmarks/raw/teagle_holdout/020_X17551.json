@@ -10,9 +10,10 @@
   "expected_superfamily": "Jockey",
   "organism": "Drosophila melanogaster",
   "panel": "line",
+  "record_scope": "element",
   "why_safe": "Despite the DEFINITION line naming the white locus, the whole deposit is the element: the feature table annotates mobile_element 1..4725 with /mobile_element_type=\"insertion sequence:Doc retroposon\", so no coordinate extraction from a host locus is required. Both ORFs are complete, translated CDSs (ORF1 213..1910 RNA-binding protein; ORF2 1910..4576 reverse transcriptase), giving the canonical two-ORF jockey-clade architecture. The three misc_feature entries in the record were checked individually and mark secondary insertions found in OTHER derivative alleles (I factor in w-IR2, B104 in w-honey, pogo in w-eosin) - they are not disruptions of the white-one Doc copy deposited here, so the intact-autonomous framing holds. Confidence is medium rather than high solely because the Jockey-clade assignment rests on a passing (though peer-reviewed and phylogenetically grounded) Discussion statement in Villasante et al. 2007 rather than a dedicated clade table; the class-level non-LTR LINE call is high confidence from the deposit paper and record structure. Note the terminal misc_feature at 4693..4694 implies the element's 3' end is at or just before ~4692, i.e. the last ~30 bp may be flanking white sequence."
  },
- "elapsed_s": 0.032,
+ "elapsed_s": 0.016,
  "fetch_source": {
   "accession": "X17551.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "963c5fc67e5a726f3a62ff9ea8cc1c7cb2a0b59f55aef270a99a1831d51e50c2",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:50+00:00",
+   "createdUtc": "2026-08-06T16:16:22+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 4725,
     "sha256": "5a68aea5afca20cf4dcc1f03663c7d424fd047d7e230141c57459379a960122a"
    },
-   "manifestSha256": "7ef7133bbe427ec4905079bb85d5a88ac83ea83d9562cdc29143dd8996892d9a",
+   "manifestSha256": "b73c8bf2559d0c73089704c983d06e0900eca922e1ca5dca15182ae4aa750344",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -126,10 +127,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

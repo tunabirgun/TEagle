@@ -59,7 +59,7 @@
    "IUPAC-ambiguous template bases"
   ],
   "provenance": {
-   "createdUtc": "2026-08-06T03:58:20+00:00",
+   "createdUtc": "2026-08-06T20:29:38+00:00",
    "databases": [],
    "environment": {
     "machine": "AMD64",
@@ -71,7 +71,7 @@
     "length": 3618,
     "sha256": "43c2cb300ecbab57e1c9c30a25959964ae25f13e4ba36a0123883b73e9fe20c6"
    },
-   "manifestSha256": "e16465999c471d37202c0c9fc14181d1ae7474789d663d5f173095143e702d91",
+   "manifestSha256": "56e2586a9594facbea72b269afaca1b74a41161f49b2fbeef08c92c48067195f",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -98,10 +98,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "references": [],
   "truncated": false,
@@ -114,7 +114,7 @@
   "citation": "Dufresne M, Hua-Van A, Abd El Wahab H, Ben M'Barek S, Vasnier C, Teysset L, Kema GHJ, Daboussi M-J. Transposition of a fungal miniature inverted-repeat transposable element through the action of a Tc1-like transposase. Genetics. 2007;175(1):441-452. doi:10.1534/genetics.106.064360. PMID 17179071; PMCID PMC1775018.",
   "closest_bp": 485,
   "difference_bp": 0,
-  "elapsed_s": 0.014,
+  "elapsed_s": 0.017,
   "element": "mimp1 (miniature inverted-repeat transposable element, MITE) mobilised in trans by the impala Tc1/mariner-family transposase",
   "expected_bp": 485,
   "found": true,

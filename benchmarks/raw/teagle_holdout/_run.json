@@ -1,7 +1,7 @@
 {
  "corpus_path": "benchmarks/corpus_holdout.tsv",
  "corpus_rows": 44,
- "corpus_sha256": "eaf45caf15828dbca3747e2930fb12b2a9d4fc54c90a34fb652f1ef10fadd8a4",
+ "corpus_sha256": "6a97051afe10adf64ab53d54e479374be81d0420e6f180360b80ab7f6737f54a",
  "counts": {
   "analysed": 44,
   "failed": 0,
@@ -31,11 +31,11 @@
   "tsd_min_len": 2
  },
  "failures": [],
- "finished": "2026-08-05T23:39:51",
+ "finished": "2026-08-06T19:16:23",
  "panel_profiles": 30,
  "panel_sha256": "57f2b7881f35e2aeb2885430c80d7d514005d32b9f1f782e362189b3207858ac",
  "provenance_schema": null,
  "python": "3.12.10",
- "started": "2026-08-05T23:39:49",
- "teagle_version": "3.6.0"
+ "started": "2026-08-06T19:16:22",
+ "teagle_version": "3.7.0"
 }

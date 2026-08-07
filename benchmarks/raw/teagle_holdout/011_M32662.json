@@ -10,9 +10,10 @@
   "expected_superfamily": "Gypsy (Ty3)",
   "organism": "Trichoplusia ni (host); GenBank ORGANISM field is the ICTV virus taxon \"Trichoplusia ni TED virus\", host explicitly annotated /host=\"Trichoplusia ni\"",
   "panel": "ltr-gypsy",
+  "record_scope": "element",
   "why_safe": "The primary paper assigns TED to the gypsy/17.6 group from pol-domain sequence similarity, and the assignment has been carried forward independently by ICTV, which places this record's source taxon in Metaviridae; Errantivirus; Errantivirus trichoplusiae - i.e. within Ty3/Gypsy. The paper's stated element length (7,510 bp) equals the LOCUS length exactly, and the record annotates the LTR (1..273), the tRNA primer binding site, and the three gag/pol/env-like ORFs, so the deposit is the element. Organism field note: the record's SOURCE organism is the ICTV virus taxon \"Trichoplusia ni TED virus\" with /host=\"Trichoplusia ni\"; the biological host species (the moth in which TED is a retrotransposon) is Trichoplusia ni, which is what is reported here."
  },
- "elapsed_s": 0.035,
+ "elapsed_s": 0.019,
  "fetch_source": {
   "accession": "M32662.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "2374cb75fd6d41e5970d7cf99f0eac8fd3bbe7e23180374cde65ed006ce9ca5e",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:49+00:00",
+   "createdUtc": "2026-08-06T16:16:22+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 7510,
     "sha256": "9ff11ff98094f08b775bda9163f2e23dd6cca321bd22bfb3e9a702838145a71e"
    },
-   "manifestSha256": "2aaab4d6d4939ec4c58d8ab8f92e8d62826b7d955c511769defa06347224eb29",
+   "manifestSha256": "0dae65a3d03258e5e5db26a8f53359ad938968a76b79e8185bc95a934227b6b7",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -126,10 +127,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

@@ -10,9 +10,10 @@
   "expected_superfamily": "Gypsy (Ty3)",
   "organism": "Zea mays",
   "panel": "ltr-gypsy",
+  "record_scope": "element",
   "why_safe": "Zhong et al. 2002 supplies the deposit (the CRM element used in the maize CENH3 ChIP study) but never states a superfamily; the Ty3-gypsy label is taken from two later phylogenetic studies that assign the CR/CRM family on reverse-transcriptase sequence, one of which (Neumann 2011) defines the CRM chromovirus clade from an RT tree over 190 elements. Neither is a per-record annotation call on AY129008. The deposit is the element: mobile_element 1..7572 covers the whole record, with a single 4857-bp gag-pol CDS. Gives the panel a bona fide CRM-clade chromovirus. Maize is already represented in the corpus by other families, but this accession is not."
  },
- "elapsed_s": 0.041,
+ "elapsed_s": 0.02,
  "fetch_source": {
   "accession": "AY129008.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "9d857c24fad32a442db9f7ce90ee6254b6a52c25dedbe507f455c07377a38102",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:49+00:00",
+   "createdUtc": "2026-08-06T16:16:22+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 7572,
     "sha256": "a25e343161b0319f09e4b0332b9fe0ab0f54cdd494a7a884883a0ffa0051c70c"
    },
-   "manifestSha256": "12a8da33a6a05a126cbfd7ec04f269ed2ceb3da260a486dc235822bf50ad8e3d",
+   "manifestSha256": "5bf1d703ff3f547f940771a1ae07bcbd02dd81babca90662eb56135f7a821965",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -126,10 +127,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

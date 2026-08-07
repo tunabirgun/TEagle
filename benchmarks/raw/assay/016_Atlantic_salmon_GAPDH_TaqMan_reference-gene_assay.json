@@ -58,7 +58,7 @@
    "IUPAC-ambiguous template bases"
   ],
   "provenance": {
-   "createdUtc": "2026-08-06T03:58:36+00:00",
+   "createdUtc": "2026-08-06T20:30:07+00:00",
    "databases": [],
    "environment": {
     "machine": "AMD64",
@@ -70,7 +70,7 @@
     "length": 796,
     "sha256": "a739716b0ae08b2c6c18d1ed227fc1007576b89892470d748b173cbe2f01d1c9"
    },
-   "manifestSha256": "dbf579b0457e2a66886d5cd5e8208f47fe6152f793e75b5290b1b9080442bbc3",
+   "manifestSha256": "1f695c80509f1b2cff9ab39f0707e93accf94d615c367c575c9d09acbd167764",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -97,10 +97,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "references": [],
   "truncated": false,
@@ -113,7 +113,7 @@
   "citation": "Olsvik PA, Lie KK, Jordal AEO, Nilsen TO, Hordvik I. Evaluation of potential reference genes in real-time RT-PCR studies of Atlantic salmon. BMC Mol Biol. 2005;6:21. doi:10.1186/1471-2199-6-21. PMID 16293192; PMCID PMC1314898.",
   "closest_bp": 96,
   "difference_bp": 0,
-  "elapsed_s": 0.007,
+  "elapsed_s": 0.005,
   "element": "Non-TE control assay. Glyceraldehyde-3-phosphate dehydrogenase (GAPDH) evaluated as a real-time RT-PCR reference gene.",
   "expected_bp": 96,
   "found": true,

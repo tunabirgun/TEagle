@@ -10,9 +10,10 @@
   "expected_superfamily": "Gypsy (Ty3)",
   "organism": "Takifugu rubripes",
   "panel": "ltr-gypsy",
+  "record_scope": "element",
   "why_safe": "The gypsy assignment is the discovery paper's own sequence comparison of the gag and pol ORFs against known gypsy-class elements, with a specific sister-group relationship to MAGGY/CfT-1 - not a pipeline call, and post-dating the Ty3/Gypsy vs Bel/Pao split so the \"gypsy\" term is used in its modern sense. The deposit is the element: mobile_element 1..5645 covering the whole record, with 5' LTR 1..560; the paper's stated full length (5.645 kb) matches the LOCUS length. Independent later corroboration exists in the sushi-ichi/SIRH-PEG10 domestication literature, and the record notes it contains the ICTV exemplar Takifugu rubripes Sushi virus."
  },
- "elapsed_s": 0.032,
+ "elapsed_s": 0.013,
  "fetch_source": {
   "accession": "AF030881.2",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "8bc35f58ac187df50e79e7288691c6344f8a50d6c99955f956ebbb62632c70b7",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:49+00:00",
+   "createdUtc": "2026-08-06T16:16:22+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 5645,
     "sha256": "77cf67e76fcf7054836501757c8e969fddff49edb6553023758682a16df0e44a"
    },
-   "manifestSha256": "3c894fbe3c225d83a6027630040187ed0c0018509b6783c5ed37690f315df300",
+   "manifestSha256": "bd9744374f8dbc58cc28976f35ad42876306d6e8f8c7b3e1ae66f0c13ad6977a",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -126,10 +127,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

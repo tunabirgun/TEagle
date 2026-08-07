@@ -10,9 +10,10 @@
   "expected_superfamily": "Gypsy (Ty3)",
   "organism": "Lilium henryi",
   "panel": "ltr-gypsy",
+  "record_scope": "element",
   "why_safe": "The label comes from the 1989 discovery paper's own amino-acid comparisons of three conserved pol regions against Ty3 and the Drosophila gypsy group, made 15+ years before any modern TE annotation pipeline existed; the paper title states the assignment. The deposit is the element itself (record = del 1-46, 9345 bp, LTRs 1..2406 and the internal pol ORF annotated), and the paper's stated element length (9345 bp) matches the LOCUS length exactly. del is also the prototype of the Del/Tekay chromovirus lineage."
  },
- "elapsed_s": 0.033,
+ "elapsed_s": 0.007,
  "fetch_source": {
   "accession": "X13886.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "ec98b2c92c56bbd744ff7be80ed70abccec7a7222011c0ff3d25b3f5498cf9fc",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:49+00:00",
+   "createdUtc": "2026-08-06T16:16:22+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 9345,
     "sha256": "44511aff4db973a62db5e44f0a58d6218d91505915c52df71c516ff8bd1c742c"
    },
-   "manifestSha256": "7a2212f32760c2b94513c90b3a96b5414ac39538961ca1e1de692bc00059d179",
+   "manifestSha256": "d2e4a6b38ca11fee7c9ee53aa0c5635291c13f19bf0c90ec84dc810c5ef7db2a",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -126,10 +127,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

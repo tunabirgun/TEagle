@@ -10,9 +10,10 @@
   "expected_superfamily": "MULE (Mutator)",
   "organism": "Zea mays",
   "panel": "tir",
+  "record_scope": "element",
   "why_safe": "MuDR is the autonomous type element of the Mutator-like element (MULE) superfamily, established genetically by two independent 1991 papers. The deposit IS the element: mobile_element 1..4942 with mobile_element_type=transposon:MuDR, ~215 bp inverted repeat_regions at 1..215 and 4728..4942, and both mudrA (transposase) and mudrB genes annotated as complete cds. The Mu9/MuDR naming equivalence is taken from the record's own qualifier /note='transposon formerly called Mu9', not from recollection."
  },
- "elapsed_s": 0.024,
+ "elapsed_s": 0.014,
  "fetch_source": {
   "accession": "M76978.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "416eb1bf357f56a070d8d889366d420547a84a79313cd454e90de9d73bbb19d3",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:50+00:00",
+   "createdUtc": "2026-08-06T16:16:23+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 4942,
     "sha256": "cb5e5bc360ee4858cc506b7798a8ebae11f1f8f08be851f49e94d0516ab1e1d6"
    },
-   "manifestSha256": "e95fe0e25528e2e0208cfa2903c19c05c34d41f409b35f1c46fd4140596fd040",
+   "manifestSha256": "1debf8b68c7d7baa71433bb94ac7659e0d4c5e99d9134ce402b4306b2ba40f16",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -126,10 +127,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

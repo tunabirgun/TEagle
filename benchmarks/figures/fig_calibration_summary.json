@@ -9,12 +9,12 @@
   ]
  },
  "Moderate": {
-  "n": 22,
-  "correct": 21,
-  "accuracy": 0.9545,
+  "n": 20,
+  "correct": 20,
+  "accuracy": 1.0,
   "ci95": [
-   0.782,
-   0.9919
+   0.8389,
+   1.0
   ]
  },
  "Candidate": {

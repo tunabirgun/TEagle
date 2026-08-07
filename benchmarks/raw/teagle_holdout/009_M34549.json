@@ -10,9 +10,10 @@
   "expected_superfamily": "Gypsy (Ty3)",
   "organism": "Saccharomyces cerevisiae",
   "panel": "ltr-gypsy",
+  "record_scope": "element",
   "why_safe": "Ty3 is the type element that names the Ty3/Gypsy superfamily; the 1988 paper established, from domain order and RT similarity to Drosophila 17.6 (a gypsy-group element), that Ty3 is distinct from the Ty1/copia elements. That determination predates every TE annotation tool. This record is the transpositionally active Ty3 element: the feature table annotates the 5' sigma LTR (121..460) and 3' sigma LTR (5132..5471) with rpt_type=long_terminal_repeat, a complete gag3 CDS, and POL3; NCBI notes it \"contains ICTV exemplar Saccharomyces cerevisiae Ty3 virus\". The only non-element sequence is the flanking tRNA-Cys gene. (Note: the alternative Ty3-2 deposit M23367 was rejected because its feature table annotates no LTRs at all.)"
  },
- "elapsed_s": 0.048,
+ "elapsed_s": 0.02,
  "fetch_source": {
   "accession": "M34549.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "e3e42822d9bd1c7abd01bb51b013ab20de314076db1bd5a27c6e611903d14230",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:49+00:00",
+   "createdUtc": "2026-08-06T16:16:22+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 5510,
     "sha256": "7952d55004c46f50bd21437b43d4b99ade1c325e69b28760b9843cdb52a4073b"
    },
-   "manifestSha256": "a62b141cbbafbd5d442713500064b6535d8e9b45cf9dd838399cdd3e8384a509",
+   "manifestSha256": "e755fe58dee62692e54bd49d3a880054d482c75d879af2b968944314b36120bd",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -126,10 +127,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

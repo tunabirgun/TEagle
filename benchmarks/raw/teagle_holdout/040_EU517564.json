@@ -10,9 +10,10 @@
   "expected_superfamily": "",
   "organism": "Arabidopsis thaliana",
   "panel": "negative",
+  "record_scope": "element",
   "why_safe": "Confusion axis: plant ARP is an APE1/ExoIII-family abasic endonuclease, i.e. the Exo_endo_phos/DNase-I-like fold shared with the LINE-1 ORF2p EN domain - the same trap as Rrp1, sampled from a second kingdom. Tool-independence: the cited paper's evidence is loss-of-function genetics (seed-development phenotype of insertion lines), not homology-based annotation. mRNA deposit, complete cds 9..1625, single locus, no LTR/TIR/TSD/RT/transposase content. Note: I deliberately did NOT cite Babiychuk et al. 1994 PNAS (the original Arabidopsis Arp AP-endonuclease enzymology) because I could not confirm that ACB29409.1 in this record is the same locus as Babiychuk's ARP - the two 'ARP' deposits encode proteins of different length (Z49776 CDS 49..1938 -> 629 aa vs this record's 538 aa) and Murphy et al. deposited multiple abasic-endonuclease homologues. The AP-endonuclease label is safe either way; only the choice of citation was affected."
  },
- "elapsed_s": 0.023,
+ "elapsed_s": 0.012,
  "fetch_source": {
   "accession": "EU517564.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "81b4f6ff183139c0a1f2850bf879814b55ebcb872ae78b48d46ebaba426d9918",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:51+00:00",
+   "createdUtc": "2026-08-06T16:16:23+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 1735,
     "sha256": "3109f08c380947f0a5f7a4a7c71239f300aec8b97e3d729d79b934b8f9e08178"
    },
-   "manifestSha256": "a9034f9e41266aa3328176c59af9949d8c4ca78971b37e6292e29de99fbc44dc",
+   "manifestSha256": "5d70f7b6a83936646c98c54cf32fdd30b92fef223ae4c39ff94ca7589bcbffbc",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -126,10 +127,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

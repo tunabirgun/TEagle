@@ -58,7 +58,7 @@
    "IUPAC-ambiguous template bases"
   ],
   "provenance": {
-   "createdUtc": "2026-08-06T03:58:36+00:00",
+   "createdUtc": "2026-08-06T20:30:07+00:00",
    "databases": [],
    "environment": {
     "machine": "AMD64",
@@ -70,7 +70,7 @@
     "length": 1445,
     "sha256": "22632822e5a045f42b7cb391bc64161adbfebff98ded8b4c6ab466b304a047fd"
    },
-   "manifestSha256": "f7c8b77a83c580b9d93f1d723c77ae8780f4d1769418da4068f6269f0eef0dd7",
+   "manifestSha256": "a30650697b18dddf34b857d16234e7fd2b52b5cc12b9610b980c2856da729655",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -97,10 +97,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "references": [],
   "truncated": false,
@@ -113,7 +113,7 @@
   "citation": "Olsvik PA, Lie KK, Jordal AEO, Nilsen TO, Hordvik I. Evaluation of potential reference genes in real-time RT-PCR studies of Atlantic salmon. BMC Mol Biol. 2005;6:21. doi:10.1186/1471-2199-6-21. PMID 16293192; PMCID PMC1314898.",
   "closest_bp": 57,
   "difference_bp": 0,
-  "elapsed_s": 0.004,
+  "elapsed_s": 0.008,
   "element": "Non-TE control assay. Elongation factor 1 alpha paralogue A (EF1AA) evaluated as a real-time RT-PCR reference gene.",
   "expected_bp": 57,
   "found": true,

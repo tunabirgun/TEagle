@@ -10,9 +10,10 @@
   "expected_superfamily": "Tc1/Mariner",
   "organism": "Fusarium oxysporum f. sp. melonis",
   "panel": "tir",
+  "record_scope": "element",
   "why_safe": "The Tc1-mariner assignment appears verbatim in the primary paper's title, derived from transposase (DDE) sequence comparison rather than from any annotation tool, and autonomy was demonstrated experimentally in 2001. The deposit IS the element and is exceptionally clean: mobile_element 1..1281 (mobile_element_type=transposon:impala), 27 bp inverted repeat_regions at 1..27 and 1255..1281, and one complete transposase CDS 133..1155 (AAB33090.2). Strain FOM24, clone imp160, subfamily E; organism recorded here at binomial rank, the deposit specifies forma specialis melonis. Note this record supersedes S75106.1."
  },
- "elapsed_s": 0.02,
+ "elapsed_s": 0.007,
  "fetch_source": {
   "accession": "AF282722.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "0e07e24c2944e8bcf57c0e71fc9a9f52885ed1d852815daf2d05a1d474ec2585",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:50+00:00",
+   "createdUtc": "2026-08-06T16:16:23+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 1281,
     "sha256": "e45f59cd911af25ce69c6d22fde53deed28f5a9e6f13b450296e954edae4dce1"
    },
-   "manifestSha256": "bde614dece2222492a73a3ce68de0357fe36962f9db3588cdb3190c9b27c8179",
+   "manifestSha256": "435121e00fe0fa3eb9e2d32d7403b604c8f5e57943dfd232c0c495c0f6d75624",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -126,10 +127,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

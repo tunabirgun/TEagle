@@ -59,7 +59,7 @@
    "IUPAC-ambiguous template bases"
   ],
   "provenance": {
-   "createdUtc": "2026-08-06T03:52:24+00:00",
+   "createdUtc": "2026-08-06T20:24:43+00:00",
    "databases": [],
    "environment": {
     "machine": "AMD64",
@@ -71,7 +71,7 @@
     "length": 58617616,
     "sha256": "accf9a2898dcaa3f135d9b68179900f3fabe7d42db78bc43328b65e844b63347"
    },
-   "manifestSha256": "59096f208d471ae4f1ceb48e1cb91ffeb607177d63068093574194740ccf3b97",
+   "manifestSha256": "ce0f09f2c6324d7b9e615d278a705f1f938fc2a62591897266390d6c2aea3b8b",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -98,10 +98,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "references": [],
   "truncated": false,
@@ -114,7 +114,7 @@
   "citation": "Jha AR, Pillai SK, York VA, Sharp ER, Storm EC, Wachter DJ, Martin JN, Deeks SG, Rosenberg MG, Nixon DF, Garrison KE. Cross-sectional dating of novel haplotypes of HERV-K 113 and HERV-K 115 indicate these proviruses originated in Africa before Homo sapiens. Mol Biol Evol. 2009;26(11):2617-2626. doi:10.1093/molbev/msp180. PMID 19666991; PMCID PMC2760466.",
   "closest_bp": 303,
   "difference_bp": 0,
-  "elapsed_s": 153.608,
+  "elapsed_s": 108.244,
   "element": "HERV-K(HML-2) provirus K113 - LTR retroelement (betaretrovirus-like ERV); insertion-site / empty-allele PCR at 19p13.11",
   "expected_bp": 303,
   "found": true,

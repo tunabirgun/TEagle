@@ -1,5 +1,5 @@
 ﻿Tool,Version,Input,Structural,Domains,Family,Wicker,Abstains,Confidence,Primers,isPCR,Off-target,Provenance,GUI,Offline
-TEagle,3.6.0,single element,yes,yes,partial,yes,yes,yes,yes,yes,yes,yes,yes,yes
+TEagle,3.7.0,single element,yes,yes,partial,yes,yes,yes,yes,yes,yes,yes,yes,yes
 RepeatMasker,4.2.4,both,no,partial,yes,partial,no,partial,n.a.,n.a.,n.a.,no,partial,yes
 RepeatModeler2,2.0.9,whole genome,partial,partial,yes,partial,no,no,n.a.,n.a.,n.a.,no,no,yes
 EDTA,v2.3.0,whole genome,yes,partial,yes,yes,no,partial,n.a.,n.a.,n.a.,no,no,yes

@@ -10,9 +10,10 @@
   "expected_superfamily": "Gypsy (Ty3)",
   "organism": "Pyricularia grisea",
   "panel": "ltr-gypsy",
+  "record_scope": "element",
   "why_safe": "The label is the discovery paper's own, based on its analysis of the polyprotein domain organisation, and predates the annotation tools under test. The deposit is the element: mobile_element 1..7250 spans the whole record. Pyret is a useful stress case because the paper's headline finding is a non-canonical extra domain inserted between the nucleocapsid and protease domains - a structure that domain-order heuristics can misread while the published superfamily label stays fixed. Note on overlap: the species (Magnaporthe/Pyricularia grisea) already appears in the existing corpus via MAGGY and grasshopper, but this accession and element family are distinct and not on the exclusion list."
  },
- "elapsed_s": 0.046,
+ "elapsed_s": 0.017,
  "fetch_source": {
   "accession": "AB062507.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "00833b17ab07c5ec785e39c9c01eca643374ad67fe847aed2b61d0a664c65d2a",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:50+00:00",
+   "createdUtc": "2026-08-06T16:16:22+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 7250,
     "sha256": "f2b3131e81c6dd8268c8ea392902b17a971df1ac940aeb9ae722e4db20b89310"
    },
-   "manifestSha256": "46e1c12556d3c0ec04cfe961d8da2c34bf0deb6c7441ab0646515157f9b893a8",
+   "manifestSha256": "9014d044d1a87be369168336e2c39f20a0a58f39fe66811806366d30a056fa9f",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -126,10 +127,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

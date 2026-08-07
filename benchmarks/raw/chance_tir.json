@@ -14,8 +14,8 @@
   "identity_floor": 80,
   "note": "reported lengths are conditioned on find_tir's own detection floor, its identity gate and its low-complexity guard; sequences are uniform in base composition, and an AT-rich background would yield longer chance repeats than this measures"
  },
- "elapsed_s": 3.9,
- "generated": "2026-08-06T07:33:47",
+ "elapsed_s": 6.9,
+ "generated": "2026-08-06T23:33:06",
  "hit_rate": 0.01178,
  "hits": 53,
  "length_histogram": {
@@ -92,7 +92,7 @@
    17,
    17
   ],
-  "elapsed_s": 18.9,
+  "elapsed_s": 33.4,
   "first_seed": 20260806,
   "max_bp": 17,
   "min_bp": 15,
@@ -100,7 +100,7 @@
   "sequences_total": 22500
  },
  "supports_min_tir_standalone": true,
- "teagle_version": "3.6.0",
+ "teagle_version": "3.7.0",
  "trials": 4500,
  "trials_per_length": 1500
 }

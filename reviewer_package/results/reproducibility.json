@@ -8,7 +8,7 @@
   "run_at_defaults": true,
   "sealed_parameters": 9
  },
- "elapsed_s": 0.6,
+ "elapsed_s": 0.4,
  "fidelity": {
   "coverage_complete": true,
   "derivation": "engine._detector_parameters() via inspect.signature - never restated as a literal",
@@ -29,7 +29,7 @@
   "sealed_parameters": 21,
   "serialised_matches_live_derivation": true
  },
- "generated": "2026-08-06T06:51:42",
+ "generated": "2026-08-06T19:17:28",
  "replicates": 10,
  "seal_contents": {
   "database_checksums": [
@@ -79,21 +79,21 @@
  "stability": {
   "A": {
    "distinct_seal_hashes": 1,
-   "seal_sha256": "48c915de4421df8e47b0cd6b8cec39271ae1a12325f079a85192832c5dff79c2",
+   "seal_sha256": "f675220f8f693bb6241406918d73be4c5a12f3b4ca2b57fae54994df905ed64d",
    "stable": true
   },
   "A_one_base_changed": {
    "distinct_seal_hashes": 1,
-   "seal_sha256": "fa21d674508f9256bc165633c7e309eeae009b3e9a81a7873976719f5de253be",
+   "seal_sha256": "775331fa77a64c1f5720f6747d74f7fa11dce3f9e0859b00bbc7b855a03d396e",
    "stable": true
   },
   "B": {
    "distinct_seal_hashes": 1,
-   "seal_sha256": "5177ecd0026a115f268bdf7f11408511702653a242bb958a2085c98684a67c92",
+   "seal_sha256": "f92a08b6b76d23f1dc9aa684c89dc161ce38650b6c89954bac270e854847e97b",
    "stable": true
   }
  },
- "teagle_version": "3.6.0",
+ "teagle_version": "3.7.0",
  "volatile_fields_excluded": [
   "createdUtc"
  ]

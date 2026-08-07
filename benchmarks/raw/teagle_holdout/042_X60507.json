@@ -10,9 +10,10 @@
   "expected_superfamily": "",
   "organism": "Thermus thermophilus HB8",
   "panel": "negative",
+  "record_scope": "element",
   "why_safe": "Confusion axis: bacterial RNase HI is the reference fold for the RNase H domain carried in the pol polyprotein of every LTR retrotransposon/retrovirus and in many non-LTR elements, so an RNase-H-domain profile hit here is essentially guaranteed. Tool-independence: the label rests on in vivo complementation of an rnh-deficient E. coli strain and on Mg2+-dependent RNA:DNA-hybrid cleavage assayed with purified recombinant protein - enzymology, not annotation. The deposit is a 1062 bp discrete gene record for a single-copy housekeeping gene, with no RT, no integrase, no terminal repeats and no target-site duplications. Adds a thermophilic-bacterium taxon absent from the existing negative panel."
  },
- "elapsed_s": 0.019,
+ "elapsed_s": 0.003,
  "fetch_source": {
   "accession": "X60507.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "3cd452811fd4ec767c315b31a2f420d690b9aaa93f8463108b29e2e8eb1c06f8",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:51+00:00",
+   "createdUtc": "2026-08-06T16:16:23+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 1062,
     "sha256": "aeefcbc210242543509d151fa268caff0136812ff97feb39e5929f249ce22c2c"
    },
-   "manifestSha256": "c57edf15a1503fd864ba4d48970141ff709261c7aa07b29b56d04aad781cbf29",
+   "manifestSha256": "6ea1426f1389a0060cb169539e740fb248a45daeaee26584e6b800afdc6cb694",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -126,10 +127,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

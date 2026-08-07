@@ -59,7 +59,7 @@
    "IUPAC-ambiguous template bases"
   ],
   "provenance": {
-   "createdUtc": "2026-08-06T03:58:20+00:00",
+   "createdUtc": "2026-08-06T20:29:38+00:00",
    "databases": [],
    "environment": {
     "machine": "AMD64",
@@ -71,7 +71,7 @@
     "length": 85234,
     "sha256": "ee8a64275aa4b7d7381ecd97080d2b4b7ac5a95ce866fa1ace728e0aaa2d7a06"
    },
-   "manifestSha256": "ef6e94eccd002b6d51d9dcc93ff55525bf1afa697bc549faf8fb6147ebc354ba",
+   "manifestSha256": "85c6774fcecbb59e52b7906c2ee036dc53200f27740f3f334280423d2c55d0f1",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -98,10 +98,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "references": [],
   "truncated": false,
@@ -114,7 +114,7 @@
   "citation": "Salem AH, Ray DA, Hedges DJ, Jurka J, Batzer MA. Analysis of the human Alu Ye lineage. BMC Evolutionary Biology 2005;5:18. doi:10.1186/1471-2148-5-18. PMID 15725352; PMCID PMC554112.",
   "closest_bp": 494,
   "difference_bp": 0,
-  "elapsed_s": 0.215,
+  "elapsed_s": 0.348,
   "element": "Alu Ye5 (SINE, non-LTR); Alu Ye lineage insertion polymorphism",
   "expected_bp": 494,
   "found": true,

@@ -67,16 +67,44 @@ def test_line_tier_never_claims_intact():
         assert "autonomous" not in tier.lower()
 
 
+def test_a_lone_reverse_transcriptase_is_not_a_line_even_with_a_polya_tail():
+    """The telomerase regression, and the reason the fixtures below carry an ORF1p.
+
+    Human telomerase catalytic subunit is deposited as an mRNA (AF018167). Its sole detected domain is a
+    reverse transcriptase and, being an mRNA, it carries a poly-A tail. An earlier rule admitted that tail
+    as evidence of target-primed reverse transcription, so the record satisfied "RT, no integrase, no LTR,
+    tail present" and a telomerase gene was called a non-LTR retrotransposon. Every mRNA and cDNA deposit
+    has a poly-A tail, so it separates nothing and cannot license the call.
+
+    Neither rank may be assigned here: telomerase and group II intron maturases both present as a lone
+    reverse transcriptase, and the bundled panel carries one RT model rather than a clade-resolved set."""
+    for structural_ev, what in (([], "no tail"), (_POLYA, "with a poly-A tail")):
+        cl = classify.classify(structural_ev, [_rt_domain()])
+        assert cl["te_class"] != "LINE", f"lone RT {what} was called a LINE"
+        assert "line" not in (cl["superfamily"] or "").lower(), f"lone RT {what} named a LINE superfamily"
+        assert cl["order"] is None, f"lone RT {what} was given an order"
+        assert "class i" not in (cl["class"] or "").lower(), f"lone RT {what} asserted Class I"
+
+
+def test_the_uncredited_polya_tail_is_reported_rather_than_silently_dropped():
+    """Declining to credit evidence is itself a result the ledger must carry. A reader who can see the
+    tail in the record needs to be told why it did not count, not left to infer that it was missed."""
+    ev = " ".join(classify.classify(_POLYA, [_rt_domain()])["evidence"]).lower()
+    assert "poly-a" in ev
+    assert "not credited" in ev
+
+
 def test_line_without_a_tail_is_only_a_candidate():
-    """The tail is the sole positive evidence; without it the call rests on an absence."""
-    assert classify.classify([], [_rt_domain()])["confidence"] == "Candidate"
-    assert classify.classify(_POLYA, [_rt_domain()])["confidence"] == "Moderate"
+    """The tail raises confidence once a LINE is licensed on coding grounds. ORF1p is what licenses it
+    here: the tail can corroborate a call it is no longer permitted to make on its own."""
+    assert classify.classify([], [_rt_domain(), _orf1()])["confidence"] == "Candidate"
+    assert classify.classify(_POLYA, [_rt_domain(), _orf1()])["confidence"] == "Moderate"
 
 
 def test_line_call_names_the_alternative_it_cannot_exclude():
     """DIRS is now tested directly (a YR branch ahead of the RT branch), so it is no longer a hedge.
     Penelope-like elements stay unexcluded because their GIY-YIG endonuclease is not in the panel."""
-    ev = " ".join(classify.classify(_POLYA, [_rt_domain()])["evidence"]).lower()
+    ev = " ".join(classify.classify(_POLYA, [_rt_domain(), _orf1()])["evidence"]).lower()
     assert "penelope" in ev
     assert "not excluded" in ev
 

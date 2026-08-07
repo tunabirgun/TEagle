@@ -71,11 +71,11 @@
   },
   "Moderate": {
    "class": {
-    "abstention_rate": 0.0,
-    "accuracy": 0.9333,
-    "ci95_high": 0.9881,
-    "ci95_low": 0.7018,
-    "n_answered": 15,
+    "abstention_rate": 0.0667,
+    "accuracy": 1.0,
+    "ci95_high": 1.0,
+    "ci95_low": 0.7847,
+    "n_answered": 14,
     "n_correct": 14,
     "n_gradable": 15
    },
@@ -242,11 +242,11 @@
   },
   "negative": {
    "class": {
-    "abstention_rate": 0.875,
-    "accuracy": 0.0,
-    "ci95_high": 0.7935,
-    "ci95_low": 0.0,
-    "n_answered": 1,
+    "abstention_rate": 1.0,
+    "accuracy": null,
+    "ci95_high": null,
+    "ci95_low": null,
+    "n_answered": 0,
     "n_correct": 0,
     "n_gradable": 8
    },
@@ -1474,11 +1474,11 @@
    "input_length": 3279,
    "input_sha256": "72aa233b013711cab8a06790e9e13242f57918259f5ad93510213e372cf05c0e",
    "n_domains": 1,
-   "observed_class": "CLASS_I",
+   "observed_class": "NO_CALL",
    "observed_order": "ABSTAIN",
-   "observed_superfamily": "retrotransposon (partial)",
+   "observed_superfamily": "reverse transcriptase, class unassigned",
    "observed_superfamily_token": "ABSTAIN",
-   "observed_te_class": "retro/partial",
+   "observed_te_class": "retro/unassigned",
    "orfs_unscanned": 0,
    "organism": "Euplotes aediculatus",
    "panel": "negative",
@@ -1688,23 +1688,17 @@
  "distinct_inputs_scored": 44,
  "excluded_cases": [],
  "negative_controls": {
-  "correctly_not_called": 7,
-  "false_positives": [
-   {
-    "accession": "U95964",
-    "called": "retro/partial",
-    "confidence": "Moderate"
-   }
-  ],
+  "correctly_not_called": 8,
+  "false_positives": [],
   "n": 8
  },
  "overall": {
   "class": {
-   "abstention_rate": 0.1818,
-   "accuracy": 0.9722,
-   "ci95_high": 0.9951,
-   "ci95_low": 0.8583,
-   "n_answered": 36,
+   "abstention_rate": 0.2045,
+   "accuracy": 1.0,
+   "ci95_high": 1.0,
+   "ci95_low": 0.9011,
+   "n_answered": 35,
    "n_correct": 35,
    "n_gradable": 44
   },
@@ -1821,7 +1815,7 @@
   {
    "accession": "U95964",
    "expected": "",
-   "observed": "retrotransposon (partial)",
+   "observed": "reverse transcriptase, class unassigned",
    "panel": "negative",
    "reason": "no superfamily label in the corpus"
   },

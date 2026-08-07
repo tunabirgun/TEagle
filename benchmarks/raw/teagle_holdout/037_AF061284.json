@@ -10,9 +10,10 @@
   "expected_superfamily": "",
   "organism": "Tetrahymena thermophila",
   "panel": "negative",
+  "record_scope": "element",
   "why_safe": "Confusion axis: TERT carries an authentic RT fingers-palm-thumb fold with the canonical RT motifs, so any RT-HMM/domain-based TE caller can match it exactly as it matches LINE ORF2p or LTR pol. Tool-independence: Collins & Gandhi identified p133 by biochemical purification of the telomerase RNP and epitope-tagging/functional assay in Tetrahymena, not by homology search or repeat annotation. The deposit is the mRNA of a single-copy nuclear host gene, with no LTRs, no TIRs, no target-site duplications and no gag/transposase ORF."
  },
- "elapsed_s": 0.023,
+ "elapsed_s": 0.007,
  "fetch_source": {
   "accession": "AF061284.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "f13172f35f1e203c348b73eda2c0a2ea0e13c93adde35dc917a404c927a58618",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:50+00:00",
+   "createdUtc": "2026-08-06T16:16:23+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 3481,
     "sha256": "e987b829299aca546657b28b7bec109f47a0f52b79862364999a4e56488aea44"
    },
-   "manifestSha256": "c678bbddb715afe9f19bcfa6111a3bc0b1c67cd137e2e2729ce69b6fb4c81e80",
+   "manifestSha256": "17ecdf2aa00ccc76ef2e12fe3d9909b81c93767dfc3088199f364d3f4f9ce1ca",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -110,10 +111,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

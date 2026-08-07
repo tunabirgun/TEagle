@@ -10,9 +10,10 @@
   "expected_superfamily": "Gypsy (Ty3)",
   "organism": "Lotus japonicus",
   "panel": "ltr-gypsy",
+  "record_scope": "element",
   "why_safe": "The classification is the discovery paper's own, asserted in its title, and is reinforced independently by Fukai E et al. (2010) PLoS Genet 6(3):e1000868, \"Derepression of the plant Chromovirus LORE1 induces germline transposition in regenerated plants\", which treats LORE1 as a chromovirus - the chromodomain-bearing lineage inside Ty3/Gypsy. Neither statement derives from running an annotation tool on this record. The deposit is the element: repeat_region 137..5177 is annotated as \"TY3-gypsy retrotransposon LORE1a\" with its LTR (137..361) and a single 4527-bp ORF, inside a 5406-bp record. Adds an autonomous, transpositionally active eudicot (legume) element to the panel."
  },
- "elapsed_s": 0.034,
+ "elapsed_s": 0.02,
  "fetch_source": {
   "accession": "AJ966990.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "0e6cf01fa2e13efe6156e6efead7f7a0bc20f5a7582398aaa9b2cddb6e1415ca",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:49+00:00",
+   "createdUtc": "2026-08-06T16:16:22+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 5406,
     "sha256": "4a6aaf011922b84bdc29aa181fa6601a51c9c00420a9cb5aa0a11caa41b5843d"
    },
-   "manifestSha256": "8d45f0cbaf051a41ba8729fc5e5424e7fa768ae9738b9bfdb10f5e52e58c4d38",
+   "manifestSha256": "e172dc4e142b7cbc045e99e75819a7916eddb0238b35802852abe23edf566c7f",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -126,10 +127,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

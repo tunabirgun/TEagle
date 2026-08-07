@@ -4,7 +4,7 @@ Everything needed to check a number in the manuscript, in one place. This is a c
 that also lives in `benchmarks/` and is assembled so that a reviewer does not have to navigate the working
 tree. Nothing here is unique to this folder; it is a convenience, not a separate deposit.
 
-TEagle 3.6.0. Corpora and results correspond to the manuscript as submitted.
+TEagle 3.7.0. Corpora and results correspond to the manuscript as submitted.
 
 ## What is here
 

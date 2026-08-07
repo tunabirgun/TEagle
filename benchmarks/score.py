@@ -144,9 +144,20 @@ def observed(cl: dict):
     else:
         order = "OTHER"
 
+    # The class is read from the class field, never inferred from a withheld order.
+    #
+    # "ABSTAIN" used to appear in the CLASS_I list, so any te_class beginning "retro/" scored as a Class I
+    # call regardless of what the classifier said about the class. That made the order abstention itself
+    # manufacture a class assertion, and it hid the case this matters for: when the classifier withholds
+    # BOTH ranks - a lone reverse transcriptase, which telomerase and group II intron maturases also
+    # produce - the scorer still recorded Class I, and a negative control that the tool had correctly
+    # declined to call was counted as called.
+    #
+    # 'retro/partial' still scores CLASS_I, because there the classifier does assert the class and withholds
+    # only the order; it says so in its class field, which is now what decides this.
     if "class ii" in klass or order == "TIR":
         c = "CLASS_II"
-    elif "class i" in klass or order in ("LTR", "LINE", "SINE", "ABSTAIN"):
+    elif "class i" in klass or order in ("LTR", "LINE", "SINE"):
         c = "CLASS_I"
     else:
         c = "NO_CALL"
@@ -204,6 +215,12 @@ SF_OBSERVED = {
     "LTR retrotransposon (superfamily undetermined)": ABSTAIN,   # classify.py:143/183/228/242
     "LTR retrotransposon (no coding domains detected)": ABSTAIN,  # classify.py:375
     "retrotransposon (partial)": ABSTAIN,                        # classify.py:202
+    # A lone reverse transcriptase, withheld at every rank. This is the one refusal that declines the
+    # CLASS as well: telomerase and group II intron maturases both present as a bare RT, and the bundled
+    # panel carries a single RT model, so the record cannot be shown to be a transposable element at all.
+    # It reads as an abstention here for the same reason as its neighbours -- the tool declined to answer,
+    # and an abstention is never scored as an error.
+    "reverse transcriptase, class unassigned": ABSTAIN,
     "LINE (non-LTR)": ABSTAIN,                                   # classify.py:208 - order named, see above
     "non-autonomous TIR element (superfamily undetermined)": ABSTAIN,   # classify.py:394
     "terminal inverted repeat, class unassigned": ABSTAIN,       # classify.py:405

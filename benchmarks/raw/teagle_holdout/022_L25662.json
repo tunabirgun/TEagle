@@ -10,9 +10,10 @@
   "expected_superfamily": "Tad1",
   "organism": "Neurospora crassa",
   "panel": "line",
+  "record_scope": "element",
   "why_safe": "The class label is the deposit paper's title claim ('an active LINE-like element'), and Tad is the experimentally demonstrated actively transposing element of Neurospora, so activity/autonomy is not inferred from sequence. Full-length status is attested structurally by the deposit itself: target-site duplications are annotated at BOTH ends as repeat_region order(36..50, 6974..6988), bracketing an ~6.9 kb element, with ORF1 (gag-like, CDS 158..1618) and ORF2 present - a complete element with both flanks, not a fragment. Confidence is medium rather than high only on the superfamily field: Tad1 is a legitimate non-LTR clade in the Malik/Burke/Eickbush RT-phylogeny scheme (and in Repbase's clade list), but it lies outside the six clades this panel enumerates, and I could not quote a sentence from Malik et al. 1999 naming Tad specifically because the clade roster is in the paper's figures, not the abstract. The class-level call is high confidence. Precedent for accepting a clade outside the enumerated set exists in the corpus, which already carries R4 (U29445) and I (M14954) under line-nonltr."
  },
- "elapsed_s": 0.039,
+ "elapsed_s": 0.012,
  "fetch_source": {
   "accession": "L25662.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "6db4ce24f32e01abb26cf7d014e17dd7923bc1002f7046b19f62350b2075184c",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:50+00:00",
+   "createdUtc": "2026-08-06T16:16:23+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 7029,
     "sha256": "5f4474d420ba307ac5bf3544a67cd995bab58b152ebc748eacc224ec37373e84"
    },
-   "manifestSha256": "14c538705b92d52bb31ca0da0b611f8a8e8a2810acfc6659edc54c7e7b5f3060",
+   "manifestSha256": "fee5dcb9f6acfeb488ac14ef27a59286df5f1a1c7d8df8405424c25752108049",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -126,10 +127,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

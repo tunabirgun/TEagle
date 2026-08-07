@@ -10,9 +10,10 @@
   "expected_superfamily": "",
   "organism": "Mus musculus",
   "panel": "negative",
+  "record_scope": "element",
   "why_safe": "Confusion axis: highly abundant tandem repeat that trips repeat-content and low-complexity masking, which is the same signal many pipelines use to nominate TE candidates - but it has no ORF, no RT, no transposase, no LTRs and no TIRs, so it is a pure repeat-content false positive rather than a domain false positive. Tool-independence: satellite identity was established by buoyant-density fractionation and direct sequencing of the isolated satellite fraction, an experimental definition with no annotation step. The record length (234 bp) is the major-satellite monomer itself, so the deposit is the repeat unit, not a clone containing it. Complements the excluded human alpha-satellite row (X07685) with a rodent satellite of independent origin."
  },
- "elapsed_s": 0.043,
+ "elapsed_s": 0.013,
  "fetch_source": {
   "accession": "V00846.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "aa8cae708b087212896a8ecab9ef2cac1b2a68a6ad217c989869d9bbc8c221a4",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:51+00:00",
+   "createdUtc": "2026-08-06T16:16:23+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 234,
     "sha256": "cc8d20c22364b9125e52c644c1c15b58005cd1215cc052ea2a1814aba46821d2"
    },
-   "manifestSha256": "31a5eef5e7be329e45389bbc22cec0bf77a35f464869bef40b365d8bb4b43c1f",
+   "manifestSha256": "bad743a173b67fc5428c8b1ac0c28b20829f7cfaecea4b2b4add9829a37241c4",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -110,10 +111,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

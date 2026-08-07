@@ -58,7 +58,7 @@
    "IUPAC-ambiguous template bases"
   ],
   "provenance": {
-   "createdUtc": "2026-08-06T03:58:36+00:00",
+   "createdUtc": "2026-08-06T20:30:07+00:00",
    "databases": [],
    "environment": {
     "machine": "AMD64",
@@ -70,7 +70,7 @@
     "length": 556,
     "sha256": "9bc1dce8058a7d6e922f6fe8ee01b01ca068a2180949f5e2e625252df76228da"
    },
-   "manifestSha256": "6820f398ea18b896962a4c8e666ac1818fe2b547a49ce4a579f40e85dfaf1569",
+   "manifestSha256": "6d9a7828dd6f3429af2e0adb3f7d070a8d664261504a5d322244cb3f13376b14",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -97,10 +97,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "references": [],
   "truncated": false,
@@ -113,7 +113,7 @@
   "citation": "Maroufi A, Van Bockstaele E, De Loose M. Validation of reference genes for gene expression analysis in chicory (Cichorium intybus) using quantitative real-time PCR. BMC Mol Biol. 2010;11:15. doi:10.1186/1471-2199-11-15. PMID 20156357; PMCID PMC2830926.",
   "closest_bp": 101,
   "difference_bp": 0,
-  "elapsed_s": 0.0,
+  "elapsed_s": 0.003,
   "element": "Non-TE control assay. Nuclear beta-tubulin used as a candidate RT-qPCR reference gene.",
   "expected_bp": 101,
   "found": true,

@@ -10,9 +10,10 @@
   "expected_superfamily": "hAT",
   "organism": "Zea mays",
   "panel": "tir",
+  "record_scope": "element",
   "why_safe": "Ac is the type element of the superfamily and the hAT grouping was established by protein-sequence comparison in Calvi et al. 1991, not by any pipeline. The deposit IS the element (mobile_element 1..4565, mobile_element_type=transposon:Ac element, imperfect inverted repeat annotated at 1..11). Record-level caveat: the feature table carries the original 1984-era ORF1/ORF2/ORF3 CDS calls, not the 5-exon spliced transposase defined by Kunze & Starlinger 1989, so the transposase is not present as a single contiguous CDS in this record."
  },
- "elapsed_s": 0.019,
+ "elapsed_s": 0.007,
  "fetch_source": {
   "accession": "X01380.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "4bbfd5932862cf4987ece3ec697933289f84bc6ac4740fa471d6e4cf5fb24fd4",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:50+00:00",
+   "createdUtc": "2026-08-06T16:16:23+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 4565,
     "sha256": "1c33f49609bb87296b351566782b07570ba61a7d0a715ab685b3ac6bee5880a0"
    },
-   "manifestSha256": "956ea04891598a693b65ceacc9972ced99e0f9a811f1783e5157f2be777e4ba6",
+   "manifestSha256": "8f5522c6db68939d956d10d26a439a8f7bc4ddb97c9557be4ad8c1ec658f5640",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -126,10 +127,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

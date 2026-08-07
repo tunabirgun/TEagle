@@ -10,9 +10,10 @@
   "expected_superfamily": "Retroviridae, Epsilonretrovirus (RMERV)",
   "organism": "Rhinella marina (host); ORGANISM field on the record is Rhinella marina endogenous retrovirus",
   "panel": "erv",
+  "record_scope": "element",
   "why_safe": "Genus assignment ('a distinct epsilonretrovirus') is stated in words by the authors who described the element, from their own phylogenetic analysis, and their endogeneity evidence is independent of any repeat annotator (8 complete proviruses plus 21 truncated insertions found in the assembled cane toad genome, with an insertion-age estimate). Record annotates both LTRs (1-471, 9739-10209) and gag (1207-3828), pol (3886-7680, 'protease, reverse transcriptase, integrase') and env (7668-9569) CDSs. Caveat for the benchmark: mol_type is RNA and the deposit is a Trinity assembly from a pooled liver transcriptome, i.e. a consensus provirus rather than a cloned genomic locus."
  },
- "elapsed_s": 0.06,
+ "elapsed_s": 0.015,
  "fetch_source": {
   "accession": "MG981046.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "01417ddf4d7ec336b9d1d5b1615b8bc7caed8d9240dfabc3c9fb1d6330628b52",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:50+00:00",
+   "createdUtc": "2026-08-06T16:16:23+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 10209,
     "sha256": "c881417d71214f1b2564adec911e8c3b484e25fad7288205d9ac2e69323e17d1"
    },
-   "manifestSha256": "26d166de0a09ad6958581631954bb4d2706ee1affc1cd6184340011b32c7073a",
+   "manifestSha256": "b6524a1e794addb24286783234943c844b2243531f8ab6ac1015b9e859054cff",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -126,10 +127,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

@@ -9,6 +9,46 @@ and propagates to the backend health endpoint, the UI header badge, every run
 provenance manifest, the packaged executable's Windows file-version metadata, and
 the LaTeX report title page.
 
+## [3.7.0] — 2026-08-06
+
+A correctness release for the classifier's Class I branch, and a data-integrity fix in the benchmark
+harness that changes previously published numbers. **Results change for records whose only detected
+domain is a reverse transcriptase.** No element that carried corroborating evidence loses its call.
+
+### Fixed
+- **A lone reverse transcriptase no longer establishes a transposable element.** Two defects compounded.
+  The guard added in 3.6.0 admitted a poly-A tail as evidence that a record was LINE-like; human
+  telomerase catalytic subunit is deposited as an mRNA, so its poly-A belongs to the transcript, and the
+  tail defeated the guard. The record fell through to the LINE branch and a telomerase gene was called a
+  non-LTR retrotransposon. Separately, any reverse-transcriptase hit asserted Class I before corroboration
+  was weighed. Telomerase and group II intron maturases both carry a reverse transcriptase, and the
+  bundled panel holds a single RT model rather than a clade-resolved set, so it cannot say which kind it
+  found. A reverse transcriptase unaccompanied by an ORF1p, an ORF2p endonuclease, RNase H, gag, protease
+  or envelope now assigns neither class nor order, and the uncredited poly-A tail is reported rather than
+  silently dropped. Negative-control false positives fell from 2 to 0 on the broader corpus and from 1 to
+  0 on the validation corpus, at a cost of one answered case.
+- **The scorer inferred a class assertion from a withheld order.** `benchmarks/score.py` mapped any
+  `retro/*` result to an order abstention and then read that abstention as a Class I call, so a record
+  whose class the classifier had explicitly withheld was still counted as classified. The class is now
+  read from the class field.
+- **The benchmark raw directory accumulated orphaned case files, and they were being scored.** Cases are
+  named by corpus row index, so inserting a row shifts every index below it; `--force` rewrote cases under
+  their new names and left the old files in place. The directory held 232 files for 135 corpus rows, some
+  predating a classifier change, so records produced by two different rule sets were scored together and
+  cases were counted twice. **The accuracy figures published for 3.6.0 were computed over that inflated
+  set and were wrong.** On a de-duplicated corpus, class and order accuracy are 1.000 on answered cases
+  for both the old and the new decision rules — the improvement over 3.6.0 came from removing the
+  duplicates, not from the classifier fix. `tests/test_raw_output_has_no_orphans.py` now fails the build
+  when the directory holds more files than the run reported or more copies of an accession than the corpus
+  has rows citing it.
+
+### Changed
+- Confidence tiers are unchanged and are **not** recalibrated. All three now score 1.000 on this corpus
+  (High 36/36, Moderate 20/20, Candidate 11/11) and their intervals differ only because the counts differ,
+  so the corpus provides no evidence that they differ in reliability. Re-fitting the boundaries to it
+  would be tuning on the evaluation set. The tiers rank the kind of evidence behind a call, not a measured
+  accuracy, and the documentation now says so.
+
 ## [3.6.0] — 2026-08-05
 
 Benchmarking against an external classifier located four defects in how the classifier decides an *order*,

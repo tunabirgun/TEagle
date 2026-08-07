@@ -10,9 +10,10 @@
   "expected_superfamily": "Copia (Ty1)",
   "organism": "Avena sativa",
   "panel": "ltr-copia",
+  "record_scope": "element",
   "why_safe": "Ty1-copia assignment is in the primary paper's title, and the paper also places OARE-1 in the BARE-1 subgroup - BARE-1 is independently an established Copia element (already in this corpus as Z17327), which corroborates the call from a second direction. LINKAGE: the GenBank REFERENCE is 'Unpublished' ('OARE-1, an LTR-retrotransposon isolated from oat'), so the link is inferential, but it is tight - the record length (8,665 bp) matches the paper's stated complete-copy length exactly, and four of the five deposit authors (Kimura, Sogo, Tosa, Nakayashiki, Mayama) are authors on the paper. STRUCTURAL CAVEAT: the DEFINITION calls the gag-pol a pseudogene, so the ORF is disrupted; use for LTR/domain-content, not for intact-ORF testing."
  },
- "elapsed_s": 0.042,
+ "elapsed_s": 0.017,
  "fetch_source": {
   "accession": "AB061327.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "3606c2ec609202e1f55883995f1f1d9090415bbd105050f9a202bfe6eedb310b",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:49+00:00",
+   "createdUtc": "2026-08-06T16:16:22+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 8665,
     "sha256": "c39bdb12a158270c01f76819a9848ed9b30db6e7da7efd672680433c1135b526"
    },
-   "manifestSha256": "56060d3e0b46e9b3b065125e70f84b39c7205f2ebd3b481b482f454d1fafcf26",
+   "manifestSha256": "60982fcf2c0a7a98d4c05a1d1475414b41a2954298da9bcdb6ea839ecb429ee4",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -126,10 +127,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

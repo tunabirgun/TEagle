@@ -59,7 +59,7 @@
    "IUPAC-ambiguous template bases"
   ],
   "provenance": {
-   "createdUtc": "2026-08-06T03:58:36+00:00",
+   "createdUtc": "2026-08-06T20:30:07+00:00",
    "databases": [],
    "environment": {
     "machine": "AMD64",
@@ -71,7 +71,7 @@
     "length": 24070,
     "sha256": "d325c31ca200e2b4f710c62fab669c1bffeebbb27246ea927341863650ba7a0c"
    },
-   "manifestSha256": "f161cfee4841f3ea136474e55b508730639bba007f9d78768fbde826f992bc6b",
+   "manifestSha256": "5965874f4a2176a022ba496a688b067619a70da38179bedf4d5f14b3b61e6199",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -98,10 +98,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "references": [],
   "truncated": false,
@@ -114,7 +114,7 @@
   "citation": "Rigat B, Hubert C, Corvol P, Soubrier F. PCR detection of the insertion/deletion polymorphism of the human angiotensin converting enzyme gene (DCP1) (dipeptidyl carboxypeptidase 1). Nucleic Acids Res. 1992;20(6):1433. doi:10.1093/nar/20.6.1433-a. PMID 1313972; PMCID PMC312213.",
   "closest_bp": 480,
   "difference_bp": -10,
-  "elapsed_s": 0.062,
+  "elapsed_s": 0.099,
   "element": "Alu element (SINE), 287 bp, inserted in intron 16 of the ACE/DCP1 gene at 17q23",
   "expected_bp": 490,
   "found": true,

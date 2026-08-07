@@ -10,9 +10,10 @@
   "expected_superfamily": "Copia (Ty1)",
   "organism": "Citrus sinensis",
   "panel": "ltr-copia",
+  "record_scope": "element",
   "why_safe": "The Copia call comes from the primary describing paper's own title, and that paper is REFERENCE 1 of the GenBank record itself (verified in the flatfile: Rico-Cabanas & Martinez-Izquierdo, Mol. Genet. Genomics 277(4):365-377 (2007), PUBMED 17216224). No annotation pipeline, no RepeatMasker, no inference from sequence. The deposit IS the element (title is the element, 5,044 bp, no host gene included)."
  },
- "elapsed_s": 0.255,
+ "elapsed_s": 0.104,
  "fetch_source": {
   "accession": "AM040263.2",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "2f4676d0e0e6f5817c60eb4ac3584449e590484c523e60cd8156dc05ffe89f5f",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:49+00:00",
+   "createdUtc": "2026-08-06T16:16:22+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 5044,
     "sha256": "f899d7bcd1fa51f7050d05bac4621d45fd6c4b9e84c6749a1a782a0d3ee1b004"
    },
-   "manifestSha256": "e25b32e89d61e10d3c8454e09a8d388bb2c1a54b9357f64854bbe98672b21a5b",
+   "manifestSha256": "46baf114f7719a8d276c1aa79d2877858a2cee309712212ef271f8c847327508",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -126,10 +127,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

@@ -28,7 +28,10 @@ def test_protease_evidence_recorded_from_pr_code():
 def test_line_polyt_not_mislabeled_as_polya():
     # a LINE with only a 5' poly-T tract must not be reported as a "3' poly-A tail"
     struct = [{"type": "poly-T (5')", "length": 20, "pos": [0, 20]}]
-    cl = classify.classify(struct, [_dom("RT", (100, 1000), "+", 90)])
+    # ORF1p is what licenses the LINE call; the tract only names which tail was seen. Without a coding
+    # module a lone RT no longer reaches this branch at all, because telomerase presents the same way.
+    cl = classify.classify(struct, [_dom("RT", (100, 1000), "+", 90),
+                                    _dom("ORF1", (10, 90), "+", 200)])
     ev = " ".join(cl["evidence"])
     assert "poly-T" in ev and "poly-A tail consistent" not in ev
 

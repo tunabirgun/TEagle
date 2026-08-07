@@ -59,7 +59,7 @@
    "IUPAC-ambiguous template bases"
   ],
   "provenance": {
-   "createdUtc": "2026-08-06T03:58:18+00:00",
+   "createdUtc": "2026-08-06T20:29:35+00:00",
    "databases": [],
    "environment": {
     "machine": "AMD64",
@@ -71,7 +71,7 @@
     "length": 13271,
     "sha256": "9c4012b471439096cc22d2eb894a4c4a5522d72c76ea3a1e347bc57ef6c7fa1c"
    },
-   "manifestSha256": "d24cf8ea163f66de8352471f6b58be099ab88661e0318fe1e67d7fe4369ddd38",
+   "manifestSha256": "2c380baedb9b43a1463d3f9135be67ce2dec182bca3f1f052741c1fbbefbd65e",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -98,10 +98,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "references": [],
   "truncated": false,
@@ -114,7 +114,7 @@
   "citation": "Chang W, Jääskeläinen M, Li S-P, Schulman AH. BARE retrotransposons are translated and replicated via distinct RNA pools. PLoS One. 2013;8(8):e72270. doi:10.1371/journal.pone.0072270. PMID 23940808; PMCID PMC3735527.",
   "closest_bp": 1303,
   "difference_bp": 28,
-  "elapsed_s": 0.031,
+  "elapsed_s": 0.06,
   "element": "BARE1 (BARE-1) Ty1/copia-group LTR retrotransposon; gag-PR region, element-internal",
   "expected_bp": 1275,
   "found": true,

@@ -2,23 +2,23 @@
  "by_confidence_tier": {
   "Candidate": {
    "class": {
-    "abstention_rate": 0.4857,
-    "accuracy": 0.9444,
-    "ci95_high": 0.9901,
-    "ci95_low": 0.7424,
-    "n_answered": 18,
-    "n_correct": 17,
-    "n_gradable": 35
-   },
-   "n": 36,
-   "order": {
-    "abstention_rate": 0.6857,
+    "abstention_rate": 0.7027,
     "accuracy": 1.0,
     "ci95_high": 1.0,
     "ci95_low": 0.7412,
     "n_answered": 11,
     "n_correct": 11,
-    "n_gradable": 35
+    "n_gradable": 37
+   },
+   "n": 38,
+   "order": {
+    "abstention_rate": 0.7027,
+    "accuracy": 1.0,
+    "ci95_high": 1.0,
+    "ci95_low": 0.7412,
+    "n_answered": 11,
+    "n_correct": 11,
+    "n_gradable": 37
    },
    "superfamily": {
     "abstention_rate": 1.0,
@@ -27,11 +27,11 @@
     "ci95_low": null,
     "n_answered": 0,
     "n_correct": 0,
-    "n_gradable": 17,
-    "n_not_gradable": 19,
+    "n_gradable": 18,
+    "n_not_gradable": 20,
     "not_gradable_by_reason": {
      "Wicker Retrovirus/ERV superfamily: not in the classifier's answer space": 6,
-     "no superfamily label in the corpus": 13
+     "no superfamily label in the corpus": 14
     }
    }
   },
@@ -72,36 +72,35 @@
   },
   "Moderate": {
    "class": {
-    "abstention_rate": 0.0,
-    "accuracy": 0.9565,
-    "ci95_high": 0.9923,
-    "ci95_low": 0.7901,
-    "n_answered": 23,
-    "n_correct": 22,
-    "n_gradable": 23
+    "abstention_rate": 0.0476,
+    "accuracy": 1.0,
+    "ci95_high": 1.0,
+    "ci95_low": 0.8389,
+    "n_answered": 20,
+    "n_correct": 20,
+    "n_gradable": 21
    },
-   "n": 23,
+   "n": 21,
    "order": {
-    "abstention_rate": 0.0435,
-    "accuracy": 0.9545,
-    "ci95_high": 0.9919,
-    "ci95_low": 0.782,
-    "n_answered": 22,
-    "n_correct": 21,
-    "n_gradable": 23
+    "abstention_rate": 0.0476,
+    "accuracy": 1.0,
+    "ci95_high": 1.0,
+    "ci95_low": 0.8389,
+    "n_answered": 20,
+    "n_correct": 20,
+    "n_gradable": 21
    },
    "superfamily": {
-    "abstention_rate": 0.4286,
+    "abstention_rate": 0.4,
     "accuracy": 1.0,
     "ci95_high": 1.0,
     "ci95_low": 0.7575,
     "n_answered": 12,
     "n_correct": 12,
-    "n_gradable": 21,
-    "n_not_gradable": 2,
+    "n_gradable": 20,
+    "n_not_gradable": 1,
     "not_gradable_by_reason": {
-     "Wicker Retrovirus/ERV superfamily: not in the classifier's answer space": 1,
-     "no superfamily label in the corpus": 1
+     "Wicker Retrovirus/ERV superfamily: not in the classifier's answer space": 1
     }
    }
   }
@@ -118,7 +117,7 @@
     "n_gradable": 2
    },
    "n": 2,
-   "n_stratified": 22,
+   "n_stratified": 23,
    "order": {
     "abstention_rate": 0.0,
     "accuracy": 1.0,
@@ -144,12 +143,12 @@
   },
   "erv-architecture": {
    "class": {
-    "abstention_rate": 0.2,
+    "abstention_rate": 0.3,
     "accuracy": 1.0,
     "ci95_high": 1.0,
-    "ci95_low": 0.8064,
-    "n_answered": 16,
-    "n_correct": 16,
+    "ci95_low": 0.7847,
+    "n_answered": 14,
+    "n_correct": 14,
     "n_gradable": 20
    },
    "n": 20,
@@ -180,23 +179,23 @@
   },
   "line-nonltr": {
    "class": {
-    "abstention_rate": 0.0909,
+    "abstention_rate": 0.5455,
     "accuracy": 1.0,
     "ci95_high": 1.0,
-    "ci95_low": 0.7225,
-    "n_answered": 10,
-    "n_correct": 10,
+    "ci95_low": 0.5655,
+    "n_answered": 5,
+    "n_correct": 5,
     "n_gradable": 11
    },
    "n": 11,
    "n_stratified": 1,
    "order": {
-    "abstention_rate": 0.4545,
+    "abstention_rate": 0.5455,
     "accuracy": 1.0,
     "ci95_high": 1.0,
-    "ci95_low": 0.6097,
-    "n_answered": 6,
-    "n_correct": 6,
+    "ci95_low": 0.5655,
+    "n_answered": 5,
+    "n_correct": 5,
     "n_gradable": 11
    },
    "superfamily": {
@@ -215,12 +214,12 @@
   },
   "ltr-copia-gypsy": {
    "class": {
-    "abstention_rate": 0.0286,
+    "abstention_rate": 0.0571,
     "accuracy": 1.0,
     "ci95_high": 1.0,
-    "ci95_low": 0.8985,
-    "n_answered": 34,
-    "n_correct": 34,
+    "ci95_low": 0.8957,
+    "n_answered": 33,
+    "n_correct": 33,
     "n_gradable": 35
    },
    "n": 35,
@@ -248,22 +247,22 @@
   },
   "negative-controls": {
    "class": {
-    "abstention_rate": 0.8182,
-    "accuracy": 0.0,
-    "ci95_high": 0.6576,
-    "ci95_low": 0.0,
-    "n_answered": 2,
+    "abstention_rate": 1.0,
+    "accuracy": null,
+    "ci95_high": null,
+    "ci95_low": null,
+    "n_answered": 0,
     "n_correct": 0,
     "n_gradable": 11
    },
    "n": 11,
    "n_stratified": 0,
    "order": {
-    "abstention_rate": 0.9091,
-    "accuracy": 0.0,
-    "ci95_high": 0.7935,
-    "ci95_low": 0.0,
-    "n_answered": 1,
+    "abstention_rate": 1.0,
+    "accuracy": null,
+    "ci95_high": null,
+    "ci95_low": null,
+    "n_answered": 0,
     "n_correct": 0,
     "n_gradable": 11
    },
@@ -631,12 +630,12 @@
    "superfamily_not_gradable_reason": "no superfamily label in the corpus"
   },
   {
-   "abstained_at_order": false,
+   "abstained_at_order": true,
    "abstained_at_superfamily": true,
    "accession": "AF018167",
    "citation": "Meyerson M, Counter CM, Eaton EN, et al. (1997) hEST2, the putative human telomerase catalytic subunit gene, is up-regulated in tumor cells and during immortalization. Cell 90(4):785-795",
    "completeness": "partial (RT only)",
-   "confidence": "Moderate",
+   "confidence": "Candidate",
    "coords_applied": null,
    "corpus_confidence": "high",
    "deposit_title": "Homo sapiens telomerase catalytic subunit (hEST2) mRNA, complete cds",
@@ -647,11 +646,11 @@
    "input_length": 4027,
    "input_sha256": "0a968bcf3aa3103b1a7e9ea5c28958acaa788cc33dbffa571a5ed8f6ba57e827",
    "n_domains": 1,
-   "observed_class": "CLASS_I",
-   "observed_order": "LINE",
-   "observed_superfamily": "LINE (non-LTR)",
+   "observed_class": "NO_CALL",
+   "observed_order": "ABSTAIN",
+   "observed_superfamily": "reverse transcriptase, class unassigned",
    "observed_superfamily_token": "ABSTAIN",
-   "observed_te_class": "LINE",
+   "observed_te_class": "retro/unassigned",
    "orfs_unscanned": 3,
    "organism": "Homo sapiens",
    "panel": "negative-controls",
@@ -678,11 +677,11 @@
    "input_length": 1800,
    "input_sha256": "fb2b9bf04417cb4a62a3df4dcf44007b97a972ec26d2033d87518dcea7b50379",
    "n_domains": 1,
-   "observed_class": "CLASS_I",
+   "observed_class": "NO_CALL",
    "observed_order": "ABSTAIN",
-   "observed_superfamily": "retrotransposon (partial)",
+   "observed_superfamily": "reverse transcriptase, class unassigned",
    "observed_superfamily_token": "ABSTAIN",
-   "observed_te_class": "retro/partial",
+   "observed_te_class": "retro/unassigned",
    "orfs_unscanned": 0,
    "organism": "Lactococcus lactis",
    "panel": "negative-controls",
@@ -1267,11 +1266,11 @@
    "input_length": 225,
    "input_sha256": "5edbf57000a6ead979345ee5d3cbd214943a5ba06ecc698b16812b1d3ea4782b",
    "n_domains": 1,
-   "observed_class": "CLASS_I",
+   "observed_class": "NO_CALL",
    "observed_order": "ABSTAIN",
-   "observed_superfamily": "retrotransposon (partial)",
+   "observed_superfamily": "reverse transcriptase, class unassigned",
    "observed_superfamily_token": "ABSTAIN",
-   "observed_te_class": "retro/partial",
+   "observed_te_class": "retro/unassigned",
    "orfs_unscanned": 0,
    "organism": "Pyxicephalus adspersus",
    "panel": "ltr-copia-gypsy",
@@ -1980,11 +1979,11 @@
    "input_length": 4185,
    "input_sha256": "90555b92a93082ceef0ba4388e3dd26ef4f3f7374c8d6b187240388555053553",
    "n_domains": 1,
-   "observed_class": "CLASS_I",
+   "observed_class": "NO_CALL",
    "observed_order": "ABSTAIN",
-   "observed_superfamily": "retrotransposon (partial)",
+   "observed_superfamily": "reverse transcriptase, class unassigned",
    "observed_superfamily_token": "ABSTAIN",
-   "observed_te_class": "retro/partial",
+   "observed_te_class": "retro/unassigned",
    "orfs_unscanned": 0,
    "organism": "Bombyx mori",
    "panel": "line-nonltr",
@@ -2011,11 +2010,11 @@
    "input_length": 5356,
    "input_sha256": "81745a5f8b332f354dd78e816c4da42f142fdbd5bccd9d139388765aef63267a",
    "n_domains": 1,
-   "observed_class": "CLASS_I",
+   "observed_class": "NO_CALL",
    "observed_order": "ABSTAIN",
-   "observed_superfamily": "retrotransposon (partial)",
+   "observed_superfamily": "reverse transcriptase, class unassigned",
    "observed_superfamily_token": "ABSTAIN",
-   "observed_te_class": "retro/partial",
+   "observed_te_class": "retro/unassigned",
    "orfs_unscanned": 10,
    "organism": "Drosophila melanogaster",
    "panel": "line-nonltr",
@@ -2042,11 +2041,11 @@
    "input_length": 4686,
    "input_sha256": "db25b584a9f6e7acdfd2242157c2f13a6578248ec106d8f5bf6416a2e0aff71f",
    "n_domains": 1,
-   "observed_class": "CLASS_I",
+   "observed_class": "NO_CALL",
    "observed_order": "ABSTAIN",
-   "observed_superfamily": "retrotransposon (partial)",
+   "observed_superfamily": "reverse transcriptase, class unassigned",
    "observed_superfamily_token": "ABSTAIN",
-   "observed_te_class": "retro/partial",
+   "observed_te_class": "retro/unassigned",
    "orfs_unscanned": 2,
    "organism": "Ascaris lumbricoides",
    "panel": "line-nonltr",
@@ -2088,12 +2087,12 @@
    "superfamily_not_gradable_reason": null
   },
   {
-   "abstained_at_order": false,
+   "abstained_at_order": true,
    "abstained_at_superfamily": true,
    "accession": "AY032740",
    "citation": "Zatsepina OG, Velikodvorskaia VV, Molodtsov VB, Garbuz D, Lerman DN, Bettencourt BR, Feder ME, Evgen'ev MB. 2001. J Exp Biol 204(Pt 11):1869-1881",
    "completeness": "partial (RT only)",
-   "confidence": "Moderate",
+   "confidence": "Candidate",
    "coords_applied": "360-1806",
    "corpus_confidence": "high",
    "deposit_title": "Drosophila melanogaster truncated Jockey element transposon, and heat shock protein Hsp70Ba gene, promoter and complete ",
@@ -2104,11 +2103,11 @@
    "input_length": 1447,
    "input_sha256": "abea2ad1e45085a70b3a680fc51b813060dd1689a9d6cf77ae60071e143bfe56",
    "n_domains": 1,
-   "observed_class": "CLASS_I",
-   "observed_order": "LINE",
-   "observed_superfamily": "LINE (non-LTR)",
+   "observed_class": "NO_CALL",
+   "observed_order": "ABSTAIN",
+   "observed_superfamily": "reverse transcriptase, class unassigned",
    "observed_superfamily_token": "ABSTAIN",
-   "observed_te_class": "LINE",
+   "observed_te_class": "retro/unassigned",
    "orfs_unscanned": 0,
    "organism": "Drosophila melanogaster",
    "panel": "line-nonltr",
@@ -2166,11 +2165,11 @@
    "input_length": 2132,
    "input_sha256": "d3822e7123faf9c8c3465e4b422beb5b461f5dee097efbe421e7a1b87cc51c5d",
    "n_domains": 1,
-   "observed_class": "CLASS_I",
+   "observed_class": "NO_CALL",
    "observed_order": "ABSTAIN",
-   "observed_superfamily": "retrotransposon (partial)",
+   "observed_superfamily": "reverse transcriptase, class unassigned",
    "observed_superfamily_token": "ABSTAIN",
-   "observed_te_class": "retro/partial",
+   "observed_te_class": "retro/unassigned",
    "orfs_unscanned": 0,
    "organism": "Homo sapiens",
    "panel": "line-nonltr",
@@ -3251,7 +3250,7 @@
    "input_length": 10229,
    "input_sha256": "f08c8e6725b748dd0686d99befe060d9f01953f4da624626a9fb6845632ff6ce",
    "n_domains": 2,
-   "observed_class": "CLASS_I",
+   "observed_class": "NO_CALL",
    "observed_order": "ABSTAIN",
    "observed_superfamily": "coding fragment (GAG\u2013ENV; RT/transposase not detected)",
    "observed_superfamily_token": "ABSTAIN",
@@ -3282,7 +3281,7 @@
    "input_length": 10222,
    "input_sha256": "e697f5b89eb5863726619eada270ed83c906a8d9c7336cf6a84830321e758b4d",
    "n_domains": 2,
-   "observed_class": "CLASS_I",
+   "observed_class": "NO_CALL",
    "observed_order": "ABSTAIN",
    "observed_superfamily": "coding fragment (GAG\u2013ENV; RT/transposase not detected)",
    "observed_superfamily_token": "ABSTAIN",
@@ -3328,17 +3327,16 @@
    "superfamily_not_gradable_reason": null
   }
  ],
- "cases_excluded_not_single_element": 33,
+ "cases_excluded_not_single_element": 34,
  "cases_scored": 95,
  "confusion_order": {
-  "LINE->ABSTAIN": 4,
-  "LINE->LINE": 6,
+  "LINE->ABSTAIN": 5,
+  "LINE->LINE": 5,
   "LINE->NO_CALL": 1,
   "LTR->ABSTAIN": 3,
   "LTR->LTR": 49,
   "LTR->NO_CALL": 5,
-  "NOT_TE->ABSTAIN": 1,
-  "NOT_TE->LINE": 1,
+  "NOT_TE->ABSTAIN": 2,
   "NOT_TE->NO_CALL": 9,
   "OTHER->NO_CALL": 1,
   "TIR->NO_CALL": 2,
@@ -3467,6 +3465,11 @@
    "reason": "deposit is a containing record and no coordinate was applied, so the whole 198022430 bp record was analysed (NOT APPLICABLE without an assembly (chr3:9,889,346-9,896,236 (GRCh37/hg19)) - whole record used)"
   },
   {
+   "accession": "NC_000001.10",
+   "panel": "divergence-gradient",
+   "reason": "deposit is a containing record and no coordinate was applied, so the whole 249250621 bp record was analysed (NOT APPLICABLE without an assembly (chr1:166,574,603-166,580,258 (GRCh37/hg19)) - whole record used)"
+  },
+  {
    "accession": "NC_000008.10",
    "panel": "divergence-gradient",
    "reason": "deposit is a containing record and no coordinate was applied, so the whole 146364022 bp record was analysed (NOT APPLICABLE without an assembly (chr8:47,175,650-47,183,661 (GRCh37/hg19)) - whole record used)"
@@ -3513,38 +3516,27 @@
   }
  ],
  "negative_controls": {
-  "correctly_not_called": 9,
-  "false_positives": [
-   {
-    "accession": "AF018167",
-    "called": "LINE",
-    "confidence": "Moderate"
-   },
-   {
-    "accession": "U50902",
-    "called": "retro/partial",
-    "confidence": "Candidate"
-   }
-  ],
+  "correctly_not_called": 11,
+  "false_positives": [],
   "n": 11
  },
  "overall": {
   "class": {
-   "abstention_rate": 0.1809,
-   "accuracy": 0.974,
-   "ci95_high": 0.9928,
-   "ci95_low": 0.9102,
-   "n_answered": 77,
-   "n_correct": 75,
+   "abstention_rate": 0.2872,
+   "accuracy": 1.0,
+   "ci95_high": 1.0,
+   "ci95_low": 0.9458,
+   "n_answered": 67,
+   "n_correct": 67,
    "n_gradable": 94
   },
   "order": {
-   "abstention_rate": 0.266,
-   "accuracy": 0.9855,
-   "ci95_high": 0.9974,
-   "ci95_low": 0.9224,
-   "n_answered": 69,
-   "n_correct": 68,
+   "abstention_rate": 0.2872,
+   "accuracy": 1.0,
+   "ci95_high": 1.0,
+   "ci95_low": 0.9458,
+   "n_answered": 67,
+   "n_correct": 67,
    "n_gradable": 94
   },
   "superfamily": {
@@ -3564,25 +3556,33 @@
  },
  "stratum_containing_record": {
   "class": {
-   "abstention_rate": 0.125,
+   "abstention_rate": 0.1515,
    "accuracy": 1.0,
    "ci95_high": 1.0,
    "ci95_low": 0.8794,
    "n_answered": 28,
    "n_correct": 28,
-   "n_gradable": 32
+   "n_gradable": 33
   },
-  "distinct_inputs": 21,
-  "incorrect_calls": [],
-  "n": 33,
+  "distinct_inputs": 22,
+  "incorrect_calls": [
+   {
+    "accession": "AC005333",
+    "expected": "LTR",
+    "level": "order",
+    "observed": "LINE",
+    "panel": "divergence-gradient"
+   }
+  ],
+  "n": 34,
   "order": {
-   "abstention_rate": 0.1562,
-   "accuracy": 1.0,
-   "ci95_high": 1.0,
-   "ci95_low": 0.8754,
-   "n_answered": 27,
+   "abstention_rate": 0.1515,
+   "accuracy": 0.9643,
+   "ci95_high": 0.9937,
+   "ci95_low": 0.8229,
+   "n_answered": 28,
    "n_correct": 27,
-   "n_gradable": 32
+   "n_gradable": 33
   },
   "superfamily": {
    "abstention_rate": 1.0,
@@ -3592,9 +3592,9 @@
    "n_answered": 0,
    "n_correct": 0,
    "n_gradable": 30,
-   "n_not_gradable": 3,
+   "n_not_gradable": 4,
    "not_gradable_by_reason": {
-    "Wicker Retrovirus/ERV superfamily: not in the classifier's answer space": 3
+    "Wicker Retrovirus/ERV superfamily: not in the classifier's answer space": 4
    }
   },
   "superfamily_incorrect": []
@@ -3681,14 +3681,14 @@
   {
    "accession": "AF018167",
    "expected": "",
-   "observed": "LINE (non-LTR)",
+   "observed": "reverse transcriptase, class unassigned",
    "panel": "negative-controls",
    "reason": "no superfamily label in the corpus"
   },
   {
    "accession": "U50902",
    "expected": "",
-   "observed": "retrotransposon (partial)",
+   "observed": "reverse transcriptase, class unassigned",
    "panel": "negative-controls",
    "reason": "no superfamily label in the corpus"
   },
@@ -3716,14 +3716,14 @@
   {
    "accession": "X51968",
    "expected": "",
-   "observed": "retrotransposon (partial)",
+   "observed": "reverse transcriptase, class unassigned",
    "panel": "line-nonltr",
    "reason": "no superfamily label in the corpus"
   },
   {
    "accession": "U29445",
    "expected": "",
-   "observed": "retrotransposon (partial)",
+   "observed": "reverse transcriptase, class unassigned",
    "panel": "line-nonltr",
    "reason": "no superfamily label in the corpus"
   },

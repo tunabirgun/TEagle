@@ -10,9 +10,10 @@
   "expected_superfamily": "Copia (Ty1)",
   "organism": "Excoecaria agallocha",
   "panel": "ltr-copia",
+  "record_scope": "element",
   "why_safe": "Strongest accession-to-paper linkage in this set: the article text itself states the element was 'deposited in GenBank under the accession number KU198316' (verified verbatim from the PMC full text), and the same text gives the Ty1/copia domain order as the basis of the assignment. Length note: 9,555 bp is long for a Ty1/copia element, but the paper independently claims a 'putative full-length (~9550 bp)' element, so the record scope is paper-endorsed rather than a mis-scoped deposit."
  },
- "elapsed_s": 0.042,
+ "elapsed_s": 0.014,
  "fetch_source": {
   "accession": "KU198316.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "b290e78289b15604a5547b87c1ee0cb4b9fe8fde40554e5bdee9e20a9574b621",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:49+00:00",
+   "createdUtc": "2026-08-06T16:16:22+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 9555,
     "sha256": "b9493ba8c98613a81c934d739b13c3e3afd55f5e4d1ce4ecc35361521ac83519"
    },
-   "manifestSha256": "ea41ee81b8597df89790f3438943751bca7e1662392706023feb66b277ed1198",
+   "manifestSha256": "76d501de1a97c3f4ae0a8998f2fe6db3f54118af7f37288833cad662c0372da8",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -126,10 +127,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

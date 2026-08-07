@@ -10,9 +10,10 @@
   "expected_superfamily": "Copia (Ty1)",
   "organism": "Helianthus annuus",
   "panel": "ltr-copia",
+  "record_scope": "element",
   "why_safe": "The published paper's title carries the Copia assignment for the named element HACRE1, and its abstract describes a complete element with flanking LTRs and an internal region, ~160 copies in the sunflower genome. LINKAGE CAVEAT: the GenBank REFERENCE block still lists the paper as 'Unpublished' (title 'HACRE1, a complete, recently inserted Copia-like retrotransposon of sunflower (Helianthus annuus L.)'), so the accession-to-paper link rests on element name plus submitter identity (Natali L., same senior author) rather than on an accession quoted in the paper - Genome is not open access, so I could not confirm the accession is printed in the article text. The deposit is the element alone, no host gene."
  },
- "elapsed_s": 0.041,
+ "elapsed_s": 0.014,
  "fetch_source": {
   "accession": "FN298618.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "7cd675abca81657cac195e4d4d96084459eaf808b7a02ce9fe4f8f84f1fc95b0",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:49+00:00",
+   "createdUtc": "2026-08-06T16:16:22+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 6521,
     "sha256": "7e1cc8f43fbb8be3dd2e7c5215397010d2d23772cdfa7fd2ae6ad6618d1ff005"
    },
-   "manifestSha256": "ae9d8e0475b332232ba41b4ce7167057d36ceed6bf9f2a1fa6c57f303fe8e600",
+   "manifestSha256": "4f122e62343c49a991e8ad122ff549764fcd8f0ae1e18878a32b3f3180a8312b",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -126,10 +127,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

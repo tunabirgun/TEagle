@@ -1,18 +1,18 @@
 {
- "collected": 633,
+ "collected": 651,
  "counts": {
   "errors": 0,
   "failures": 0,
   "skipped": 1,
-  "tests": 633
+  "tests": 651
  },
- "elapsed_s": 553.8,
+ "elapsed_s": 1871.1,
  "exit_code": 0,
  "failed": 0,
- "generated": "2026-08-06T16:44:10",
+ "generated": "2026-08-07T01:51:47",
  "green": true,
- "passed": 632,
+ "passed": 650,
  "python": "3.12.10",
  "skipped": 1,
- "test_files": 39
+ "test_files": 42
 }

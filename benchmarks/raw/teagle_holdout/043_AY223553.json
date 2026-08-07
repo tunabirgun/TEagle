@@ -10,9 +10,10 @@
   "expected_superfamily": "",
   "organism": "Gallus gallus",
   "panel": "negative",
+  "record_scope": "element",
   "why_safe": "Confusion axis: none at the domain level - this is the easy-case control that should never be called. Its only risk is generic ORF/repeat heuristics. Tool-independence: ovalbumin was characterised by direct protein and mRNA sequencing in 1978 and by complete chromosomal gene sequencing (Woo et al. 1981 Biochemistry 20:6437-6446), long predating any TE caller. Identity of THIS deposit was checked by derivation rather than taken on trust: CDS 27..1187 = 1161 nt = 386 codons + stop = 385 aa, matching mature chicken ovalbumin exactly. I deliberately chose this mRNA deposit over the classic genomic record J00895 (9206 bp) because CR1 non-LTR elements are documented in the chicken ovalbumin gene domain, so a genomic deposit could legitimately contain a TE inside its introns and would be an unsafe negative; an mRNA cannot. Bird taxon is absent from the existing negative panel."
  },
- "elapsed_s": 0.027,
+ "elapsed_s": 0.013,
  "fetch_source": {
   "accession": "AY223553.1",
   "coords_applied": null,
@@ -24,7 +25,7 @@
  "input_sha256": "5bf702b6ecf757dc0b0e5debb8123c7bbe61eabc3c9d557d9ca61df786da0479",
  "result": {
   "provenance": {
-   "createdUtc": "2026-08-05T20:39:51+00:00",
+   "createdUtc": "2026-08-06T16:16:23+00:00",
    "databases": [
     {
      "file": "data/te_domains.hmm",
@@ -42,7 +43,7 @@
     "length": 1217,
     "sha256": "08970e60e44fc7026683b3d016baa5b376b550017e372c7f648c92b5c9a47c0d"
    },
-   "manifestSha256": "aca0ace689f1d6181c1d9ef7510a94533833a656422619e688f5ff61e94661a4",
+   "manifestSha256": "86e3ca24ef43febf6c355f8b8851f7e96578819481f1d353fd319e52402bbd37",
    "notRun": [
     "DB-backed family naming (Dfam / RepeatMasker) — available via the WSL backend; not run in this step",
     "External NCBI Primer-BLAST",
@@ -110,10 +111,10 @@
     },
     {
      "name": "TEagle core",
-     "version": "3.6.0"
+     "version": "3.7.0"
     }
    ],
-   "teagleVersion": "3.6.0"
+   "teagleVersion": "3.7.0"
   },
   "records": [
    {

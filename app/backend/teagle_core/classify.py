@@ -37,6 +37,21 @@ _GAG_CORE = {"Gag_p24", "Gag_p24_C", "Gag_p10", "PEG10_N-capsid"}
 
 _CODE_ORDER = ["ORF1", "GAG", "PR", "EN", "RT", "RNaseH", "INT", "YR", "CHR", "ENV", "TPase", "HEL"]
 
+# What has to accompany a reverse transcriptase before a Class I call is licensed.
+#
+# A reverse transcriptase on its own does not identify a transposable element. Telomerase carries one,
+# group II intron maturases carry one, and the bundled panel holds a single RT model rather than a
+# clade-resolved set, so it cannot say which kind of reverse transcriptase it found. Each code below is a
+# structural or coding module that a retrotransposon carries and a host reverse-transcribing gene does
+# not: the LINE ORF1p and ORF2p endonuclease, the retroviral gag, protease and envelope, and RNase H.
+#
+# Terminal repeats, a DDE integrase, a chromodomain and a tyrosine recombinase are all handled by
+# branches that run before this test, so they are deliberately absent here rather than forgotten.
+#
+# A poly-A tail is deliberately NOT in this set. Every mRNA and cDNA deposit has one, so it distinguishes
+# nothing; admitting it is what let a telomerase mRNA be called a LINE.
+_RETRO_CORROBORATION = {"ORF1", "EN", "RNaseH", "GAG", "PR", "ENV"}
+
 # Retained for reference: the shortest record that could plausibly hold an autonomous non-LTR element.
 # Autonomous LINEs run 3-6 kb (L1 ~6 kb, R2Bm 3.6 kb). Length is NOT used to license a LINE call - a
 # multi-kilobase record whose sole detected domain is a reverse transcriptase is equally consistent with a
@@ -188,22 +203,35 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
                       "accepted")
             ev.append("the superfamily is not called: Copia versus Gypsy needs the integrase-versus-RT "
                       "translation order, and no integrase was detected")
-        elif (not has_ltr and not intg
-              and not (has_polya or "ORF1" in cset or "EN" in cset or "RNaseH" in cset)):
-            # A LONE reverse transcriptase is not a LINE. The branch below reads an absent integrase as
-            # positive evidence for a non-LTR element, which holds only when something else about the record
-            # is LINE-like: a poly-A tail from target-primed reverse transcription, an ORF1p, an
-            # endonuclease, or an RNase H. With none of those the only fact in evidence is "a reverse
-            # transcriptase is present", which every retroelement order satisfies — and which host genes
-            # satisfy too. A telomerase reverse transcriptase presents exactly this way, as a multi-kilobase
-            # record whose sole detected domain is RT, and cannot be separated from an R2-clade element on
-            # that evidence: both are reverse transcriptases and the panel carries one RT model, not a
-            # clade-resolved set. The order is therefore withheld rather than defaulted to LINE.
-            superfamily, te_class = "retrotransposon (partial)", "retro/partial"
-            ev.append("a reverse transcriptase was detected with no integrase, no terminal repeat, and none "
-                      "of the features that distinguish a non-LTR element — no poly-A tail, no ORF1p, no "
-                      "ORF2p endonuclease–RT arrangement, no RNase H. Every retrotransposon order carries a "
-                      "reverse transcriptase, so the order is left unassigned rather than defaulted to LINE")
+        elif not has_ltr and not intg and not (cset & _RETRO_CORROBORATION):
+            # A LONE reverse transcriptase establishes neither the order NOR the class.
+            #
+            # An earlier form of this guard withheld only the order, and admitted a poly-A tail as evidence
+            # that the record was LINE-like. Both were wrong, and the same record exposed both. Telomerase
+            # reverse transcriptase is a host enzyme, not a transposable element, and the human catalytic
+            # subunit is deposited as an mRNA — so it carries a poly-A tail that belongs to the transcript,
+            # not to target-primed reverse transcription. The tail defeated the guard, the record fell
+            # through to the LINE branch, and a telomerase gene was called a non-LTR retrotransposon.
+            #
+            # A poly-A tail cannot license this call at all. Every mRNA and every cDNA deposit carries one,
+            # so it separates nothing; it is retained as reported evidence once a call is licensed on coding
+            # grounds, and never as the thing that licenses it.
+            #
+            # The class is withheld for the same reason the order is. A reverse transcriptase is carried by
+            # every retrotransposon order, by telomerase, and by group II intron maturases — the panel holds
+            # one RT model, not a clade-resolved set, so on this evidence a Class I element cannot be
+            # separated from a host gene that reverse-transcribes. Asserting Class I here is the error that
+            # a negative-control panel exists to catch.
+            klass = "unclassified"
+            superfamily, te_class = "reverse transcriptase, class unassigned", "retro/unassigned"
+            ev.append("a reverse transcriptase was detected with no integrase, no terminal repeat and none "
+                      "of the domains that distinguish a retrotransposon from another reverse-transcribing "
+                      "gene — no ORF1p, no ORF2p endonuclease–RT arrangement, no RNase H, no gag, no "
+                      "protease, no envelope. Telomerase and group II intron maturases also present as a "
+                      "lone reverse transcriptase, so neither the class nor the order is assigned")
+            if has_polya:
+                ev.append("a poly-A tail is present but is not credited: every mRNA and cDNA deposit carries "
+                          "one, so it does not distinguish a non-LTR element from a transcript")
         elif not has_ltr and not intg:
             superfamily, te_class = "LINE (non-LTR)", "LINE"
             ev.append("RT without a DDE integrase and without LTRs → non-LTR retrotransposon (LINE)")
