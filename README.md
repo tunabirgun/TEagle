@@ -38,14 +38,15 @@ Being clear about this saves time:
 
 ## Getting started
 
-1. Download **`TEagle-Setup-<version>.exe`** (≈ 40 MiB) from the [Releases](../../releases) page.
-2. Run it — per-user, no administrator rights — and launch **TEagle**.
-   *Windows will show a blue **“Windows protected your PC”** SmartScreen warning: the installer is not code-signed, so Windows has no publisher reputation for it. Click **More info → Run anyway**. On a managed or institutional laptop this prompt may be blocked outright, in which case your IT team has to approve the executable.*
-3. Click **Load example element** for a bundled, published TE (or paste a sequence, open a FASTA, or type an NCBI accession) and press **Run analysis**.
+1. Download **[`TEagle-Setup-3.8.0.exe`](https://github.com/tunabirgun/TEagle/releases/download/v3.8.0/TEagle-Setup-3.8.0.exe)** (≈ 37.6 MiB) from the [v3.8.0 release](https://github.com/tunabirgun/TEagle/releases/tag/v3.8.0).
+2. Verify its SHA-256 checksum: `A25FDECF27749BF3DDF9D9B2A6C3587F09F8913825BD7B1E999D581FC6D38F39`.
+3. Run the installer and launch **TEagle**. It installs per user by default. Select **Clean install** only when you intend to remove an older TEagle configuration, cache, and TEagle-owned backend environments; the cleanup preserves the shared micromamba executable and environments belonging to other applications.
+4. *Windows will show a blue **“Windows protected your PC”** SmartScreen warning because the installer is not code-signed and has no publisher reputation. Click **More info → Run anyway**. A managed or institutional computer may block this action, in which case local information-technology staff must approve the executable.*
+5. Click **Load example element** for a bundled, published TE (or paste a sequence, open a FASTA, or type an NCBI accession) and press **Run analysis**.
 
 That is the whole first run. Everything the core needs — Python, Qt, Primer3, HMMER and the CC0 Pfam TE-domain profiles — is inside the installer; there is nothing to `pip install`. The optional Linux backend (Dfam family naming, splice detection, whole-genome scans) installs from inside the app: click **BACKEND** in the window header (or the same button inside panel 03), one click per component, with repair and integrity checks. The backend installer uses exact package versions and a checksum-pinned micromamba bootstrap; a repair rejects version drift and restores missing package files. Components that are not there yet offer **Install**; each reports its download live in the window's log.
 
-The illustrated guide to every panel ships with each release as **`TEagle-User-Manual.pdf`**. The version-locked benchmark evidence is archived separately at [Zenodo](https://doi.org/10.5281/zenodo.21848814).
+The illustrated guide to every panel is the release asset **[`TEagle-User-Manual.pdf`](https://github.com/tunabirgun/TEagle/releases/download/v3.8.0/TEagle-User-Manual.pdf)** (SHA-256 `738A96EAEFA44D988872BAC7555013EAE8F8D364AA4457C69CFDAA91959CF746`). The version-locked benchmark evidence is archived separately at [Zenodo](https://doi.org/10.5281/zenodo.21848814).
 
 > **License:** TEagle is free software under the **GNU Affero General Public License, version 3 or later** — see [LICENSE](LICENSE). You may use, study, modify and redistribute it under those terms. Because it is AGPL, anyone who runs a modified TEagle as a network service must also offer its source to the users of that service. Third-party components and their licences are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 

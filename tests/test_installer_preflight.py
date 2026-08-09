@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import ast
-import importlib.metadata
 import os
 import re
 import shutil
@@ -16,6 +15,19 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "installer" / "build_installer.ps1"
 SPEC = ROOT / "installer" / "teagle_native.spec"
+BUILD_LOCK = ROOT / "installer" / "requirements-build.txt"
+
+
+def _locked_pyinstaller_version(path: Path = BUILD_LOCK) -> str:
+    matches = re.findall(
+        r"(?m)^\s*PyInstaller==([^\s#]+)\s*$",
+        path.read_text(encoding="utf-8"),
+    )
+    assert len(matches) == 1, "requirements-build.txt must contain exactly one PyInstaller==<version> pin"
+    return matches[0]
+
+
+PYINSTALLER_PIN = _locked_pyinstaller_version()
 
 
 def _stage_preflight(tmp_path: Path, *, envcheck_exit: int, pyi_pin: str) -> Path:
@@ -60,7 +72,7 @@ def test_runtime_pin_or_import_failure_stops_before_build(tmp_path):
     script = _stage_preflight(
         tmp_path,
         envcheck_exit=1,
-        pyi_pin=importlib.metadata.version("PyInstaller"),
+        pyi_pin=PYINSTALLER_PIN,
     )
     result = _run_preflight(script, sys.executable)
     assert result.returncode != 0
@@ -80,7 +92,7 @@ def test_absent_python_executable_cannot_pass(tmp_path):
     script = _stage_preflight(
         tmp_path,
         envcheck_exit=0,
-        pyi_pin=importlib.metadata.version("PyInstaller"),
+        pyi_pin=PYINSTALLER_PIN,
     )
     result = _run_preflight(script, tmp_path / "missing-python.exe")
     assert result.returncode != 0
@@ -92,7 +104,7 @@ def test_exact_preflight_can_pass_without_building(tmp_path):
     script = _stage_preflight(
         tmp_path,
         envcheck_exit=0,
-        pyi_pin=importlib.metadata.version("PyInstaller"),
+        pyi_pin=PYINSTALLER_PIN,
     )
     result = _run_preflight(script, sys.executable)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -107,13 +119,28 @@ def test_localappdata_python_discovery_works_without_python_on_path(tmp_path):
     script = _stage_preflight(
         tmp_path,
         envcheck_exit=0,
-        pyi_pin=importlib.metadata.version("PyInstaller"),
+        pyi_pin=PYINSTALLER_PIN,
     )
     clean_env = os.environ.copy()
     clean_env["PATH"] = ""
     result = _run_preflight(script, None, env=clean_env)
     assert result.returncode == 0, result.stdout + result.stderr
     assert str(Path(sys.executable).resolve()) in result.stdout
+
+
+@pytest.mark.parametrize(
+    "contents",
+    [
+        "",
+        "PyInstaller>=6.21.0\n",
+        "PyInstaller==6.21.0\nPyInstaller==6.21.1\n",
+    ],
+)
+def test_build_lock_parser_rejects_missing_loose_or_duplicate_pins(tmp_path, contents):
+    lock = tmp_path / "requirements-build.txt"
+    lock.write_text(contents, encoding="utf-8")
+    with pytest.raises(AssertionError, match="exactly one PyInstaller"):
+        _locked_pyinstaller_version(lock)
 
 
 def test_full_release_path_cannot_skip_freeze_and_orders_gates_before_mutation():
