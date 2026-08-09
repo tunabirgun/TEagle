@@ -6,7 +6,11 @@ in it, so `tail -n` handed the log panel a single 250 kB line and the download l
 lock down the three parts that fix: the step reports whole lines, the reader normalises any CR meter
 it still meets, and a component that is not installed says Install rather than Repair."""
 import os
+import subprocess
 import sys
+import threading
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 from teagle_core import wsl
@@ -16,20 +20,144 @@ def _step(key="dfam_unc_euk"):
     return wsl._STEP[key]
 
 
+def _dfam_python_downloader() -> str:
+    """Return the exact heredoc executed in a python3-only fresh WSL."""
+    marker = 'python3 - "$dest" "$url" <<\'PY\'\n'
+    _, remainder = _step().split(marker, 1)
+    return remainder.split("\nPY\n", 1)[0]
+
+
+@contextmanager
+def _download_server(payload: bytes, behavior: str):
+    """Hermetic HTTP server for the stdlib downloader's wire-level contract."""
+    state = {"requests": 0, "ranges": []}
+
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def log_message(self, *_args):
+            pass
+
+        def do_GET(self):
+            state["requests"] += 1
+            range_header = self.headers.get("Range")
+            state["ranges"].append(range_header)
+            if behavior == "transient" and state["requests"] == 1:
+                self.send_response(503)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            start = int(range_header.split("=", 1)[1].split("-", 1)[0]) if range_header else 0
+            body = payload[start:] if range_header and behavior != "ignore_range" else payload
+            status = 206 if range_header and behavior != "ignore_range" else 200
+            self.send_response(status)
+            if status == 206:
+                content_range = ("bytes malformed" if behavior == "malformed_range"
+                                 else f"bytes {start}-{len(payload) - 1}/{len(payload)}")
+                self.send_header("Content-Range", content_range)
+            advertised = len(body) if behavior != "failed_transfer" else len(body) + 5
+            self.send_header("Content-Length", str(advertised))
+            self.end_headers()
+            self.wfile.write(body if behavior != "failed_transfer" else body[:2])
+            self.wfile.flush()
+            if behavior == "failed_transfer":
+                self.close_connection = True
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}/dfam.gz", state
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join(timeout=5)
+
+
+def _run_embedded_downloader(tmp_path, url: str, initial: bytes = b""):
+    destination = tmp_path / "dfam.gz"
+    if initial:
+        destination.write_bytes(initial)
+    return subprocess.run([sys.executable, "-", str(destination), url], input=_dfam_python_downloader(),
+                          text=True, capture_output=True, timeout=30), destination
+
+
+def test_python_only_dfam_downloader_fetches_a_fresh_archive(tmp_path):
+    payload = b"TEagle-Dfam" * 100
+    with _download_server(payload, "normal") as (url, state):
+        result, destination = _run_embedded_downloader(tmp_path, url)
+    assert result.returncode == 0, result.stderr
+    assert destination.read_bytes() == payload
+    assert state["ranges"] == [None]
+
+
+def test_python_only_dfam_downloader_resumes_an_honored_range(tmp_path):
+    payload, partial = b"TEagle-Dfam" * 100, b"TEagle-Dfam" * 17
+    with _download_server(payload, "normal") as (url, state):
+        result, destination = _run_embedded_downloader(tmp_path, url, partial)
+    assert result.returncode == 0, result.stderr
+    assert destination.read_bytes() == payload
+    assert state["ranges"] == [f"bytes={len(partial)}-"]
+
+
+def test_python_only_dfam_downloader_restarts_safely_when_range_is_ignored(tmp_path):
+    payload, partial = b"TEagle-Dfam" * 100, b"obsolete-partial"
+    with _download_server(payload, "ignore_range") as (url, state):
+        result, destination = _run_embedded_downloader(tmp_path, url, partial)
+    assert result.returncode == 0, result.stderr
+    assert destination.read_bytes() == payload
+    assert state["ranges"] == [f"bytes={len(partial)}-"]
+    assert not destination.with_name(destination.name + ".restart").exists()
+
+
+def test_python_only_dfam_downloader_retries_a_transient_failure(tmp_path):
+    payload = b"TEagle-Dfam" * 100
+    with _download_server(payload, "transient") as (url, state):
+        result, destination = _run_embedded_downloader(tmp_path, url)
+    assert result.returncode == 0, result.stderr
+    assert destination.read_bytes() == payload
+    assert state["requests"] == 2
+
+
+@pytest.mark.parametrize("behavior", ["malformed_range", "failed_transfer"])
+def test_python_only_dfam_downloader_keeps_a_partial_on_malformed_or_failed_transfer(tmp_path, behavior):
+    payload, partial = b"TEagle-Dfam" * 100, b"TEagle-Dfam" * 17
+    with _download_server(payload, behavior) as (url, _state):
+        result, destination = _run_embedded_downloader(tmp_path, url, partial)
+    assert result.returncode != 0
+    # A malformed Content-Range is rejected before append. A real mid-stream failure can retain the
+    # bytes received before the socket closed, but it must never discard the resumable prefix.
+    if behavior == "malformed_range":
+        assert destination.read_bytes() == partial
+    else:
+        assert destination.read_bytes().startswith(partial)
+    assert not destination.with_name(destination.name + ".restart").exists()
+
+
 # ---------- the download step reports progress as whole lines ----------
 def test_dfam_step_silences_curl_meter_and_reports_lines():
     s = _step()
     assert "curl -sS -L --fail -C -" in s          # -s kills the CR meter, -S keeps real errors
+    assert "elif command -v python3" in s and "urllib.request" in s
+    assert 'headers = {"Range": f"bytes={have}-"}' in s  # stdlib path resumes an existing partial
     assert "sleep 15" in s and "kill -0 \"$dl_pid\"" in s   # a watcher polls the file while curl runs
     assert 'echo "[teagle] ' in s.split("dl_pid=$!", 1)[1]  # and reports on its own newline-terminated lines
+
+
+def test_range_ignored_restart_progress_watches_the_active_restart_file():
+    watcher = _step().split('while kill -0 "$dl_pid"', 1)[1].split('wait "$dl_pid"', 1)[0]
+    assert '[ -f "dfam40.uncurated.consensus.1.h5.gz.restart" ]' in watcher
+    assert 'active="dfam40.uncurated.consensus.1.h5.gz.restart"' in watcher
+    assert 'stat -c %s "$active"' in watcher
 
 
 def test_dfam_step_percentage_is_derived_from_a_head_not_the_resumed_get():
     """A resumed (-C -) GET answers 206 with Content-Length = REMAINING bytes. Reading the total off
     the transfer would make every percentage wrong, so the total comes from a separate HEAD."""
     s = _step()
-    assert "curl -sIL" in s and "content-length" in s.lower()
-    head, rest = s.split("total_b=$(curl -sIL", 1)
+    assert "dfam_head_bytes" in s and "content-length" in s.lower()
+    assert "curl -sIL" in s and 'Request(sys.argv[1], method="HEAD")' in s
+    head, rest = s.split("total_b=$(dfam_head_bytes", 1)
     assert "-C -" not in rest.split(")", 1)[0]     # the HEAD itself must not be a resumed request
     # a percentage is only printed when the total is known AND consistent with the bytes on disk
     assert '[ "$total_b" -gt 0 ] && [ "$now_b" -le "$total_b" ]' in s
@@ -37,18 +165,14 @@ def test_dfam_step_percentage_is_derived_from_a_head_not_the_resumed_get():
 
 def _bash(script: str):
     """Run a bash snippet and return (rc, stdout). Skips where no bash is available."""
-    import shutil, subprocess, tempfile, os as _os
+    import shutil, subprocess
     bash = shutil.which("bash")
     if not bash:
         pytest.skip("no bash on PATH")
-    fd, p = tempfile.mkstemp(suffix=".sh")
-    with _os.fdopen(fd, "wb") as f:
-        f.write(script.replace("\r\n", "\n").encode())
-    try:
-        r = subprocess.run([bash, p], capture_output=True, text=True, timeout=60)
-        return r.returncode, r.stdout.strip()
-    finally:
-        _os.unlink(p)
+    # A native temporary path can be mangled when Windows launches bash/WSL; deliver script bytes directly.
+    r = subprocess.run([bash, "-s"], input=script.replace("\r\n", "\n").encode(),
+                       capture_output=True, timeout=60)
+    return r.returncode, r.stdout.decode(errors="replace").strip()
 
 
 @pytest.mark.parametrize("rc,total,have,expect", [
@@ -115,11 +239,23 @@ def test_integrity_probe_covers_every_dfam_partition_and_grades_only_the_require
         assert wsl._DFAM_FILES[k][0] in wsl._INTEGRITY_PROBE, k
 
 
+def test_integrity_probe_conditions_success_on_real_exit_codes_and_signatures():
+    probe = wsl._INTEGRITY_PROBE
+    assert 'ispcr_out=$("$ENV/bin/isPcr" 2>&1); ispcr_rc=$?' in probe
+    assert '"isPcr - Standalone v 33x2"*' in probe and '[ "$ispcr_rc" -eq 255 ]' in probe
+    assert 'datasets_rc=$?' in probe and 'datasets version 18.34.0 OK' in probe
+    assert '"faToTwoBit - Convert DNA"*' in probe and '[ "$fa_rc" -eq 255 ]' in probe
+    assert "isPcr executable ran" not in probe and "datasets executable ran" not in probe
+
+
 def test_integrity_check_reports_optional_partitions_without_failing_on_them(monkeypatch):
     probe = ("=RM=\nRepeatMasker version 4.2.4\n=MM=\n2.31-r1302\n=FAMDB=\nVersion : 4.0\n"
              "=FILES=\npresent dfam40.0.h5 1\npresent dfam40.curated.consensus.0.h5 1\n"
              "=OPTFILES=\npresent dfam40.uncurated.consensus.0.h5\nabsent dfam40.uncurated.consensus.1.h5\n"
-             "=SCAN=\nisPcr present datasets present\n")
+             "=SCAN=\nisPcr - Standalone v 33x2\nisPcr signature 33x2 OK\n"
+             "datasets version: 18.34.0\ndatasets version 18.34.0 OK\n"
+             "ispcr package 33\ndatasets package 18.34.0\n"
+             "=FATOTWOBIT=\nabsent\n=VRNA=\nabsent\n")
     monkeypatch.setattr(wsl, "available", lambda: {"wsl2": True, "distro": "Ubuntu", "error": None})
     monkeypatch.setattr(wsl, "_wsl_script", lambda *a, **k: (0, probe, ""))
     r = wsl.integrity_check()
@@ -127,6 +263,105 @@ def test_integrity_check_reports_optional_partitions_without_failing_on_them(mon
     assert r["ok"] is True and files["ok"] is True              # one optional partition missing is not a fault
     assert "uncurated.consensus.0.h5 present" in files["detail"]
     assert "uncurated.consensus.1.h5 not installed" in files["detail"]
+
+
+@pytest.mark.parametrize("section, body, expected", [
+    ("FATOTWOBIT", "faToTwoBit - Convert DNA\nfaToTwoBit signature OK\npresent 482", True),
+    ("FATOTWOBIT", "faToTwoBit - Convert DNA\nfaToTwoBit signature OK\npresent 481", False),
+    ("VRNA", "present 2.7.2", True),
+    ("VRNA", "present 2.7.1", False),
+])
+def test_integrity_grades_installed_optional_tools_at_their_pinned_version(monkeypatch, section, body, expected):
+    probe = ("=RM=\nRepeatMasker version 4.2.4\n=MM=\n2.31-r1302\n=FAMDB=\nVersion : 4.0\n"
+             "=FILES=\npresent dfam40.0.h5 1\npresent dfam40.curated.consensus.0.h5 1\n"
+             "=OPTFILES=\nabsent dfam40.uncurated.consensus.0.h5\nabsent dfam40.uncurated.consensus.1.h5\n"
+             "=SCAN=\nisPcr - Standalone v 33x2\nisPcr signature 33x2 OK\n"
+             "datasets version: 18.34.0\ndatasets version 18.34.0 OK\n"
+             "ispcr package 33\ndatasets package 18.34.0\n"
+             f"={section}=\n{body}\n")
+    other = "VRNA" if section == "FATOTWOBIT" else "FATOTWOBIT"
+    probe += f"={other}=\nabsent\n"
+    monkeypatch.setattr(wsl, "available", lambda: {"wsl2": True, "distro": "Ubuntu", "error": None})
+    monkeypatch.setattr(wsl, "_wsl_script", lambda *a, **k: (0, probe, ""))
+    result = wsl.integrity_check()
+    optional = [check for check in result["checks"] if section.lower().replace("vrna", "viennarna") in check["name"].lower()][0]
+    assert optional["ok"] is expected
+    assert result["ok"] is expected
+
+
+@pytest.mark.parametrize("section, bad_body, check_name", [
+    ("SCAN", "/env/bin/isPcr: cannot execute: required file not found\nisPcr BROKEN rc=127 wrong signature\n"
+             "datasets version: 18.34.0\ndatasets version 18.34.0 OK\n"
+             "ispcr package 33\ndatasets package 18.34.0", "isPcr + NCBI datasets"),
+    ("SCAN", "unexpected isPcr banner\nisPcr BROKEN rc=1 wrong signature\n"
+             "datasets version: 18.34.0\ndatasets version 18.34.0 OK\n"
+             "ispcr package 33\ndatasets package 18.34.0", "isPcr + NCBI datasets"),
+    ("SCAN", "isPcr - Standalone v 33x2\nisPcr signature 33x2 OK\n"
+             "datasets version: 18.34.1\ndatasets BROKEN rc=0 wrong version/signature\n"
+             "ispcr package 33\ndatasets package 18.34.0", "isPcr + NCBI datasets"),
+    ("FATOTWOBIT", "/env/bin/faToTwoBit: cannot execute: required file not found\n"
+                     "faToTwoBit BROKEN rc=127 wrong signature\npresent 482", "faToTwoBit"),
+    ("FATOTWOBIT", "unexpected faToTwoBit banner\nfaToTwoBit BROKEN rc=1 wrong signature\npresent 482", "faToTwoBit"),
+])
+def test_integrity_rejects_unusable_or_wrong_signature_executables(monkeypatch, section, bad_body, check_name):
+    healthy_scan = ("isPcr - Standalone v 33x2\nisPcr signature 33x2 OK\n"
+                    "datasets version: 18.34.0\ndatasets version 18.34.0 OK\n"
+                    "ispcr package 33\ndatasets package 18.34.0")
+    probe = ("=RM=\nRepeatMasker version 4.2.4\n=MM=\n2.31-r1302\n=FAMDB=\nVersion : 4.0\n"
+             "=FILES=\npresent dfam40.0.h5 1\npresent dfam40.curated.consensus.0.h5 1\n"
+             "=OPTFILES=\nabsent dfam40.uncurated.consensus.0.h5\nabsent dfam40.uncurated.consensus.1.h5\n"
+             f"=SCAN=\n{bad_body if section == 'SCAN' else healthy_scan}\n"
+             f"=FATOTWOBIT=\n{bad_body if section == 'FATOTWOBIT' else 'absent'}\n=VRNA=\nabsent\n")
+    monkeypatch.setattr(wsl, "available", lambda: {"wsl2": True, "distro": "Ubuntu", "error": None})
+    monkeypatch.setattr(wsl, "_wsl_script", lambda *a, **k: (0, probe, ""))
+    result = wsl.integrity_check()
+    failed = next(check for check in result["checks"] if check_name in check["name"])
+    assert failed["ok"] is False
+    assert result["ok"] is False
+    assert "cannot execute" in failed["detail"] or "BROKEN" in failed["detail"]
+
+
+@pytest.mark.parametrize("fa_state, expected_detail", [
+    ("absent", "not installed (optional"),
+    ("version drift", "version drift"),
+    ("broken (pinned metadata, executable missing)", "broken"),
+])
+def test_component_status_reports_optional_fatotwobit_without_breaking_required_genome_scan(monkeypatch, fa_state, expected_detail):
+    status = ("micromamba=2.8.1\nrepeatmasker=4.2.4\nminimap2=2.31-r1302\ngenomescan=1\n"
+              "ispcr_pin=1\ndatasets_pin=1\n"
+              f"fatotwobit={fa_state}\n"
+              "viennarna=absent\ndfam_root=1\ndfam_curated=1\ndfam_unc_root=0\ndfam_unc_euk=0\n"
+              "famdb_conf=1\ninstalling=0\ndisk_free_gb=100\n")
+    monkeypatch.setattr(wsl, "available", lambda: {"wsl2": True, "distro": "Ubuntu", "error": None})
+    monkeypatch.setattr(wsl, "_wsl_script", lambda *a, **k: (0, status, ""))
+    components = {c["key"]: c for c in wsl.components_status()["components"]}
+    assert components["genomescan"]["ok"] is True
+    assert expected_detail in components["genomescan"]["detail"]
+
+
+def test_status_probe_distinguishes_absent_from_present_broken_viennarna():
+    probe = wsl._STATUS_PROBE
+    assert '[ ! -d "$VRNAENV" ]' in probe and 'viennarna=absent' in probe
+    assert 'viennarna=broken/unusable' in probe
+    assert 'import RNA;print(RNA.__version__)' in probe
+
+
+@pytest.mark.parametrize("vrna_state, expected_ok, expected_detail", [
+    ("absent", False, "not installed (optional)"),
+    ("broken/unusable", False, "broken/unusable"),
+    ("2.7.2", True, "v2.7.2"),
+])
+def test_component_status_reports_viennarna_absent_broken_and_exact(monkeypatch, vrna_state, expected_ok, expected_detail):
+    status = ("micromamba=2.8.1\nrepeatmasker=4.2.4\nminimap2=2.31-r1302\ngenomescan=1\n"
+              "ispcr_pin=1\ndatasets_pin=1\nfatotwobit=absent\n"
+              f"viennarna={vrna_state}\n"
+              "dfam_root=1\ndfam_curated=1\ndfam_unc_root=0\ndfam_unc_euk=0\n"
+              "famdb_conf=1\ninstalling=0\ndisk_free_gb=100\n")
+    monkeypatch.setattr(wsl, "available", lambda: {"wsl2": True, "distro": "Ubuntu", "error": None})
+    monkeypatch.setattr(wsl, "_wsl_script", lambda *a, **k: (0, status, ""))
+    component = next(c for c in wsl.components_status()["components"] if c["key"] == "viennarna")
+    assert component["ok"] is expected_ok
+    assert expected_detail in component["detail"]
 
 
 def test_every_conda_install_step_creates_the_environment_through_the_recovery():
@@ -138,6 +373,42 @@ def test_every_conda_install_step_creates_the_environment_through_the_recovery()
         assert b.index("mm_create") < b.index("mm_install"), key
 
 
+def test_failed_package_probe_forces_file_restoration_even_when_metadata_survives():
+    """A missing binary must not be accepted as healthy because conda still records the package."""
+    helper = wsl._PRELUDE[wsl._PRELUDE.index("mm_install(){"):]
+    first_install = helper.split("mm_reset_cache", 1)[0]
+    assert 'install --force-reinstall -y -n te' in first_install
+    for key in ("repeatmasker", "minimap2", "miniprot", "genomescan"):
+        assert "mm_install" in wsl._STEP[key], key
+    assert "install --force-reinstall -y -n teagle-vrna" in wsl._STEP["viennarna"]
+    assert "install --force-reinstall -y -n te" in wsl._STEP["genomescan"]  # optional faToTwoBit
+
+
+def test_backend_package_pins_cover_every_installed_tool():
+    assert wsl._CONDA_PINS == {
+        "repeatmasker": "4.2.4", "minimap2": "2.31", "miniprot": "0.18",
+        "ispcr": "33", "ncbi-datasets-cli": "18.34.0", "ucsc-fatotwobit": "482",
+        "viennarna": "2.7.2",
+    }
+    assert "repeatmasker=4.2.4" in wsl._STEP["repeatmasker"]
+    assert "minimap2=2.31" in wsl._STEP["minimap2"]
+    assert "miniprot=0.18" in wsl._STEP["miniprot"]
+    assert "ispcr=33" in wsl._STEP["genomescan"]
+    assert "ncbi-datasets-cli=18.34.0" in wsl._STEP["genomescan"]
+    assert "ucsc-fatotwobit=482" in wsl._STEP["genomescan"]
+    assert "viennarna=2.7.2" in wsl._STEP["viennarna"]
+
+
+def test_micromamba_bootstrap_is_versioned_and_checksum_gated():
+    s = wsl._STEP["micromamba"]
+    assert wsl._MICROMAMBA_VERSION == "2.8.1"
+    assert "/2.8.1-0/micromamba-linux-64.tar.bz2" in s
+    assert wsl._MICROMAMBA_SHA256 in s
+    assert "hashlib.sha256(data).hexdigest()" in s
+    assert "sha256sum -c -" in s
+    assert "/latest" not in s
+
+
 def test_prelude_kills_background_helpers_on_exit():
     """Closing the app kills the WSL session and this script; an orphaned watcher would keep writing
     progress for a download that is no longer running."""
@@ -145,17 +416,16 @@ def test_prelude_kills_background_helpers_on_exit():
     assert "trap cleanup EXIT" in wsl._PRELUDE
 
 
-@pytest.mark.parametrize("key", sorted(wsl._DFAM_FILES))
-def test_every_dfam_step_is_valid_bash(key, tmp_path):
-    """`bash -n` the real generated script — a quoting slip in the watcher would only surface mid-download."""
+@pytest.mark.parametrize("key", sorted(wsl._STEP))
+def test_every_install_step_is_valid_bash(key):
+    """`bash -n` every real generated script before any package or database is downloaded."""
     import shutil, subprocess
     bash = shutil.which("bash")
     if not bash:
         pytest.skip("no bash on PATH")
-    p = tmp_path / f"{key}.sh"
-    p.write_bytes(wsl._build_script([key]).encode())
-    r = subprocess.run([bash, "-n", str(p)], capture_output=True, text=True)
-    assert r.returncode == 0, r.stderr
+    script = wsl._build_script([key]).replace("\r\n", "\n").encode()
+    r = subprocess.run([bash, "-n", "-s"], input=script, capture_output=True, timeout=60)
+    assert r.returncode == 0, r.stderr.decode(errors="replace")
 
 
 # ---------- the reader normalises any CR meter that still reaches it ----------
@@ -320,6 +590,8 @@ def test_curated_coverage_is_stated_per_lineage_and_never_as_one_number():
     cov = wsl._DFAM_CURATED_COVERAGE
     assert cov["Drosophila melanogaster"] == (399, 998)
     assert cov["Saccharomyces cerevisiae"] == (9, 398)
+    yeast_counts = wsl.dfam_coverage_counts("Saccharomyces cerevisiae")
+    assert yeast_counts == (9, 398, 389)
     assert cov["Homo sapiens"][0] == cov["Homo sapiens"][1]      # curated alone is the whole set for human
     for sp, (c, u) in cov.items():
         assert 0 < c <= u, sp
@@ -329,8 +601,14 @@ def test_curated_coverage_is_stated_per_lineage_and_never_as_one_number():
     import pathlib
     src = pathlib.Path(wsl.__file__).parent.parent.parent / "native" / "main.py"
     text = src.read_text(encoding="utf-8")
+    backend_text = pathlib.Path(wsl.__file__).read_text(encoding="utf-8")
     assert "just 9 families" not in text                          # the false claim is gone from the UI
     assert "copia, gypsy, hobo and mdg1 are not among them" not in text
+    assert "421 more" not in text + backend_text
+    assert text.count("{_DFAM_YEAST_ADDITIONAL}") >= 1
+    assert backend_text.count("{_DFAM_YEAST_ADDITIONAL}") >= 2
+    desc = next(c[3] for c in wsl._COMP_META if c[0] == "dfam_unc_euk")
+    assert all(str(n) in desc for n in yeast_counts)
 
 
 _MULTI = [

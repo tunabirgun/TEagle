@@ -8,6 +8,28 @@ def test_parse_requirements():
     assert reqs["primer3-py"]                    # pinned version present
 
 
+def test_every_bundled_direct_dependency_has_a_functional_import_probe():
+    requirements = {name for name, _ in envcheck.parse_requirements()}
+    assert requirements <= set(envcheck._IMPORT_NAME)
+    assert envcheck._IMPORT_NAME["openpyxl"] == "openpyxl"
+    assert envcheck._IMPORT_NAME["certifi"] == "certifi"
+
+
+def test_metadata_without_a_working_import_requires_repair(monkeypatch):
+    reqs = [("openpyxl", "3.1.5"), ("certifi", "2026.7.22")]
+    monkeypatch.setattr(envcheck, "parse_requirements", lambda: reqs)
+    monkeypatch.setattr(envcheck, "_installed", lambda name: dict(reqs)[name])
+    monkeypatch.setattr(envcheck, "_importable", lambda name: name != "openpyxl")
+    monkeypatch.setattr(envcheck, "probe_backends", lambda: {})
+    rep = envcheck.check()
+    packages = {p["name"]: p for p in rep["packages"]}
+    assert packages["openpyxl"]["ok"] is False
+    assert packages["certifi"]["ok"] is True
+    assert rep["packages_ok"] is False
+    assert rep["needs_install"] is True
+    assert rep["importFailures"] == ["openpyxl"]
+
+
 def test_check_shape_and_python_ok():
     rep = envcheck.check()
     for k in ("python", "python_ok", "packages", "packages_ok", "signature",

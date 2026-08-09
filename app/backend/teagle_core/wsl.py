@@ -282,6 +282,20 @@ def merge_fragments(hits):
 # (R-SEC3: pinned checksums, not runtime-fetched); resumable downloads; each step idempotent so a
 # repair re-run is safe. Steps share one prelude and are composed for either "install all" or a
 # single-component "repair".
+_CONDA_PINS = {
+    "repeatmasker": "4.2.4",
+    "minimap2": "2.31",
+    "miniprot": "0.18",
+    "ispcr": "33",
+    "ncbi-datasets-cli": "18.34.0",
+    "ucsc-fatotwobit": "482",
+    "viennarna": "2.7.2",
+}
+_MICROMAMBA_VERSION = "2.8.1"
+_MICROMAMBA_URL = ("https://github.com/mamba-org/micromamba-releases/releases/download/"
+                   "2.8.1-0/micromamba-linux-64.tar.bz2")
+_MICROMAMBA_SHA256 = "a934c3709c997feae403a27fd1e321c106d26ffa4f294800ffb11cbc9a3e8515"
+
 _DFAM_BASE = "https://www.dfam.org/releases/Dfam_4.0/families/FamDB"   # pinned & versioned
 # (filename, md5-of-the-.gz) — trust anchors captured from Dfam_4.0/*.md5 (verified 2026-07-19)
 _DFAM_FILES = {
@@ -344,6 +358,12 @@ _DFAM_CURATED_COVERAGE = {
 }
 
 
+def dfam_coverage_counts(species: str) -> tuple[int, int, int]:
+    """Curated, total, and additional-uncurated family counts for a measured lineage."""
+    curated, total = _DFAM_CURATED_COVERAGE[species]
+    return curated, total, total - curated
+
+
 def curated_coverage_sentence() -> str:
     """One sentence naming the best- and worst-covered lineages in the measured table, built from that
     table so a figure shown on screen can never drift from the measurement it came from."""
@@ -353,6 +373,10 @@ def curated_coverage_sentence() -> str:
     same = " — the same set either way" if bc == bu else ""
     return (f"{bs} has {bc} of {bu} family models in the curated partitions alone{same}, "
             f"while {ws} has only {wc} of {wu}.")
+
+
+_DFAM_YEAST_CURATED, _DFAM_YEAST_TOTAL, _DFAM_YEAST_ADDITIONAL = \
+    dfam_coverage_counts("Saccharomyces cerevisiae")
 
 _PRELUDE = r'''#!/usr/bin/env bash
 set -uo pipefail
@@ -446,8 +470,8 @@ mm_create(){   # create the shared 'te' env if absent; clean-index + retry once 
   fi
   return 0
 }
-mm_install(){  # install package(s) into 'te'; clean-index + force-reinstall retry once on a solve failure
-  "$MM" install -y -n te -c conda-forge -c bioconda "$@" && return 0
+mm_install(){  # called only after a functional/version probe fails, so restore files even if metadata survives
+  "$MM" install --force-reinstall -y -n te -c conda-forge -c bioconda "$@" && return 0
   mm_reset_cache; "$MM" install --force-reinstall -y -n te -c conda-forge -c bioconda "$@"
 }
 echo "[teagle] START $(date -u +%FT%TZ)"
@@ -464,11 +488,98 @@ echo "[teagle] STEP {key} START"
 mkdir -p "$FAMDIR" || fail "mkdir famdb"
 cd "$FAMDIR" || fail "cd famdb"
 if [ -f "{fname}" ]; then echo "[teagle] {fname} already present — delete it inside WSL to force a fresh download"; else
+  # A genuinely fresh Ubuntu WSL has python3 but often has neither curl nor wget. Keep curl as the
+  # preferred path when present, but use only the Python standard library otherwise. The fallback sends
+  # a Range request when a partial archive exists; if a server ignores it, a completed full response
+  # replaces the partial atomically instead of corrupting it by append.
+  dfam_head_bytes(){{
+    if command -v curl >/dev/null 2>&1; then
+      curl -sIL --max-time 60 --retry 3 --retry-delay 2 "$1" | tr -d '\r' | awk 'tolower($1)=="content-length:"{{n=$2}} END{{print n+0}}'
+    elif command -v python3 >/dev/null 2>&1; then
+      python3 - "$1" <<'PY'
+import sys
+from urllib.request import Request, urlopen
+try:
+    with urlopen(Request(sys.argv[1], method="HEAD"), timeout=60) as response:
+        print(int(response.headers.get("Content-Length") or 0))
+except Exception:
+    print(0)
+PY
+    else
+      echo 0
+    fi
+  }}
+  dfam_download(){{
+    dest=$1; url=$2
+    if command -v curl >/dev/null 2>&1; then
+      curl -sS -L --fail -C - --retry 5 --retry-delay 5 -o "$dest" "$url"
+    elif command -v python3 >/dev/null 2>&1; then
+      python3 - "$dest" "$url" <<'PY'
+import os, sys, time
+from urllib.request import Request, urlopen
+
+dest, url = sys.argv[1:3]
+attempts = 3
+last_error = None
+for attempt in range(1, attempts + 1):
+    have = os.path.getsize(dest) if os.path.exists(dest) else 0
+    headers = {{"Range": f"bytes={{have}}-"}} if have else {{}}
+    restart = None
+    try:
+        with urlopen(Request(url, headers=headers), timeout=180) as response:
+            status = response.getcode()
+            content_range = response.headers.get("Content-Range", "")
+            if have and status == 206:
+                if not content_range.startswith(f"bytes {{have}}-"):
+                    raise ValueError(f"malformed Content-Range for resume: {{content_range!r}}")
+                target, mode = dest, "ab"
+            elif have and status == 200:
+                # A server that ignores Range can still supply a clean archive. Download it beside the
+                # retained partial and replace atomically only after the full response has been read.
+                restart, target, mode = dest + ".restart", dest + ".restart", "wb"
+            elif not have and status == 200:
+                target, mode = dest, "wb"
+            else:
+                raise ValueError(f"unexpected HTTP status {{status}} for {{'resume' if have else 'download'}}")
+            advertised = response.headers.get("Content-Length")
+            expected = int(advertised) if advertised is not None else None
+            written = 0
+            with open(target, mode) as out:
+                while True:
+                    block = response.read(1024 * 1024)
+                    if not block:
+                        break
+                    out.write(block)
+                    written += len(block)
+            if expected is not None and written != expected:
+                raise EOFError(f"short HTTP response: received {{written}} of {{expected}} bytes")
+        if restart:
+            os.replace(restart, dest)
+        break
+    except Exception as exc:
+        last_error = exc
+        if restart:
+            try:
+                os.remove(restart)
+            except FileNotFoundError:
+                pass
+        if attempt < attempts:
+            time.sleep(attempt)
+else:
+    raise SystemExit(f"download failed after {{attempts}} attempts; partial archive was kept: {{last_error}}")
+PY
+    elif command -v wget >/dev/null 2>&1; then
+      wget -q --continue -O "$dest" "$url"
+    else
+      echo "python3, curl, and wget are unavailable" >&2
+      return 127
+    fi
+  }}
   # Total size comes from a separate HEAD. A resumed (-C -) GET answers 206 with Content-Length set to
   # the REMAINING bytes, so reading the total off the transfer itself would make every percentage wrong.
   # Retried like the transfer itself: an unknown total costs the percentage AND the completeness evidence
   # that decides whether a failed checksum may delete the file.
-  total_b=$(curl -sIL --max-time 60 --retry 3 --retry-delay 2 "{_DFAM_BASE}/{fname}.gz" | tr -d '\\r' | awk 'tolower($1)=="content-length:"{{n=$2}} END{{print n+0}}')
+  total_b=$(dfam_head_bytes "{_DFAM_BASE}/{fname}.gz")
   total_b=${{total_b:-0}}
   have_b=$(stat -c %s "{fname}.gz" 2>/dev/null || echo 0)
   # Gate on what this file still needs. The unpacked size is measured ({unpacked_h}) because a gzip
@@ -488,13 +599,14 @@ if [ -f "{fname}" ]; then echo "[teagle] {fname} already present — delete it i
   # curl's own meter is one endless carriage-return line, which the app's log panel cannot tail — a
   # multi-GB download looked frozen there. Silence it (-sS keeps real errors) and report whole lines
   # from a watcher instead, so progress is visible while the transfer runs.
-  curl -sS -L --fail -C - --retry 5 --retry-delay 5 -o "{fname}.gz" "{_DFAM_BASE}/{fname}.gz" &
+  dfam_download "{fname}.gz" "{_DFAM_BASE}/{fname}.gz" &
   dl_pid=$!
   (
     while kill -0 "$dl_pid" 2>/dev/null; do
       sleep 15
       kill -0 "$dl_pid" 2>/dev/null || break
-      now_b=$(stat -c %s "{fname}.gz" 2>/dev/null || echo 0)
+      active="{fname}.gz"; [ -f "{fname}.gz.restart" ] && active="{fname}.gz.restart"
+      now_b=$(stat -c %s "$active" 2>/dev/null || echo 0)
       # a percentage is only printed when the total is known AND consistent with what is on disk;
       # a redirect hop's Content-Length would otherwise produce a figure above 100%
       if [ "$total_b" -gt 0 ] && [ "$now_b" -le "$total_b" ]; then
@@ -551,11 +663,15 @@ _STEP = {
     "micromamba": r'''
 echo "[teagle] STEP micromamba START"
 mkdir -p "$HOME/bin" || fail "cannot create $HOME/bin"
-MM_URL="https://micro.mamba.pm/api/micromamba/linux-64/latest"
-mm_py3(){ python3 - "$MM" "$MM_URL" <<'PY'
-import io, os, stat, sys, tarfile, urllib.request
-dest, url = sys.argv[1], sys.argv[2]
+MM_VERSION="__MM_VERSION__"
+MM_URL="__MM_URL__"
+MM_SHA256="__MM_SHA256__"
+mm_py3(){ python3 - "$MM" "$MM_URL" "$MM_SHA256" <<'PY'
+import hashlib, io, os, stat, sys, tarfile, urllib.request
+dest, url, expected = sys.argv[1:4]
 data = urllib.request.urlopen(url, timeout=180).read()
+got = hashlib.sha256(data).hexdigest()
+if got != expected: raise SystemExit(f"micromamba sha256 mismatch: {got}")
 with tarfile.open(fileobj=io.BytesIO(data), mode="r:bz2") as tf:
     m = tf.extractfile(tf.getmember("bin/micromamba"))
     if m is None: raise SystemExit("bin/micromamba not in archive")
@@ -564,75 +680,85 @@ with tarfile.open(fileobj=io.BytesIO(data), mode="r:bz2") as tf:
 os.chmod(dest, os.stat(dest).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 PY
 }
-if [ -x "$MM" ]; then echo "[teagle] micromamba already present"; else
+mm_fetch(){
+  arc="$HOME/micromamba-$MM_VERSION.tar.bz2"
+  rm -f "$arc"
+  if command -v curl >/dev/null 2>&1; then curl -fL --retry 3 -o "$arc" "$MM_URL"
+  elif command -v wget >/dev/null 2>&1; then wget -qO "$arc" "$MM_URL"
+  else return 1; fi
+  echo "$MM_SHA256  $arc" | sha256sum -c - || { rm -f "$arc"; return 1; }
+  tar -xj -C "$HOME" -f "$arc" bin/micromamba || { rm -f "$arc"; return 1; }
+  rm -f "$arc"; chmod +x "$MM"
+}
+if [ -x "$MM" ] && [ "$("$MM" --version 2>/dev/null)" = "$MM_VERSION" ]; then
+  echo "[teagle] micromamba $MM_VERSION already present"
+else
   FOUND=""
   for c in "$HOME/.local/bin/micromamba" "$HOME/micromamba/bin/micromamba" "$(command -v micromamba 2>/dev/null)"; do
-    if [ -n "$c" ] && [ "$c" != "$MM" ] && [ -x "$c" ] && "$c" --version >/dev/null 2>&1; then FOUND="$c"; break; fi
+    if [ -n "$c" ] && [ "$c" != "$MM" ] && [ -x "$c" ] && [ "$("$c" --version 2>/dev/null)" = "$MM_VERSION" ]; then FOUND="$c"; break; fi
   done
   if [ -n "$FOUND" ] && cp -f "$FOUND" "$MM" && chmod +x "$MM"; then
     echo "[teagle] reused existing micromamba from $FOUND"
   elif command -v python3 >/dev/null 2>&1 && mm_py3; then
     echo "[teagle] micromamba installed via python3"
-  elif command -v bzip2 >/dev/null 2>&1 && command -v curl >/dev/null 2>&1 && curl -fL "$MM_URL" | tar -xj -C "$HOME" bin/micromamba; then
-    echo "[teagle] micromamba installed via curl"
-  elif command -v bzip2 >/dev/null 2>&1 && command -v wget >/dev/null 2>&1 && wget -qO- "$MM_URL" | tar -xj -C "$HOME" bin/micromamba; then
-    echo "[teagle] micromamba installed via wget"
+  elif command -v bzip2 >/dev/null 2>&1 && mm_fetch; then
+    echo "[teagle] micromamba installed via verified archive"
   elif sudo -n true 2>/dev/null && sudo apt-get update && sudo apt-get install -y python3 ca-certificates && mm_py3; then
     echo "[teagle] micromamba installed via apt+python3"
   else
     fail "micromamba: no python3, no curl/wget+bzip2, and sudo needs a password. Open a WSL terminal, run:  sudo apt-get update && sudo apt-get install -y python3 ca-certificates  then click Repair again"
   fi
-  [ -x "$MM" ] || fail "micromamba missing after install"
+  [ -x "$MM" ] && [ "$("$MM" --version 2>/dev/null)" = "$MM_VERSION" ] || fail "micromamba $MM_VERSION missing after install"
 fi
 echo "[teagle] STEP micromamba OK"
-''',
+'''.replace("__MM_VERSION__", _MICROMAMBA_VERSION).replace("__MM_URL__", _MICROMAMBA_URL).replace("__MM_SHA256__", _MICROMAMBA_SHA256),
     "repeatmasker": r'''
 echo "[teagle] STEP repeatmasker START"
 [ -x "$MM" ] || fail "micromamba required first (repair micromamba)"
-if "$MM" run -n te RepeatMasker -v >/dev/null 2>&1; then echo "[teagle] RepeatMasker already present"; else
+if "$MM" run -n te RepeatMasker -v 2>&1 | grep -q "RepeatMasker version __RM_VERSION__$"; then echo "[teagle] RepeatMasker __RM_VERSION__ already present"; else
   # never `env remove` here: the Dfam .h5 libraries (multi-GB) live INSIDE this env prefix.
   # mm_create / mm_install self-recover from a corrupted repodata shard (clean-index + retry once).
   mm_create || fail "create te env"
-  mm_install repeatmasker || fail "install repeatmasker"
-  "$MM" run -n te RepeatMasker -v >/dev/null 2>&1 || fail "RepeatMasker not runnable after install"
+  mm_install repeatmasker=__RM_VERSION__ || fail "install repeatmasker __RM_VERSION__"
+  "$MM" run -n te RepeatMasker -v 2>&1 | grep -q "RepeatMasker version __RM_VERSION__$" || fail "RepeatMasker __RM_VERSION__ not runnable after install"
 fi
 echo "[teagle] STEP repeatmasker OK"
-''',
+'''.replace("__RM_VERSION__", _CONDA_PINS["repeatmasker"]),
     "minimap2": r'''
 echo "[teagle] STEP minimap2 START"
 [ -x "$MM" ] || fail "micromamba required first (repair micromamba)"
-if [ -x "$ENV/bin/minimap2" ]; then echo "[teagle] minimap2 already present"; else
+if [ -x "$ENV/bin/minimap2" ] && [ "$("$ENV/bin/minimap2" --version 2>/dev/null | cut -d- -f1)" = "__MM2_VERSION__" ]; then echo "[teagle] minimap2 __MM2_VERSION__ already present"; else
   mm_create || fail "create te env"
-  mm_install minimap2 || fail "install minimap2"
-  [ -x "$ENV/bin/minimap2" ] || fail "minimap2 missing after install"
+  mm_install minimap2=__MM2_VERSION__ || fail "install minimap2 __MM2_VERSION__"
+  [ -x "$ENV/bin/minimap2" ] && [ "$("$ENV/bin/minimap2" --version 2>/dev/null | cut -d- -f1)" = "__MM2_VERSION__" ] || fail "minimap2 __MM2_VERSION__ missing after install"
 fi
 echo "[teagle] STEP minimap2 OK"
-''',
+'''.replace("__MM2_VERSION__", _CONDA_PINS["minimap2"]),
     "miniprot": r'''
 echo "[teagle] STEP miniprot START"
 [ -x "$MM" ] || fail "micromamba required first (repair micromamba)"
-if [ -x "$ENV/bin/miniprot" ]; then echo "[teagle] miniprot already present"; else
+if [ -x "$ENV/bin/miniprot" ] && [ "$("$ENV/bin/miniprot" --version 2>&1 | head -1 | cut -d- -f1)" = "__MP_VERSION__" ]; then echo "[teagle] miniprot __MP_VERSION__ already present"; else
   mm_create || fail "create te env"
-  mm_install miniprot || fail "install miniprot"
-  [ -x "$ENV/bin/miniprot" ] || fail "miniprot missing after install"
+  mm_install miniprot=__MP_VERSION__ || fail "install miniprot __MP_VERSION__"
+  [ -x "$ENV/bin/miniprot" ] && [ "$("$ENV/bin/miniprot" --version 2>&1 | head -1 | cut -d- -f1)" = "__MP_VERSION__" ] || fail "miniprot __MP_VERSION__ missing after install"
 fi
 echo "[teagle] STEP miniprot OK"
-''',
+'''.replace("__MP_VERSION__", _CONDA_PINS["miniprot"]),
     "genomescan": r'''
 echo "[teagle] STEP genomescan START"
 [ -x "$MM" ] || fail "micromamba required first (repair micromamba)"
-if [ -x "$ENV/bin/isPcr" ] && [ -x "$ENV/bin/datasets" ]; then echo "[teagle] isPcr + datasets already present"; else
+if compgen -G "$ENV/conda-meta/ispcr-__ISPCR_VERSION__-*.json" >/dev/null && compgen -G "$ENV/conda-meta/ncbi-datasets-cli-__DATASETS_VERSION__-*.json" >/dev/null && [ -x "$ENV/bin/isPcr" ] && [ -x "$ENV/bin/datasets" ]; then echo "[teagle] isPcr __ISPCR_VERSION__ + NCBI Datasets __DATASETS_VERSION__ already present"; else
   mm_create || fail "create te env"
-  mm_install ispcr ncbi-datasets-cli || fail "install ispcr + ncbi-datasets-cli"
-  [ -x "$ENV/bin/isPcr" ] || fail "isPcr missing after install"
-  [ -x "$ENV/bin/datasets" ] || fail "datasets missing after install"
+  mm_install ispcr=__ISPCR_VERSION__ ncbi-datasets-cli=__DATASETS_VERSION__ || fail "install pinned ispcr + ncbi-datasets-cli"
+  [ -x "$ENV/bin/isPcr" ] && compgen -G "$ENV/conda-meta/ispcr-__ISPCR_VERSION__-*.json" >/dev/null || fail "isPcr __ISPCR_VERSION__ missing after install"
+  [ -x "$ENV/bin/datasets" ] && compgen -G "$ENV/conda-meta/ncbi-datasets-cli-__DATASETS_VERSION__-*.json" >/dev/null || fail "NCBI Datasets __DATASETS_VERSION__ missing after install"
 fi
 # faToTwoBit is best-effort: it makes cached genomes compact + fast to load, but scans still work on plain
 # FASTA if it is unavailable, so a missing package must NOT fail the step.
-[ -x "$ENV/bin/faToTwoBit" ] || "$MM" install -y -n te -c bioconda -c conda-forge ucsc-fatotwobit >/dev/null 2>&1 \
+[ -x "$ENV/bin/faToTwoBit" ] && compgen -G "$ENV/conda-meta/ucsc-fatotwobit-__FATOTWOBIT_VERSION__-*.json" >/dev/null || "$MM" install --force-reinstall -y -n te -c bioconda -c conda-forge ucsc-fatotwobit=__FATOTWOBIT_VERSION__ >/dev/null 2>&1 \
   || echo "[teagle] note: faToTwoBit unavailable (genomes cached as FASTA — larger, still functional)"
 echo "[teagle] STEP genomescan OK"
-''',
+'''.replace("__ISPCR_VERSION__", _CONDA_PINS["ispcr"]).replace("__DATASETS_VERSION__", _CONDA_PINS["ncbi-datasets-cli"]).replace("__FATOTWOBIT_VERSION__", _CONDA_PINS["ucsc-fatotwobit"]),
     # Pinned to the SAME major/minor as the optional in-process package so both routes compute the
     # cross-check with one implementation and one parameter set. A version skew here would silently
     # make the reported dG depend on how ViennaRNA was installed.
@@ -643,18 +769,24 @@ echo "[teagle] STEP viennarna START"
 # the core Dfam / RepeatMasker stack downloads in the steps that follow, and "Install all" promises each
 # component installs independently. So it logs a note and continues (the faToTwoBit policy above), and
 # the component reports "not installed (optional)" via its own live import probe rather than failing.
-if "$MM" run -n teagle-vrna python -c "import RNA" >/dev/null 2>&1; then
-  echo "[teagle] ViennaRNA already present"
-elif "$MM" create -y -n teagle-vrna -c conda-forge -c bioconda "viennarna>=2.7,<2.8" python=3.12 \
-     || { mm_reset_cache; "$MM" create -y -n teagle-vrna -c conda-forge -c bioconda "viennarna>=2.7,<2.8" python=3.12; }; then
-  "$MM" run -n teagle-vrna python -c "import RNA" >/dev/null 2>&1 \
+vrna_install(){
+  if [ -d "$VRNAENV/conda-meta" ]; then
+    "$MM" install --force-reinstall -y -n teagle-vrna -c conda-forge -c bioconda viennarna=__VRNA_VERSION__ python=3.12
+  else
+    "$MM" create -y -n teagle-vrna -c conda-forge -c bioconda viennarna=__VRNA_VERSION__ python=3.12
+  fi
+}
+if "$MM" run -n teagle-vrna python -c "import RNA,sys;sys.exit(0 if RNA.__version__ == '__VRNA_VERSION__' else 1)" >/dev/null 2>&1; then
+  echo "[teagle] ViennaRNA __VRNA_VERSION__ already present"
+elif vrna_install || { mm_reset_cache; vrna_install; }; then
+  "$MM" run -n teagle-vrna python -c "import RNA,sys;sys.exit(0 if RNA.__version__ == '__VRNA_VERSION__' else 1)" >/dev/null 2>&1 \
     || echo "[teagle] note: ViennaRNA not importable after install (optional primer-QC engine skipped — Primer3 still reports every structure)"
 else
   echo "[teagle] note: could not create the teagle-vrna env (optional primer-QC engine skipped — Primer3 still reports every structure)"
 fi
 "$MM" run -n teagle-vrna python -c "import RNA; print('[teagle] ViennaRNA ' + RNA.__version__)" 2>/dev/null || true
 echo "[teagle] STEP viennarna OK"
-''',
+'''.replace("__VRNA_VERSION__", _CONDA_PINS["viennarna"]),
     "dfam_root": _dfam_step("dfam_root"),
     "dfam_unc_root": _dfam_step("dfam_unc_root"),
     "dfam_unc_euk": _dfam_step("dfam_unc_euk"),
@@ -701,8 +833,9 @@ _COMP_META = [
      "are uncurated in Dfam 4.0 and cannot be named without it. Installing it is only half of what is "
      "needed: RepeatMasker searches curated families ONLY unless it is asked for both, so choose the "
      "'include uncurated families' library option to actually use what this downloads. Measured on baker's "
-     "yeast, curated-only searches 9 families and finds no transposable element at all, while including "
-     "uncurated searches 421 more and finds Ty elements over 4.5% of the genome. Expect roughly 40-60 minutes: Dfam serves "
+     f"yeast, curated-only searches {_DFAM_YEAST_CURATED} of {_DFAM_YEAST_TOTAL} family models and finds "
+     f"no transposable element at all, while including uncurated adds {_DFAM_YEAST_ADDITIONAL} models and "
+     "finds Ty elements over 4.5% of the genome. Expect roughly 40-60 minutes: Dfam serves "
      "this file at about 2 MB/s per client, and measured here, splitting it across parallel connections "
      "made it SLOWER, not faster. The download resumes where it stopped if it is interrupted, so a failed "
      "attempt does not start over. There is no smaller alternative: RepeatMasker's RMBLAST engine reads the "
@@ -770,12 +903,25 @@ def repair_component(key: str) -> dict:
 
 _STATUS_PROBE = r'''cd "$HOME" 2>/dev/null
 export MAMBA_ROOT_PREFIX="$HOME/micromamba"
-MM="$HOME/bin/micromamba"; ENV="$HOME/micromamba/envs/te"; FAMDIR="$ENV/share/RepeatMasker/Libraries/famdb"
-echo "micromamba=$([ -x "$MM" ] && echo 1 || echo 0)"
+MM="$HOME/bin/micromamba"; ENV="$HOME/micromamba/envs/te"; VRNAENV="$HOME/micromamba/envs/teagle-vrna"; FAMDIR="$ENV/share/RepeatMasker/Libraries/famdb"
+echo "micromamba=$([ -x "$MM" ] && "$MM" --version 2>/dev/null || echo 0)"
 rmv=$("$MM" run -n te RepeatMasker -v 2>/dev/null | grep -oiE 'version [0-9][0-9.]*' | head -1 | awk '{print $2}'); echo "repeatmasker=${rmv:-0}"
 mmv=$([ -x "$ENV/bin/minimap2" ] && "$ENV/bin/minimap2" --version 2>/dev/null); echo "minimap2=${mmv:-0}"
 echo "genomescan=$([ -x "$ENV/bin/isPcr" ] && [ -x "$ENV/bin/datasets" ] && echo 1 || echo 0)"
-vrv=$("$MM" run -n teagle-vrna python -c "import RNA;print(RNA.__version__)" 2>/dev/null); echo "viennarna=${vrv:-0}"
+echo "ispcr_pin=$(compgen -G "$ENV/conda-meta/ispcr-__ISPCR_VERSION__-*.json" >/dev/null && echo 1 || echo 0)"
+echo "datasets_pin=$(compgen -G "$ENV/conda-meta/ncbi-datasets-cli-__DATASETS_VERSION__-*.json" >/dev/null && echo 1 || echo 0)"
+if [ -x "$ENV/bin/faToTwoBit" ]; then
+  compgen -G "$ENV/conda-meta/ucsc-fatotwobit-__FATOTWOBIT_VERSION__-*.json" >/dev/null && echo "fatotwobit=__FATOTWOBIT_VERSION__" || echo "fatotwobit=version drift"
+else
+  compgen -G "$ENV/conda-meta/ucsc-fatotwobit-__FATOTWOBIT_VERSION__-*.json" >/dev/null && echo "fatotwobit=broken (pinned metadata, executable missing)" || echo "fatotwobit=absent"
+fi
+if [ ! -d "$VRNAENV" ]; then
+  echo "viennarna=absent"
+elif vrv=$("$MM" run -n teagle-vrna python -c "import RNA;print(RNA.__version__)" 2>/dev/null) && [ -n "$vrv" ]; then
+  echo "viennarna=$vrv"
+else
+  echo "viennarna=broken/unusable"
+fi
 echo "dfam_root=$([ -f "$FAMDIR/dfam40.0.h5" ] && echo 1 || echo 0)"
 echo "dfam_curated=$([ -f "$FAMDIR/dfam40.curated.consensus.0.h5" ] && echo 1 || echo 0)"
 echo "dfam_unc_root=$([ -f "$FAMDIR/dfam40.uncurated.consensus.0.h5" ] && echo 1 || echo 0)"
@@ -783,7 +929,7 @@ echo "dfam_unc_euk=$([ -f "$FAMDIR/dfam40.uncurated.consensus.1.h5" ] && echo 1 
 echo "famdb_conf=$( { ls "$ENV"/share/famdb-*/famdb.conf >/dev/null 2>&1 || [ -f "$ENV/share/RepeatMasker/famdb.conf" ]; } && echo 1 || echo 0)"
 if [ -d "$HOME/.teagle_install.lock" ] && [ -f "$HOME/.teagle_install.lock/pid" ] && kill -0 "$(cat "$HOME/.teagle_install.lock/pid" 2>/dev/null)" 2>/dev/null; then echo "installing=1"; else echo "installing=0"; fi
 echo "disk_free_gb=$(df -BG --output=avail "$HOME" 2>/dev/null | tail -1 | tr -dc '0-9')"
-'''
+'''.replace("__ISPCR_VERSION__", _CONDA_PINS["ispcr"]).replace("__DATASETS_VERSION__", _CONDA_PINS["ncbi-datasets-cli"]).replace("__FATOTWOBIT_VERSION__", _CONDA_PINS["ucsc-fatotwobit"])
 
 
 def components_status() -> dict:
@@ -823,15 +969,29 @@ def components_status() -> dict:
     def present(key, ok, detail):
         comp[key]["ok"] = ok
         comp[key]["detail"] = detail
-    present("micromamba", kv.get("micromamba") == "1", "installed" if kv.get("micromamba") == "1" else "missing")
+    mmgr = kv.get("micromamba", "0")
+    present("micromamba", mmgr == _MICROMAMBA_VERSION,
+            (f"v{mmgr}" if mmgr not in ("0", "") else "missing"))
     rm = kv.get("repeatmasker", "0")
-    present("repeatmasker", rm not in ("0", ""), (f"v{rm}" if rm not in ("0", "") else "missing"))
+    present("repeatmasker", rm == _CONDA_PINS["repeatmasker"], (f"v{rm}" if rm not in ("0", "") else "missing"))
     mm = kv.get("minimap2", "0")
-    present("minimap2", mm not in ("0", ""), (mm if mm not in ("0", "") else "missing"))
-    present("genomescan", kv.get("genomescan") == "1", "installed" if kv.get("genomescan") == "1" else "missing")
-    vr = kv.get("viennarna", "0")
-    # optional: its absence never blocks anything, so it is reported as such rather than as "missing"
-    present("viennarna", vr not in ("0", ""), (f"v{vr}" if vr not in ("0", "") else "not installed (optional)"))
+    mm_base = mm.split("-", 1)[0]
+    present("minimap2", mm_base == _CONDA_PINS["minimap2"], (mm if mm not in ("0", "") else "missing"))
+    scan_ok = kv.get("genomescan") == "1" and kv.get("ispcr_pin") == "1" and kv.get("datasets_pin") == "1"
+    fa = kv.get("fatotwobit", "absent")
+    fa_detail = ("faToTwoBit not installed (optional; genomes remain FASTA)" if fa == "absent" else
+                 (f"faToTwoBit v{fa} installed" if fa == _CONDA_PINS["ucsc-fatotwobit"] else
+                  f"faToTwoBit {fa} (optional; compact-cache conversion unavailable)"))
+    scan_detail = (("installed at pinned isPcr/Datasets versions" if scan_ok else "isPcr or NCBI Datasets missing/version drift")
+                   + "; " + fa_detail)
+    present("genomescan", scan_ok, scan_detail)
+    vr = kv.get("viennarna", "absent")
+    # Optional absence is normal, but a present environment that cannot import RNA is a repairable fault.
+    vr_detail = (f"v{vr}" if vr == _CONDA_PINS["viennarna"] else
+                 ("not installed (optional)" if vr == "absent" else
+                  ("broken/unusable (repair optional component)" if vr == "broken/unusable" else
+                   f"v{vr} (version drift; repair optional component)")))
+    present("viennarna", vr == _CONDA_PINS["viennarna"], vr_detail)
     present("dfam_root", kv.get("dfam_root") == "1", "present" if kv.get("dfam_root") == "1" else "missing")
     present("dfam_curated", kv.get("dfam_curated") == "1", "present" if kv.get("dfam_curated") == "1" else "missing")
     for _k in ("dfam_unc_root", "dfam_unc_euk"):      # optional: absent is a normal state, not "missing"
@@ -849,15 +1009,42 @@ _DFAM_OPTIONAL = [k for k in _DFAM_FILES if k not in _ALL_STEPS]
 
 _INTEGRITY_PROBE = r'''cd "$HOME" 2>/dev/null
 export MAMBA_ROOT_PREFIX="$HOME/micromamba"
-MM="$HOME/bin/micromamba"; ENV="$HOME/micromamba/envs/te"; FAMDIR="$ENV/share/RepeatMasker/Libraries/famdb"
+MM="$HOME/bin/micromamba"; ENV="$HOME/micromamba/envs/te"; VRNAENV="$HOME/micromamba/envs/teagle-vrna"; FAMDIR="$ENV/share/RepeatMasker/Libraries/famdb"
 echo "=RM="; "$MM" run -n te RepeatMasker -v 2>&1 | head -1
 echo "=MM="; "$ENV/bin/minimap2" --version 2>&1 | head -1
 echo "=FAMDB="; "$MM" run -n te famdb.py info 2>&1 | grep -iE "version|families|consensus" | head -3
 echo "=FILES="; for f in ''' + " ".join(_DFAM_FILES[k][0] for k in _DFAM_REQUIRED) + r'''; do if [ -f "$FAMDIR/$f" ]; then echo "present $f $(stat -c %s "$FAMDIR/$f" 2>/dev/null)"; else echo "MISSING $f"; fi; done
 echo "=OPTFILES="; for f in ''' + " ".join(_DFAM_FILES[k][0] for k in _DFAM_OPTIONAL) + r'''; do if [ -f "$FAMDIR/$f" ]; then echo "present $f"; else echo "absent $f"; fi; done
-echo "=SCAN="; { [ -x "$ENV/bin/isPcr" ] && echo "isPcr present"; } || echo "isPcr MISSING"; { [ -x "$ENV/bin/datasets" ] && echo "datasets present"; } || echo "datasets MISSING"
-echo "=VRNA="; "$MM" run -n teagle-vrna python -c "import RNA;print('ViennaRNA '+RNA.__version__)" 2>&1 | head -1
-'''
+echo "=SCAN="
+# The pinned UCSC isPcr/faToTwoBit builds deliberately return 255 for a no-argument usage request.
+# Their exact first-line banners plus exact conda metadata distinguish that healthy behavior from a
+# missing ELF interpreter or a wrong binary without coupling this backend check to assay fixtures.
+if [ -x "$ENV/bin/isPcr" ]; then
+  ispcr_out=$("$ENV/bin/isPcr" 2>&1); ispcr_rc=$?; ispcr_first=$(printf '%s\n' "$ispcr_out" | head -1); printf '%s\n' "$ispcr_first"
+  case "$ispcr_first" in "isPcr - Standalone v 33x2"*) [ "$ispcr_rc" -eq 255 ] && echo "isPcr signature 33x2 OK" || echo "isPcr BROKEN rc=$ispcr_rc";; *) echo "isPcr BROKEN rc=$ispcr_rc wrong signature";; esac
+else echo "isPcr MISSING"; fi
+if [ -x "$ENV/bin/datasets" ]; then
+  datasets_out=$("$ENV/bin/datasets" version 2>&1); datasets_rc=$?; datasets_first=$(printf '%s\n' "$datasets_out" | head -1); printf '%s\n' "$datasets_first"
+  if [ "$datasets_rc" -eq 0 ] && printf '%s\n' "$datasets_out" | grep -Eq '(^|[^0-9.])__DATASETS_VERSION__([^0-9.]|$)'; then echo "datasets version __DATASETS_VERSION__ OK"; else echo "datasets BROKEN rc=$datasets_rc wrong version/signature"; fi
+else echo "datasets MISSING"; fi
+compgen -G "$ENV/conda-meta/ispcr-__ISPCR_VERSION__-*.json" >/dev/null && echo "ispcr package __ISPCR_VERSION__" || echo "ispcr package MISMATCH"
+compgen -G "$ENV/conda-meta/ncbi-datasets-cli-__DATASETS_VERSION__-*.json" >/dev/null && echo "datasets package __DATASETS_VERSION__" || echo "datasets package MISMATCH"
+echo "=FATOTWOBIT="
+if [ -x "$ENV/bin/faToTwoBit" ]; then
+  fa_out=$("$ENV/bin/faToTwoBit" 2>&1); fa_rc=$?; fa_first=$(printf '%s\n' "$fa_out" | head -1); printf '%s\n' "$fa_first"
+  case "$fa_first" in "faToTwoBit - Convert DNA"*) [ "$fa_rc" -eq 255 ] && echo "faToTwoBit signature OK" || echo "faToTwoBit BROKEN rc=$fa_rc";; *) echo "faToTwoBit BROKEN rc=$fa_rc wrong signature";; esac
+  compgen -G "$ENV/conda-meta/ucsc-fatotwobit-__FATOTWOBIT_VERSION__-*.json" >/dev/null && echo "present __FATOTWOBIT_VERSION__" || echo "present MISMATCH"
+else
+  compgen -G "$ENV/conda-meta/ucsc-fatotwobit-__FATOTWOBIT_VERSION__-*.json" >/dev/null && echo "MISSING executable package __FATOTWOBIT_VERSION__" || echo "absent"
+fi
+echo "=VRNA="
+if [ -d "$VRNAENV" ]; then
+  v=$("$MM" run -n teagle-vrna python -c "import RNA;print(RNA.__version__)" 2>/dev/null) || v="UNUSABLE"
+  echo "present ${v:-UNUSABLE}"
+else
+  echo "absent"
+fi
+'''.replace("__ISPCR_VERSION__", _CONDA_PINS["ispcr"]).replace("__DATASETS_VERSION__", _CONDA_PINS["ncbi-datasets-cli"]).replace("__FATOTWOBIT_VERSION__", _CONDA_PINS["ucsc-fatotwobit"])
 
 
 def integrity_check() -> dict:
@@ -886,10 +1073,26 @@ def integrity_check() -> dict:
     # spent 40 minutes downloading one should be able to see it named here rather than infer it
     opt = [l.split() for l in sec.get("OPTFILES", []) if l.strip()]
     opt_txt = ", ".join(f"{f} {'present' if s == 'present' else 'not installed'}" for s, f in opt if f)
-    scan_txt = " ".join(sec.get("SCAN", []))
+    scan_lines = [line.strip() for line in sec.get("SCAN", []) if line.strip()]
+    scan_txt = " ".join(scan_lines)
+    scan_fault = next((line for line in scan_lines if any(flag in line for flag in ("BROKEN", "MISSING", "MISMATCH"))), None)
+    scan_detail = ((scan_fault + (f" | {scan_lines[0]}" if scan_lines and scan_lines[0] != scan_fault else ""))
+                   if scan_fault else scan_txt)
+    fatotwobit_lines = [line.strip() for line in sec.get("FATOTWOBIT", []) if line.strip()]
+    fatotwobit_txt = " ".join(fatotwobit_lines)
+    fatotwobit_fault = next((line for line in fatotwobit_lines if any(flag in line for flag in ("BROKEN", "MISSING", "MISMATCH"))), None)
+    fatotwobit_detail = ((fatotwobit_fault + (f" | {fatotwobit_lines[0]}" if fatotwobit_lines and fatotwobit_lines[0] != fatotwobit_fault else ""))
+                         if fatotwobit_fault else fatotwobit_txt)
+    vrna_txt = " ".join(sec.get("VRNA", [])).strip()
+    fa_absent = fatotwobit_txt == "absent"
+    fa_exact = ("faToTwoBit signature OK" in fatotwobit_txt
+                and f"present {_CONDA_PINS['ucsc-fatotwobit']}" in fatotwobit_txt
+                and "BROKEN" not in fatotwobit_txt and "MISSING" not in fatotwobit_txt)
+    vrna_absent = vrna_txt == "absent"
+    vrna_exact = vrna_txt == f"present {_CONDA_PINS['viennarna']}"
     checks = [
-        {"name": "RepeatMasker runs", "ok": "RepeatMasker version" in rm_txt, "detail": rm_txt.strip()[:80] or "no version reported"},
-        {"name": "minimap2 runs", "ok": bool(re.match(r"^\d+\.\d+", mm_txt)), "detail": mm_txt[:60] or "no version reported"},
+        {"name": "RepeatMasker runs", "ok": f"RepeatMasker version {_CONDA_PINS['repeatmasker']}" in rm_txt, "detail": rm_txt.strip()[:80] or "no version reported"},
+        {"name": "minimap2 runs", "ok": mm_txt.split("-", 1)[0] == _CONDA_PINS["minimap2"], "detail": mm_txt[:60] or "no version reported"},
         {"name": "FamDB loads", "ok": bool(re.search(r"(?i)version|families|consensus", fam_txt)), "detail": fam_txt.strip()[:90] or "famdb.py info returned nothing"},
         {"name": "Dfam library files present",
          "ok": len(files) >= len(_DFAM_REQUIRED) and all(f.startswith("present") for f in files),
@@ -897,8 +1100,19 @@ def integrity_check() -> dict:
                    + (f" | optional: {opt_txt}" if opt_txt else "")},
         # the whole-genome off-target scan needs isPcr + NCBI datasets; verify them here so a "healthy" deep-check
         # never precedes a scan that fails at first use (same binding-truthfulness class as the fixed unzip gap)
-        {"name": "isPcr + NCBI datasets (whole-genome scan)", "ok": "isPcr present" in scan_txt and "datasets present" in scan_txt,
-         "detail": scan_txt.strip()[:80] or "not probed"},
+        {"name": "isPcr + NCBI datasets (whole-genome scan)",
+         "ok": ("isPcr signature 33x2 OK" in scan_txt
+                and f"datasets version {_CONDA_PINS['ncbi-datasets-cli']} OK" in scan_txt
+                and "MISSING" not in scan_txt and "BROKEN" not in scan_txt
+                and f"ispcr package {_CONDA_PINS['ispcr']}" in scan_txt
+                and f"datasets package {_CONDA_PINS['ncbi-datasets-cli']}" in scan_txt),
+         "detail": scan_detail[:120] or "not probed"},
+        {"name": "faToTwoBit (compact genome cache; optional)",
+         "ok": fa_absent or fa_exact,
+         "detail": ("not installed (optional)" if fa_absent else fatotwobit_detail[:120] or "not probed")},
+        {"name": "ViennaRNA (primer-QC cross-check; optional)",
+         "ok": vrna_absent or vrna_exact,
+         "detail": ("not installed (optional)" if vrna_absent else vrna_txt[:90] or "not probed")},
     ]
     return {"ok": all(c["ok"] for c in checks), "checks": checks, "raw": out[-1500:]}
 
@@ -1793,10 +2007,10 @@ def genome_annotate(accession: str, species: str | None = None, threads: int = 4
         if not chk.get("ok"):
             return {"ok": False, "error": chk["error"], "ambiguous_species": chk.get("ambiguous", False)}
         # RepeatMasker searches CURATED families only unless told otherwise, so the optional uncurated
-        # Dfam partitions are inert without this flag. Measured on S. cerevisiae: curated-only sees 9
-        # ancestor families and no lineage-specific ones and finds ZERO transposable elements, while
-        # -uncurated sees the same 9 plus 421 lineage-specific families and recovers the Ty1/Copia and
-        # Gypsy elements the genome actually carries. Uncurated families are auto-generated and lower
+        # Dfam partitions are inert without this flag. Measured on S. cerevisiae, curated-only sees the
+        # curated subset and finds ZERO transposable elements, while -uncurated adds the lineage's
+        # remaining family models and recovers the Ty1/Copia and Gypsy elements the genome actually
+        # carries. Uncurated families are auto-generated and lower
         # confidence, so this stays the caller's decision rather than a silent default.
         sp = f'-species "{species}"' + (" -uncurated" if include_uncurated else "")
     st = env_status()
@@ -1877,9 +2091,10 @@ def genome_annotate(accession: str, species: str | None = None, threads: int = 4
                      f"{species or 'this lineage'}" if avail.get("ok") else "")
                   + (", and this run used only the CURATED subset of them. Most families outside a few "
                      "heavily curated species are uncurated in Dfam, so re-running with uncurated families "
-                     "included is the first thing to try: measured on S. cerevisiae, curated-only sees 9 "
-                     "families and finds no transposable element, while including uncurated sees 421 more "
-                     "and recovers the Ty elements the genome carries."
+                     f"included is the first thing to try: measured on S. cerevisiae, curated-only sees "
+                     f"{_DFAM_YEAST_CURATED} of {_DFAM_YEAST_TOTAL} family models and finds no transposable "
+                     f"element, while including uncurated adds {_DFAM_YEAST_ADDITIONAL} models and recovers "
+                     "the Ty elements the genome carries."
                      if not include_uncurated else
                      ". Uncurated families were already included, so consider whether Dfam covers this "
                      "lineage at all, or supply a species-specific library.")))),

@@ -8,7 +8,7 @@ gate advanced features. Nothing fails silently: a failed install is reported wit
 the pip error, never treated as success.
 """
 from __future__ import annotations
-import sys, os, json, subprocess, hashlib, shutil
+import sys, os, json, subprocess, hashlib, shutil, importlib
 import importlib.metadata as md
 from teagle_core import appdirs
 
@@ -96,14 +96,32 @@ def probe_backends() -> dict:
     return {"webview2": bool(wv), "wsl2": wsl or "not found"}
 
 
-_IMPORT_NAME = {"primer3-py": "primer3", "pyhmmer": "pyhmmer", "PySide6": "PySide6",
-                "ViennaRNA": "RNA"}   # verify they truly import (dist name -> module; ViennaRNA imports as RNA)
+_IMPORT_NAME = {
+    "primer3-py": "primer3",
+    "pyhmmer": "pyhmmer",
+    "PySide6": "PySide6",
+    "openpyxl": "openpyxl",
+    "certifi": "certifi",
+    "ViennaRNA": "RNA",  # ViennaRNA imports as RNA when it is deliberately enabled.
+}
 _SOURCE_ONLY = set()                                            # every pinned dep ships in the frozen native build
+
+
+def _importable(distribution: str) -> bool:
+    """Check the module users actually load, rather than accepting package metadata alone."""
+    module = _IMPORT_NAME.get(distribution)
+    if not module:
+        return False
+    try:
+        importlib.import_module(module)
+        return True
+    except Exception:
+        return False
 
 
 def check() -> dict:
     reqs = parse_requirements()
-    pkgs = []            # (name, required, installed)
+    pkgs = []            # (name, required, installed, import-and-version-ok)
     all_ok = True
     import_fail = []
     for name, ver in reqs:
@@ -111,15 +129,12 @@ def check() -> dict:
             continue
         inst = _installed(name)
         ok = (inst is not None) and (ver == "" or inst == ver)
-        if ok and name in _IMPORT_NAME:                      # metadata present != importable
-            try:
-                __import__(_IMPORT_NAME[name])
-            except Exception:
-                ok = False
-                import_fail.append(name)
+        if ok and not _importable(name):                      # metadata present != importable
+            ok = False
+            import_fail.append(name)
         if not ok:
             all_ok = False
-        pkgs.append((name, ver, inst))
+        pkgs.append((name, ver, inst, ok))
     sig = _signature(reqs)
     last = _read_state().get("signature")
     py_ok = sys.version_info[:2] >= MIN_PY
@@ -127,8 +142,8 @@ def check() -> dict:
         "python": ".".join(map(str, sys.version_info[:3])),
         "python_ok": py_ok,
         "app_version": _app_version(),
-        "packages": [{"name": n, "required": r or "(any)", "installed": i, "ok": (i is not None and (r == "" or i == r))}
-                     for n, r, i in pkgs],
+        "packages": [{"name": n, "required": r or "(any)", "installed": i, "ok": ok}
+                     for n, r, i, ok in pkgs],
         "packages_ok": all_ok,
         "importFailures": import_fail,
         "signature": sig,

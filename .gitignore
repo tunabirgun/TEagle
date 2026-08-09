@@ -1,0 +1,88 @@
+# TEagle repository exclusions
+# Local tool and editor metadata
+**/.claude/
+**/AGENTS.md
+**/CLAUDE.md
+**/GEMINI.md
+**/.agents/
+**/.codex/
+**/scratchpad/
+*.session.json
+.vs/
+*.user
+*.suo
+
+# Local analysis, review, and verification workspaces
+outdated/
+manuscript/
+Deliverables/
+report/
+review-records/
+verification/
+scratch_e2e/
+workflows/
+DESIGN-IS-*/
+
+# Build / packaging artifacts (regenerable; the shippable installer is attached to a Release)
+dist/
+dist_native/
+build/
+build_native/
+*.pyi_manifest
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.pytest_tmp*/
+
+# Node / legacy web tooling
+node_modules/
+.cache/
+
+# Runtime state + logs + temp
+.teagle/
+*.log
+*.tmp
+
+# Unused sample sequences (the app generates its demo element in code)
+app/samples/
+
+# Scientific databases & large binaries (user-installed at runtime, never committed)
+databases/
+models/
+*.h5
+*.2bit
+*.nhr
+*.nin
+*.nsq
+*.sam
+# loose sequence scratch at the repo root (fixtures under tests/ are re-included below)
+/*.fa
+/*.fasta
+/*.fna
+/*.gz
+
+# OS cruft
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Keep the assets the tool and its tests need
+!tests/fixtures/
+!tests/fixtures/*.fasta
+!app/backend/data/
+!app/backend/data/*.hmm
+
+# Regenerable benchmark inputs and per-case outputs
+benchmarks/raw/genbank/
+benchmarks/raw/teagle/
+benchmarks/raw/tesorter/
+benchmarks/raw/assay/
+benchmarks/raw/teagle_holdout/
+benchmarks/outdated/
+*.json.bak
+# Corpus-assembly intermediate
+benchmarks/raw/corpus_holdout_raw.json

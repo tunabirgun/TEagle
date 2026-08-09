@@ -2,13 +2,13 @@
 ; Build:  ISCC.exe /DMyAppVersion=1.0.0 installer\teagle.iss   (version injected by build_installer.ps1)
 ; Per-user install (no admin/UAC), self-contained bundle from dist\TEagle.
 ; Detects a previous version and upgrades in place; offers an opt-in clean install
-; that also wipes previously generated environments (app data + WSL annotation backend).
+; that also removes TEagle-generated environments and data (app data + WSL annotation backend).
 
 #ifndef MyAppVersion
   #define MyAppVersion "1.0.0"
 #endif
 #define MyAppName "TEagle"
-#define MyAppPublisher "Tuna Birgun"
+#define MyAppPublisher "Tuna Birgün"
 #define MyAppExeName "TEagle.exe"
 #define MyAppId "{A7F3C2E9-5D41-4B8A-9E2F-1C6D8B3A0F51}"
 ; must stay byte-identical to SetCurrentProcessExplicitAppUserModelID(...) in app/native/main.py, so Windows
@@ -56,7 +56,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Shortcuts:"
-Name: "cleaninstall"; Description: "Clean install — remove previous TEagle settings, cache, and any downloaded databases / environments (including the WSL annotation backend)"; GroupDescription: "Installation type:"; Flags: unchecked
+Name: "cleaninstall"; Description: "Clean install — remove previous TEagle settings, cache, and downloaded TEagle databases / environments (including the WSL annotation backend)"; GroupDescription: "Installation type:"; Flags: unchecked
 
 [Files]
 Source: "..\dist\TEagle\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
@@ -98,7 +98,9 @@ begin
     Result := ExpandConstant('{sys}\wsl.exe');
 end;
 
-{ remove the generated WSL backend (env + Dfam) — targets the distro the app recorded, never unregisters it }
+{ Remove only TEagle-owned WSL environments, caches, and logs. The micromamba root and binary may be
+  shared with another application, so a TEagle clean install must never delete either one. This targets
+  the distro the app recorded and never unregisters it. }
 procedure CleanWslBackend();
 var
   rc: Integer;
@@ -116,7 +118,7 @@ begin
     if distro <> '' then
       distroArg := '-d "' + distro + '" ';
   end;
-  Exec(wsl, distroArg + '-- bash -lc "rm -rf ~/micromamba ~/bin/micromamba ~/teagle_wsl_install.log ~/.teagle_install.lock"',
+  Exec(wsl, distroArg + '-- bash -lc "rm -rf ~/micromamba/envs/te ~/micromamba/envs/teagle-vrna ~/teagle_genomes ~/teagle_libs ~/teagle_wsl_install.sh ~/teagle_wsl_install.log ~/teagle_genome_prepare.log ~/teagle_genome_annotate.log ~/.teagle_install.lock"',
        '', SW_HIDE, ewWaitUntilTerminated, rc);
 end;
 
@@ -140,11 +142,11 @@ var
 begin
   if PrevVersion <> '' then
     S := 'Existing TEagle detected: version ' + PrevVersion + NewLine
-       + 'Action: upgrade to {#MyAppVersion} (settings and downloaded databases are kept unless clean install is selected).' + NewLine + NewLine
+       + 'Action: upgrade to {#MyAppVersion} (settings and downloaded TEagle databases are kept unless clean install is selected).' + NewLine + NewLine
   else
     S := 'Fresh install of TEagle {#MyAppVersion}.' + NewLine + NewLine;
   if WizardIsTaskSelected('cleaninstall') then
-    S := S + 'CLEAN INSTALL selected: previous settings, cache, and downloaded environments (including the WSL backend) will be removed.' + NewLine + NewLine;
+    S := S + 'CLEAN INSTALL selected: previous settings, cache, and downloaded TEagle environments (including the WSL backend) will be removed.' + NewLine + NewLine;
   if MemoDirInfo <> '' then S := S + MemoDirInfo + NewLine + NewLine;
   if MemoTasksInfo <> '' then S := S + MemoTasksInfo;
   Result := S;
@@ -157,7 +159,7 @@ begin
     Default button is No, so an accidental Enter keeps the user's downloaded databases. }
   if (CurUninstallStep = usUninstall) and (not UninstallSilent()) then
   begin
-    if MsgBox('Also remove TEagle settings, cache, and downloaded databases / environments (including the WSL annotation backend)?'
+    if MsgBox('Also remove TEagle settings, cache, and downloaded TEagle databases / environments (including the WSL annotation backend)?'
               + #13#10 + '(Choose No to keep them for a future reinstall.)',
               mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
     begin

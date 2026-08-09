@@ -4,7 +4,7 @@
   <img alt="TEagle" src="docs/img/teagle-banner-light.png" width="460">
 </picture>
 
-![Version](https://img.shields.io/badge/version-3.7.0-0A7259) ![Platform](https://img.shields.io/badge/platform-Windows%20x64-1FB89C) ![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-0A7259) ![Built with](https://img.shields.io/badge/built%20with-PySide6%20%C2%B7%20Primer3%20%C2%B7%20HMMER-2B3740)
+![Version](https://img.shields.io/badge/version-3.8.0-0A7259) ![Platform](https://img.shields.io/badge/platform-Windows%20x64-1FB89C) ![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-0A7259) ![Built with](https://img.shields.io/badge/built%20with-PySide6%20%C2%B7%20Primer3%20%C2%B7%20HMMER-2B3740)
 </div>
 
 **TEagle** takes one transposable element and tells you what it is, how it is built, and how to amplify it — in one window, without a command line, and with every result carrying the exact software and database versions that produced it.
@@ -43,9 +43,9 @@ Being clear about this saves time:
    *Windows will show a blue **“Windows protected your PC”** SmartScreen warning: the installer is not code-signed, so Windows has no publisher reputation for it. Click **More info → Run anyway**. On a managed or institutional laptop this prompt may be blocked outright, in which case your IT team has to approve the executable.*
 3. Click **Load example element** for a bundled, published TE (or paste a sequence, open a FASTA, or type an NCBI accession) and press **Run analysis**.
 
-That is the whole first run. Everything the core needs — Python, Qt, Primer3, HMMER and the CC0 Pfam TE-domain profiles — is inside the installer; there is nothing to `pip install`. The optional Linux backend (Dfam family naming, splice detection, whole-genome scans) installs from inside the app: click **BACKEND** in the window header (or the same button inside panel 03), one click per component, with repair and integrity checks. Components that are not there yet offer **Install**; each reports its download live in the window's log.
+That is the whole first run. Everything the core needs — Python, Qt, Primer3, HMMER and the CC0 Pfam TE-domain profiles — is inside the installer; there is nothing to `pip install`. The optional Linux backend (Dfam family naming, splice detection, whole-genome scans) installs from inside the app: click **BACKEND** in the window header (or the same button inside panel 03), one click per component, with repair and integrity checks. The backend installer uses exact package versions and a checksum-pinned micromamba bootstrap; a repair rejects version drift and restores missing package files. Components that are not there yet offer **Install**; each reports its download live in the window's log.
 
-The illustrated guide to every panel ships with each release as **`TEagle-User-Manual.pdf`**; the scientific basis, methods and benchmarks are in the technical report.
+The illustrated guide to every panel ships with each release as **`TEagle-User-Manual.pdf`**. The version-locked benchmark evidence is archived separately at [Zenodo](https://doi.org/10.5281/zenodo.21848814).
 
 > **License:** TEagle is free software under the **GNU Affero General Public License, version 3 or later** — see [LICENSE](LICENSE). You may use, study, modify and redistribute it under those terms. Because it is AGPL, anyone who runs a modified TEagle as a network service must also offer its source to the users of that service. Third-party components and their licences are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
@@ -64,7 +64,7 @@ The window is a numbered sequence of panels. You work down it, and each panel fi
 | 06 | **Whole-genome scan** | Choose a downloaded genome | On- and off-target priming across the genome |
 | 07 | **Run provenance** | (fills in) | The versions, checksums and parameters behind the result |
 
-Right-click almost anything — a table row, a feature in the map, a band on the gel — for actions that fit *that* item: copy its sequence or coordinates, take its flanks, design a primer there, or send it onward.
+Right-click almost anything — a table cell or row, a feature in the map, a band on the gel — for actions that fit *that* item: copy the selected cell or row, copy its sequence or coordinates, take its flanks, design a primer there, or send it onward.
 
 Separately, **Manage genomes → Annotate TE landscape** runs a whole downloaded genome and reports which TE families live in it and how much of it they occupy.
 
@@ -72,7 +72,7 @@ Separately, **Manage genomes → Annotate TE landscape** runs a whole downloaded
 
 Short version — the manual explains each in full.
 
-**Reads an element.** Terminal repeats (LTR/TIR), target-site duplications, tails, ORFs, and protein domains from a 30-model Pfam panel spanning all four TE classes. For an LTR element it also reads the cis-elements: primer-binding site, polypurine tract, the terminal motif, and the polyadenylation-signal motif.
+**Reads an element.** Terminal repeats (LTR/TIR), target-site duplications, tails, ORFs, and protein domains from a 30-model Pfam panel spanning major retrotransposon and DNA-transposon groups. For an LTR element it also reads the cis-elements: primer-binding site, polypurine tract, the terminal motif, and the polyadenylation-signal motif.
 
 **Calls a superfamily, with its reasons — and declines when it cannot.** Copia versus Gypsy from strand-aware integrase-vs-RT order, LINE, DIRS, ERV, and the DNA-transposon superfamilies — under the Wicker 2007 scheme, with the domains that support the call listed beside it. Where the evidence cannot carry a call the element is reported as undetermined rather than guessed: an integrase and RT on opposite strands, or on overlapping spans, leave the order unreadable, so no Copia/Gypsy call is made.
 
@@ -95,7 +95,7 @@ Short version — the manual explains each in full.
 ## Where to read more
 
 - **`TEagle-User-Manual.pdf`** (ships with each release) — the illustrated guide: every panel, every option, what each number means and how to read it. Start here.
-- **Technical report** — the scientific basis of each step, the third-party tools and why each was chosen, and the benchmarks with their literature sources.
+- **[Benchmark evidence](https://doi.org/10.5281/zenodo.21848814)** — the sanitized v3.8.0 corpora, aggregate results, provenance audit, method-audit scripts, tables and figures.
 - **[CHANGELOG.md](CHANGELOG.md)** — what changed in each version, including any change that can move a reported value.
 
 ## Develop / build
@@ -109,40 +109,31 @@ powershell -File installer/build_installer.ps1   # freeze + bundle guard + self-
 
 ## Reproducibility
 
-Every analysis packs the databases and package versions plus input checksums that produced it, so a run reproduces byte-for-byte on another machine. The seal excludes volatile fields (retrieval timestamps, unused-tool versions), and derived/advisory annotations (the primer QC, the on/off-target labelling) are recorded but kept out of the seal so they never change a result's identity.
+Every analysis records the database and package versions, parameters, and input checksums that produced it. Identical retained or refetched inputs analysed with the same versions and parameters produce the same seal. The seal excludes volatile fields (retrieval timestamps, unused-tool versions), and derived/advisory annotations (the primer QC, the on/off-target labelling) are recorded but kept out of the seal so they never change a result's identity.
 
-This is measured, not asserted. `python benchmarks/reproducibility.py` re-analyses the same input ten times and checks the seals are identical, checks that different inputs — down to a single base substitution — give different seals, and enumerates every numeric threshold in the detectors to confirm none is applied without being recorded. The last of those three found a real gap in 3.4.0 and is why 3.5.0 exists.
+The separately archived v3.8.0 benchmark evidence includes the measured ten-run seal-stability result, input-sensitivity checks and a compact audit of the recorded thresholds. The archive is a sanitized evidence package rather than a source release; exact reruns require the tagged TEagle source and refetching the cited public records.
 
 ## Benchmarks
 
-`benchmarks/` holds the evidence behind the claims above, as runnable scripts rather than a table of
-remembered numbers. Every figure and table regenerates from raw output with one command, and no value is
-typed into a plotting script.
+The version-locked v3.8.0 benchmark evidence is deposited separately at [Zenodo](https://doi.org/10.5281/zenodo.21848814). It contains sanitized corpus definitions, scored aggregates, compact sequence-free provenance evidence, audit scripts, tables and figures. It excludes fetched records and sequence-bearing per-case detector output. Exact aggregate regeneration requires the tagged TEagle source, refetching the cited public accessions and rerunning the tools.
 
-Measured on an independent validation corpus of 44 records from 36 species, each labelled from the
-publication that described it: TEagle named the Wicker order for 35 of the 36 transposable elements and was
-correct on all 35, and declined to name an order on all 8 negative controls. Across a broader corpus of 135
-entries from 122 accessions, order-level accuracy was 0.986 (Wilson 95% CI 0.922–0.997) over the 94
-gradable cases, and superfamily accuracy 0.939 (0.804–0.983) over 59. Compared against TEsorter 1.5.1
-on byte-identical input, neither tool made an incorrect order call on any of the 82 paired cases; they
-differ only in how often they commit.
+Measured on a held-out validation corpus under the documented bundled-example exclusion rule: 43 records
+carrying 36 distinct organism annotations. Each label is sourced from the publication or authority that
+described it, independently of TEagle. TEagle named the Wicker order for 34 of the 35 transposable elements
+and was correct on all 34, and declined to name an order on all 8 negative controls. The broader benchmark
+is a curated, non-random development corpus and does not estimate population-level accuracy or broad
+utility. Its primary distinct-input summary contains 93 gradable content hashes at class and order rank:
+TEagle answered 66 and all 66 were correct (answered-case accuracy 1.000; Wilson 95% CI 0.945–1.000).
+Among 82 gradable element hashes, it answered 66 and withheld the order on 16; all 11 negative-control
+hashes received no order call. The row-level sensitivity summary is 67/67 answered among 94 gradable
+curated rows. At superfamily rank, 31 of 33 answered calls were correct among 59 gradable hashes
+(answered-case accuracy 0.939; Wilson 95% CI 0.804–0.983). Compared against TEsorter 1.5.1 on
+byte-identical input, neither tool made an incorrect order call on any of the 82 paired accession-level
+inputs; they differ only in how often they commit. These figures describe this fixed curated evidence set.
 
 The assay half is measured the same way, against 17 published assays from 8 sources whose product sizes
 were determined at the bench. Every one returned a product on its cited template; of the 16 targeting a
 single locus, all 16 fell within tolerance and 14 reproduced the published size exactly, with a median
 absolute difference of 0 bp and all 16 binding with no mismatch in either primer.
 
-```powershell
-python benchmarks/sim_divergence.py    # where age censors terminal-repeat detection (600 runs)
-python benchmarks/reproducibility.py   # seal stability, sensitivity and threshold coverage
-python benchmarks/run_teagle.py        # the classification corpus
-python benchmarks/score.py             # scoring, with abstention reported separately from accuracy
-python benchmarks/run_tesorter.py      # the external comparator, both database passes
-python benchmarks/head_to_head.py      # paired comparison, McNemar exact
-python benchmarks/run_assay.py         # in-silico PCR against published product sizes
-python benchmarks/testsuite.py         # the test suite, counts recorded like any other result
-python benchmarks/figures.py           # figures, from benchmarks/raw/ only
-python benchmarks/make_tables.py       # capability comparison against 15 other tools
-```
-
-`benchmarks/CORPUS_SCOPE.md` records what each corpus can and cannot support, including the panel that cannot be scored as assembled and the repeated-accession structure of the broader corpus.
+The deposit documents what each corpus can and cannot support, including the curated sampling, repeated-accession structure, abstention denominators, paired-comparator exclusions and absence of prospective wet-lab validation.

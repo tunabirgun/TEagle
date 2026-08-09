@@ -28,7 +28,8 @@ from widgets import FigurePanel, GenomePanel, DataTable, BusyBar
 from sample import make_sample
 import theme as theme_mod
 from teagle_core import appdirs, classify           # classify.DOMAINS_TESTED = the tested-profile panel (scope caveat)
-from teagle_core.wsl import curated_coverage_sentence as _curated_coverage   # measured, never retyped on a panel
+from teagle_core.wsl import (curated_coverage_sentence as _curated_coverage,
+                             dfam_coverage_counts as _dfam_coverage_counts)  # measured, never retyped on a panel
 from teagle_core import domains as domains_mod      # DOMAIN_INFO: the methods panel is derived from it, never retyped
 from teagle_core import structural as structural_mod   # MIN_TSD/MAX_TSD: the TSD method text states the real window
 
@@ -42,6 +43,8 @@ def _SIG(fn, name):
 from teagle_core.fetch import (COORD_ASSEMBLIES, all_assemblies,                        # pinned + user-added assemblies
                                complete_gene_model, cross_check_models, retrieve)        # + gene model / transcript fetch
 from teagle_core import __version__ as APP_VERSION    # single source of truth (never hardcode a duplicate version)
+_DFAM_YEAST_CURATED, _DFAM_YEAST_TOTAL, _DFAM_YEAST_ADDITIONAL = \
+    _dfam_coverage_counts("Saccharomyces cerevisiae")
 # common model organisms for RepeatMasker/Dfam lineage (display, value passed to -species).
 # 'Other…' at the end reveals a free-text field for anything not listed.
 WSL_ORGANISMS = [
@@ -1165,7 +1168,7 @@ class MainWindow(QMainWindow):
             return self._banner(f"“{os.path.basename(path)}” looks like a .gz file but could not be "
                                 "decompressed — it may be incomplete or not really gzip-compressed.")
         except OSError as e:
-            # AGENTS.md rule 2: an error says what went wrong and what to do next, and never puts a raw
+            # An error says what went wrong and what to do next, and never puts a raw
             # traceback or errno in front of the user. str(OSError) is "[Errno 13] Permission denied:
             # 'C:\\Users\\...\\x.fa'" — an errno and a full filesystem path, which is neither.
             name = os.path.basename(path)
@@ -1332,7 +1335,7 @@ class MainWindow(QMainWindow):
             self._banner("Genome download failed — " + msg, "warn"); return
         else:
             self._reset_buttons(key)
-        # AGENTS.md rule 2: an error never puts a raw traceback in front of the user as the primary message.
+        # An error never puts a raw traceback in front of the user as the primary message.
         # `msg` is "{ExceptionType}: {str(e)}" straight from engine_worker, so "unexpected error: KeyError:
         # 'accession'" was the whole sentence a bench scientist got. Lead with what failed and what to do;
         # keep the technical string, clearly subordinate, because it is what they would quote in a bug report.
@@ -2797,7 +2800,13 @@ class MainWindow(QMainWindow):
             return
         for i, c in enumerate(pairs):
             roww = QWidget(); rl = QHBoxLayout(roww); rl.setContentsMargins(0, 0, 0, 0)
-            lab = QLabel(f"P{i+1}  {c['left_seq'][:16]}… / {c['right_seq'][:16]}…  · {c['product_size']} bp")
+            # A queued row normally comes from Primer3 and has every field. Keep rendering recoverable if
+            # an older session/test fixture supplies only the primer sequences: the queue is user-facing
+            # state, so one absent display field must not turn the startup callback into a traceback.
+            product = c.get("product_size")
+            product_text = f"{product} bp" if product is not None else "product size unavailable"
+            lab = QLabel(f"P{i+1}  {str(c.get('left_seq', ''))[:16]}… / "
+                         f"{str(c.get('right_seq', ''))[:16]}…  · {product_text}")
             lab.setObjectName("cardmeta"); rl.addWidget(lab); rl.addStretch(1)
             up = QPushButton("Up"); up.setProperty("sm", True); up.clicked.connect(lambda _=False, k=i: self._move_pair(k, -1))
             dn = QPushButton("Down"); dn.setProperty("sm", True); dn.clicked.connect(lambda _=False, k=i: self._move_pair(k, 1))
@@ -3290,8 +3299,9 @@ class MainWindow(QMainWindow):
             "Dfam families are either curated (reviewed) or uncurated (automatically built). RepeatMasker "
             "searches curated families only unless you ask for both.\n\n"
             "Outside a few heavily studied species most families are uncurated, so curated-only can find "
-            "nothing at all: on baker's yeast it sees 9 families and reports no transposable element, while "
-            "including uncurated sees 421 more and finds the Ty elements the genome really has.\n\n"
+            f"nothing at all: on baker's yeast it sees {_DFAM_YEAST_CURATED} of {_DFAM_YEAST_TOTAL} family "
+            f"models and reports no transposable element, while including uncurated adds "
+            f"{_DFAM_YEAST_ADDITIONAL} models and finds the Ty elements the genome really has.\n\n"
             "Including them needs the optional uncurated partitions from the backend installer, and the "
             "extra families are lower confidence — the result says which setting produced it.\n\n"
             "A custom FASTA library replaces Dfam entirely for that run.")
@@ -4361,8 +4371,8 @@ class MainWindow(QMainWindow):
 
 def selftest():
     """Bundle self-test (TEAGLE_SELFTEST=1). Proves the packaged build imports the compiled
-    scientific stack (pyhmmer, primer3), ships the HMM profiles, renders figures through QtSvg,
-    and runs an end-to-end analysis — the checks a double-click launch cannot report. Exit 0/1."""
+    scientific stack (pyhmmer, primer3), ships the HMM profiles and TLS roots, renders figures through
+    QtSvg, and runs an end-to-end analysis — the checks a double-click launch cannot report. Exit 0/1."""
     app = QApplication.instance() or QApplication([])
     import engine
     from teagle_core import domains, primers
@@ -4426,6 +4436,21 @@ def selftest():
             wb = widgets._xl()["Workbook"](); wb.active.append(["h", 1]); wb.save(io.BytesIO())
     except Exception as e:
         problems.append(f"XLSX export self-check failed: {type(e).__name__}: {e}")
+    # Network retrieval is intentionally not exercised here, but its trust store must be functional. The
+    # frozen launcher bypasses envcheck, and package metadata alone cannot prove that certifi's bundled CA
+    # file is present or that OpenSSL can parse it into the context every HTTPS fetch uses.
+    try:
+        import certifi
+        from teagle_core import fetch
+        fetch._SSL_CTX_CACHE.clear()
+        ca_path = certifi.where()
+        tls_context = fetch._ssl_ctx()
+        if not os.path.isfile(ca_path):
+            problems.append("certifi CA bundle missing from build")
+        elif tls_context is None or not tls_context.get_ca_certs():
+            problems.append("certifi CA bundle did not load into the TLS context")
+    except Exception as e:
+        problems.append(f"TLS trust-store self-check failed: {type(e).__name__}: {e}")
     # the installer dialog must construct offscreen (it ships in the frozen build)
     try:
         from install_dialog import InstallDialog
@@ -4443,7 +4468,7 @@ def selftest():
     _vr = oligoqc.VIENNARNA_VERSION if oligoqc.available().get("viennarna") else "not installed (optional)"
     print(f"TEAGLE SELFTEST OK · primer3 {primers.PRIMER3_VERSION} · ViennaRNA {_vr} "
           f"· pyhmmer {domains.PYHMMER_VERSION} · HMM {domains.HMM_SHA256[:12]} ({len(domains._hmms())} profiles) "
-          f"· QtSvg ok · install dialog ok")
+          f"· TLS roots ok · QtSvg ok · install dialog ok")
     return 0
 
 

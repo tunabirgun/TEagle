@@ -701,7 +701,7 @@ def export_table(headers, rows, base, parent=None, fmt=None, notes=None):
         return
     # A failed export must say what to do, not raise. atomic_write correctly cleans up and re-raises, and
     # an unhandled OSError here reached the generic crash banner as a bare exception string — the exact
-    # thing AGENTS.md rule 2 forbids, on the most ordinary failure there is (a read-only folder, a
+    # wrong primary message on the most ordinary failure there is (a read-only folder, a
     # disconnected drive, the file open in Excel).
     name = os.path.basename(path)
     try:
@@ -738,7 +738,7 @@ def serialize_table(headers, rows, sep=",", notes=None) -> str:
     that only a human reading a spreadsheet can catch is one that ships."""
     lines = [sep.join(_csv_escape(h, sep) for h in headers)]
     lines += [sep.join(_csv_escape(c, sep) for c in r) for r in rows]
-    # The scientific qualifications shown beside the table travel WITH it. AGENTS.md: an export that
+    # The scientific qualifications shown beside the table travel with it. An export that
     # silently drops a hedge or a units label is a defect — and these tables become figures and supplementary
     # files in papers, where the screen the numbers came from is long gone. Comment-prefixed so the data rows
     # stay machine-readable for anything that skips '#'.
@@ -964,11 +964,13 @@ class DataTable(QTableWidget):
 
     def _menu(self, pos):
         row = self.rowAt(pos.y())
+        col = self.columnAt(pos.x())
         m = QMenu(self)
         if row >= 0 and self._row_menu:
             for label, fn in self._row_menu(self._orig(row)):        # pass the original data index, not the sorted row
                 m.addAction(label, fn)
             m.addSeparator()
+        m.addAction("Copy cell", lambda: self._copy_cell(row, col))
         m.addAction("Copy row", lambda: self._copy_row(row))
         gpos = self.viewport().mapToGlobal(pos)                   # flat action (no submenu -> no native ▶ arrow to collide with)
         m.addAction("Export table…", lambda: self._do_export(gpos))
@@ -998,6 +1000,11 @@ class DataTable(QTableWidget):
             return
         QApplication.clipboard().setText("\t".join(self._value(row, j) for j in range(self.columnCount())))
 
+    def _copy_cell(self, row, col):
+        if row < 0 or col < 0:
+            return
+        QApplication.clipboard().setText(self._value(row, col))
+
     def export_headers(self):
         """Headers as written to a FILE. `export_header_map` renames a column for export only, so a units
         or coordinate-convention label can reach the file without widening the on-screen column (headers are
@@ -1010,7 +1017,7 @@ class DataTable(QTableWidget):
         """Rows for export/copy, in the table's current on-screen (sorted) order.
 
         `full_rows` overrides this when the table on screen is a capped VIEW of a bigger set. A file that
-        silently held the first N of M would be the export defect AGENTS.md names: what reaches the file
+        silently held the first N of M would be an export defect: what reaches the file
         must not be quietly less than what was computed. Both export entry points — the visible button and
         the right-click menu — read through here, so neither can drift from the other."""
         full = getattr(self, "full_rows", None)

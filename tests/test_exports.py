@@ -184,6 +184,13 @@ def test_export_flat_action_routes_chosen_format(monkeypatch):
     assert not hasattr(widgets, "add_export_submenu")         # the arrow-prone submenu helper is gone
 
 
+def test_data_table_copy_cell_uses_export_value():
+    t = widgets.DataTable(["display"])
+    t.set_rows([["12.0 !"]], exports=[["12.0"]])
+    t._copy_cell(0, 0)
+    assert _app.clipboard().text() == "12.0"
+
+
 @pytest.mark.parametrize("theme", ["dark", "white"])
 def test_genome_export(theme, tmp_path):
     sys.path.insert(0, os.path.join(os.path.dirname(_NATIVE), "backend"))

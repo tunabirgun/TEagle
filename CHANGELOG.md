@@ -9,7 +9,59 @@ and propagates to the backend health endpoint, the UI header badge, every run
 provenance manifest, the packaged executable's Windows file-version metadata, and
 the LaTeX report title page.
 
-## [3.7.0] — 2026-08-06
+## [3.8.0] — 2026-08-09
+
+Supersedes 3.7.0, which was published and then **retracted**; see the note under that heading. **Every provenance manifest hash changes in this release**, because the sealed parameter set grew by two. Release review also corrected one LINE corroboration guard described below; primer rules did not change.
+
+### Fixed
+- **A raw endonuclease hit could bypass the LINE ORF2p geometry check.** The classifier computed whether the endonuclease was N-terminal to reverse transcriptase on the same strand, but the lone-RT guard also treated any unfiltered endonuclease hit as corroboration. A downstream or opposite-strand hit could therefore license LINE. Only the accepted same-strand N-terminal EN–RT arrangement now corroborates a reverse-transcriptase hit; focused regressions cover both invalid geometries and the valid arrangement.
+- **The optional WSL backend was not version-locked.** The installer now requests exact releases of
+  RepeatMasker, minimap2, isPcr, NCBI Datasets, faToTwoBit and ViennaRNA. Its status and
+  integrity probes reject version drift. The micromamba bootstrap now downloads a versioned official
+  archive and verifies its embedded SHA-256 before extraction. A failed executable or version probe
+  forces package-file restoration even when conda metadata still records the pinned package.
+- **A Windows clean install deleted the shared micromamba root but left TEagle caches behind.** Cleanup
+  now removes only TEagle's two environments, genome and custom-library caches, logs, staged installer
+  script and lock. It preserves the shared package-manager binary and other applications' environments.
+- **A second Windows build could fail on PyInstaller-generated read-only metadata.** The build script now
+  clears read-only attributes only inside its generated bundle before asking PyInstaller to replace it.
+- **Generic result tables advertised cell copying but exposed only whole-row copying.** Their context menu
+  now copies either the selected cell or the complete row, using the same machine value written to exports
+  when the displayed cell contains a UI-only warning mark.
+- **A partially populated saved or test primer queue could fail during startup rendering.** Queue rows now
+  remain usable when optional display metadata such as product size is absent; the missing value is stated
+  in the row instead of raising an exception.
+- **Two thresholds that decide a call were applied but never sealed.** `MIN_TIR_STANDALONE`, the length
+  at or above which a terminal inverted repeat licenses a Class II call with no transposase, and
+  `_LTR_SEED_WINDOW`, which caps the region searched for terminal-repeat seeds. Both are module constants
+  read across module boundaries, and the manifest builds itself from `inspect.signature` defaults, so
+  neither was reachable by the mechanism that seals everything else — and an audit keyed on detector
+  functions did not miss them so much as never look. The first is the bound this project measures a
+  chance ceiling against, so a manifest omitting it could not reconstruct the one threshold reported as
+  empirically set. `tests/test_every_applied_threshold_is_sealed.py` now fails when a numeric constant is
+  read outside the module defining it and does not appear in the manifest, with an exemption list that is
+  itself checked for constants that have started being used.
+- **An excluded development accession had entered the validation corpus.** The benchmark specification
+  names five bundled example accessions as development data. One of them, `X01005`, was
+  included as an ordinary case in the corpus described as held out. It was removed so the corpus matches
+  the documented exclusion rule. The held-out validation corpus is 43 records carrying 36 distinct
+  organism annotations; its
+  re-indexed output supersedes the earlier held-out output and is archived with the v3.8.0 benchmark
+  evidence at https://doi.org/10.5281/zenodo.21848814.
+
+## [3.7.0] — 2026-08-06 — RELEASED AND RETRACTED
+
+**This release was published on 2026-08-07 and withdrawn the same day. Its reported benchmark figures
+should not be used.** They were computed over a validation corpus that contained an accession the
+project's own pre-registration excludes as development data, so the independence the accompanying
+numbers claimed did not hold for one case. Separately, two thresholds that decide a call were absent
+from the provenance manifest, so the reconstruction guarantee stated alongside those figures was not
+met. Both are fixed in 3.8.0. The git tag remains so the history is not rewritten; the release assets
+were removed so the superseded figures are not distributable. No downloads had occurred.
+
+The changes below are real and carried forward into 3.8.0.
+
+
 
 A correctness release for the classifier's Class I branch, and a data-integrity fix in the benchmark
 harness that changes previously published numbers. **Results change for records whose only detected
@@ -58,11 +110,11 @@ no element loses a call, and no superfamily assignment changes.
 Measured over the benchmark corpus at the time of this release: order-level accuracy rose from 0.855 to
 0.980, and the negative-control abstention rate from 72.7% to 90.9%.
 
-**Superseded figures.** The accuracy and comparison numbers first recorded here were computed before the
-corpus was restratified — see the entry below for `record_scope` — and the paired comparison then ran over
-98 cases rather than the 82 that survive stratification. The current values are order 0.986 (0.922–0.997)
-over 94 gradable cases and McNemar *p* = 0.109 and 0.581; `benchmarks/raw/scores.json` and
-`head_to_head.json` are the authority. Only the negative-control abstention figure above is unchanged.
+**Superseded figures.** Every accuracy and comparison value in this 3.6.0 block is historical 3.6 evidence
+and is superseded by the current 3.8 benchmark. The earlier comparison ran over 98 cases before the
+`record_scope` stratification; the current comparison contains 82 paired accession-level inputs. Current
+values and their accounting are archived in the v3.8.0 benchmark-evidence record at
+https://doi.org/10.5281/zenodo.21848814.
 
 ### Fixed
 - **The LTR order was gated on structural evidence it did not need.** Naming an element an LTR
@@ -288,7 +340,7 @@ Two additions: an element's LTR now reports its polyadenylation-signal motif and
 - **Whole-genome transposable-element annotation.** A genome already downloaded for the off-target scan can be run through RepeatMasker against the installed Dfam library, giving the families present, how many copies of each, how much of the assembly they cover, and how diverged those copies are — with XLSX/CSV/TSV table export, an SVG/PNG composition figure, a Markdown report and a JSON provenance manifest (GFF3/BED remains the per-record annotation export). The assembly is processed in contig chunks so progress is shown, a cancelled run keeps what finished, and a re-run resumes rather than restarting; the per-hit rows (millions, for a mammalian genome) are summarised inside the backend and never loaded into the window.
   - **Before the run starts** the app states the measured cost: cores, memory and free disk in WSL, the parallel job count it will use and whether cores or memory is the limit, the disk the run needs (derived from the genome's own size), a realistic time range, and — the part that decides whether the run is worth starting at all — **how many family models the installed Dfam partitions actually hold for that organism**.
   - **Transposable elements are reported separately from every other repeat.** Simple repeats, low-complexity sequence and satellites are tandem repeats, and rRNA/tRNA entries are not TEs; merging them into one "% repeats" would overstate TE content.
-  - **You choose whether to search Dfam's uncurated families, and it matters more than any other setting.** RepeatMasker searches curated families only unless asked for both, and outside a few intensively studied species almost all families are uncurated. Measured on the same yeast assembly, changing nothing else: curated-only searches 9 families and reports **0.00% transposable elements**; including uncurated searches 421 more and reports **4.53%**, dominated by LTR/Copia — the Ty elements yeast actually carries. A run that finds nothing therefore says so as a statement about what was *searched*, not about the genome, and the library setting is printed with every result and sealed into its provenance.
+  - **You choose whether to search Dfam's uncurated families, and it matters more than any other setting.** RepeatMasker searches curated families only unless asked for both, and outside a few intensively studied species almost all families are uncurated. Measured on the same yeast assembly, changing nothing else: curated-only searches 9 of 398 family models and reports **0.00% transposable elements**; including uncurated adds the remaining 389 models and reports **4.53%**, dominated by LTR/Copia — the Ty elements yeast actually carries. A run that finds nothing therefore says so as a statement about what was *searched*, not about the genome, and the library setting is printed with every result and sealed into its provenance.
   - **Library choice is the user's.** Either the installed Dfam partitions, or your own repeat library in FASTA, which RepeatMasker searches instead of Dfam (`-lib`). A custom library's checksum is recorded so the run is reproducible, and it is labelled user-supplied because TEagle cannot vouch for its contents.
   - **Sensitivity** is selectable — default, quick (`-q`) or slow (`-s`) — quoting RepeatMasker's own figures: quick is 2–5× faster and 5–10% less sensitive, slow is 2–3× slower and 0–5% more sensitive, where sensitivity means recovering older, more diverged copies.
 - **The polyadenylation-signal motif of an LTR**, reported as advisory context. A hexamer from the published panel (AATAAA and its documented variants) counts only when a GU/U-rich downstream element follows it, because the hexamer alone occurs about once per 4 kb by chance and roughly half of genomic occurrences are never used. The same offset is checked in the other LTR copy: agreement corroborates, disagreement is shown as drift. It is a **motif and never a located cleavage site** — the U3–R–U5 boundaries and the transcript end need RNA evidence TEagle does not use, and the panel itself is derived from mammalian data, which is stated wherever the call appears.
@@ -301,7 +353,7 @@ Two additions: an element's LTR now reports its polyadenylation-signal motif and
 - **The application starts about twice as fast.** Its import graph drops from 537 ms to 151 ms, and a window is up in roughly 250 ms. Two costs were being paid on every launch for work most sessions never do: `openpyxl` (245 ms, and it pulls in numpy) was loaded for spreadsheet export, and the TLS certificate bundle (137 ms) was parsed even by a session that never opens a socket. Both now load on first use. A present-but-broken `openpyxl` still degrades to CSV exactly as an absent one does, rather than offering an export that fails.
 - **Closing is clean.** The window stopped one named polling timer on close; it now stops every one, so a background poll can no longer fire into a window being destroyed.
 - Interactive latency was measured and left alone: window build 30 ms, theme switch 64 ms, rendering a finished analysis 18 ms, self-similarity matrix 59 ms at 50 kb.
-- **Downloads were measured, and one plausible optimisation was rejected on the evidence.** Dfam's server limits each client to about 2 MB/s, and splitting the 3.9 GB library across eight parallel connections measured *slower* (1.23 vs 1.81 MB/s), so no parallel download was added; the installer states the real time instead. NCBI, by contrast, is about twice as fast in parallel — recorded in `verification/perf_measurements.md` for a future change, since the genome download is one-time and cached.
+- **Downloads were measured, and one plausible optimisation was rejected on the evidence.** Dfam's server limits each client to about 2 MB/s, and splitting the 3.9 GB library across eight parallel connections measured *slower* (1.23 vs 1.81 MB/s), so no parallel download was added; the installer states the real time instead. NCBI was about twice as fast in release-development measurements, but that one-time cached download was left unchanged.
 
 ### Fixed
 - **The poly(A) downstream-element window was measured from the wrong point.** The hexamer lies 10–30 nt upstream of the cleavage site and the downstream element begins about 15 nt *after* that site, so relative to the hexamer it sits at roughly +25 to +60. The first implementation scored +10 to +30 — the gap between the hexamer and the cleavage site — and therefore judged the wrong stretch of sequence. Corrected to +20–60. Hits that only passed under the old window (measured: Ty1 and Ta1) are no longer reported.

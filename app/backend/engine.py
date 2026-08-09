@@ -170,6 +170,16 @@ def _detector_parameters():
         "tir_min_len": d(structural.find_tir, "min_tir"),
         "tir_max_len": d(structural.find_tir, "max_tir"),
         "tir_min_anchors": d(structural.find_tir, "min_anchors"),
+        # Two thresholds that decide a call from module scope rather than from a signature default, so
+        # the inspect.signature idiom above could not reach them and a coverage audit keyed on detector
+        # functions did not miss them so much as never look. Both are applied:
+        # MIN_TIR_STANDALONE is the length at or above which a terminal inverted repeat licenses a
+        # Class II call with no transposase (classify.py), and it is the constant the benchmark measures
+        # a chance ceiling against — so a manifest that omits it cannot reconstruct the one bound the
+        # paper reports as empirically set. _LTR_SEED_WINDOW caps the region searched for terminal-repeat
+        # seeds (structural.py), so on a long record it determines what can be found at all.
+        "tir_min_standalone": structural.MIN_TIR_STANDALONE,
+        "ltr_seed_window": structural._LTR_SEED_WINDOW,
         "tsd_min_len": structural.MIN_TSD,
         "tsd_max_len": structural.MAX_TSD,
         "polya_min_run": d(structural.find_polya, "min_run"),

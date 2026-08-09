@@ -59,6 +59,23 @@ def test_endonuclease_is_only_credited_upstream_of_the_rt():
     assert "EN" in upstream["present"]
 
 
+def test_only_an_accepted_endonuclease_rt_arrangement_licenses_a_line():
+    """A raw EN hit must not bypass the lone-RT guard when its geometry is not ORF2p-like."""
+    invalid_endonucleases = (
+        _en(nt=(2000, 2100)),
+        {**_en(), "strand": "-"},
+    )
+    for en in invalid_endonucleases:
+        cl = classify.classify([], [_rt_domain(), en])
+        assert cl["te_class"] != "LINE"
+        assert cl["order"] is None
+        assert "class i" not in (cl["class"] or "").lower()
+
+    accepted = classify.classify([], [_rt_domain(), _en()])
+    assert accepted["te_class"] == "LINE"
+    assert any("orf2p" in item.lower() for item in accepted["evidence"])
+
+
 def test_line_tier_never_claims_intact():
     """ORF1 and the endonuclease are not in the bundled panel, so a LINE cannot be shown autonomous."""
     for structural_ev in ([], _POLYA):

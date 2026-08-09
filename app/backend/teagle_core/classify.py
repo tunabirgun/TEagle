@@ -43,14 +43,16 @@ _CODE_ORDER = ["ORF1", "GAG", "PR", "EN", "RT", "RNaseH", "INT", "YR", "CHR", "E
 # group II intron maturases carry one, and the bundled panel holds a single RT model rather than a
 # clade-resolved set, so it cannot say which kind of reverse transcriptase it found. Each code below is a
 # structural or coding module that a retrotransposon carries and a host reverse-transcribing gene does
-# not: the LINE ORF1p and ORF2p endonuclease, the retroviral gag, protease and envelope, and RNase H.
+# not: the LINE ORF1p, the retroviral gag, protease and envelope, and RNase H. The LINE ORF2p
+# endonuclease is evaluated separately because a raw EN hit is promiscuous and counts only when `en_ok`
+# confirms its same-strand, N-terminal arrangement with the RT.
 #
 # Terminal repeats, a DDE integrase, a chromodomain and a tyrosine recombinase are all handled by
 # branches that run before this test, so they are deliberately absent here rather than forgotten.
 #
 # A poly-A tail is deliberately NOT in this set. Every mRNA and cDNA deposit has one, so it distinguishes
 # nothing; admitting it is what let a telomerase mRNA be called a LINE.
-_RETRO_CORROBORATION = {"ORF1", "EN", "RNaseH", "GAG", "PR", "ENV"}
+_RETRO_CORROBORATION = {"ORF1", "RNaseH", "GAG", "PR", "ENV"}
 
 # Retained for reference: the shortest record that could plausibly hold an autonomous non-LTR element.
 # Autonomous LINEs run 3-6 kb (L1 ~6 kb, R2Bm 3.6 kb). Length is NOT used to license a LINE call - a
@@ -109,6 +111,7 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
     en_d = _rep(domains, "EN")
     en_ok = bool(en_d and rt_d and en_d.get("strand", "+") == rt_d.get("strand", "+")
                  and _pos(en_d) < _pos(rt_d))
+    retro_corroborated = en_ok or bool(cset & _RETRO_CORROBORATION)
     rt, intg = rt_d is not None, int_d is not None
     tpase = "TPase" in cset
     # the element's own ends: a TIR pair that actually encloses the transposase. The scan resolves the two
@@ -153,7 +156,7 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
                 # INT sits upstream or downstream of RT (measured: INT-on-minus -> always Copia,
                 # RT-on-minus -> always Gypsy, at every coordinate). Naming a tentative superfamily from that
                 # puts a family in the card's headline on evidence containing no information about it, which
-                # AGENTS.md rule 1 forbids. The overlapping-span case is equally unreadable. Fall through to
+                # would exceed the evidence available. The overlapping-span case is equally unreadable. Fall through to
                 # the same honest label the no-integrase path already uses.
                 superfamily, te_class = "LTR retrotransposon (superfamily undetermined)", "LTR/unclassified"
                 ev.append("integrase and RT are not in a readable arrangement (different strands, or "
@@ -203,7 +206,7 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
                       "accepted")
             ev.append("the superfamily is not called: Copia versus Gypsy needs the integrase-versus-RT "
                       "translation order, and no integrase was detected")
-        elif not has_ltr and not intg and not (cset & _RETRO_CORROBORATION):
+        elif not has_ltr and not intg and not retro_corroborated:
             # A LONE reverse transcriptase establishes neither the order NOR the class.
             #
             # An earlier form of this guard withheld only the order, and admitted a poly-A tail as evidence

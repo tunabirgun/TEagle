@@ -774,3 +774,22 @@ def test_pcr_queue_buttons_are_uppercased_on_every_mutation(win):
     win._add_pcr_pair(c)
     labels = [b.text() for b in win.pcrQueueBox.parentWidget().findChildren(QPushButton)]
     assert labels and all(l == l.upper() for l in labels), labels
+
+
+def test_pcr_queue_missing_display_metadata_stays_recoverable(win):
+    """A partial/stale row must render an honest placeholder instead of raising in a startup callback."""
+    from PySide6.QtWidgets import QLabel
+    win.state["pcrPairs"] = [{"left_seq": "ACGT" * 5, "right_seq": "TGCA" * 5}]
+    win._render_pcr_queue()
+    labels = [label.text() for label in win.pcrQueueBox.parentWidget().findChildren(QLabel)]
+    assert any("product size unavailable" in text for text in labels)
+
+
+def test_frozen_selftest_exercises_the_certifi_tls_context():
+    """The frozen launcher bypasses envcheck, so its self-test must prove the CA bundle is usable."""
+    import inspect
+    import main
+    source = inspect.getsource(main.selftest)
+    assert "certifi.where()" in source
+    assert "fetch._ssl_ctx()" in source
+    assert "get_ca_certs()" in source

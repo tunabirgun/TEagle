@@ -3,6 +3,7 @@ where WSL is already present, so these lock down the decomposable parts: the ele
 the NUL-stripping Windows-log reader, the absent-vs-broken classification, and the dialog routing.
 No real `wsl --install` / UAC is ever triggered."""
 import os
+from pathlib import Path
 import pytest
 from teagle_core import wsl
 
@@ -18,6 +19,18 @@ def test_wsl2_bat_script_has_install_fallback_and_terminal_marker():
     assert "retrying: wsl --install" in bat                      # fallback for older wsl.exe
     assert "--set-default-version 2" in bat and "|| rem" in bat  # tolerant pre-reboot
     assert "DONE-WSL" in bat                                     # terminal marker the poller stops on
+
+
+def test_windows_clean_install_preserves_shared_micromamba_root():
+    """The opt-in cleanup removes TEagle data without deleting other applications' conda envs."""
+    root = Path(__file__).resolve().parents[1]
+    iss = (root / "installer" / "teagle.iss").read_text(encoding="utf-8")
+    clean = next(line for line in iss.splitlines() if "Exec(wsl, distroArg" in line)
+    assert "~/micromamba/envs/te " in clean
+    assert "~/micromamba/envs/teagle-vrna" in clean
+    assert "~/teagle_genomes" in clean and "~/teagle_libs" in clean
+    assert "~/micromamba " not in clean
+    assert "~/bin/micromamba" not in clean
 
 
 # ---------- Windows-side log reader ----------

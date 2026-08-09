@@ -18,11 +18,11 @@ open(_verinfo, "w", encoding="utf-8").write(f"""VSVersionInfo(
                     OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
   kids=[
     StringFileInfo([StringTable('040904B0', [
-      StringStruct('CompanyName', 'Tuna Birgun'),
+      StringStruct('CompanyName', 'Tuna Birgün'),
       StringStruct('FileDescription', 'TEagle - Transposable Elements Assay Terminal'),
       StringStruct('FileVersion', '{VERSION}'),
       StringStruct('InternalName', 'TEagle'),
-      StringStruct('LegalCopyright', 'Copyright (C) 2026 Tuna Birgun. Licensed under AGPL-3.0-or-later.'),
+      StringStruct('LegalCopyright', 'Copyright (C) 2026 Tuna Birgün. Licensed under AGPL-3.0-or-later.'),
       StringStruct('OriginalFilename', 'TEagle.exe'),
       StringStruct('ProductName', 'TEagle'),
       StringStruct('ProductVersion', '{VERSION}')])]),
@@ -69,11 +69,42 @@ hiddenimports = [
 # edge openpyxl -> pandas -> scipy -> torch -> transformers (~528 MB of dead weight). Drop it at the source.
 _SHIM = "openpyxl.utils.dataframe"
 
-# C-extension packages + openpyxl (XLSX table export): pull binaries, data and dynamic submodules
+# collect_all also returns tests shipped inside some wheels. They are development payload, not runtime
+# data: filter them by complete path/module component so names such as ``latest`` remain untouched.
+_TEST_COMPONENTS = {"test", "tests", "testing", "testdata", "test_data", "fixture", "fixtures"}
+
+
+def _is_test_payload(parts):
+    return any(part.lower() in _TEST_COMPONENTS for part in parts)
+
+
+def _has_test_filename(path):
+    stem = os.path.splitext(os.path.basename(path))[0].lower()
+    return "test" in re.split(r"[^a-z0-9]+", stem)
+
+
+def _collect_runtime_package(package):
+    package_datas, package_binaries, package_imports = collect_all(package)
+    package_datas = [
+        item for item in package_datas
+        if not _is_test_payload(item[1].replace("\\", "/").split("/"))
+        and not _has_test_filename(item[0])
+    ]
+    package_imports = [
+        module for module in package_imports
+        if not _is_test_payload(module.split("."))
+    ]
+    package_imports += [
+        module for module in collect_submodules(package)
+        if not _is_test_payload(module.split("."))
+    ]
+    return package_datas, package_binaries, package_imports
+
+
+# C-extension packages + openpyxl (XLSX table export): pull binaries, runtime data and dynamic submodules
 for pkg in ("primer3", "pyhmmer", "openpyxl", "certifi"):
-    d, b, h = collect_all(pkg)
+    d, b, h = _collect_runtime_package(pkg)
     datas += d; binaries += b; hiddenimports += h
-    hiddenimports += collect_submodules(pkg)
 hiddenimports = [m for m in hiddenimports if m != _SHIM]
 hiddenimports += ["pyhmmer.platform", "pyhmmer.platform.win32", "openpyxl", "et_xmlfile", "certifi"]
 
