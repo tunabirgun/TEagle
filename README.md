@@ -39,7 +39,7 @@ Being clear about this saves time:
 ## Getting started
 
 1. Download **[`TEagle-Setup-3.8.1.exe`](https://github.com/tunabirgun/TEagle/releases/download/v3.8.1/TEagle-Setup-3.8.1.exe)** (≈ 38.7 MiB) from the [v3.8.1 release](https://github.com/tunabirgun/TEagle/releases/tag/v3.8.1).
-2. Verify its SHA-256 checksum: `6F3AE72291F1A14836025370BA4BAA1A5868E111F95D4F7A560DF73B630B877C`.
+2. Verify its SHA-256 checksum: `D731BD3066136F6E540F6A10256D328FDB37321613206CBD58CFFA29B2A86375`.
 3. Run the installer and launch **TEagle**. It installs per user by default. Select **Clean install** only when you intend to remove an older TEagle configuration, cache, and TEagle-owned backend environments. Linux-side cleanup uses only the distribution previously recorded by TEagle; a missing or invalid record skips Linux cleanup. A cleanup failure stops a clean installation and retains the validated record for retry. During interactive uninstallation, the same failure is reported but uninstallation continues, potentially leaving optional backend data for later removal. TEagle never substitutes another default distribution. The shared micromamba executable and environments belonging to other applications are preserved.
 4. *Windows will show a blue **“Windows protected your PC”** SmartScreen warning because the installer is not code-signed and has no publisher reputation. Click **More info → Run anyway**. A managed or institutional computer may block this action, in which case local information-technology staff must approve the executable.*
 5. Click **Load example element** for a bundled, published TE (or paste a sequence, open a FASTA, or type an NCBI accession) and press **Run analysis**.

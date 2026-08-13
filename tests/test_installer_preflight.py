@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import ast
+import importlib.util
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 from pathlib import Path
@@ -15,6 +17,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "installer" / "build_installer.ps1"
 SPEC = ROOT / "installer" / "teagle_native.spec"
+INNO_SCRIPT = ROOT / "installer" / "teagle.iss"
+INNO_METADATA = ROOT / "installer" / "sanitize_inno_metadata.py"
 BUILD_LOCK = ROOT / "installer" / "requirements-build.txt"
 
 
@@ -153,6 +157,117 @@ def test_full_release_path_cannot_skip_freeze_and_orders_gates_before_mutation()
     freeze = source.index('& $python -m PyInstaller "installer\\teagle_native.spec" --noconfirm')
     assert runtime_gate < bundle_cleanup < freeze
     assert build_tool_gate < bundle_cleanup
+
+
+def test_inno_metadata_minimisation_is_gated_before_and_after_compile():
+    source = SOURCE.read_text(encoding="utf-8")
+    inno = INNO_SCRIPT.read_text(encoding="utf-8")
+    assert "prepare-templates $innoSource $innoTemp $ver" in source
+    assert "verify-setup $setupOutput $ver" in source
+    assert source.index("prepare-templates $innoSource $innoTemp $ver") < source.index("& $sanitizedIscc")
+    assert source.index("& $sanitizedIscc") < source.index("verify-setup $setupOutput $ver")
+    assert "DisablePrecompiledFileVerifications=setup setupcustomstyle setupldr" in inno
+    assert INNO_METADATA.is_file()
+
+
+def test_inno_metadata_helper_has_narrow_fail_closed_contract():
+    source = INNO_METADATA.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(INNO_METADATA))
+    assignments = {
+        target.id: ast.literal_eval(node.value)
+        for node in tree.body
+        if isinstance(node, (ast.Assign, ast.AnnAssign))
+        for target in (
+            node.targets if isinstance(node, ast.Assign) else [node.target]
+        )
+        if isinstance(target, ast.Name)
+        and target.id in {
+            "TEMPLATE_NAMES", "VERSIONED_TEMPLATE_NAMES", "GENERATOR_COMMENT", "OPTIONAL_STRING_KEYS",
+        }
+    }
+    assert assignments["TEMPLATE_NAMES"] == (
+        "Setup.e32", "SetupCustomStyle.e32", "SetupLdr.e32", "SetupLdr.e64", "unins000.exe",
+    )
+    assert assignments["VERSIONED_TEMPLATE_NAMES"] == (
+        "Setup.e32", "SetupCustomStyle.e32", "unins000.exe",
+    )
+    assert assignments["GENERATOR_COMMENT"] == "This installation was built with Inno Setup."
+    assert assignments["OPTIONAL_STRING_KEYS"] == (
+        "Comments", "InternalName", "LegalCopyright", "LegalTrademarks",
+        "OriginalFilename", "PrivateBuild", "SpecialBuild",
+    )
+    assert "must occur exactly once; found" in source
+    assert "changed outside the approved byte span" in source
+    assert "installer retains optional PE metadata" in source
+    assert "installer retains the Inno Setup generator Comments value" in source
+    assert "uninstaller template already uses the release version" in source
+    assert "installed uninstaller retains optional PE metadata" in source
+
+
+def _load_inno_metadata_helper():
+    spec = importlib.util.spec_from_file_location("teagle_sanitize_inno_metadata", INNO_METADATA)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_inno_template_cleaner_changes_only_one_exact_same_length_span(tmp_path):
+    helper = _load_inno_metadata_helper()
+    source_dir = tmp_path / "source"
+    copied_dir = tmp_path / "copied"
+    source_dir.mkdir()
+    copied_dir.mkdir()
+    needle = helper.GENERATOR_COMMENT.encode("utf-16le")
+    fixed = struct.pack(
+        "<13I", 0xFEEF04BD, 0x00010000, (51 << 16) | 1054, 0,
+        0, 0, 0x3F, 0, 0x00040004, 1, 0, 0, 0,
+    )
+    old_file_version = "51.1054.0.0".encode("utf-16le")
+    payload = b"prefix-resource-bytes" + fixed + old_file_version + needle + b"suffix-resource-bytes"
+    for name in helper.TEMPLATE_NAMES:
+        (source_dir / name).write_bytes(payload)
+        (copied_dir / name).write_bytes(payload)
+
+    helper.prepare_templates(source_dir, copied_dir, "3.8.1")
+
+    for name in helper.TEMPLATE_NAMES:
+        result = (copied_dir / name).read_bytes()
+        assert len(result) == len(payload)
+        assert result[:len(b"prefix-resource-bytes")] == b"prefix-resource-bytes"
+        assert result[-len(b"suffix-resource-bytes"):] == b"suffix-resource-bytes"
+        assert needle not in result
+        comment_start = payload.index(needle)
+        assert result[comment_start:comment_start + len(needle)] == b"\0" * len(needle)
+        assert (source_dir / name).read_bytes() == payload
+    for name in helper.VERSIONED_TEMPLATE_NAMES:
+        result = (copied_dir / name).read_bytes()
+        version_offset = result.index(struct.pack("<I", 0xFEEF04BD))
+        version_fields = struct.unpack_from("<13I", result, version_offset)
+        assert version_fields[2:4] == ((3 << 16) | 8, 1 << 16)
+        assert "3.8.1".encode("utf-16le") in result
+        assert old_file_version not in result
+
+
+@pytest.mark.parametrize("copies", [0, 2])
+def test_inno_template_cleaner_fails_closed_when_known_comment_count_drifts(tmp_path, copies):
+    helper = _load_inno_metadata_helper()
+    source_dir = tmp_path / "source"
+    copied_dir = tmp_path / "copied"
+    source_dir.mkdir()
+    copied_dir.mkdir()
+    needle = helper.GENERATOR_COMMENT.encode("utf-16le")
+    fixed = struct.pack(
+        "<13I", 0xFEEF04BD, 0x00010000, (51 << 16) | 1054, 0,
+        0, 0, 0x3F, 0, 0x00040004, 1, 0, 0, 0,
+    )
+    payload = b"prefix" + fixed + "51.1054.0.0".encode("utf-16le") + (needle * copies) + b"suffix"
+    for name in helper.TEMPLATE_NAMES:
+        (source_dir / name).write_bytes(payload)
+        (copied_dir / name).write_bytes(payload)
+    with pytest.raises(ValueError, match="known generator Comments value must occur exactly once"):
+        helper.prepare_templates(source_dir, copied_dir, "3.8.1")
+    assert (copied_dir / helper.TEMPLATE_NAMES[0]).read_bytes() == payload
 
 
 def test_installer_spec_filters_dependency_tests_without_dropping_runtime_payloads():

@@ -16,6 +16,9 @@
 #define MyAppAumid "TEagle.desktop.2"
 
 [Setup]
+; build_installer.ps1 compiles with copied Inno templates whose generator Comments and file-version
+; spans were replaced with blank metadata and the TEagle release version, then verified byte for byte.
+DisablePrecompiledFileVerifications=setup setupcustomstyle setupldr
 AppId={{#MyAppId}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}

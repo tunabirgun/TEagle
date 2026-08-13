@@ -109,6 +109,35 @@ $iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $iscc) { throw "ISCC.exe not found. Install Inno Setup 6 (winget install JRSoftware.InnoSetup)." }
 Write-Output "ISCC: $iscc"
 
-& $iscc "/DMyAppVersion=$ver" (Join-Path $PSScriptRoot "teagle.iss")
-if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE" }
-Write-Output "Installer written to: $(Join-Path $root ("dist\TEagle-Setup-$ver.exe"))"
+$metadataHelper = Join-Path $PSScriptRoot "sanitize_inno_metadata.py"
+if (-not (Test-Path -LiteralPath $metadataHelper)) { throw "Inno metadata helper is missing: $metadataHelper" }
+$innoSource = Split-Path -Parent $iscc
+$innoTemp = Join-Path ([IO.Path]::GetTempPath()) ("TEagle-Inno-" + [guid]::NewGuid().ToString("N"))
+$setupOutput = Join-Path $root ("dist\TEagle-Setup-$ver.exe")
+New-Item -ItemType Directory -Path $innoTemp | Out-Null
+try {
+  # Inno's stock Setup/uninstaller templates carry a generator Comments field and generator file version.
+  # Compile from an isolated copy in which those exact spans are replaced by blank metadata and the TEagle
+  # release version without changing PE layout. The helper verifies every byte delta before compilation.
+  Get-ChildItem -LiteralPath $innoSource -Force | Copy-Item -Destination $innoTemp -Recurse -Force
+  & $python $metadataHelper prepare-templates $innoSource $innoTemp $ver
+  if ($LASTEXITCODE -ne 0) { throw "Inno template metadata minimisation failed with exit code $LASTEXITCODE" }
+  $sanitizedIscc = Join-Path $innoTemp "ISCC.exe"
+  if (-not (Test-Path -LiteralPath $sanitizedIscc)) { throw "Copied ISCC.exe is missing: $sanitizedIscc" }
+  & $sanitizedIscc "/DMyAppVersion=$ver" (Join-Path $PSScriptRoot "teagle.iss")
+  if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE" }
+  & $python $metadataHelper verify-setup $setupOutput $ver
+  if ($LASTEXITCODE -ne 0) { throw "Installer metadata verification failed with exit code $LASTEXITCODE" }
+} finally {
+  if (Test-Path -LiteralPath $innoTemp) {
+    $resolvedTemp = (Resolve-Path -LiteralPath $innoTemp).Path
+    $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
+    if ($resolvedTemp.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase) -and
+        (Split-Path -Leaf $resolvedTemp).StartsWith("TEagle-Inno-")) {
+      Remove-Item -LiteralPath $resolvedTemp -Recurse -Force
+    } else {
+      Write-Warning "Refusing to remove unexpected Inno work directory: $resolvedTemp"
+    }
+  }
+}
+Write-Output "Installer written to: $setupOutput"

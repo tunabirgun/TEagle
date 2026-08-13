@@ -1,7 +1,7 @@
 """Image-export integrity: every figure must export to valid SVG and a correctly-sized PNG in every
 background mode (dark / light / uv / mono / transparent), single-row and wrapped multi-row gels alike.
 Runs headless via the same save_svg / render_png the export buttons call."""
-import os, sys, re, tempfile
+import builtins, os, re, struct, sys, tempfile, zlib
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 
@@ -17,6 +17,29 @@ from PySide6.QtCore import QByteArray
 import figures, widgets
 
 _app = QApplication.instance() or QApplication([])
+_PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+
+
+def _png_chunk(chunk_type, data):
+    crc = zlib.crc32(chunk_type + data) & 0xFFFFFFFF
+    return struct.pack(">I", len(data)) + chunk_type + data + struct.pack(">I", crc)
+
+
+def _png_records(payload):
+    assert payload.startswith(_PNG_SIGNATURE)
+    offset = len(_PNG_SIGNATURE)
+    records = []
+    while offset < len(payload):
+        length = struct.unpack(">I", payload[offset:offset + 4])[0]
+        end = offset + 12 + length
+        records.append((payload[offset + 4:offset + 8], payload[offset + 8:offset + 8 + length], offset, end))
+        offset = end
+    assert offset == len(payload)
+    return records
+
+
+def _png_bytes(records):
+    return _PNG_SIGNATURE + b"".join(_png_chunk(kind, data) for kind, data in records)
 
 
 def _lanes(n):
@@ -316,6 +339,98 @@ def test_runtime_figure_exports_have_author_only_metadata(tmp_path):
     from teagle_core.artifact_metadata import media_metadata_violations
     for path in outputs.values():
         assert media_metadata_violations(path) == [], path
+
+
+def test_png_metadata_cleanup_needs_no_pillow_and_rejects_extra_text(tmp_path, monkeypatch):
+    from teagle_core import artifact_metadata
+
+    path = tmp_path / "figure.png"
+    svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><rect width="100" height="50"/></svg>'
+    widgets.render_png(svg, str(path), scale=1)
+    pristine = path.read_bytes()
+    pristine_records = [(kind, data) for kind, data, _start, _end in _png_records(pristine)]
+    before = QImage(str(path))
+    before_pixels = [before.pixel(x, y) for y in range(before.height()) for x in range(before.width())]
+    dirty_records = pristine_records[:-1] + [(b"tEXt", b"Software\0synthetic generator")] + pristine_records[-1:]
+    path.write_bytes(_png_bytes(dirty_records))
+    assert artifact_metadata.media_metadata_violations(path)
+
+    real_import = builtins.__import__
+    def reject_pillow(name, *args, **kwargs):
+        if name == "PIL" or name.startswith("PIL."):
+            raise AssertionError("PNG metadata handling must not import Pillow")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", reject_pillow)
+    artifact_metadata.clean_png_metadata(path)
+    assert artifact_metadata.media_metadata_violations(path) == []
+    cleaned_records = [(kind, data) for kind, data, _start, _end in _png_records(path.read_bytes())]
+    assert [item for item in cleaned_records if item[0] == b"tEXt"] == [(b"tEXt", b"Author\0Tuna Birgun")]
+    assert [item for item in cleaned_records if item[0] != b"tEXt"] == [
+        item for item in pristine_records if item[0] != b"tEXt"
+    ]
+    after = QImage(str(path))
+    assert (after.width(), after.height()) == (before.width(), before.height())
+    assert [after.pixel(x, y) for y in range(after.height()) for x in range(after.width())] == before_pixels
+
+
+@pytest.mark.parametrize("chunk", [
+    (b"vpAg", b"generator=synthetic;tracking=123"),
+    (b"iTXt", b"Author\0\0\0en\0Translated Author\0Tuna Birgun"),
+])
+def test_png_metadata_cleanup_removes_private_and_extended_text_chunks(tmp_path, chunk):
+    from teagle_core import artifact_metadata
+
+    path = tmp_path / "figure.png"
+    widgets.render_png('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>', str(path), scale=1)
+    records = [(kind, data) for kind, data, _start, _end in _png_records(path.read_bytes())]
+    path.write_bytes(_png_bytes(records[:-1] + [chunk] + records[-1:]))
+    assert artifact_metadata.media_metadata_violations(path)
+    artifact_metadata.clean_png_metadata(path)
+    assert artifact_metadata.media_metadata_violations(path) == []
+    assert chunk not in [(kind, data) for kind, data, _start, _end in _png_records(path.read_bytes())]
+
+
+def test_png_metadata_gate_rejects_bad_crc_without_replacing_source(tmp_path):
+    from teagle_core import artifact_metadata
+
+    path = tmp_path / "figure.png"
+    widgets.render_png('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>', str(path), scale=1)
+    corrupt = bytearray(path.read_bytes())
+    idat = next(record for record in _png_records(corrupt) if record[0] == b"IDAT")
+    corrupt[idat[3] - 1] ^= 1
+    path.write_bytes(corrupt)
+    original = path.read_bytes()
+    assert any("invalid CRC" in item for item in artifact_metadata.media_metadata_violations(path))
+    with pytest.raises(ValueError, match="invalid CRC"):
+        artifact_metadata.clean_png_metadata(path)
+    assert path.read_bytes() == original
+
+
+@pytest.mark.parametrize("mutation", ["duplicate-ihdr", "nonconsecutive-idat"])
+def test_png_metadata_gate_rejects_invalid_chunk_structure(tmp_path, mutation):
+    from teagle_core import artifact_metadata
+
+    path = tmp_path / "figure.png"
+    widgets.render_png('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>', str(path), scale=1)
+    records = [(kind, data) for kind, data, _start, _end in _png_records(path.read_bytes())]
+    if mutation == "duplicate-ihdr":
+        records.insert(1, records[0])
+    else:
+        index = next(index for index, item in enumerate(records) if item[0] == b"IDAT")
+        kind, data = records[index]
+        split = max(1, len(data) // 2)
+        records[index:index + 1] = [
+            (kind, data[:split]),
+            (b"tEXt", b"Author\0Tuna Birgun"),
+            (kind, data[split:]),
+        ]
+    path.write_bytes(_png_bytes(records))
+    original = path.read_bytes()
+    assert artifact_metadata.media_metadata_violations(path)
+    with pytest.raises(ValueError):
+        artifact_metadata.clean_png_metadata(path)
+    assert path.read_bytes() == original
 
 
 def test_pdf_export_failure_preserves_existing_file(tmp_path, monkeypatch):

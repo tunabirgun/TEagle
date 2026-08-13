@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import os
 import posixpath
+import struct
 import tempfile
+import zlib
 from collections import Counter
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -19,6 +21,15 @@ from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 AUTHOR = "Tuna Birgun"
 _FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
+_PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+_PNG_CRITICAL_CHUNKS = {b"IHDR", b"PLTE", b"IDAT", b"IEND"}
+# These ancillary chunks affect faithful display or physical sizing rather than authorship or history.
+# Everything else is optional metadata and is removed instead of attempting to interpret arbitrary payloads.
+_PNG_RENDERING_CHUNKS = {
+    b"cHRM", b"gAMA", b"iCCP", b"sBIT", b"sRGB", b"cICP", b"mDCV", b"cLLI",
+    b"bKGD", b"hIST", b"pHYs", b"sPLT", b"tRNS",
+}
+_PNG_CANONICAL_AUTHOR = b"Author\0" + AUTHOR.encode("latin-1")
 
 _CONTENT_TYPES_PART = "[Content_Types].xml"
 _ROOT_RELS_PART = "_rels/.rels"
@@ -615,27 +626,112 @@ def clean_pdf_metadata(path: str | os.PathLike[str]) -> None:
             os.unlink(tmp_name)
 
 
-def clean_png_metadata(path: str | os.PathLike[str]) -> None:
-    """Retain the pixel data and one author field; discard ancillary metadata."""
-    from PIL import Image, PngImagePlugin
+def _png_chunk(chunk_type: bytes, payload: bytes) -> bytes:
+    if len(chunk_type) != 4:
+        raise ValueError("PNG chunk type must be four bytes")
+    checksum = zlib.crc32(chunk_type + payload) & 0xFFFFFFFF
+    return struct.pack(">I", len(payload)) + chunk_type + payload + struct.pack(">I", checksum)
 
+
+def _png_chunks(payload: bytes) -> list[tuple[bytes, bytes]]:
+    """Parse and CRC-check a complete PNG without an image-decoding dependency."""
+    if not payload.startswith(_PNG_SIGNATURE):
+        raise ValueError("missing PNG signature")
+    chunks: list[tuple[bytes, bytes]] = []
+    offset = len(_PNG_SIGNATURE)
+    plte_seen = False
+    idat_seen = False
+    idat_ended = False
+    while offset < len(payload):
+        if len(payload) - offset < 12:
+            raise ValueError("truncated PNG chunk")
+        length = struct.unpack(">I", payload[offset:offset + 4])[0]
+        if length > 0x7FFFFFFF:
+            raise ValueError("PNG chunk length exceeds the specification limit")
+        end = offset + 12 + length
+        if end > len(payload):
+            raise ValueError("PNG chunk length exceeds the file")
+        chunk_type = payload[offset + 4:offset + 8]
+        if len(chunk_type) != 4 or any(
+            not (65 <= byte <= 90 or 97 <= byte <= 122) for byte in chunk_type
+        ):
+            raise ValueError("PNG chunk type contains a non-letter byte")
+        if 97 <= chunk_type[2] <= 122:
+            raise ValueError("PNG chunk type uses the reserved lowercase bit")
+        if 65 <= chunk_type[0] <= 90 and chunk_type not in _PNG_CRITICAL_CHUNKS:
+            label = chunk_type.decode("ascii")
+            raise ValueError(f"unknown critical PNG chunk: {label}")
+        data = payload[offset + 8:offset + 8 + length]
+        expected_crc = struct.unpack(">I", payload[offset + 8 + length:end])[0]
+        actual_crc = zlib.crc32(chunk_type + data) & 0xFFFFFFFF
+        if expected_crc != actual_crc:
+            label = chunk_type.decode("ascii", errors="replace")
+            raise ValueError(f"invalid CRC for {label} chunk")
+        if not chunks:
+            if chunk_type != b"IHDR" or length != 13:
+                raise ValueError("IHDR must be the first PNG chunk")
+        elif chunk_type == b"IHDR":
+            raise ValueError("PNG contains more than one IHDR chunk")
+        if chunk_type == b"PLTE":
+            if plte_seen:
+                raise ValueError("PNG contains more than one PLTE chunk")
+            if idat_seen:
+                raise ValueError("PLTE appears after IDAT")
+            plte_seen = True
+        if chunk_type == b"IDAT":
+            if idat_ended:
+                raise ValueError("PNG IDAT chunks are not consecutive")
+            idat_seen = True
+        elif idat_seen:
+            idat_ended = True
+        chunks.append((chunk_type, data))
+        offset = end
+        if chunk_type == b"IEND":
+            if offset != len(payload):
+                raise ValueError("data follows the IEND chunk")
+            break
+    if not idat_seen:
+        raise ValueError("PNG contains no IDAT chunk")
+    if chunks[-1] != (b"IEND", b""):
+        raise ValueError("IEND must be the final empty PNG chunk")
+    return chunks
+
+
+def _png_metadata_problems(chunks: list[tuple[bytes, bytes]]) -> list[str]:
+    problems: list[str] = []
+    author_positions = [
+        index for index, item in enumerate(chunks)
+        if item == (b"tEXt", _PNG_CANONICAL_AUTHOR)
+    ]
+    if author_positions != [1]:
+        problems.append("PNG does not contain one canonical author chunk immediately after IHDR")
+    for chunk_type, payload in chunks:
+        if chunk_type in _PNG_CRITICAL_CHUNKS or chunk_type in _PNG_RENDERING_CHUNKS:
+            continue
+        if chunk_type == b"tEXt" and payload == _PNG_CANONICAL_AUTHOR:
+            continue
+        label = chunk_type.decode("ascii", errors="replace")
+        problems.append(f"PNG optional metadata retained: {label}")
+    return problems
+
+
+def clean_png_metadata(path: str | os.PathLike[str]) -> None:
+    """Preserve PNG image chunks and replace optional metadata with one author field."""
     target = Path(path)
-    fd, tmp_name = tempfile.mkstemp(prefix=target.name + ".", suffix=".png", dir=target.parent)
-    os.close(fd)
-    try:
-        with Image.open(target) as image:
-            pixels = image.copy()
-            dpi = image.info.get("dpi")
-        metadata = PngImagePlugin.PngInfo()
-        metadata.add_text("Author", AUTHOR)
-        kwargs = {"pnginfo": metadata, "optimize": False}
-        if dpi:
-            kwargs["dpi"] = dpi
-        pixels.save(tmp_name, **kwargs)
-        os.replace(tmp_name, target)
-    finally:
-        if os.path.exists(tmp_name):
-            os.unlink(tmp_name)
+    chunks = _png_chunks(target.read_bytes())
+    cleaned = bytearray(_PNG_SIGNATURE)
+    for index, (chunk_type, payload) in enumerate(chunks):
+        if chunk_type not in _PNG_CRITICAL_CHUNKS and chunk_type not in _PNG_RENDERING_CHUNKS:
+            continue
+        cleaned.extend(_png_chunk(chunk_type, payload))
+        if index == 0:
+            cleaned.extend(_png_chunk(b"tEXt", _PNG_CANONICAL_AUTHOR))
+    result = bytes(cleaned)
+    result_chunks = _png_chunks(result)
+    violations = _png_metadata_problems(result_chunks)
+    if violations:
+        raise ValueError("invalid cleaned PNG metadata: " + "; ".join(violations))
+    _atomic_write_bytes(target, result, suffix=".png")
 
 
 def _svg_metadata_elements(document: minidom.Document) -> list[Node]:
@@ -777,16 +873,12 @@ def media_metadata_violations(path: str | os.PathLike[str]) -> list[str]:
         if reader.trailer.get("/ID") is not None:
             problems.append("PDF document ID retained")
     elif suffix == ".png":
-        from PIL import Image
-
-        with Image.open(target) as image:
-            info = {
-                str(key): str(value)
-                for key, value in image.info.items()
-                if key.lower() not in {"dpi", "icc_profile"}
-            }
-        if info != {"Author": AUTHOR}:
-            problems.append(f"PNG metadata is not author-only: {info}")
+        try:
+            chunks = _png_chunks(target.read_bytes())
+        except ValueError as exc:
+            problems.append(f"invalid PNG: {exc}")
+        else:
+            problems.extend(_png_metadata_problems(chunks))
     elif suffix == ".svg":
         try:
             document = minidom.parseString(target.read_bytes())

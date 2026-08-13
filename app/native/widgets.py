@@ -101,7 +101,13 @@ def render_png(svg: str, path: str, scale: int = 3):
     r.render(p)
     p.end()
     img.setText("Author", "Tuna Birgun")
-    atomic_save(path, lambda tmp: img.save(tmp, "PNG"))
+    def write_clean(tmp):
+        if not img.save(tmp, "PNG"):
+            raise OSError("Qt could not write the PNG export")
+        from teagle_core.artifact_metadata import clean_png_metadata
+        clean_png_metadata(tmp)
+
+    atomic_save(path, write_clean)
 
 
 def render_pdf(svg: str, path: str):
