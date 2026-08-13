@@ -343,6 +343,17 @@ def test_genome_prepare_resumes_pending_scan(win):
     assert win._genome_prep_inflight is False and ops and ops[0][0] == "genome_pcr"   # resumed into the SAME scan (captured org)
 
 
+def test_genome_prepare_cache_failure_preserves_remove_and_download_action(win):
+    messages = []
+    win._render_genome_status = lambda msg, level="error": messages.append((msg, level))
+    win._banner = lambda msg, level="error": messages.append((msg, level))
+    win._on_genome_prepare({"ok": False, "cache_corrupt": True,
+                            "error": "Open Manage genomes, remove this cached genome, then download it again."})
+    rendered = " ".join(msg for msg, _ in messages)
+    assert "Manage genomes" in rendered and "remove" in rendered and "download" in rendered
+    assert all(level == "warn" for _, level in messages)
+
+
 def test_banner_level_distinguishes_success_from_error(win):
     # messages surface as a single, closable notification dialog (not a top-of-panel banner); level drives the
     # colour style (theme.py #notifmsg[level]) and a new message replaces the previous one (never stacks).
@@ -472,6 +483,35 @@ def test_genome_need_prepare_uses_captured_org(win, monkeypatch):
     win._on_genome_pcr({"ok": False, "need_prepare": True})
     assert ops and ops[0][0] == "genome_prepare"
     assert ops[0][1]["organism"] == "Saccharomyces cerevisiae"   # the captured org, not the live placeholder
+
+
+def test_corrupt_genome_cache_never_enters_download_prepare_loop(win, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    win._pending_scan = {"org": "Saccharomyces cerevisiae", "cand": {"id": "P1"}}
+    ops = []
+    messages = []
+    win.engine.submit = lambda op, body=None, key=None: ops.append((op, body))
+    win._render_genome_status = lambda msg, level="error": messages.append((msg, level))
+    win._banner = lambda msg, level="error": messages.append((msg, level))
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: pytest.fail("corrupt cache opened download prompt"))
+    win._on_genome_pcr({"ok": False, "cache_corrupt": True,
+                        "error": "cached genome failed its integrity check"})
+    assert not any(op == "genome_prepare" for op, _ in ops)
+    assert win._pending_scan is None
+    visible = " ".join(msg for msg, _ in messages)
+    assert "Manage genomes" in visible and "remove" in visible and "download" in visible
+
+
+def test_corrupt_annotation_cache_preserves_remove_and_download_action(win):
+    messages = []
+    win._refresh_genome_manager = lambda: None
+    win._banner = lambda msg, level="error": messages.append((msg, level))
+    win._on_genome_annotate({"ok": False, "cache_corrupt": True,
+                             "error": "Open Manage genomes, remove this cached genome, then download it again."})
+    rendered = " ".join(msg for msg, _ in messages)
+    assert "Manage genomes" in rendered and "remove" in rendered and "download" in rendered
+    assert messages[-1][1] == "warn"
 
 
 def test_flank_region_clickable_and_slices_analyzed_seq(win):
@@ -716,6 +756,22 @@ def test_wsl_ready_enables_optional(win):
     assert not win.wslInstallBtn.isHidden()                    # installer stays reachable for repair / integrity checks
 
 
+def test_partial_uncurated_install_never_exposes_combined_library_choice(win):
+    """One optional shard is not a searchable curated+uncurated installation."""
+    win._on_wsl_status({
+        "wsl2": True,
+        "ready": True,
+        "distro": "Ubuntu-24.04",
+        "repeatmasker": "4.2.4",
+        "dfam": True,
+        "dfam_uncurated": False,
+        "dfam_library": {"partitions": ["dfam40.0.h5", "dfam40.uncurated.consensus.0.h5"]},
+    })
+    assert win._uncurated_available is False
+    assert win.wslLibraryRow.isHidden()
+    assert "curated + uncurated available" not in win.wslStatus.text().lower()
+
+
 def test_core_science_independent_of_wsl():
     """The engine's core path must not touch WSL — analyze/primers/pcr work with WSL absent or broken."""
     import engine
@@ -793,3 +849,149 @@ def test_frozen_selftest_exercises_the_certifi_tls_context():
     assert "certifi.where()" in source
     assert "fetch._ssl_ctx()" in source
     assert "get_ca_certs()" in source
+
+
+def test_frozen_selftest_exercises_a_pdf_metadata_cleaning_cycle():
+    """Importability is insufficient: the frozen build must write, clean and read a tiny artifact."""
+    import inspect
+    import main
+    source = inspect.getsource(main.selftest)
+    for expected in (
+        "TemporaryDirectory", "PdfWriter", "writer.write", "clean_pdf_metadata",
+        "media_metadata_violations", "PdfReader", "len(reader.pages)",
+    ):
+        assert expected in source
+
+
+def _budget_result(mode, request_id, families=None):
+    result = {"ok": True, "cores": 8, "mem_gb": 16, "avail_gb": 100,
+              "recommended_threads": 7, "limited_by": "cores", "disk_needed_gb": 2,
+              "disk_ok": True, "library_mode": mode, "budget_request_id": request_id}
+    if families is not None:
+        result["library_families_for_species"] = families
+    return result
+
+
+def test_custom_annotation_budget_has_no_dfam_copy_or_warning(win):
+    """A custom-library estimate must carry only the library that will actually be searched."""
+    from PySide6.QtWidgets import QLabel, QPushButton, QComboBox
+    cost, warn, start, gsel, ssel = QLabel(), QLabel(), QPushButton(), QComboBox(), QComboBox()
+    warn.hide()
+    win._annot_cost_widgets = (cost, warn, start, gsel, ssel)
+    win._annot_cost_state = {"organism": "Saccharomyces cerevisiae",
+                             "custom_library": r"C:\libraries\lab.fa",
+                             "library_mode": "custom", "budget_request_id": 11}
+    win._on_annotate_budget(_budget_result("custom", 11, families=9))
+    rendered = (cost.text() + " " + warn.text()).lower()
+    assert "lab.fa" in rendered
+    assert "dfam" not in rendered and "family model" not in rendered
+    assert warn.isHidden() and start.isEnabled()
+
+
+def test_stale_dfam_budget_cannot_overwrite_custom_selection(win):
+    from PySide6.QtWidgets import QLabel, QPushButton, QComboBox
+    cost, warn, start, gsel, ssel = QLabel("estimating custom"), QLabel(), QPushButton(), QComboBox(), QComboBox()
+    warn.hide()
+    start.setEnabled(False)
+    win._annot_cost_widgets = (cost, warn, start, gsel, ssel)
+    win._annot_cost_state = {"organism": "Saccharomyces cerevisiae",
+                             "custom_library": r"C:\libraries\lab.fa",
+                             "library_mode": "custom", "budget_request_id": 12}
+    win._on_annotate_budget(_budget_result("dfam_curated", 11, families=9))
+    assert cost.text() == "estimating custom"
+    assert warn.isHidden() and not start.isEnabled()
+
+
+def test_dfam_budget_warnings_name_the_selected_search_set(win):
+    from PySide6.QtWidgets import QLabel, QPushButton, QComboBox
+
+    def render(mode, request_id):
+        cost, warn, start, gsel, ssel = QLabel(), QLabel(), QPushButton(), QComboBox(), QComboBox()
+        win._annot_cost_widgets = (cost, warn, start, gsel, ssel)
+        win._annot_cost_state = {"organism": "Saccharomyces cerevisiae", "custom_library": None,
+                                 "library_mode": mode, "budget_request_id": request_id}
+        win._on_annotate_budget(_budget_result(mode, request_id, families=9))
+        return (cost.text() + " " + warn.text()).lower()
+
+    curated = render("dfam_curated", 13)
+    uncurated = render("dfam_uncurated", 14)
+    assert "curated-only" in curated and "uncurated families will not be searched" in curated
+    assert "curated + uncurated" in uncurated and "both family sets are already being searched" in uncurated
+
+
+def test_missing_uncurated_partitions_block_start_and_never_claim_both_sets(win):
+    from PySide6.QtWidgets import QLabel, QPushButton, QComboBox
+    cost, warn, start, gsel, ssel = QLabel(), QLabel(), QPushButton(), QComboBox(), QComboBox()
+    win._annot_cost_widgets = (cost, warn, start, gsel, ssel)
+    win._annot_cost_state = {"organism": "Saccharomyces cerevisiae", "custom_library": None,
+                             "library_mode": "dfam_uncurated", "budget_request_id": 19}
+    result = _budget_result("dfam_uncurated", 19)
+    result.update({"uncurated_available": False, "library_ready": False,
+                   "library_error": "the optional uncurated Dfam partitions are not installed"})
+    win._on_annotate_budget(result)
+    rendered = (cost.text() + " " + warn.text()).lower()
+    assert "not installed" in rendered
+    assert not start.isEnabled() and not warn.isHidden()
+    assert "both family sets are already being searched" not in rendered
+
+
+def test_uncurated_without_lineage_shows_lineage_action_not_install_action(win):
+    from PySide6.QtWidgets import QLabel, QPushButton, QComboBox
+    cost, warn, start, gsel, ssel = QLabel(), QLabel(), QPushButton(), QComboBox(), QComboBox()
+    win._annot_cost_widgets = (cost, warn, start, gsel, ssel)
+    win._annot_cost_state = {"organism": None, "custom_library": None,
+                             "library_mode": "dfam_uncurated", "budget_request_id": 20}
+    result = _budget_result("dfam_uncurated", 20)
+    result.update({"library_ready": False,
+                   "library_error": "select an organism/lineage before including uncurated Dfam families"})
+    win._on_annotate_budget(result)
+    rendered = (cost.text() + " " + warn.text()).lower()
+    assert "select an organism" in rendered and "not installed" not in rendered
+    assert not start.isEnabled()
+
+
+def test_custom_budget_copy_gate_rejects_injected_dfam_claim():
+    """Mutation negative: an old Dfam sentence must fail the custom-library copy invariant."""
+    def assert_custom_copy(text):
+        lowered = text.lower()
+        assert "lab.fa" in lowered and "dfam" not in lowered and "family model" not in lowered
+
+    assert_custom_copy("Selected library: user-supplied FASTA lab.fa. Only represented sequences can match.")
+    with pytest.raises(AssertionError):
+        assert_custom_copy("Selected library: lab.fa. Dfam holds 9 family models for this lineage.")
+
+
+def test_annotation_dialog_refreshes_budget_for_each_selected_library(win, monkeypatch, tmp_path):
+    """Drive the non-modal dialog offscreen: custom and each Dfam search set issue a fresh typed budget."""
+    from PySide6.QtWidgets import QComboBox, QFileDialog, QLabel
+    import main
+    library = tmp_path / "lab.fa"
+    library.write_text(">LabTE\nACGT\n", encoding="utf-8")
+    win._prepared_genomes = [{"accession": "GCF_000146045.2", "n_seqs": 17,
+                              "bytes": 12_000_000, "sha256": "a" * 64}]
+    submitted = []
+    win.engine.submit = lambda op, body=None, key=None: submitted.append((op, body, key))
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *a, **k: (str(library), "FASTA"))
+
+    win._annotate_genome_dialog()
+    dialog = win._annot_dialog
+    try:
+        library_selector = next(
+            combo for combo in dialog.findChildren(QComboBox)
+            if combo.findData("custom") >= 0 and combo.findData("uncurated") >= 0)
+        assert submitted[-1][1]["library_mode"] == "dfam_curated"
+
+        library_selector.setCurrentIndex(library_selector.findData("custom"))
+        assert submitted[-1][1]["library_mode"] == "custom"
+        custom_id = submitted[-1][1]["budget_request_id"]
+
+        library_selector.setCurrentIndex(library_selector.findData("uncurated"))
+        assert submitted[-1][1]["library_mode"] == "dfam_uncurated"
+        assert submitted[-1][1]["budget_request_id"] > custom_id
+
+        intro = " ".join(label.text() for label in dialog.findChildren(QLabel)
+                         if label.objectName() == "orient")
+        assert "selected library" in intro.lower()
+        assert "selected dfam" not in intro.lower()
+    finally:
+        dialog.close()

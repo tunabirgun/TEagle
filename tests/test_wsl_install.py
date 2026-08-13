@@ -12,6 +12,29 @@ def _wsl2(res):
     return [c for c in res["components"] if c["key"] == "wsl2"][0]
 
 
+def _assert_cleanup_target_contract(iss: str) -> None:
+    cleanup = iss[iss.index("function CleanTeagleData(): Boolean;"):iss.index("procedure CurStepChanged")]
+    capture = cleanup.index("HasRecordedDistro := TryReadRecordedWslDistro(Distro);")
+    assert "WindowsCleanupOk := DelTree(ExpandConstant('{localappdata}\\TEagle')" in cleanup
+    delete = cleanup.index("WindowsCleanupOk := DelTree(ExpandConstant('{localappdata}\\TEagle')")
+    invoke = cleanup.index("WslCleanupOk := CleanWslBackend(Distro);")
+    assert capture < invoke < delete
+    assert "if HasRecordedDistro then\n    WslCleanupOk := CleanWslBackend(Distro);" in cleanup
+    assert "SaveStringToFile(marker, Distro, False)" in cleanup
+    assert "HasRecordedDistro and (not WslCleanupOk)" in cleanup
+    assert "if not WindowsCleanupOk then" in cleanup
+    assert "if MarkerRestored then" in cleanup
+    assert "if MarkerRestored then\n      FailureText := FailureText + 'The optional WSL backend could not be cleaned." in cleanup
+    assert "retry marker could not be restored" in cleanup
+    assert "Result := WindowsCleanupOk and WslCleanupOk;" in cleanup
+
+    backend = iss[iss.index("function CleanWslBackend"):iss.index("function CleanTeagleData")]
+    assert "'-d \"' + Distro + '\" -- bash" in backend
+    assert "if not Exec(" in backend and "if rc <> 0 then" in backend
+    assert "Result := True;" in backend
+    assert "distroArg" not in backend
+
+
 # ---------- elevated .bat ----------
 def test_wsl2_bat_script_has_install_fallback_and_terminal_marker():
     bat = wsl._wsl2_bat_script(r"C:\tmp\wsl.log")
@@ -25,12 +48,90 @@ def test_windows_clean_install_preserves_shared_micromamba_root():
     """The opt-in cleanup removes TEagle data without deleting other applications' conda envs."""
     root = Path(__file__).resolve().parents[1]
     iss = (root / "installer" / "teagle.iss").read_text(encoding="utf-8")
-    clean = next(line for line in iss.splitlines() if "Exec(wsl, distroArg" in line)
+    clean = next(line for line in iss.splitlines() if "Exec(wsl, '-d" in line)
     assert "~/micromamba/envs/te " in clean
     assert "~/micromamba/envs/teagle-vrna" in clean
     assert "~/teagle_genomes" in clean and "~/teagle_libs" in clean
     assert "~/micromamba " not in clean
     assert "~/bin/micromamba" not in clean
+
+
+def test_windows_cleanup_captures_recorded_distro_before_deleting_marker():
+    """A recorded non-default distro remains the cleanup target after LocalAppData is removed."""
+    root = Path(__file__).resolve().parents[1]
+    iss = (root / "installer" / "teagle.iss").read_text(encoding="utf-8")
+    _assert_cleanup_target_contract(iss)
+
+
+def test_windows_cleanup_missing_or_invalid_marker_never_uses_default_distro():
+    """No marker means no Linux-side deletion; malformed marker text cannot inject wsl.exe arguments."""
+    root = Path(__file__).resolve().parents[1]
+    iss = (root / "installer" / "teagle.iss").read_text(encoding="utf-8")
+    reader = iss[iss.index("function TryReadRecordedWslDistro"):iss.index("function CleanWslBackend")]
+    cleanup = iss[iss.index("function CleanTeagleData(): Boolean;"):iss.index("procedure CurStepChanged")]
+    validator = iss[iss.index("function IsSafeDistroName"):iss.index("function TryReadRecordedWslDistro")]
+
+    assert "if not FileExists(marker) then" in reader
+    assert "Result := False;" in reader
+    assert "if HasRecordedDistro then\n    WslCleanupOk := CleanWslBackend(Distro);" in cleanup
+    assert "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-" in validator
+    assert "default distro" not in iss.lower()
+
+
+def test_windows_cleanup_promises_match_the_safe_skip_behavior():
+    root = Path(__file__).resolve().parents[1]
+    iss = (root / "installer" / "teagle.iss").read_text(encoding="utf-8")
+    assert iss.count("valid recorded distribution") >= 3
+    assert "failed cleanup retains" in iss
+    assert "retained for a later retry" in iss
+    assert "including the WSL annotation backend) will be removed" not in iss
+
+
+def test_windows_cleanup_gate_rejects_injected_old_defects():
+    """Prove the source gate fails if deletion comes first or cleanup loses its explicit distro."""
+    root = Path(__file__).resolve().parents[1]
+    iss = (root / "installer" / "teagle.iss").read_text(encoding="utf-8")
+    capture = "  HasRecordedDistro := TryReadRecordedWslDistro(Distro);\n"
+    invoke = "  if HasRecordedDistro then\n    WslCleanupOk := CleanWslBackend(Distro);\n"
+    delete = "  WindowsCleanupOk := DelTree(ExpandConstant('{localappdata}\\TEagle'), True, True, True);\n"
+
+    deleted_first = iss.replace(invoke + delete, delete + invoke, 1)
+    with pytest.raises(AssertionError):
+        _assert_cleanup_target_contract(deleted_first)
+
+    implicit_default = iss.replace("'-d \"' + Distro + '\" -- bash", "'-- bash", 1)
+    with pytest.raises(AssertionError):
+        _assert_cleanup_target_contract(implicit_default)
+
+    unchecked_exit = iss.replace("  if rc <> 0 then", "  if False then", 1)
+    with pytest.raises(AssertionError):
+        _assert_cleanup_target_contract(unchecked_exit)
+
+    erased_retry = iss.replace("SaveStringToFile(marker, Distro, False)",
+                               "SaveStringToFile(marker, '', False)", 1)
+    with pytest.raises(AssertionError):
+        _assert_cleanup_target_contract(erased_retry)
+
+    unchecked_windows_delete = iss.replace(
+        "WindowsCleanupOk := DelTree(ExpandConstant('{localappdata}\\TEagle'), True, True, True);",
+        "DelTree(ExpandConstant('{localappdata}\\TEagle'), True, True, True);", 1)
+    with pytest.raises(AssertionError):
+        _assert_cleanup_target_contract(unchecked_windows_delete)
+
+    false_restoration_claim = iss.replace("if MarkerRestored then\n      FailureText :=",
+                                          "if True then\n      FailureText :=", 1)
+    with pytest.raises(AssertionError):
+        _assert_cleanup_target_contract(false_restoration_claim)
+
+
+def test_inno_source_has_no_fallback_version_and_callers_check_cleanup_result():
+    root = Path(__file__).resolve().parents[1]
+    iss = (root / "installer" / "teagle.iss").read_text(encoding="utf-8")
+    assert '#error "MyAppVersion must be injected by installer/build_installer.ps1"' in iss
+    preamble = iss[:iss.index("#define MyAppName")]
+    assert '#define MyAppVersion "' not in preamble
+    assert iss.count("if not CleanTeagleData() then") == 2
+    assert "RaiseException('Clean install stopped" in iss
 
 
 # ---------- Windows-side log reader ----------

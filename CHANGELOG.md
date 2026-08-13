@@ -4,10 +4,70 @@ All notable changes to TEagle are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-The version is defined once in `app/backend/teagle_core/__init__.py` (`__version__`)
-and propagates to the backend health endpoint, the UI header badge, every run
-provenance manifest, the packaged executable's Windows file-version metadata, and
-the LaTeX report title page.
+The application version is defined once in `app/backend/teagle_core/__init__.py`
+(`__version__`) and propagates to the backend health endpoint, the UI header badge,
+every run provenance manifest, and the packaged executable's Windows file-version
+metadata. Release QA separately reconciles the documentation with that source.
+
+## [3.8.1] — 2026-08-13
+
+This patch corrects whole-genome coverage and provenance, cached-genome integrity, Windows cleanup scope,
+and the legacy local-server entry point. **Whole-genome landscape coverage may be lower than in 3.8.0**
+when RepeatMasker assigned overlapping bases to different repeat names/models: 3.8.1 counts each headline
+from its own contig-wise interval union while retaining a within-row union for each repeat-name/model and
+class/family pair. TE, tandem,
+and other unions may overlap and are non-additive. The v3.8.0 single-locus classification and assay evidence remains version-locked to v3.8.0;
+this patch does not modify those classifier or assay rules.
+
+### Fixed
+
+- Whole-genome landscape summaries now compute independent contig-wise interval unions for TE, tandem,
+  other, and all-repeat headlines. Overlapping labels no longer count the same submitted bases twice within
+  one headline; TE, tandem, and other unions may overlap and must not be added.
+- Numerical whole-genome coverage values printed by 3.8.0 and earlier are not carried forward as 3.8.1
+  evidence. Current documentation retains only the qualitative library-coverage interpretation until affected genome
+  examples are regenerated with the corrected union calculation.
+- Cached genome FASTA files are rehashed against their sealed source checksum before reuse. Annotation run
+  signatures include that checksum; pending chunks and completed outputs are also checksum-sealed and
+  reverified before reuse and before summary. A cache that fails validation now stops with an explicit
+  remove-and-download-again instruction instead of entering a preparation loop.
+- Whole-genome provenance now binds the backend-verified genome SHA-256 and biological base count rather
+  than the empty request body. Changing only the verified genome bytes therefore changes the manifest seal.
+- Penelope (`PLE/*`) RepeatMasker calls are included in the TE union rather than being assigned to the
+  residual non-TE category.
+- Whole-genome rows now retain RepeatMasker's matched repeat name/model (output column 10) separately from
+  its broader class/family label (column 11). Column 10 is not asserted to be a biological family. Distinct
+  repeat names/models in the same class remain separate, “Copies” is a raw alignment-row count rather than
+  an insertion count, and the headline TE count is the number of distinct TE repeat names/models.
+- Landscape percentages now state their denominator: all submitted FASTA bases, including ambiguous bases.
+  Mean divergence is defined as the alignment-span-weighted mean RepeatMasker divergence from consensus,
+  using raw overlapping or fragmented alignment rows as weights; it is not a mutation rate or age.
+- A requested curated-plus-uncurated Dfam search now fails before annotation when either optional
+  uncurated partition is absent. The UI cannot label a curated-only library as both sets searched.
+- A user-supplied RepeatMasker library now produces provenance for that library and no longer claims that
+  Dfam was searched. Dfam database and reference records remain attached only to Dfam-backed runs; the
+  custom library is content-addressed, so renaming identical bytes does not change the manifest seal.
+  Matches without a recognized `#class/family` label remain visible as unclassified/other and are excluded
+  from the TE union because their classification is unavailable, not because they were shown to be non-TE.
+- Custom-library cost estimates no longer run Dfam lineage counting or display Dfam partition warnings.
+  Asynchronous estimates are tagged by mode so an earlier Dfam response cannot overwrite a later custom
+  selection.
+- Clean installation and interactive uninstallation resolve the recorded TEagle WSL distribution before
+  Windows-side state is removed. Cleanup cannot silently fall back to a different default distribution.
+  Any cleanup failure, including Windows-side deletion failure, stops a selected clean installation;
+  interactive uninstallation reports incomplete cleanup but continues and may leave application or optional
+  backend data. A failed WSL cleanup retains the validated record for retry when marker restoration succeeds.
+- The documented `--server` entry point starts again; its startup banner now obtains the Primer3 version
+  from the imported scientific core instead of referencing an undefined module.
+
+### Changed
+- Generated Office and figure exports now retain only `Tuna Birgun` as embedded author metadata and remove optional generator, timestamp, document-identifier and revision-session fields. The cleanup is applied at each export boundary and covered by defect-injection tests.
+- Vector-PDF export is written atomically and postprocessed to the same author-only metadata policy.
+- The landscape figure now uses separate union bars rather than stacking non-additive repeat groups. Its
+  on-figure note states that TE, tandem, and other unions may overlap and must not be summed.
+- The installer build script now derives the application version from its single source and passes
+  `/DMyAppVersion=<version>` to Inno Setup. Compiling `teagle.iss` without that definition fails
+  explicitly instead of falling back to version 1.0.0.
 
 ## [3.8.0] — 2026-08-09
 
@@ -43,10 +103,10 @@ Supersedes 3.7.0, which was published and then **retracted**; see the note under
   itself checked for constants that have started being used.
 - **An excluded development accession had entered the validation corpus.** The benchmark specification
   names five bundled example accessions as development data. One of them, `X01005`, was
-  included as an ordinary case in the corpus described as held out. It was removed so the corpus matches
-  the documented exclusion rule. The held-out validation corpus is 43 records carrying 36 distinct
-  organism annotations; its
-  re-indexed output supersedes the earlier held-out output and is archived with the v3.8.0 benchmark
+  included as an ordinary case in the retrospective external corpus. It was removed so the corpus matches
+  the documented exclusion rule. The development-example-excluded retrospective external corpus is 43
+  records carrying 36 distinct literal organism annotations; its re-indexed output supersedes the earlier
+  output and is archived with the v3.8.0 benchmark
   evidence at https://doi.org/10.5281/zenodo.21848814.
 
 ## [3.7.0] — 2026-08-06 — RELEASED AND RETRACTED
@@ -393,7 +453,7 @@ A fix release: no new feature, one scientific-correctness fix and a set of robus
 
 TEagle is now free software. The annotation can leave the tool as a genome-browser file, a first-time user opens a real published element instead of a synthetic null, a self-similarity view catches repeats the targeted detectors miss, and the primer secondary-structure cross-check no longer requires a manual ViennaRNA install. **Results may differ from 3.1.0**: the wider domain panel adds a DIRS-group class, and terminal-repeat lengths are now measured by diagonal extension — re-run any record whose classification or terminal-repeat length you have on file (see *Changed*).
 ### Added
-- **The Pfam TE-domain panel grows from 21 to 30 models, widening coverage across all four TE classes.** LINE ORF1p is now a genuine multi-domain module (RNA-binding, trimerisation and dsRBD-like domains), the ORF2p apurinic-like endonuclease is tested (credited only in the EN–RT reading-frame arrangement), a tyrosine recombinase is modelled — which lets a **DIRS-group** element be called directly instead of misfiling as a LINE — and the Helitron helicase plus the CACTA, MULE and IS4-like/piggyBac transposases are added. Each carries a completeness ledger scoped to its class (a DIRS call is scored against RT + tyrosine recombinase + Gag, never the LTR ledger's DDE integrase it structurally lacks). The target-site duplication length is checked for congruence with the called superfamily's expected duplication.
+- **The Pfam TE-domain panel grows from 21 to 30 models, widening coverage across major retrotransposon and DNA-transposon groups.** LINE ORF1p is now a genuine multi-domain module (RNA-binding, trimerisation and dsRBD-like domains), the ORF2p apurinic-like endonuclease is tested (credited only in the EN–RT reading-frame arrangement), a tyrosine recombinase is modelled — which lets a **DIRS-group** element be called directly instead of misfiling as a LINE — and the Helitron helicase plus the CACTA, MULE and IS4-like/piggyBac transposases are added. Each carries a completeness ledger scoped to its class (a DIRS call is scored against RT + tyrosine recombinase + Gag, never the LTR ledger's DDE integrase it structurally lacks). The target-site duplication length is checked for congruence with the called superfamily's expected duplication.
 - **GFF3 / BED export of an annotation.** The element, its terminal repeats (LTR/TIR), its cis-elements (TSD, PBS, PPT) and its protein domains export with verified Sequence Ontology terms and accessions, coordinates locus-relative unless a genome-anchored seqid is supplied, with the input sequence embedded after `##FASTA` so the file stands alone in a browser. Column 3 is gated on the completeness tier: a call whose defining evidence was not established degrades to a generic term rather than asserting a coding subclass the run does not support.
 - **A self-similarity dot plot,** in its own resizable window. Exact k-mer matches — forward on the diagonals (direct repeats), reverse-complement on the anti-diagonals (inverted repeats) — surface a repeat of any arrangement without the scan being told what to expect, so a block the targeted structural detectors capped or missed still shows. A present diagonal is positive evidence; an absent one is not (a diverged repeat leaves a faint diagonal or none), and the panel states the asymmetry. The window opens fitted to its contents and supports zoom (buttons or Ctrl + wheel) with pan; the direct- and inverted-repeat mark colours are user-selectable (defaulting to a colour-vision-safe Okabe–Ito pair, with a reset), and the figure exports to SVG, PNG and vector PDF with a one-line method caveat embedded in the file. Pure stdlib, so it adds nothing to the frozen bundle.
 - **Bundled real, published TE examples.** Five canonical specimens (Copia M11240, Gypsy M12927, LINE-1 M80343, Tc1 X01005, Ac X05424) chosen to exercise every branch of the classifier, each carrying its published identity so the call can be checked against the literature. The previous synthetic demo had a random ORF that could not hit a Pfam profile, so a first-time user's first result was a structural-only null.
@@ -772,6 +832,8 @@ primer design, usable without a command line.
   the WebView2 runtime is absent. A kill-on-close Job Object ties the whole process tree to the
   launcher, so an in-place upgrade never orphans a window.
 
+[3.8.1]: https://github.com/tunabirgun/TEagle/releases/tag/v3.8.1
+[3.8.0]: https://github.com/tunabirgun/TEagle/releases/tag/v3.8.0
 [3.1.0]: https://github.com/tunabirgun/TEagle/releases/tag/v3.1.0
 [3.0.0]: https://github.com/tunabirgun/TEagle/releases/tag/v3.0.0
 [2.12.0]: https://github.com/tunabirgun/TEagle/releases/tag/v2.12.0

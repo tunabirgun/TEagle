@@ -82,8 +82,13 @@ def atomic_save(path: str, writer):
 
 
 def save_svg(svg: str, path: str):
-    with atomic_write(path, "w", encoding="utf-8") as f:
-        f.write(svg)
+    def write_clean(tmp):
+        with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+            f.write(svg)
+        from teagle_core.artifact_metadata import clean_svg_metadata
+        clean_svg_metadata(tmp)
+
+    atomic_save(path, write_clean)
 
 
 def render_png(svg: str, path: str, scale: int = 3):
@@ -95,6 +100,7 @@ def render_png(svg: str, path: str, scale: int = 3):
     p = QPainter(img)
     r.render(p)
     p.end()
+    img.setText("Author", "Tuna Birgun")
     atomic_save(path, lambda tmp: img.save(tmp, "PNG"))
 
 
@@ -105,14 +111,22 @@ def render_pdf(svg: str, path: str):
     from PySide6.QtGui import QPdfWriter, QPageSize, QPageLayout
     from PySide6.QtCore import QSizeF, QMarginsF, QRectF
     w, h = _svg_size(svg)
-    writer = QPdfWriter(path)
-    writer.setResolution(96)                                          # 1 SVG px == 1 device px at 96 dpi
-    writer.setPageSize(QPageSize(QSizeF(w * 25.4 / 96.0, h * 25.4 / 96.0), QPageSize.Unit.Millimeter))
-    writer.setPageMargins(QMarginsF(0, 0, 0, 0), QPageLayout.Unit.Millimeter)
-    r = QSvgRenderer(QByteArray(svg.encode("utf-8")))
-    p = QPainter(writer)
-    r.render(p, QRectF(0, 0, writer.width(), writer.height()))       # fill the page in device pixels
-    p.end()
+    def write_clean(tmp):
+        writer = QPdfWriter(tmp)
+        writer.setAuthor("Tuna Birgun")
+        writer.setCreator("")
+        writer.setTitle("")
+        writer.setResolution(96)                                      # 1 SVG px == 1 device px at 96 dpi
+        writer.setPageSize(QPageSize(QSizeF(w * 25.4 / 96.0, h * 25.4 / 96.0), QPageSize.Unit.Millimeter))
+        writer.setPageMargins(QMarginsF(0, 0, 0, 0), QPageLayout.Unit.Millimeter)
+        r = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+        p = QPainter(writer)
+        r.render(p, QRectF(0, 0, writer.width(), writer.height()))   # fill the page in device pixels
+        p.end()
+        from teagle_core.artifact_metadata import clean_pdf_metadata
+        clean_pdf_metadata(tmp)
+
+    atomic_save(path, write_clean)
 
 
 class SvgCanvas(QWidget):
@@ -662,7 +676,12 @@ def _export_xlsx(headers, rows, path, notes=None):
         for ln in str(n).splitlines():
             if ln.strip():
                 ws.append([ln])
-    atomic_save(path, lambda tmp: wb.save(tmp))
+    def write_clean(tmp):
+        wb.save(tmp)
+        from teagle_core.artifact_metadata import clean_ooxml_metadata
+        clean_ooxml_metadata(tmp)
+
+    atomic_save(path, write_clean)
 
 
 _TABLE_FORMATS = [("Excel workbook (.xlsx)", "xlsx"),

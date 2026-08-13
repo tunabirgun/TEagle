@@ -30,11 +30,38 @@ def _software(run_type: str) -> list:
 
 def build_manifest(run_type: str, input_seq: str, input_id: str, params: dict,
                    not_run: list | None = None, source: dict | None = None,
-                   references: list | None = None, databases: list | None = None):
+                   references: list | None = None, databases: list | None = None,
+                   input_sha256: str | None = None, input_length: int | None = None):
+    """Build a content-addressed manifest.
+
+    ``input_sha256`` and ``input_length`` bind a previously verified, non-materialised input such as a
+    multi-gigabyte cached genome. Ordinary sequence workflows omit them and retain the original behavior.
+    Whole-genome annotation must supply both; hashing its intentionally empty ``input_seq`` would otherwise
+    seal the empty string rather than the assembly that RepeatMasker read.
+    """
+    if (input_sha256 is None) != (input_length is None):
+        raise ValueError("input_sha256 and input_length must be supplied together")
+    if input_sha256 is not None:
+        candidate = str(input_sha256).lower()
+        if len(candidate) != 64 or any(ch not in "0123456789abcdef" for ch in candidate):
+            raise ValueError("input_sha256 must be a 64-character hexadecimal SHA-256")
+        input_hash = candidate
+    else:
+        input_hash = hashlib.sha256(input_seq.encode()).hexdigest()
+    if input_length is not None:
+        if isinstance(input_length, bool) or not isinstance(input_length, int) or input_length < 0:
+            raise ValueError("input_length must be a non-negative integer")
+        recorded_length = input_length
+    else:
+        recorded_length = len(input_seq)
+    if run_type == "genome_annotate" and input_sha256 is None:
+        raise ValueError("genome_annotate requires the verified genome SHA-256 and length")
+    if run_type == "genome_annotate" and recorded_length < 1:
+        raise ValueError("genome_annotate requires a positive verified genome length")
     inp = {
         "id": input_id,
-        "length": len(input_seq),
-        "sha256": hashlib.sha256(input_seq.encode()).hexdigest(),
+        "length": recorded_length,
+        "sha256": input_hash,
     }
     if isinstance(source, dict):                # accession/coordinate retrieval provenance, if fetched
         inp.update({k: source[k] for k in ("accession", "organism", "taxid", "source", "endpoint", "retrievedUtc",

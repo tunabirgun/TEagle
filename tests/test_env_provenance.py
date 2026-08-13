@@ -13,6 +13,7 @@ def test_every_bundled_direct_dependency_has_a_functional_import_probe():
     assert requirements <= set(envcheck._IMPORT_NAME)
     assert envcheck._IMPORT_NAME["openpyxl"] == "openpyxl"
     assert envcheck._IMPORT_NAME["certifi"] == "certifi"
+    assert envcheck._IMPORT_NAME["pypdf"] == "pypdf"
 
 
 def test_metadata_without_a_working_import_requires_repair(monkeypatch):

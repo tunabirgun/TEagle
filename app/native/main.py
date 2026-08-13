@@ -3,7 +3,7 @@ column of collapsible result cards. All science runs in-process through the shar
 GUI thread via engine_worker.Engine. This module wires the analyze workflow, primer/PCR, WSL family
 annotation, splice detection, provenance and exports."""
 from __future__ import annotations
-import gzip, json, os, re, sys
+import gzip, html, json, os, re, sys
 
 from PySide6.QtCore import Qt, QTimer, QByteArray, QSettings, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import (QGuiApplication, QFont, QPixmap, QPainter, QIcon, QCursor, QShortcut,
@@ -2942,8 +2942,10 @@ class MainWindow(QMainWindow):
         if getattr(self, "_prep_timer", None):
             self._prep_timer.stop()
         if not d.get("ok"):
-            self._render_genome_status("Genome download failed — " + d.get("error", "unknown error"))
-            return self._banner("Genome download failed — " + d.get("error", ""))
+            msg = "Genome download failed — " + d.get("error", "unknown error")
+            level = "warn" if d.get("cache_corrupt") else "error"
+            self._render_genome_status(msg, level)
+            return self._banner(msg, level)
         mb = (d.get("bytes", 0) or 0) / 1e6
         self._banner(f"Genome ready · {d.get('organism','')} ({d.get('assemblyAccession','')}) · "
                      f"{d.get('n_seqs','?')} sequences · {mb:.0f} MB cached.", level="success")
@@ -3262,10 +3264,10 @@ class MainWindow(QMainWindow):
         lay.setSpacing(theme_mod.sp(8))
         t = QLabel("Annotate the TE landscape of a downloaded genome")
         tf = t.font(); tf.setBold(True); tf.setPointSizeF(tf.pointSizeF() + 1); t.setFont(tf); lay.addWidget(t)
-        intro = QLabel("TEagle runs RepeatMasker over the whole assembly and summarises which transposable-element "
-                       "families it places, how much of the genome they cover, and how diverged each is. This finds "
-                       "copies of families that are already in the installed Dfam library; it does not discover new "
-                       "families, so coverage depends on that library.")
+        intro = QLabel("TEagle runs RepeatMasker over the whole assembly and summarises which repeat names/models "
+                       "match, how much of the genome their intervals cover, and their alignment-span-weighted "
+                       "divergence. It matches references represented in the selected library; it does not discover "
+                       "new repeats, so coverage depends on that library.")
         intro.setObjectName("orient"); intro.setWordWrap(True); lay.addWidget(intro)
 
         grid = QHBoxLayout()
@@ -3318,14 +3320,16 @@ class MainWindow(QMainWindow):
                 libpath.setText("Curated + uncurated families. Needs the uncurated Dfam partitions installed; "
                                 "uncurated families are automatically built and lower confidence."
                                 if self._annot_uncurated else "")
+                refresh_cost()
                 return
             fn, _ = QFileDialog.getOpenFileName(dlg, "Choose a repeat library (FASTA)", "",
                                                 "FASTA library (*.fa *.fasta *.lib *.txt);;All files (*)")
             if not fn:
                 lsel.setCurrentIndex(0); self._annot_custom_lib = None; libpath.setText(""); return
             self._annot_custom_lib = fn
-            libpath.setText(f"{os.path.basename(fn)} — searched instead of Dfam; TEagle records its checksum "
-                            "but cannot vouch for its contents.")
+            libpath.setText(f"{os.path.basename(fn)} — used as the sole repeat library; TEagle records its "
+                            "checksum but cannot vouch for its contents.")
+            refresh_cost()
         lsel.currentIndexChanged.connect(pick_library)
         cost = QLabel("Estimating…"); cost.setObjectName("orient"); cost.setWordWrap(True)
         cost.setTextInteractionFlags(Qt.TextSelectableByMouse); lay.addWidget(cost)
@@ -3339,11 +3343,21 @@ class MainWindow(QMainWindow):
             acc = gsel.currentData()
             g = next((x for x in prepared if x["accession"] == acc), {})
             org = acc_to_org.get(acc, "")
-            cost.setText("Estimating cost — reading the WSL budget and the installed Dfam library…")
+            custom_path = self._annot_custom_lib
+            library_mode = ("custom" if custom_path else
+                            ("dfam_uncurated" if self._annot_uncurated else "dfam_curated"))
+            cost.setText("Estimating cost — reading the WSL compute and disk budget…" if custom_path else
+                         "Estimating cost — reading the WSL budget and the installed Dfam library…")
             start.setEnabled(False); warn.hide()
-            self._annot_cost_state = {"accession": acc, "organism": org, "sha256": g.get("sha256")}
+            self._annot_budget_generation = int(getattr(self, "_annot_budget_generation", 0)) + 1
+            self._annot_cost_state = {"accession": acc, "organism": org, "sha256": g.get("sha256"),
+                                      "custom_library": custom_path, "library_mode": library_mode,
+                                      "budget_request_id": self._annot_budget_generation}
             self.engine.submit("annotate_budget",
-                               {"species": org, "genome_bytes": int(g.get("bytes") or 0)}, key="annotate_budget")
+                               {"species": org, "genome_bytes": int(g.get("bytes") or 0),
+                                "library_mode": library_mode,
+                                "budget_request_id": self._annot_budget_generation},
+                               key="annotate_budget")
 
         self._annot_cost_widgets = (cost, warn, start, gsel, ssel)
         gsel.currentIndexChanged.connect(lambda *_: refresh_cost())
@@ -3363,10 +3377,18 @@ class MainWindow(QMainWindow):
         cost, warn, start, gsel, ssel = w
         try:
             st = self._annot_cost_state
+            # Budget jobs run concurrently. A slow Dfam lineage query can finish after the user has
+            # switched to a custom FASTA (or another Dfam search set); never render that stale response
+            # under the new selection.
+            if (b.get("budget_request_id") != st.get("budget_request_id")
+                    or b.get("library_mode") != st.get("library_mode")):
+                return
             # keep the MEASURED thread count so the run uses the number the dialog promised
             self._annot_threads = int(b.get("recommended_threads") or 4)
             fams = b.get("library_families_for_species")
             gb = b.get("disk_needed_gb")
+            custom_path = st.get("custom_library")
+            library_mode = st.get("library_mode")
             lines = [
                 f"<b>This machine (WSL):</b> {b.get('cores')} cores · {b.get('mem_gb')} GB RAM · "
                 f"{b.get('avail_gb')} GB free. TEagle will use {b.get('recommended_threads')} parallel "
@@ -3376,11 +3398,26 @@ class MainWindow(QMainWindow):
                 "<b>Time:</b> a fly-sized genome (~140 Mb) takes minutes to about an hour here; a mammalian "
                 "genome (~3 Gb) takes many hours to a day. The run continues in the background and can be "
                 "re-started later — finished chunks are not repeated.",
-                f"<b>Library coverage:</b> the installed Dfam partitions hold "
-                f"<b>{fams if fams is not None else 'an unknown number of'}</b> family models for "
-                f"{st.get('organism') or 'this lineage'}.",
             ]
+            if custom_path:
+                lines.append(f"<b>Selected library:</b> user-supplied FASTA {html.escape(os.path.basename(custom_path))}. "
+                             "This file supplies the interspersed-repeat homology library, so only references "
+                             "represented in it can receive homology-based TE calls. RepeatMasker’s separate "
+                             "simple- and low-complexity screen can still produce non-TE repeat rows. To enter "
+                             "the TE percentage, a custom reference also needs a recognized class/family in "
+                             "its header, for example >name#LTR/Gypsy; unclassified matches remain visible but "
+                             "are not silently counted as TEs.")
+            else:
+                selected_set = ("curated + uncurated" if library_mode == "dfam_uncurated"
+                                else "curated-only")
+                lines.append(f"<b>Library coverage:</b> the selected {selected_set} Dfam search set contains "
+                             f"<b>{fams if fams is not None else 'an unknown number of'}</b> family models for "
+                             f"{st.get('organism') or 'this lineage'}.")
             cost.setText("<br>".join(lines))
+            if library_mode == "dfam_uncurated" and b.get("library_ready") is False:
+                warn.setText(b.get("library_error") or
+                             "The selected curated + uncurated Dfam search cannot be run as configured.")
+                warn.show(); start.setEnabled(False); return
             if b.get("disk_ok") is False:
                 warn.setText(f"Not enough free disk in WSL — about {gb} GB is needed. Free space, or remove a "
                              "cached genome from this manager, then try again.")
@@ -3389,12 +3426,20 @@ class MainWindow(QMainWindow):
             # of models (D. melanogaster 399, H. sapiens 1439) while an uncovered one has single digits
             # (S. cerevisiae 9, and its run found zero TEs). 25 sits in the empty gap between those two
             # regimes; it is a warning trigger only — it never blocks a run or changes a result.
-            if fams is not None and fams < self._ANNOT_LOW_LIBRARY:
-                warn.setText(f"The installed Dfam library holds only {fams} family model(s) for "
-                             f"{st.get('organism') or 'this lineage'}. A run would report tandem and "
-                             "low-complexity repeats but could not find transposable elements, however long it "
-                             "ran — that would be a limit of the library, not a property of the genome. Install "
-                             "the additional Dfam partitions from the backend installer before relying on this.")
+            if not custom_path and fams is not None and fams < self._ANNOT_LOW_LIBRARY:
+                lineage = st.get("organism") or "this lineage"
+                if library_mode == "dfam_uncurated":
+                    warn.setText(f"The selected curated + uncurated Dfam search set contains only {fams} "
+                                 f"family model(s) for {lineage}. Both family sets are already being searched, "
+                                 "so a blank result would still be limited by this library's lineage coverage. "
+                                 "Use a suitable organism-specific FASTA library before treating absence as "
+                                 "evidence that the genome lacks transposable elements.")
+                else:
+                    warn.setText(f"The selected curated-only Dfam search contains only {fams} family model(s) "
+                                 f"for {lineage}; uncurated families will not be searched. A blank result would "
+                                 "therefore be inconclusive. Select “include uncurated families” (and install "
+                                 "those partitions if needed), or use a suitable organism-specific FASTA library, "
+                                 "before interpreting absence.")
                 warn.show()
             start.setEnabled(True)
         except RuntimeError:
@@ -3444,6 +3489,9 @@ class MainWindow(QMainWindow):
         if not r or not r.get("ok"):
             msg = (r or {}).get("error") or "the annotation did not complete"
             self._refresh_genome_manager()
+            if (r or {}).get("cache_corrupt"):
+                self._banner("Genome annotation did not finish — " + msg, "warn")
+                return
             # A settings clash is the one failure the user can clear, so offer the action instead of
             # telling them to do something the window gives them no way to do.
             if "different settings" in msg:
@@ -3468,7 +3516,7 @@ class MainWindow(QMainWindow):
         # SUCCESS. This block used to live in _on_genome_annotate_reset, so the app's most expensive
         # operation — a multi-hour, uncancellable whole-genome run — finished with no banner and no results
         # window, while DISCARDING an annotation announced "transposable elements cover None% of the
-        # assembly across None families" and opened a results window on the reset reply's empty fields.
+        # assembly across None repeat models" and opened a results window on the reset reply's empty fields.
         # Each handler now reports its own outcome.
         self._annot_result = r
         self._refresh_genome_manager()
@@ -3476,7 +3524,8 @@ class MainWindow(QMainWindow):
             self._banner(r["coverage_warning"], "warn")
         else:
             self._banner(f"Genome annotation finished — transposable elements cover "
-                         f"{r.get('te_percent')}% of the assembly across {r.get('te_family_count')} families.",
+                         f"{r.get('te_percent')}% of the assembly across "
+                         f"{r.get('te_repeat_name_count')} distinct repeat names/models.",
                          "success")
         self._show_annot_window(r)
 
@@ -3488,17 +3537,96 @@ class MainWindow(QMainWindow):
             self._banner(r.get("error") or "Could not clear the previous annotation.", "warn")
         self._refresh_genome_manager()
 
-    _ANNOT_COLS = [("Family", "The repeat family RepeatMasker assigned (class/subfamily)"),
+    _ANNOT_COLS = [("Repeat name/model", "The matched RepeatMasker repeat name or consensus model (output column 10); "
+                                        "this is not necessarily a biological family"),
+                   ("Class/family", "RepeatMasker's broader class/family label. TEagle uses this label to "
+                                    "separate TE, tandem and other coverage."),
                    ("Kind", "TE = transposable element; tandem = simple/low-complexity/satellite; other = "
-                            "rRNA, tRNA and unclassified repeats"),
-                   ("Copies", "How many separate hits were placed"),
-                   ("Bases", "Total bases covered by those hits"),
-                   ("% genome", "Share of the whole assembly covered"),
-                   ("Mean divergence %", "RepeatMasker's RAW percent mismatch to the family consensus, "
-                                         "averaged weighted by hit length. It is NOT Kimura- or "
-                                         "CpG-corrected, so it saturates for old copies and is inflated "
-                                         "where CpG sites decay fast. Higher means more decayed, but it "
-                                         "is a similarity measure, not an age.")]
+                            "rRNA/tRNA; unclassified/other = no recognized class was available"),
+                   ("Copies", "RepeatMasker alignment rows; one fragmented insertion can produce several rows"),
+                   ("Bases", "Bases in this repeat name/model's within-name interval union. Different rows may "
+                             "overlap, so rows must not be summed to recover a headline total."),
+                   ("% genome", "Share of all submitted FASTA bases, including ambiguous bases"),
+                   ("Mean divergence %", "Alignment-span-weighted mean RepeatMasker divergence from consensus. "
+                                          "Raw alignment rows, including overlaps and fragments, supply the "
+                                          "weights. It is not Kimura- or CpG-corrected, a mutation rate, or an age.")]
+
+    @staticmethod
+    def _annot_library_context(r):
+        """Library-specific copy shared by the landscape window and its Markdown export."""
+        kind = str(r.get("library_kind") or "")
+        raw_custom = r.get("custom_library")
+        custom = raw_custom if isinstance(raw_custom, dict) else {}
+        is_custom = bool(custom) or kind.strip().lower() == "user" or kind.lower().startswith("user-supplied")
+        rm_version = html.escape(str(r.get("repeatmasker_version") or "unresolved"))
+
+        if is_custom:
+            name = str(custom.get("name") or "unnamed user FASTA")
+            sha = str(custom.get("sha256") or "unavailable")
+            sequences = custom.get("sequences")
+            sequence_md = f"; {sequences} reference sequences" if sequences is not None else ""
+            sequence_ui = f"; {html.escape(str(sequences))} reference sequences" if sequences is not None else ""
+            md_name = (name.replace("\\", "\\\\").replace("|", "\\|").replace("*", "\\*")
+                       .replace("_", "\\_").replace("`", "\\`"))
+            safe_name = html.escape(name)
+            safe_sha = html.escape(sha)
+            return {
+                "report": (f"- Searched with RepeatMasker {rm_version} against the user-supplied FASTA "
+                           f"{md_name}; SHA-256 `{sha}`{sequence_md}"),
+                "display": (f"Searched with RepeatMasker {rm_version} against user-supplied FASTA "
+                            f"<b>{safe_name}</b> (SHA-256 <code>{safe_sha}</code>{sequence_ui})"),
+                "tooltip": (f"The run searched the user-supplied FASTA {safe_name}, identified by SHA-256 "
+                            f"{safe_sha}. The reference-sequence count describes that file; it is not a count "
+                             "of detected repeat names/models."),
+                "scope": ("What this is: interspersed-repeat matches to references represented in the "
+                          "supplied FASTA, placed by homology. It is not de novo repeat discovery. A reference "
+                          "absent from that FASTA cannot be recovered through library homology, so absence "
+                          "is not evidence of absence. RepeatMasker's separate simple/low-complexity screen can "
+                          "still contribute non-TE rows. A custom reference contributes to the TE percentage only "
+                          "when its FASTA header supplies a recognized class/family after '#', for example "
+                          ">name#LTR/Gypsy; otherwise its matches remain visible as unclassified/other and are "
+                          "excluded because classification is unavailable, not because they were shown to be non-TE. "
+                          "Percentages use all submitted FASTA bases, including ambiguous bases and unplaced scaffolds."),
+                "report_scope": ("- Interspersed-repeat matches to references represented in the supplied "
+                                 "FASTA, placed by homology. This is not de novo repeat discovery. A reference "
+                                 "absent from that FASTA cannot be recovered through library homology; "
+                                 "RepeatMasker's separate simple/low-complexity screen can still contribute non-TE "
+                                 "rows. Custom references without a recognized `#class/family` header remain "
+                                 "visible as unclassified/other and do not enter the TE percentage because their "
+                                 "classification is unavailable, not because they were demonstrated to be non-TE."),
+            }
+
+        library_kind = kind or "installed Dfam partitions"
+        dfam_version = r.get("dfam_version")
+        models = r.get("library_families_for_species")
+        version_md = f" (Dfam {dfam_version})" if dfam_version else ""
+        models_md = f"; {models} family models available for this lineage" if models is not None else ""
+        safe_kind = html.escape(library_kind)
+        version_ui = f" (Dfam {html.escape(str(dfam_version))})" if dfam_version else ""
+        models_ui = f"; {html.escape(str(models))} family models available for this lineage" if models is not None else ""
+        return {
+            "report": (f"- Searched with RepeatMasker {rm_version} against {library_kind}{version_md}{models_md}"),
+            "display": (f"Searched with RepeatMasker {rm_version} against {safe_kind}{version_ui}{models_ui}"),
+            "tooltip": ("The exact tool and installed Dfam family set this result came from. The lineage model "
+                        "count describes profiles available to the search, not families detected in this genome. "
+                        "Chunks are assembly pieces used for progress and resumability."),
+            "scope": ("What this is: matches to repeat names/models represented in the installed Dfam library, "
+                      "placed by homology. It is not de novo repeat discovery. A model absent from the library "
+                      "cannot appear here, so absence is not evidence of absence. Percentages use all submitted "
+                      "FASTA bases, including ambiguous bases and unplaced scaffolds."),
+            "report_scope": ("- Matches to repeat names/models represented in the searched Dfam library, placed "
+                             "by homology. This is not de novo repeat discovery. A model absent from the library "
+                             "cannot appear here; absence is not evidence of absence."),
+        }
+
+    @staticmethod
+    def _annot_kind_label(row):
+        """An unknown class is unavailable evidence, not a demonstrated non-TE classification."""
+        kind = str(row.get("kind") or "")
+        class_family = str(row.get("class_family") or "").strip().lower()
+        if kind == "other" and class_family in ("", "unknown", "unclassified", "na", "n/a"):
+            return "unclassified/other"
+        return kind
 
     @staticmethod
     def _annot_report_md(r):
@@ -3507,54 +3635,60 @@ class MainWindow(QMainWindow):
         Every hedge the window shows travels with it: what was searched, what the two percentages mean,
         and why an empty TE result may be a library limit. An export that carried only the table would
         read as an unqualified statement about the genome."""
-        fams = r.get("families") or []
-        te = [f for f in fams if f.get("kind") == "TE"]
+        repeat_names = r.get("repeat_names") or []
+        te = [row for row in repeat_names if row.get("kind") == "TE"]
+        library = MainWindow._annot_library_context(r)
         L = [f"# Transposable-element landscape — {r.get('species')} ({r.get('accession')})", "",
              f"- **Transposable elements: {r.get('te_percent')}%** of "
-             f"{(r.get('genome_bp') or 0)/1e6:.1f} Mb, across {r.get('te_family_count')} families",
+             f"{(r.get('genome_bp') or 0)/1e6:.1f} Mb, across "
+             f"{r.get('te_repeat_name_count')} distinct repeat names/models",
              f"- All repeat classes together: {r.get('masked_percent')}% "
              f"({r.get('total_hits'):,} alignment rows)",
-             f"- Searched with RepeatMasker {r.get('repeatmasker_version')} against "
-             f"{r.get('library_kind')} (Dfam {r.get('dfam_version')}); "
-             f"{r.get('library_families_for_species')} family models available for this lineage",
+             library["report"],
              f"- Sensitivity {r.get('sensitivity')} · {r.get('chunks')} chunks · "
              f"complete: {bool(r.get('complete'))}", ""]
         if r.get("coverage_warning"):
             L += ["> **Coverage warning.** " + r["coverage_warning"], ""]
         L += ["## Scope and limits", "",
-              "- Copies of families already present in the searched library, placed by homology. New",
-              "  families are not discovered, and a family absent from the library cannot appear here —",
-              "  absence is not evidence of absence.",
+              library["report_scope"],
               "- Transposable elements are counted separately from tandem repeats (simple repeats,",
               "  low-complexity sequence, satellites) and non-TE entries; only the first is a statement",
               "  about transposable-element content.",
-              "- Coverage is computed on merged intervals, so overlapping alignments are not double-counted.",
-              "- Divergence is RepeatMasker's raw percent mismatch to the consensus, length-weighted. It is",
-              "  not Kimura- or CpG-corrected and is not an age.",
-              "- Percentages are of the whole assembly, including unplaced scaffolds.", "",
-              "## Families", "",
-              "| Family | Kind | Copies (alignment rows) | Bases (merged) | % genome | Mean divergence % |",
-              "|---|---|---|---|---|---|"]
-        for f in fams:
-            L.append(f"| {f.get('family')} | {f.get('kind')} | {f.get('n'):,} | {f.get('bp'):,} | "
-                     f"{f.get('percent')} | {f.get('divergence')} |")
-        L += ["", f"_{len(te)} of {len(fams)} rows are transposable-element families._"]
+              "- Each repeat name/model's Bases value is its within-name interval union. The all-repeat and TE headline "
+              "percentages use separate cross-model unions, so a genomic base contributes at most once to each "
+              "headline. Summing rows can exceed a headline because repeat models can overlap.",
+              "- TE, tandem and other category percentages are independently unioned and non-additive.",
+              "- Divergence is the alignment-span-weighted mean RepeatMasker divergence from consensus. Raw alignment",
+              "  rows, including overlaps and fragments, supply the weights. It is not Kimura- or CpG-corrected,",
+              "  a mutation rate, or an age.",
+              "- Percentages use all submitted FASTA bases, including ambiguous bases and unplaced scaffolds.", "",
+              "## Repeat names/models", "",
+              "| Repeat name/model | Class/family | Kind | Copies (alignment rows) | Bases (within-name union) | % genome | Mean divergence % |",
+              "|---|---|---|---|---|---|---|"]
+        for row in repeat_names:
+            L.append(f"| {row.get('repeat_name')} | {row.get('class_family')} | {MainWindow._annot_kind_label(row)} | {row.get('n'):,} | {row.get('bp'):,} | "
+                     f"{row.get('percent')} | {row.get('divergence')} |")
+        L += ["", f"_{len(te)} of {len(repeat_names)} rows have a recognized transposable-element class._"]
         return "\n".join(L)
 
-    def _annot_row_menu(self, f):
+    def _annot_row_menu(self, row):
         """Context menu for one genome-landscape row — aggregate-appropriate actions only."""
-        kind = f.get("kind")
-        items = [(f"Copy family name ({f.get('family')})", lambda: self._copy(str(f.get("family")))),
+        kind = row.get("kind")
+        items = [(f"Copy repeat name/model ({row.get('repeat_name')})", lambda: self._copy(str(row.get("repeat_name")))),
                  ("Copy this row (TSV)", lambda: self._copy("\t".join(
-                     str(x) for x in (f.get("family"), f.get("kind"), f.get("n"), f.get("bp"),
-                                      f.get("percent"), f.get("divergence")))))]
+                     str(x) for x in (row.get("repeat_name"), row.get("class_family"), self._annot_kind_label(row), row.get("n"), row.get("bp"),
+                                      row.get("percent"), row.get("divergence")))))]
         if kind != "TE":
+            if self._annot_kind_label(row) == "unclassified/other":
+                reason = ("This row has no recognized RepeatMasker class/family label. It is excluded from "
+                          "TE coverage because its classification is unavailable, not because it was demonstrated "
+                          "to be non-TE. For a custom library, use headers such as >name#LTR/Gypsy when supported.")
+            else:
+                reason = ("Simple repeats, low-complexity sequence and satellites are tandem repeats; rRNA and "
+                          "tRNA entries are other repeat annotations. TEagle reports these categories separately "
+                          "from transposable-element coverage.")
             items.append(("Why is this not counted as a TE?",
-                          lambda: self._banner(
-                              "Simple repeats, low-complexity sequence and satellites are tandem repeats, and "
-                              "rRNA/tRNA/unclassified entries are not transposable elements. RepeatMasker places "
-                              "them alongside TEs, so TEagle counts them separately — they are included in the "
-                              "all-repeat percentage but never in the transposable-element percentage.", "info")))
+                          lambda _reason=reason: self._banner(_reason, "info")))
         else:
             # Same field as the "Mean divergence %" column, so it must carry the same hedges. This text
             # previously said "higher means older" and dropped the raw/uncorrected and saturation caveats
@@ -3562,11 +3696,9 @@ class MainWindow(QMainWindow):
             # one a user reached by asking for an explanation.
             items.append(("What does mean divergence mean?",
                           lambda: self._banner(
-                              "RepeatMasker's RAW percent mismatch between the placed copies and their family "
-                              "consensus, averaged weighted by hit length. It is NOT Kimura- or CpG-corrected, "
-                              "so it saturates for old copies and is inflated where CpG sites decay fast. "
-                              "Higher means more decayed, but it is a similarity measure — not an age, and not "
-                              "an age in years.",
+                              "Alignment-span-weighted mean RepeatMasker divergence from the consensus. Raw "
+                              "alignment rows, including overlapping and fragmented rows, supply the weights. "
+                              "It is not Kimura- or CpG-corrected, a mutation rate, or an insertion-age estimate.",
                               "info")))
         return items
 
@@ -3583,42 +3715,40 @@ class MainWindow(QMainWindow):
         # headline numbers: the TE share is stated separately from every repeat, because they are different
         # claims and merging them would overstate transposable-element content.
         tot = QLabel(f"<b>Transposable elements: {r.get('te_percent')}%</b> of "
-                     f"{(r.get('genome_bp') or 0)/1e6:.1f} Mb, in {r.get('te_family_count')} families &nbsp;·&nbsp; "
+                     f"{(r.get('genome_bp') or 0)/1e6:.1f} Mb, across "
+                     f"{r.get('te_repeat_name_count')} distinct repeat names/models &nbsp;·&nbsp; "
                      f"all repeat classes together: {r.get('masked_percent')}% &nbsp;·&nbsp; "
-                     f"{r.get('total_hits'):,} hits")
+                     f"{r.get('total_hits'):,} alignment rows")
         tot.setTextFormat(Qt.RichText); tot.setWordWrap(True)
-        tot.setToolTip("Transposable elements = the share of the assembly covered by TE families (LTR, LINE, "
-                       "SINE, DNA transposons, rolling-circle, retroposons).\n"
-                       "All repeat classes = that plus tandem repeats (simple repeats, low-complexity "
-                       "sequence, satellites) and non-TE entries such as rRNA and tRNA genes.\n"
-                       "The two are shown separately because only the first is a statement about "
-                       "transposable-element content.")
+        tot.setToolTip("Transposable elements = the share of the assembly covered by TE-classified matches (LTR, LINE, "
+                       "SINE, DNA transposons, rolling-circle, retroposons, Penelope-like elements).\n"
+                       "All repeat classes = the separate contig-wise union of every repeat row, including "
+                       "tandem repeats (simple repeats, low-complexity sequence, satellites) and non-TE "
+                       "entries such as rRNA and tRNA genes.\n"
+                       "The categories are independently unioned and non-additive. Only the TE union is a statement "
+                       "about transposable-element content. Each headline uses a separate cross-model interval union, "
+                       "so a genomic base contributes at most once to that percentage; repeat-name/model rows use "
+                       "within-name/model unions and therefore must not be summed. Percentages use all submitted "
+                       "FASTA bases, including ambiguous bases.")
         lay.addWidget(tot)
-        prov = QLabel(f"Searched with RepeatMasker {r.get('repeatmasker_version')} against Dfam "
-                      f"{r.get('dfam_version')} ({r.get('library_families_for_species')} family models available "
-                      f"for this lineage) · sensitivity {r.get('sensitivity')} · "
+        library = self._annot_library_context(r)
+        prov = QLabel(f"{library['display']} · sensitivity {r.get('sensitivity')} · "
                       f"{r.get('chunks')} chunks · {r.get('elapsed_s')} s")
         prov.setObjectName("orient"); prov.setWordWrap(True)
-        prov.setToolTip("The exact tool and library this result came from. 'Family models available for this "
-                        "lineage' is how many family profiles the installed Dfam partitions hold for this "
-                        "organism — a small number means most of its TEs cannot be found, whatever the "
-                        "settings. Chunks are the pieces the assembly was split into so progress could be "
-                        "shown and the run resumed.")
+        prov.setToolTip(library["tooltip"])
         lay.addWidget(prov)
-        scope = QLabel("What this is: copies of families already present in the installed Dfam library, placed by "
-                       "homology. It is not a discovery of new families, and a family absent from the library "
-                       "cannot appear here — so absence is not evidence of absence. Percentages are of the whole "
-                       "assembly, including unplaced scaffolds.")
+        scope = QLabel(library["scope"])
         scope.setObjectName("orient"); scope.setWordWrap(True); lay.addWidget(scope)
         if r.get("coverage_warning"):
             cw = QLabel(r["coverage_warning"]); cw.setObjectName("errbanner"); cw.setWordWrap(True); lay.addWidget(cw)
-        fams = r.get("families") or []
+        repeat_names = r.get("repeat_names") or []
         t = DataTable([c[0] for c in self._ANNOT_COLS], dict(self._ANNOT_COLS))
-        t.set_rows([[f["family"], f["kind"], f["n"], f["bp"], f.get("percent"), f["divergence"]] for f in fams])
-        # Row menu matched to what the row IS. A landscape row is a per-family AGGREGATE, not a locus, so
+        t.set_rows([[row["repeat_name"], row.get("class_family"), self._annot_kind_label(row), row["n"], row["bp"],
+                     row.get("percent"), row["divergence"]] for row in repeat_names])
+        # Row menu matched to what the row IS. A landscape row is a per-name/model AGGREGATE, not a locus, so
         # it offers no "design primer here" or "copy sequence" — there is no single sequence behind it.
         # A tandem/other row additionally says why it is not counted as a transposable element.
-        t.set_row_menu(lambda r, _f=fams: self._annot_row_menu(_f[r]) if r < len(_f) else [])
+        t.set_row_menu(lambda r, _rows=repeat_names: self._annot_row_menu(_rows[r]) if r < len(_rows) else [])
         t.setMinimumHeight(round(260 * theme_mod.UI_SCALE)); lay.addWidget(t)
         # FigurePanel re-renders on theme/zoom, so it takes a builder (bg -> svg), not a rendered string.
         fig = FigurePanel(lambda bg, _r=r: figures.svg_te_composition(_r, theme=bg), "TEagle_TE_landscape")
@@ -3749,6 +3879,16 @@ class MainWindow(QMainWindow):
         self._genome_inflight = False
         self._refresh_genome_manager()                        # scan settled — re-enable a manager opened mid-scan
         if not d.get("ok"):
+            if d.get("cache_corrupt"):
+                ps = self._pending_scan or {}
+                org = ps.get("org") or self.genomeOrg.currentData()
+                acc = (all_assemblies().get(org, {}) or {}).get("assemblyAccession", "")
+                self._pending_scan = None
+                msg = (f"The cached {org or 'selected'} genome ({acc or 'unknown accession'}) failed its "
+                       "integrity check. Open Manage genomes, remove that cached genome, then download it "
+                       "again before scanning. TEagle did not run isPcr on the altered cache.")
+                self._render_genome_status(msg, "warn")
+                return self._banner(msg, "warn")
             if d.get("need_prepare"):                         # genome not downloaded yet — offer the one-time download
                 ps = self._pending_scan or {}
                 org = ps.get("org") or self.genomeOrg.currentData()   # the org that STARTED this scan, not the live dropdown
@@ -3970,10 +4110,12 @@ class MainWindow(QMainWindow):
         # offer the library choice only once the uncurated partitions are actually on the machine —
         # a curated-only backend has nothing extra to search, so the option would promise a search it
         # cannot run. Read from the library famdb reports, not from an assumption about the install.
-        _parts = ((w.get("dfam_library") or {}).get("partitions")) or []
         # tracked explicitly, not read back off isVisible(): a widget inside a collapsed card reports
         # not-visible, and reading the choice from that would silently discard what the user selected
-        self._uncurated_available = any("uncurated" in str(p).lower() for p in _parts)
+        # The backend sets this only when BOTH optional Dfam shards passed its file probe. Looking for an
+        # "uncurated" partition name here would expose a search choice after a partial install that the
+        # backend must reject.
+        self._uncurated_available = bool(w.get("dfam_uncurated"))
         self.wslLibraryRow.setVisible(self._uncurated_available)
         if w.get("ready"):
             # name the partitions actually on the machine — "Dfam curated" was fixed text and read as a
@@ -4451,6 +4593,28 @@ def selftest():
             problems.append("certifi CA bundle did not load into the TLS context")
     except Exception as e:
         problems.append(f"TLS trust-store self-check failed: {type(e).__name__}: {e}")
+    # Vector PDF export relies on metadata minimisation after Qt writes the page. Exercise the actual
+    # write-clean-read path so a frozen build cannot pass merely because the dependency imports.
+    try:
+        import tempfile
+        from pypdf import PdfReader, PdfWriter
+        from teagle_core.artifact_metadata import (
+            AUTHOR, clean_pdf_metadata, media_metadata_violations)
+        with tempfile.TemporaryDirectory(prefix="teagle-selftest-") as temporary:
+            path = os.path.join(temporary, "metadata-cycle.pdf")
+            writer = PdfWriter()
+            writer.add_blank_page(width=72, height=72)
+            writer.add_metadata({"/Author": AUTHOR, "/Title": "metadata self-check"})
+            writer.write(path)
+            clean_pdf_metadata(path)
+            violations = media_metadata_violations(path)
+            reader = PdfReader(path)
+            if violations:
+                problems.append("PDF metadata-cleaning cycle failed: " + "; ".join(violations))
+            if len(reader.pages) != 1:
+                problems.append("PDF metadata-cleaning cycle did not preserve its page")
+    except Exception as e:
+        problems.append(f"PDF metadata-cleaning cycle crashed: {type(e).__name__}: {e}")
     # the installer dialog must construct offscreen (it ships in the frozen build)
     try:
         from install_dialog import InstallDialog

@@ -104,7 +104,7 @@ def oligoqc_refs():
     return [{"key": k, **REFS[k]} for k in keys]
 
 
-def for_run(run_type: str, domains=None, fetched: bool = False):
+def for_run(run_type: str, domains=None, fetched: bool = False, annotate_dfam: bool = True):
     """Return the references actually used to produce this result."""
     keys = []
     if run_type == "analysis":
@@ -114,7 +114,10 @@ def for_run(run_type: str, domains=None, fetched: bool = False):
     if run_type == "primer":                   # Primer3 designs primers; in-silico PCR is TEagle's own pure-Python scanner,
         keys += ["Primer3"]                     # so its seal must not carry (and depend on) the primer3-py version
     if run_type == "annotate":
-        keys += ["RepeatMasker", "Dfam", "Wicker2007"]
+        keys += ["RepeatMasker"]
+        if annotate_dfam:
+            keys += ["Dfam"]
+        keys += ["Wicker2007"]
     if run_type == "splice":
         keys += ["minimap2"]
     if run_type == "homology":                 # protein-to-genome evidence; Dfam added when the bundled library is used

@@ -31,7 +31,8 @@ def _capture_script(monkeypatch):
     monkeypatch.setattr(wsl, "_wsl_script", fake_script)
     monkeypatch.setattr(wsl, "_wsl", fake_wsl)
     monkeypatch.setattr(wsl, "resolve_species", lambda s: {"ok": True})
-    monkeypatch.setattr(wsl, "env_status", lambda: {"ready": True, "repeatmasker": "4.2.4", "dfam": True})
+    monkeypatch.setattr(wsl, "env_status", lambda: {"ready": True, "repeatmasker": "4.2.4", "dfam": True,
+                                                     "dfam_uncurated": True})
     return seen
 
 
@@ -44,11 +45,12 @@ def test_uncurated_flag_reaches_the_repeatmasker_command(monkeypatch, unc, expec
     assert ("-uncurated" in joined) is expect
 
 
-def test_no_species_never_smuggles_the_flag_in(monkeypatch):
-    """The flag rides on the -species argument; without a lineage there is no argument to carry it."""
+def test_uncurated_without_species_fails_before_repeatmasker(monkeypatch):
+    """Silently downgrading the requested search would mislabel a curated-only result as the user's choice."""
     seen = _capture_script(monkeypatch)
-    wsl.annotate(">x\nACGT", species=None, include_uncurated=True)
-    assert "-uncurated" not in "\n".join(seen.get("scripts", []))
+    result = wsl.annotate(">x\nACGT", species=None, include_uncurated=True)
+    assert result["ok"] is False and "select an organism" in result["error"]
+    assert seen.get("scripts", []) == []
 
 
 def test_engine_threads_the_choice_through_and_seals_it(monkeypatch):
@@ -135,7 +137,8 @@ def test_library_choice_is_offered_only_once_the_partitions_are_installed():
     w._on_wsl_status({**base, "dfam_library": {"partitions": ["0 [root]: curated"]}})
     # tracked explicitly: isVisible() is False for a widget in an unshown or collapsed card either way
     assert w._uncurated_available is False        # offering it would promise a search the machine cannot run
-    w._on_wsl_status({**base, "dfam_library": {"partitions": _PARTS}})
+    w._on_wsl_status({**base, "dfam_uncurated": True,
+                      "dfam_library": {"partitions": _PARTS}})
     assert w._uncurated_available is True
     assert [w.wslLibrary.itemData(i) for i in range(w.wslLibrary.count())] == [False, True]
     assert w.wslLibrary.currentData() is False    # curated-only stays the default, as RepeatMasker's own is
@@ -146,7 +149,8 @@ def test_the_choice_is_read_from_state_not_from_widget_visibility():
     curated-only while the user had selected otherwise."""
     w = _win()
     base = {"wsl2": True, "ready": True, "distro": "Ubuntu-24.04", "repeatmasker": "4.2.4"}
-    w._on_wsl_status({**base, "dfam_library": {"partitions": _PARTS}})
+    w._on_wsl_status({**base, "dfam_uncurated": True,
+                      "dfam_library": {"partitions": _PARTS}})
     w.wslLibrary.setCurrentIndex(1)                       # "Include uncurated families"
     w.card_wsl.collapse() if hasattr(w.card_wsl, "collapse") else w.wslLibraryRow.setVisible(False)
     sent = {}

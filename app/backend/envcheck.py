@@ -102,6 +102,7 @@ _IMPORT_NAME = {
     "PySide6": "PySide6",
     "openpyxl": "openpyxl",
     "certifi": "certifi",
+    "pypdf": "pypdf",
     "ViennaRNA": "RNA",  # ViennaRNA imports as RNA when it is deliberately enabled.
 }
 _SOURCE_ONLY = set()                                            # every pinned dep ships in the frozen native build

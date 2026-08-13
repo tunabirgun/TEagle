@@ -138,8 +138,8 @@ def parse_famdb_info(text: str):
 def env_status() -> dict:
     """Report the annotation stack state inside WSL (RepeatMasker version, Dfam library, minimap2)."""
     av = available()
-    st = {**av, "repeatmasker": None, "engine": None, "dfam": False, "minimap2": None,
-          "dfam_library": None, "dfam_version": None, "ready": False}
+    st = {**av, "repeatmasker": None, "engine": None, "dfam": False, "dfam_uncurated": False,
+          "minimap2": None, "dfam_library": None, "dfam_version": None, "ready": False}
     if not av["wsl2"]:
         return st
     try:
@@ -152,6 +152,8 @@ def env_status() -> dict:
             f'{_MM} run -n te RepeatMasker -v 2>/dev/null | head -1\n'
             f'echo "dfam_root=$([ -f "{_famdb}/dfam40.0.h5" ] && echo 1 || echo 0)"\n'
             f'echo "dfam_curated=$([ -f "{_famdb}/dfam40.curated.consensus.0.h5" ] && echo 1 || echo 0)"\n'
+            f'echo "dfam_unc_root=$([ -f "{_famdb}/dfam40.uncurated.consensus.0.h5" ] && echo 1 || echo 0)"\n'
+            f'echo "dfam_unc_euk=$([ -f "{_famdb}/dfam40.uncurated.consensus.1.h5" ] && echo 1 || echo 0)"\n'
             f'echo "{_FAMDB_B}"\n'
             f'{_MM} run -n te famdb.py info 2>/dev/null\n'
             f'echo "{_FAMDB_E}"\n'
@@ -167,6 +169,8 @@ def env_status() -> dict:
         st["repeatmasker"] = m.group(1) if m else None
         # require BOTH pinned Dfam partitions — a root-only library is incomplete and must not gate annotation
         st["dfam"] = ("dfam_root=1" in out) and ("dfam_curated=1" in out)
+        # The optional search is truthful only when both uncurated consensus partitions are present.
+        st["dfam_uncurated"] = ("dfam_unc_root=1" in out) and ("dfam_unc_euk=1" in out)
         mm = re.search(r"^(\d+\.\d+[\w.-]*)$", out.strip().splitlines()[-1]) if out.strip() else None
         st["minimap2"] = mm.group(1) if mm else None
         st["ready"] = bool(st["repeatmasker"] and st["dfam"])
@@ -835,7 +839,7 @@ _COMP_META = [
      "'include uncurated families' library option to actually use what this downloads. Measured on baker's "
      f"yeast, curated-only searches {_DFAM_YEAST_CURATED} of {_DFAM_YEAST_TOTAL} family models and finds "
      f"no transposable element at all, while including uncurated adds {_DFAM_YEAST_ADDITIONAL} models and "
-     "finds Ty elements over 4.5% of the genome. Expect roughly 40-60 minutes: Dfam serves "
+      "recovers the yeast Ty families. Expect roughly 40-60 minutes: Dfam serves "
      "this file at about 2 MB/s per client, and measured here, splitting it across parallel connections "
      "made it SLOWER, not faster. The download resumes where it stopped if it is interrupted, so a failed "
      "attempt does not start over. There is no smaller alternative: RepeatMasker's RMBLAST engine reads the "
@@ -1261,7 +1265,14 @@ def annotate(fasta_text: str, species: str | None = None, threads: int = 4, time
         if not chk.get("ok"):
             return {"ok": False, "error": chk["error"], "ambiguous_species": chk.get("ambiguous", False)}
         sp = f'-species "{species}"' + (" -uncurated" if include_uncurated else "")
+    elif include_uncurated:
+        return {"ok": False, "error": "select an organism/lineage before including uncurated Dfam families",
+                "uncurated_available": True}
     st = env_status()
+    if include_uncurated and not st.get("dfam_uncurated"):
+        return {"ok": False, "error": "the optional uncurated Dfam partitions are not installed; install "
+                "both uncurated partitions in the backend manager or use curated families only",
+                "status": st, "uncurated_available": False}
     if not st["ready"]:
         return {"ok": False, "error": "WSL annotation backend not ready "
                 f"(RepeatMasker={st['repeatmasker']}, Dfam={st['dfam']})", "status": st}
@@ -1550,6 +1561,25 @@ def _ispcr_ver(banner: str) -> str:
     return m.group(1) if m else "unknown"
 
 
+_CACHE_CORRUPT_MARKER = "CACHE_CORRUPT"
+_CACHE_RECOVERY = "Open Manage genomes, remove this cached genome, then download it again."
+
+
+def _operation_failure(prefix: str, output: str, stderr: str = "", *, partial: bool = False) -> dict:
+    """Translate a shell failure while preserving a recoverable cache-integrity diagnosis."""
+    failure = next((line for line in output.splitlines() if line.startswith("FAIL")), "")
+    detail = failure[4:].strip() if failure else (stderr or "").strip()[:200]
+    cache_corrupt = _CACHE_CORRUPT_MARKER in detail
+    detail = detail.replace(_CACHE_CORRUPT_MARKER, "").strip(" :-") or "unknown error"
+    result = {"ok": False, "error": f"{prefix}: {detail}"}
+    if cache_corrupt:
+        result["cache_corrupt"] = True
+        result["error"] = result["error"].rstrip(".") + ". " + _CACHE_RECOVERY
+    if partial:
+        result["partial"] = True
+    return result
+
+
 # download the assembly, convert to compact 2bit (best-effort), seal the SOURCE FASTA sha256 (machine-
 # independent, unlike the version-dependent 2bit), mark .done for idempotent resume. __ACC__ is a
 # validated accession (safe to interpolate); no untrusted input enters the script.
@@ -1565,7 +1595,23 @@ GDIR="$HOME/teagle_genomes/$ACC"
 LOG="$HOME/teagle_genome_prepare.log"
 plog(){ echo "[prep] $1"; echo "$1" >> "$LOG"; }
 mkdir -p "$GDIR" || { echo "FAIL mkdir"; exit 1; }
-if [ -f "$GDIR/.done" ] && [ -f "$GDIR/meta.txt" ]; then echo "PREPARED"; cat "$GDIR/meta.txt"; exit 0; fi
+# A completion marker is only a hint. Recompute the cached target checksum before every reuse so a
+# truncated or modified cache can never be returned as PREPARED. Version-3.8.0 FASTA caches remain
+# verifiable because their target is the sealed source FASTA; legacy 2bit caches have no target checksum
+# and must be downloaded once more rather than being trusted without evidence.
+verify_prepared(){
+  TARGET=$(sed -n 's/^target=//p' "$GDIR/meta.txt" | head -1)
+  case "$TARGET" in genome.fna|genome.2bit) ;; *) echo "FAIL CACHE_CORRUPT cached genome metadata has an invalid target"; return 1 ;; esac
+  WANT=$(sed -n 's/^target_sha256=//p' "$GDIR/meta.txt" | head -1)
+  [ -n "$WANT" ] || { [ "$TARGET" = "genome.fna" ] && WANT=$(sed -n 's/^sha256=//p' "$GDIR/meta.txt" | head -1); }
+  [ -n "$WANT" ] || { echo "FAIL CACHE_CORRUPT cached genome has no sealed target checksum"; return 1; }
+  [ -s "$GDIR/$TARGET" ] || { echo "FAIL CACHE_CORRUPT cached genome target is missing or empty"; return 1; }
+  GOT=$(sha256sum "$GDIR/$TARGET" | cut -d' ' -f1)
+  [ "$GOT" = "$WANT" ] || { echo "FAIL CACHE_CORRUPT cached genome target failed its sealed checksum"; return 1; }
+  echo "PREPARED"
+  cat "$GDIR/meta.txt"
+}
+if [ -f "$GDIR/.done" ] && [ -f "$GDIR/meta.txt" ]; then verify_prepared || exit 1; exit 0; fi
 # atomic per-genome lock so two concurrent prepares of the same accession can't race on dl.zip / genome.2bit
 # / meta.txt and leave a half-written cache; a lock orphaned by a crash (dead PID) is reaped.
 LOCK="$GDIR/.lock"
@@ -1573,7 +1619,7 @@ if [ -d "$LOCK" ] && { [ ! -f "$LOCK/pid" ] || ! kill -0 "$(cat "$LOCK/pid" 2>/d
 if ! mkdir "$LOCK" 2>/dev/null; then echo "FAIL a download for this genome is already running"; exit 1; fi
 echo $$ > "$LOCK/pid"
 trap 'rm -rf "$LOCK" 2>/dev/null' EXIT
-[ -f "$GDIR/.done" ] && { echo "PREPARED"; cat "$GDIR/meta.txt"; exit 0; }   # another prepare finished while we waited
+if [ -f "$GDIR/.done" ] && [ -f "$GDIR/meta.txt" ]; then verify_prepared || exit 1; exit 0; fi   # another prepare finished while we waited
 cd "$GDIR"
 avail=$(df -BG --output=avail . 2>/dev/null | tail -1 | tr -dc '0-9'); avail=${avail:-0}
 # blanket floor sized for a mammalian genome's peak (extracted FASTA ~3G + 2bit ~0.8G); the zip is freed
@@ -1617,8 +1663,10 @@ else
   mv "$FNA" genome.fna 2>/dev/null || cp "$FNA" genome.fna; TARGET="genome.fna"
 fi
 TBYTES=$(stat -c %s "$TARGET" 2>/dev/null || echo 0)
+TSHA=$(sha256sum "$TARGET" | cut -d' ' -f1)
+[ -n "$TSHA" ] || { echo "FAIL target checksum failed"; exit 1; }
 rm -rf ex
-printf 'accession=%s\ntarget=%s\nsha256=%s\nn_seqs=%s\nbytes=%s\n' "$ACC" "$TARGET" "$FSHA" "$NSEQ" "$TBYTES" > meta.txt
+printf 'accession=%s\ntarget=%s\nsha256=%s\ntarget_sha256=%s\nn_seqs=%s\nbytes=%s\n' "$ACC" "$TARGET" "$FSHA" "$TSHA" "$NSEQ" "$TBYTES" > meta.txt
 touch .done
 plog "done"
 echo "PREPARED"
@@ -1646,8 +1694,7 @@ def genome_prepare(accession: str, assembly_name: str = "", timeout: int = 3600)
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
     meta = _parse_meta(out)
     if "PREPARED" not in out or not meta.get("sha256"):
-        fl = next((l for l in out.splitlines() if l.startswith("FAIL")), "") or err.strip()[:200]
-        return {"ok": False, "error": "genome preparation failed: " + (fl.replace("FAIL", "").strip() or "unknown error")}
+        return _operation_failure("genome preparation failed", out, err)
     return {"ok": True, "accession": accession, "assembly_name": assembly_name,
             "target": meta.get("target"), "sha256": meta.get("sha256"),
             "n_seqs": int(meta.get("n_seqs", 0) or 0), "bytes": int(meta.get("bytes", 0) or 0)}
@@ -1672,12 +1719,39 @@ def genome_scan(accession: str, query_text: str, max_size: int = 4000, min_size:
     av = available()
     if not av["wsl2"]:
         return {"ok": False, "error": "WSL2 not available"}
-    rc, out, _ = _wsl(f'[ -f "{_GENOMES}/{accession}/.done" ] && cat "{_GENOMES}/{accession}/meta.txt" || echo NOTPREP',
-                      timeout=20)
+    # Verify the cached search target against its sealed target checksum before isPcr reads it. The source
+    # FASTA checksum identifies the assembly; target_sha256 separately protects a derived 2bit file. Legacy
+    # FASTA caches can use the source checksum, while legacy 2bit caches must be downloaded once more because
+    # no trustworthy target baseline exists for them.
+    probe = f'''GDIR="{_GENOMES}/{accession}"
+if [ ! -f "$GDIR/.done" ] || [ ! -f "$GDIR/meta.txt" ]; then echo NOTPREP; exit 0; fi
+TARGET=$(sed -n 's/^target=//p' "$GDIR/meta.txt" | head -1)
+case "$TARGET" in genome.fna|genome.2bit) ;; *) echo "CACHE_BAD invalid target metadata"; exit 0 ;; esac
+SOURCE_SHA=$(sed -n 's/^sha256=//p' "$GDIR/meta.txt" | head -1)
+WANT=$(sed -n 's/^target_sha256=//p' "$GDIR/meta.txt" | head -1)
+[ -n "$WANT" ] || {{ [ "$TARGET" = "genome.fna" ] && WANT="$SOURCE_SHA"; }}
+[ -n "$SOURCE_SHA" ] && [ -n "$WANT" ] || {{ echo "CACHE_BAD missing sealed checksum"; exit 0; }}
+[ -s "$GDIR/$TARGET" ] || {{ echo "CACHE_BAD target missing or empty"; exit 0; }}
+GOT=$(sha256sum "$GDIR/$TARGET" | cut -d' ' -f1)
+[ "$GOT" = "$WANT" ] || {{ echo "CACHE_BAD checksum mismatch"; exit 0; }}
+echo CACHE_OK
+cat "$GDIR/meta.txt"
+'''
+    rc, out, err = _wsl_script(probe, timeout=30)
+    if rc != 0:
+        return {"ok": False, "error": "could not verify the cached genome: " + err.strip()[:160]}
+    if "CACHE_BAD" in out:
+        detail = next((line.partition("CACHE_BAD")[2].strip() for line in out.splitlines()
+                       if line.startswith("CACHE_BAD")), "integrity check failed")
+        return {"ok": False, "error": "cached genome failed its integrity check (" + detail
+                + "); remove it in Manage genomes, then download it again", "cache_corrupt": True}
     if "NOTPREP" in out or "accession=" not in out:
         return {"ok": False, "error": "genome not prepared — download it first", "need_prepare": True}
     meta = _parse_meta(out)
-    target = meta.get("target") or "genome.fna"
+    if not re.fullmatch(r"[0-9a-fA-F]{64}", meta.get("sha256", "")):
+        return {"ok": False, "error": "cached genome metadata has no valid sealed source checksum; "
+                "remove it in Manage genomes, then download it again", "cache_corrupt": True}
+    target = meta.get("target")
     rid = "teagle_" + secrets.token_hex(6)
     try:
         rc, _o, err = _wsl(f'mkdir -p /tmp/{rid} && cat > /tmp/{rid}/q.txt', stdin=query_text.encode(), timeout=60)
@@ -1752,6 +1826,8 @@ trap 'rm -rf "$LOCK" 2>/dev/null' EXIT
 
 # 1) a FASTA is required (the cache keeps a compact 2bit for isPcr; RepeatMasker needs the sequence).
 FNA="$GDIR/genome.fna"
+WANT=$(sed -n 's/^sha256=//p' "$GDIR/meta.txt" | head -1)
+[ -n "$WANT" ] || { echo "FAIL CACHE_CORRUPT prepared genome has no sealed source FASTA checksum"; exit 1; }
 if [ ! -s "$FNA" ]; then
   plog "fetching genome FASTA (one time; kept for later runs)"
   cd "$GDIR" || exit 1
@@ -1771,11 +1847,14 @@ if [ ! -s "$FNA" ]; then
   [ -n "$SRC" ] || { echo "FAIL no genomic fna in package"; exit 1; }
   # the sealed identity is the SOURCE FASTA sha256 recorded at prepare time; refuse to annotate a file
   # that is not the sequence this genome was sealed from, rather than silently annotating something else.
-  WANT=$(sed -n 's/^sha256=//p' "$GDIR/meta.txt")
   GOT=$(sha256sum "$SRC" | cut -d' ' -f1)
-  if [ -n "$WANT" ] && [ "$WANT" != "$GOT" ]; then rm -rf aex; echo "FAIL fetched FASTA does not match the sealed genome checksum"; exit 1; fi
+  if [ "$WANT" != "$GOT" ]; then rm -rf aex; echo "FAIL CACHE_CORRUPT fetched FASTA does not match the sealed genome checksum"; exit 1; fi
   mv "$SRC" "$FNA" 2>/dev/null || cp "$SRC" "$FNA"; rm -rf aex
 fi
+# Do not trust an existing genome.fna merely because it was checked when first downloaded. Rehash it on
+# every annotation and fail before reading or reusing any chunk if its bytes no longer match the seal.
+GENOME_SHA=$(sha256sum "$FNA" | cut -d' ' -f1)
+[ "$GENOME_SHA" = "$WANT" ] || { echo "FAIL CACHE_CORRUPT cached genome FASTA failed its sealed checksum"; exit 1; }
 
 # 2) disk: the chunk set is written up front and each chunk is deleted as it is consumed, so the peak
 # extra requirement is one FASTA. Derived from the actual file, never a fixed number.
@@ -1790,7 +1869,7 @@ availg=$(df -BG --output=avail "$GDIR" 2>/dev/null | tail -1 | tr -dc '0-9'); av
 # disk. Otherwise half the assembly is searched one way and half another, and the seal — which records a
 # single value for each — would describe a run that never happened. The parameters are written beside the
 # chunks at first split and compared on every resume; a mismatch stops the run and says what differs.
-RUNSIG="species=__SPSIG__|sens=$SENS|chunkbp=$CHUNKBP"
+RUNSIG="genome_sha256=$GENOME_SHA|species=__SPSIG__|sens=$SENS|chunkbp=$CHUNKBP"
 if [ -f "$ADIR/.runsig" ]; then
   OLDSIG=$(cat "$ADIR/.runsig")
   if [ "$OLDSIG" != "$RUNSIG" ]; then
@@ -1801,7 +1880,10 @@ fi
 printf '%s' "$RUNSIG" > "$ADIR/.runsig"
 if [ ! -f "$ADIR/.split_done" ]; then
   plog "splitting genome into work chunks"
-  rm -f "$ADIR"/chunk_*.fa
+  # No completion marker means the split was interrupted. Rebuild that scratch set from the verified
+  # genome instead of mixing it with unsealed partial inputs or outputs from the aborted attempt.
+  rm -f "$ADIR"/chunk_*.fa "$ADIR"/chunk_*.input.sha256 "$ADIR"/chunk_*.out \
+        "$ADIR"/chunk_*.out.sha256 "$ADIR"/all.out
   awk -v dir="$ADIR" -v lim="$CHUNKBP" '
     /^>/ { if (n > 0 && bp >= lim) { close(f); i++; bp = 0 }
            if (f == "") { i = 1 } ; f = sprintf("%s/chunk_%04d.fa", dir, i); n++ }
@@ -1809,8 +1891,54 @@ if [ ! -f "$ADIR/.split_done" ]; then
     { print >> f }
     !/^>/ { bp += length($0) }
   ' "$FNA" || { echo "FAIL split"; exit 1; }
+  SPLIT_N=0
+  for c in "$ADIR"/chunk_*.fa; do
+    [ -e "$c" ] || continue
+    SPLIT_N=$((SPLIT_N+1))
+    sha256sum "$c" | cut -d' ' -f1 > "${c%.fa}.input.sha256" \
+      || { echo "FAIL could not seal work chunk $c"; exit 1; }
+  done
+  [ "$SPLIT_N" -ge 1 ] || { echo "FAIL no chunks produced"; exit 1; }
   touch "$ADIR/.split_done"
 fi
+
+# A resume may reuse work written hours or days earlier. Verify every pending FASTA before RepeatMasker
+# reads it and every completed output before it is credited to the final summary. Runs created before
+# these seals existed stop explicitly: there is no defensible baseline from which to infer integrity.
+verify_chunk_inputs(){
+  for c in "$ADIR"/chunk_*.fa; do
+    [ -e "$c" ] || continue
+    seal="${c%.fa}.input.sha256"
+    [ -f "$seal" ] || { echo "FAIL pending work chunk lacks its integrity seal; discard this partial run"; return 1; }
+    want_chunk=$(head -1 "$seal")
+    got_chunk=$(sha256sum "$c" | cut -d' ' -f1)
+    [ "$got_chunk" = "$want_chunk" ] \
+      || { echo "FAIL pending work chunk failed its integrity seal; discard this partial run"; return 1; }
+  done
+}
+verify_finished_outputs(){
+  for o in "$ADIR"/chunk_*.out; do
+    [ -e "$o" ] || continue
+    seal="$o.sha256"
+    [ -f "$seal" ] || { echo "FAIL completed annotation output lacks its integrity seal; discard this partial run"; return 1; }
+    want_out=$(head -1 "$seal")
+    got_out=$(sha256sum "$o" | cut -d' ' -f1)
+    [ "$got_out" = "$want_out" ] \
+      || { echo "FAIL completed annotation output failed its integrity seal; discard this partial run"; return 1; }
+  done
+}
+verify_chunk_inputs || exit 1
+verify_finished_outputs || exit 1
+# A process can die after committing a valid output and its seal but before deleting the corresponding
+# input. Both files then describe one completed chunk, not two chunks. Because both sides were verified
+# above, finish that interrupted commit now; otherwise progress and sealed chunk counts double-count it.
+for c in "$ADIR"/chunk_*.fa; do
+  [ -e "$c" ] || continue
+  base="${c%.fa}"
+  [ -f "$base.out" ] || continue
+  rm -f "$c" "$base.input.sha256" "$c.masked" "$c.cat" "$c.cat.gz" "$c.tbl" "$c.ori.out" \
+    || { echo "FAIL could not reconcile a committed annotation chunk"; exit 1; }
+done
 # a finished chunk has its .fa deleted and its .out kept, so the work total is pending + finished — counting
 # only the .fa files made a fully-completed genome look like "no chunks produced" on a re-run.
 PEND_N=$(ls "$ADIR"/chunk_*.fa 2>/dev/null | wc -l)
@@ -1836,42 +1964,94 @@ for c in chunk_*.fa; do
   ec=$?
   if [ "$ec" != "0" ]; then echo "FAIL RepeatMasker exited $ec on chunk $idx: $(tail -3 "$base.rmlog" | tr '\n' ' ')"; exit 1; fi
   # RepeatMasker writes <chunk>.fa.out; a chunk with no repeats legitimately produces a header-only file.
-  if [ -f "$c.out" ]; then mv "$c.out" "$base.out"; else printf '' > "$base.out"; fi
-  rm -f "$c" "$c.masked" "$c.cat" "$c.cat.gz" "$c.tbl" "$c.ori.out" 2>/dev/null
+  # Commit the seal before moving the output into its resumable name. A crash between those moves leaves
+  # the input intact and can safely rerun; it never leaves an apparently completed, unsealed output.
+  [ -f "$c.out" ] || printf '' > "$c.out"
+  sha256sum "$c.out" | cut -d' ' -f1 > "$base.out.sha256.tmp" \
+    || { echo "FAIL could not seal completed annotation output for chunk $idx"; exit 1; }
+  mv "$base.out.sha256.tmp" "$base.out.sha256" \
+    || { echo "FAIL could not commit annotation output seal for chunk $idx"; exit 1; }
+  mv "$c.out" "$base.out" \
+    || { echo "FAIL could not commit completed annotation output for chunk $idx"; exit 1; }
+  rm -f "$c" "$base.input.sha256" "$c.masked" "$c.cat" "$c.cat.gz" "$c.tbl" "$c.ori.out" 2>/dev/null
   echo "CHUNK_DONE $idx/$TOTAL"
 done
 
 # 5) combine + summarise. The summary is computed HERE so the app never reads the per-hit rows: for each
-# repeat class/family, the hit count, the bases covered, and the divergence averaged weighted by length.
+# RepeatMasker repeat name/model, its class/family label, the alignment-row count, the bases covered, and divergence
+# averaged weighted by length.
+verify_finished_outputs || exit 1
+FINAL_GENOME_SHA=$(sha256sum "$FNA" | cut -d' ' -f1)
+[ "$FINAL_GENOME_SHA" = "$GENOME_SHA" ] \
+  || { echo "FAIL CACHE_CORRUPT genome FASTA changed during annotation; no result was sealed"; exit 1; }
 plog "summarising"
 cat chunk_*.out > all.out 2>/dev/null || true
 GENOME_BP=$(awk '!/^>/ { t += length($0) } END { print t+0 }' "$FNA")
-echo "GENOME_SHA256 $(sed -n 's/^sha256=//p' "$GDIR/meta.txt")"
-# Coverage is computed on MERGED intervals, per family and overall. RepeatMasker legitimately emits
+echo "GENOME_SHA256 $GENOME_SHA"
+# BEGIN_COVERAGE_SUMMARY -- tests execute this exact production block on synthetic RepeatMasker rows.
+# Coverage is computed on interval unions. RepeatMasker legitimately emits
 # overlapping rows for the same bases (a younger element inserted into an older one, and its own
 # fragmented re-alignments), so summing row lengths double-counts sequence and can push the reported
-# coverage above what is actually masked. Rows are sorted by family and start, then merged before the
-# bases are counted; divergence stays length-weighted over the raw rows, where each alignment's own
-# divergence belongs. The row COUNT is reported as alignment rows, which is what it is.
-# sort by family, THEN contig, THEN start — merging needs rows grouped per (family, contig) and ordered
-# by position; sorting on family+start alone interleaves contigs and merges intervals that never touch.
-sort -k11,11 -k5,5 -k6,6n all.out 2>/dev/null | awk -v gbp="$GENOME_BP" '
+# coverage above what is actually masked. Per-name/model, all-repeat, and biological-kind unions are kept
+# separate so overlaps across names/models count once in each applicable headline. Divergence stays
+# length-weighted over raw rows. The row COUNT is reported as alignment rows, which is what it is.
+# RepeatMasker column 10 is the matched repeat name/model; column 11 is its broader class/family. Sort by
+# both, then contig and start. Grouping on column 11 alone collapses distinct names/models in the same class.
+sort -k10,10 -k11,11 -k5,5 -k6,6n all.out 2>/dev/null | awk -v gbp="$GENOME_BP" '
+  function flush_name() { if (have) bp[pn]+=(pe-ps+1) }
   $1 ~ /^[0-9]+$/ {
-    div=$2+0; qs=$6+0; qe=$7+0; seqid=$5; fam=$11
+    div=$2+0; qs=$6+0; qe=$7+0; seqid=$5; repeat_name=$10; classfam=$11
     if (qe < qs) { t=qs; qs=qe; qe=t }
-    n[fam]++; dv[fam]+=div*(qe-qs+1); wt[fam]+=(qe-qs+1); tot_n++
-    key=fam SUBSEP seqid
-    if (key != prev) { if (prev != "") { bp[pf]+=(pe-ps+1); gtot+=(pe-ps+1) } ; prev=key; pf=fam; ps=qs; pe=qe }
-    else if (qs > pe+1) { bp[pf]+=(pe-ps+1); gtot+=(pe-ps+1); ps=qs; pe=qe }
+    nkey=repeat_name SUBSEP classfam
+    names[nkey]=repeat_name; classes[nkey]=classfam
+    n[nkey]++; dv[nkey]+=div*(qe-qs+1); wt[nkey]+=(qe-qs+1); tot_n++
+    key=nkey SUBSEP seqid
+    if (!have || key != prev) { flush_name(); prev=key; pn=nkey; ps=qs; pe=qe; have=1 }
+    else if (qs > pe+1) { flush_name(); ps=qs; pe=qe }
     else if (qe > pe) { pe=qe }
   }
   END {
-    if (prev != "") { bp[pf]+=(pe-ps+1); gtot+=(pe-ps+1) }
-    printf "GENOME_BP %d\n", gbp
-    printf "TOTAL_HITS %d\nTOTAL_BP %d\n", tot_n+0, gtot+0
-    for (f in n) printf "FAM\t%s\t%d\t%d\t%.2f\n", f, n[f], bp[f], (wt[f]>0 ? dv[f]/wt[f] : 0)
+    flush_name()
+    printf "GENOME_BP %d\nTOTAL_HITS %d\n", gbp, tot_n+0
+    for (k in n) printf "REP\t%s\t%s\t%d\t%d\t%.2f\n", names[k], classes[k], n[k], bp[k], (wt[k]>0 ? dv[k]/wt[k] : 0)
   }
-'
+' || { echo "FAIL per-repeat-name/model coverage summary"; exit 1; }
+
+TOTAL_BP=$(sort -k5,5 -k6,6n all.out 2>/dev/null | awk '
+  function flush_interval() { if (have) total+=(pe-ps+1) }
+  $1 ~ /^[0-9]+$/ {
+    seqid=$5; qs=$6+0; qe=$7+0; if (qe < qs) { t=qs; qs=qe; qe=t }
+    if (!have || seqid != prev) { flush_interval(); prev=seqid; ps=qs; pe=qe; have=1 }
+    else if (qs > pe+1) { flush_interval(); ps=qs; pe=qe }
+    else if (qe > pe) { pe=qe }
+  }
+  END { flush_interval(); print total+0 }
+') || { echo "FAIL overall coverage summary"; exit 1; }
+printf "TOTAL_BP %d\n" "$TOTAL_BP"
+
+awk '
+  $1 ~ /^[0-9]+$/ {
+    head=$11; sub(/\/.*/, "", head)
+    if (head=="LTR" || head=="LINE" || head=="SINE" || head=="DNA" || head=="RC" || head=="Retroposon" || head=="PLE") kind="TE"
+    else if (head=="Simple_repeat" || head=="Low_complexity" || head=="Satellite") kind="tandem"
+    else kind="other"
+    qs=$6+0; qe=$7+0; if (qe < qs) { t=qs; qs=qe; qe=t }
+    printf "%s\t%s\t%d\t%d\n", kind, $5, qs, qe
+  }
+' all.out | sort -k1,1 -k2,2 -k3,3n | awk '
+  function flush_interval() { if (have) bp[pk]+=(pe-ps+1) }
+  {
+    kind=$1; seqid=$2; qs=$3+0; qe=$4+0; key=kind SUBSEP seqid
+    if (!have || key != prev) { flush_interval(); prev=key; pk=kind; ps=qs; pe=qe; have=1 }
+    else if (qs > pe+1) { flush_interval(); ps=qs; pe=qe }
+    else if (qe > pe) { pe=qe }
+  }
+  END { flush_interval(); for (k in bp) printf "KIND\t%s\t%d\n", k, bp[k] }
+' || { echo "FAIL repeat-kind coverage summary"; exit 1; }
+# END_COVERAGE_SUMMARY
+FINAL_GENOME_SHA=$(sha256sum "$FNA" | cut -d' ' -f1)
+[ "$FINAL_GENOME_SHA" = "$GENOME_SHA" ] \
+  || { echo "FAIL CACHE_CORRUPT genome FASTA changed during annotation; no result was sealed"; exit 1; }
 echo "ANNOT_OK"
 '''
 
@@ -1879,9 +2059,9 @@ echo "ANNOT_OK"
 _LIBDIR = "$HOME/micromamba/envs/te/share/RepeatMasker/Libraries/famdb"
 
 # RepeatMasker's class/family column mixes transposable elements with tandem and non-TE repeats. Reporting
-# one merged "% repeats" as a TE landscape would overstate TE content — a yeast run masks ~1.3% of the
-# genome while finding ZERO transposable elements (measured), all of it simple/low-complexity sequence.
-_TE_PREFIXES = ("LTR", "LINE", "SINE", "DNA", "RC", "Retroposon")
+# one merged "% repeats" as a TE landscape would overstate TE content: curated-only yeast annotation
+# can mask non-TE simple/low-complexity sequence while finding no TE-classified repeat name/model.
+_TE_PREFIXES = ("LTR", "LINE", "SINE", "DNA", "RC", "Retroposon", "PLE")
 _TANDEM = ("Simple_repeat", "Low_complexity", "Satellite")
 
 
@@ -1897,7 +2077,7 @@ def repeat_kind(family_class: str) -> str:
     return "other"
 
 
-def dfam_lineage_families(species: str) -> dict:
+def dfam_lineage_families(species: str, include_uncurated: bool = False) -> dict:
     """How many family models the INSTALLED Dfam partitions can actually supply for this lineage.
 
     This is the preflight that stops a multi-hour run from quietly producing a scientifically empty result.
@@ -1908,15 +2088,31 @@ def dfam_lineage_families(species: str) -> dict:
     transposable elements no matter how long it runs, and the user has to be told BEFORE starting."""
     if not species or not _SPECIES_RE.match(species):
         return {"ok": False, "error": "invalid species token"}
-    # the family lines end with "len=<n>"; everything above them is the CC0 banner, which must not be counted
-    script = (f'"{_MM}" run -n te famdb.py -i "{_LIBDIR}" families -a -f summary "{species}" 2>/dev/null '
+    # `famdb families` includes both curated and uncurated records unless -c is present. Match the
+    # preflight count to the library RepeatMasker will actually search: curated-only uses -c, while the
+    # selected curated+uncurated search deliberately omits it. The family lines end with "len=<n>";
+    # everything above them is the CC0 banner, which must not be counted.
+    curated_flag = "" if include_uncurated else " -c"
+    availability_gate = (
+        f'[ -f "{_LIBDIR}/dfam40.uncurated.consensus.0.h5" ] && '
+        f'[ -f "{_LIBDIR}/dfam40.uncurated.consensus.1.h5" ] || '
+        '{ echo "TEAGLE_UNCURATED_MISSING"; exit 3; }\n'
+        if include_uncurated else "")
+    script = (availability_gate
+              + f'"{_MM}" run -n te famdb.py -i "{_LIBDIR}" families -a{curated_flag} -f summary "{species}" 2>/dev/null '
               f'| grep -c "len="\n')
     try:
         rc, out, _ = _wsl_script(script, timeout=300)
+        if include_uncurated and (rc != 0 or "TEAGLE_UNCURATED_MISSING" in out):
+            return {"ok": False, "species": species, "include_uncurated": True,
+                    "uncurated_available": False,
+                    "error": "the optional uncurated Dfam partitions are not installed"}
         n = int((out.strip().splitlines() or ["0"])[-1] or 0)
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
-    return {"ok": True, "species": species, "families": n}
+    return {"ok": True, "species": species, "families": n,
+            "include_uncurated": bool(include_uncurated),
+            "uncurated_available": True if include_uncurated else None}
 
 
 def annotate_budget(genome_bytes: int = 0) -> dict:
@@ -1976,13 +2172,14 @@ def stage_library(path: str) -> dict:
 def genome_annotate(accession: str, species: str | None = None, threads: int = 4,
                     sensitivity: str = "default", chunk_mb: int = 40, timeout: int = 86400,
                     custom_lib: str | None = None, include_uncurated: bool = False) -> dict:
-    """Annotate every transposable element RepeatMasker can place in a cached assembly, against the
-    installed Dfam library. Chunked, resumable, and summarised inside WSL — the caller receives per-family
-    aggregates, never the millions of individual hits (those stay on disk for export).
+    """Run RepeatMasker against installed Dfam models or a replacing custom FASTA. The annotation is
+    chunked, resumable, and summarised inside WSL — the caller receives per-repeat-name/model aggregates, never the
+    millions of individual hits (those stay on disk for export).
 
     `sensitivity` is one of default / quick / slow, mapping to RepeatMasker's own speed-vs-recall flags.
-    The run is homology-bound: only families present in the installed library can be found, so the caller
-    must state which library was searched next to any coverage claim."""
+    Interspersed-repeat calls are homology-bound by the selected library, so the caller must state which
+    library was searched next to any coverage claim. RepeatMasker's separate simple/low-complexity screen
+    can still emit non-TE rows during a custom-library run."""
     if not _ACC_RE.match(accession or ""):
         return {"ok": False, "error": "invalid assembly accession"}
     sens = {"default": "", "quick": "-q", "slow": "-s"}.get(sensitivity)
@@ -2013,20 +2210,36 @@ def genome_annotate(accession: str, species: str | None = None, threads: int = 4
         # carries. Uncurated families are auto-generated and lower
         # confidence, so this stays the caller's decision rather than a silent default.
         sp = f'-species "{species}"' + (" -uncurated" if include_uncurated else "")
+    elif not lib_info and include_uncurated:
+        return {"ok": False, "error": "select an organism/lineage before including uncurated Dfam families",
+                "uncurated_available": True}
     st = env_status()
-    if not st["ready"]:
+    # RepeatMasker's -lib mode searches only the supplied FASTA and does not read FamDB. Requiring Dfam
+    # here would make a valid custom-library run unavailable because of a database it never uses.
+    backend_ready = bool(st.get("repeatmasker") and (lib_info or st.get("dfam")))
+    if not backend_ready:
         return {"ok": False, "error": "WSL annotation backend not ready "
                 f"(RepeatMasker={st['repeatmasker']}, Dfam={st['dfam']})", "status": st}
+    if include_uncurated and not lib_info and not st.get("dfam_uncurated"):
+        return {"ok": False, "error": "the optional uncurated Dfam partitions are not installed; install "
+                "both uncurated partitions in the backend manager or use curated families only",
+                "status": st, "uncurated_available": False}
     # the signature identifies WHICH library/lineage was searched, so a resume with a different one is
     # caught; the thread count is deliberately NOT part of it (it changes speed, never which families hit)
     # The INSTALLED PARTITION SET belongs in the signature too. Adding a Dfam partition changes which
     # families exist to be found, so chunks finished before an install and chunks finished after it were
     # searched against different libraries — the same "one run, two searches" defect as a changed species,
     # and just as invisible in the finished summary.
-    _parts = ",".join((st.get("dfam_library") or {}).get("partitions") or [])
-    spsig = ((f"lib:{lib_info['sha256'][:16]}" if lib_info else f"species:{species or 'all'}")
-             + f"|parts:{hashlib.sha256(_parts.encode()).hexdigest()[:12]}"
-             + f"|unc:{int(bool(include_uncurated))}")     # curated-only vs +uncurated is a different search
+    if lib_info:
+        # Dfam partitions and -uncurated are not read in -lib mode. An unused Dfam install/change must not
+        # invalidate resumable chunks produced from the same supplied FASTA.
+        spsig = f"lib:{lib_info['sha256']}"
+        include_uncurated = False
+    else:
+        _parts = ",".join((st.get("dfam_library") or {}).get("partitions") or [])
+        spsig = (f"species:{species or 'all'}"
+                 + f"|parts:{hashlib.sha256(_parts.encode()).hexdigest()[:12]}"
+                 + f"|unc:{int(bool(include_uncurated))}")  # curated-only vs +uncurated is a different search
     script = (_ANNOT_SCRIPT.replace("__ACC__", accession).replace("__PA__", str(max(1, int(threads))))
               .replace("__CHUNKBP__", str(max(1, int(chunk_mb)) * 1_000_000))
               .replace("__SENS__", sens).replace("__SPSIG__", spsig).replace("__SP__", sp))
@@ -2038,32 +2251,36 @@ def genome_annotate(accession: str, species: str | None = None, threads: int = 4
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
     if "ANNOT_OK" not in out:
-        fl = next((l for l in out.splitlines() if l.startswith("FAIL")), "") or err.strip()[:200]
-        return {"ok": False, "error": "genome annotation failed: " + (fl.replace("FAIL", "").strip() or "unknown error"),
-                "partial": True}
-    fams, totals = [], {}
+        return _operation_failure("genome annotation failed", out, err, partial=True)
+    repeat_names, totals = [], {}
     for line in out.splitlines():
-        if line.startswith("FAM\t"):
-            _, fam, n, bp, div = line.split("\t")
-            fams.append({"family": fam, "n": int(n), "bp": int(bp), "divergence": float(div)})
+        if line.startswith("REP\t"):
+            _, repeat_name, class_family, n, bp, div = line.split("\t")
+            repeat_names.append({"repeat_name": repeat_name, "class_family": class_family, "n": int(n),
+                                 "bp": int(bp), "divergence": float(div)})
         elif line.startswith(("TOTAL_HITS ", "TOTAL_BP ", "GENOME_BP ", "TOTAL_CHUNKS ")):
             k, v = line.split(); totals[k.lower()] = int(v)
+        elif line.startswith("KIND\t"):
+            _, kind, bp = line.split("\t")
+            totals[kind.lower() + "_bp"] = int(bp)
         elif line.startswith("GENOME_SHA256 "):
             totals["genome_sha256"] = line.split(None, 1)[1].strip()
     gbp = totals.get("genome_bp", 0)
     genome_sha = totals.get("genome_sha256")
-    by_kind = {"TE": 0, "tandem": 0, "other": 0}
-    for f in fams:
-        f["percent"] = round(100.0 * f["bp"] / gbp, 4) if gbp else None
-        f["kind"] = repeat_kind(f["family"])
-        by_kind[f["kind"]] += f["bp"]
-    fams.sort(key=lambda f: -f["bp"])
-    lib = st.get("dfam_library")
-    te_bp = by_kind["TE"]
-    n_te_fams = sum(1 for f in fams if f["kind"] == "TE")
+    for row in repeat_names:
+        row["percent"] = round(100.0 * row["bp"] / gbp, 4) if gbp else None
+        row["kind"] = repeat_kind(row["class_family"])
+    repeat_names.sort(key=lambda row: -row["bp"])
+    # Do not attach an installed-but-unused Dfam identity to a custom-library result.
+    lib = None if lib_info else st.get("dfam_library")
+    # Headline kind coverage comes from contig-wise unions emitted by the shell summary. Summing repeat-name/model
+    # totals would count a base twice whenever two TE repeat names/models overlap.
+    te_bp = totals.get("te_bp", 0)
+    n_te_names = len({row["repeat_name"] for row in repeat_names if row["kind"] == "TE"})
     # with a custom library the lineage count is meaningless — what was searched is the user's file
-    avail = dfam_lineage_families(species) if (species and not lib_info) else {"ok": False}
-    return {"ok": True, "accession": accession, "families": fams, "genome_sha256": genome_sha,
+    avail = (dfam_lineage_families(species, include_uncurated=include_uncurated)
+             if (species and not lib_info) else {"ok": False})
+    return {"ok": True, "accession": accession, "repeat_names": repeat_names, "genome_sha256": genome_sha,
             "total_hits": totals.get("total_hits", 0), "total_bp": totals.get("total_bp", 0),
             "genome_bp": gbp, "chunks": totals.get("total_chunks", 0),
             # masked_percent is EVERY repeat RepeatMasker placed; te_percent is the transposable-element
@@ -2071,8 +2288,8 @@ def genome_annotate(accession: str, species: str | None = None, threads: int = 4
             # several percent while containing no detected TE at all.
             "masked_percent": round(100.0 * totals.get("total_bp", 0) / gbp, 3) if gbp else None,
             "te_bp": te_bp, "te_percent": round(100.0 * te_bp / gbp, 3) if gbp else None,
-            "tandem_bp": by_kind["tandem"], "other_bp": by_kind["other"],
-            "te_family_count": n_te_fams,
+            "tandem_bp": totals.get("tandem_bp", 0), "other_bp": totals.get("other_bp", 0),
+            "te_repeat_name_count": n_te_names,
             "library_families_for_species": avail.get("families") if avail.get("ok") else None,
             # the honest headline when a run completes but the installed library had nothing to find with
             "library_kind": ("user-supplied FASTA library" if lib_info else
@@ -2080,12 +2297,18 @@ def genome_annotate(accession: str, species: str | None = None, threads: int = 4
                               else "installed Dfam partitions, curated only")),
             "custom_library": lib_info, "include_uncurated": bool(include_uncurated),
             "coverage_warning": (
-                None if n_te_fams else
-                (("No transposable-element family was found. The supplied library "
-                  f"({lib_info['name']}, {lib_info['sequences']} sequences) placed no TE in this assembly — "
-                  "check that the library matches this organism before drawing any conclusion.")
+                None if n_te_names else
+                ((("The supplied library produced homology matches, but none carried a recognized "
+                   "RepeatMasker TE class/family label. Those rows are retained as unclassified/other and "
+                   "excluded from TE coverage because their classification is unavailable, not because they "
+                   "were demonstrated to be non-TE. Use FASTA headers such as >name#LTR/Gypsy when a reference "
+                   "has a supported TE class.")
+                   if repeat_names else
+                  ("No TE-classified repeat name/model was found. The supplied library "
+                   f"({lib_info['name']}, {lib_info['sequences']} sequences) placed no repeat in this assembly — "
+                   "check that the library matches this organism before drawing any conclusion."))
                  if lib_info else
-                 ("No transposable-element family was found. This is a limit of what was SEARCHED, not a "
+                 ("No TE-classified repeat name/model was found. This is a limit of what was SEARCHED, not a "
                   "finding about the genome"
                   + (f" — the installed Dfam partitions hold {avail['families']} family model(s) for "
                      f"{species or 'this lineage'}" if avail.get("ok") else "")
@@ -2099,7 +2322,8 @@ def genome_annotate(accession: str, species: str | None = None, threads: int = 4
                      ". Uncurated families were already included, so consider whether Dfam covers this "
                      "lineage at all, or supply a species-specific library.")))),
             "repeatmasker_version": st["repeatmasker"], "dfam_version": (lib or {}).get("version"),
-            "dfam_library": lib, "species": species or "(all installed families)",
+            "dfam_library": lib,
+            "species": (None if lib_info else (species or "(all installed families)")),
             "sensitivity": sensitivity, "threads": int(threads), "chunk_mb": int(chunk_mb),
             "complete": True}
 

@@ -96,7 +96,8 @@ def test_absent_python_executable_cannot_pass(tmp_path):
     )
     result = _run_preflight(script, tmp_path / "missing-python.exe")
     assert result.returncode != 0
-    assert "not a runnable Python 3.12 executable" in result.stdout + result.stderr
+    output = " ".join((result.stdout + result.stderr).split())
+    assert "not a runnable Python 3.12 executable" in output
     assert not (script.parents[1] / "dist").exists()
 
 

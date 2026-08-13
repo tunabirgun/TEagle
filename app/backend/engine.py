@@ -628,17 +628,40 @@ def run_genome_list(body):
 
 
 def run_annotate_budget(body):
-    """CPU/RAM/disk the WSL backend can give a whole-genome annotation, plus how many Dfam family models
-    the installed partitions hold for the chosen lineage. The UI shows all of it BEFORE a run starts: an
-    annotation costs hours, and a lineage with no family models cannot produce a TE result at any cost."""
+    """CPU/RAM/disk available to a whole-genome annotation, plus the selected Dfam search-set count.
+
+    A user-supplied FASTA replaces Dfam, so its budget must not query or report an unrelated Dfam lineage
+    count. The request identity is echoed so the UI can discard a slower response from an earlier library
+    choice instead of rendering it under the newly selected one.
+    """
     b = body or {}
     r = wsl.annotate_budget(int(_num(b.get("genome_bytes"), 0)))
+    mode = b.get("library_mode")
+    if mode is None:
+        mode = "dfam_uncurated" if bool(b.get("include_uncurated")) else "dfam_curated"
+    if mode not in ("dfam_curated", "dfam_uncurated", "custom"):
+        raise BadRequest("library_mode must be dfam_curated, dfam_uncurated or custom")
+    r["library_mode"] = mode
+    if "budget_request_id" in b:
+        request_id = b.get("budget_request_id")
+        if isinstance(request_id, bool) or not isinstance(request_id, int) or request_id < 1:
+            raise BadRequest("budget_request_id must be a positive integer")
+        r["budget_request_id"] = request_id
     sp = b.get("species")
-    if sp:
+    if mode == "dfam_uncurated" and not sp:
+        r["library_ready"] = False
+        r["library_error"] = "select an organism/lineage before including uncurated Dfam families"
+        return r
+    if mode != "custom" and sp:
         if not isinstance(sp, str):
             raise BadRequest("species must be a string")
-        lib = wsl.dfam_lineage_families(sp)
+        lib = wsl.dfam_lineage_families(sp, include_uncurated=(mode == "dfam_uncurated"))
         r["library_families_for_species"] = lib.get("families") if lib.get("ok") else None
+        if mode == "dfam_uncurated":
+            r["uncurated_available"] = bool(lib.get("ok") and lib.get("uncurated_available") is not False)
+            if not r["uncurated_available"]:
+                r["library_ready"] = False
+                r["library_error"] = lib.get("error") or "the optional uncurated Dfam partitions are unavailable"
         r["species"] = sp
     return r
 
@@ -646,9 +669,9 @@ def run_annotate_budget(body):
 def run_genome_annotate(body):
     """Whole-genome TE annotation: RepeatMasker over a cached assembly, chunked and resumable.
 
-    Homology-bound by construction — only families present in the INSTALLED Dfam partitions can be found —
-    so the result carries the family count available for the lineage and, when nothing was found, an
-    explicit statement that this is a library-coverage limit rather than a fact about the genome."""
+    Homology-bound by construction: a Dfam-backed run can place only represented Dfam families, while a
+    custom FASTA replaces Dfam for interspersed-repeat homology. The result identifies the selected library
+    and states its coverage limit rather than treating an absent match as a fact about the genome."""
     acc = str(body.get("assemblyAccession", "")).strip()
     if not acc:
         raise BadRequest("choose a downloaded genome to annotate")
@@ -659,24 +682,51 @@ def run_genome_annotate(body):
     if sens not in ("default", "quick", "slow"):
         raise BadRequest("sensitivity must be default, quick or slow")
     t0 = time.time()
-    lib = body.get("custom_library") or None
-    if lib is not None and not isinstance(lib, str):
+    custom_path = body.get("custom_library") or None
+    if custom_path is not None and not isinstance(custom_path, str):
         raise BadRequest("custom_library must be a path")
     r = wsl.genome_annotate(acc, species=(sp or None), threads=int(_num(body.get("threads"), 4)),
                             sensitivity=sens, chunk_mb=int(_num(body.get("chunk_mb"), 40)),
-                            timeout=int(_num(body.get("timeout"), 86400)), custom_lib=lib,
+                            timeout=int(_num(body.get("timeout"), 86400)), custom_lib=custom_path,
                             include_uncurated=bool(body.get("include_uncurated")))
     if r.get("ok"):
         r["elapsed_s"] = round(time.time() - t0, 1)
-        references = refs.for_run("annotate", fetched=False)
+        custom = r.get("custom_library") if isinstance(r.get("custom_library"), dict) else None
+        if custom_path:
+            custom_sha = (custom or {}).get("sha256")
+            custom_n = (custom or {}).get("sequences")
+            if (not isinstance(custom_sha, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", custom_sha)
+                    or isinstance(custom_n, bool) or not isinstance(custom_n, int) or custom_n < 1):
+                return {"ok": False, "error": "annotation completed but the requested custom library did not "
+                        "return a valid checksum and positive sequence count; the result was not sealed",
+                        "partial": True}
+        references = refs.for_run("annotate", fetched=False, annotate_dfam=not bool(custom))
         r["references"] = references
-        lib = r.get("dfam_library") or {}
-        dfam_db = {"name": "Dfam (via famdb)",
-                   "version": lib.get("version") or "unresolved — famdb reported no library version"}
-        for src_k, dst_k in (("date", "releaseDate"), ("famdbFormat", "famdbFormat"),
-                             ("partitions", "partitions"), ("consensusSequences", "consensusSequences")):
-            if lib.get(src_k) is not None:
-                dfam_db[dst_k] = lib[src_k]
+        dfam_lib = r.get("dfam_library") or {}
+        if custom:
+            # File name is a display label, not scientific identity. The content hash and sequence count
+            # seal the library, so renaming the same bytes does not create a different experiment.
+            library_db = {"name": "User-supplied repeat library", "sha256": custom.get("sha256"),
+                          "sequences": custom.get("sequences"), "bytes": custom.get("bytes")}
+            library_db = {k: v for k, v in library_db.items() if v is not None}
+            not_run = ["Dfam database search (replaced by the user-supplied FASTA library)",
+                       "De novo family discovery (RepeatModeler/EDTA)"]
+        else:
+            library_db = {"name": "Dfam (via famdb)",
+                          "version": dfam_lib.get("version") or "unresolved — famdb reported no library version"}
+            for src_k, dst_k in (("date", "releaseDate"), ("famdbFormat", "famdbFormat"),
+                                 ("partitions", "partitions"), ("consensusSequences", "consensusSequences")):
+                if dfam_lib.get(src_k) is not None:
+                    library_db[dst_k] = dfam_lib[src_k]
+            not_run = ["De novo family discovery (RepeatModeler/EDTA)"]
+        genome_sha = r.get("genome_sha256")
+        genome_bp = r.get("genome_bp")
+        if not isinstance(genome_sha, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", genome_sha):
+            return {"ok": False, "error": "annotation completed but its verified genome checksum was missing; "
+                    "the result was not sealed", "partial": True}
+        if isinstance(genome_bp, bool) or not isinstance(genome_bp, int) or genome_bp < 1:
+            return {"ok": False, "error": "annotation completed but its verified genome length was missing; "
+                    "the result was not sealed", "partial": True}
         # The seal identifies the GENOME by the checksum recorded at prepare time and records every
         # parameter that changes which families could be found. `complete` is sealed too: a run that
         # stopped early must never be indistinguishable from one that covered the whole assembly.
@@ -689,21 +739,14 @@ def run_genome_annotate(body):
              # the same genome against a different library is a different experiment.
              "library_kind": r.get("library_kind"),
              "include_uncurated": bool(r.get("include_uncurated")),
-             "custom_library_sha256": ((r.get("custom_library") or {}).get("sha256"))},
-            # A sealed manifest must not assert something the same manifest disproves. This list was
-            # unconditional, so a default run — which searches Dfam, and whose OWN databases entry carries
-            # the resolved Dfam version and partition list two lines below — sealed the statement "Dfam
-            # partitions not installed on this machine" as part of its content-addressed identity. The
-            # claim is only true when a custom library replaced Dfam and no partitions were resolved.
-            not_run=(["De novo family discovery (RepeatModeler/EDTA)"]
-                     + ([] if lib.get("partitions") or lib.get("version")
-                        else ["Dfam partitions not installed on this machine"])),
-            databases=[dfam_db, {"name": "RepeatMasker", "version": r.get("repeatmasker_version")}],
+             "custom_library_sha256": (custom or {}).get("sha256")},
+            not_run=not_run,
+            databases=[library_db, {"name": "RepeatMasker", "version": r.get("repeatmasker_version")}],
             # the genome's sealed checksum comes from the PREPARE step's own meta.txt (wsl returns it),
             # not from whatever the caller passed in — a caller-supplied hash would let the manifest
             # claim an identity the analysed sequence was never checked against.
-            source={"assemblyAccession": acc, "sha256": r.get("genome_sha256") or body.get("sha256")},
-            references=references)
+            source={"assemblyAccession": acc}, references=references,
+            input_sha256=genome_sha, input_length=genome_bp)
     return r
 
 

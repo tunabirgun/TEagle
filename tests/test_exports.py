@@ -299,3 +299,39 @@ def test_dot_pdf_export_is_a_valid_vector_pdf(tmp_path):
     assert os.path.getsize(p) > 1000
     with open(p, "rb") as fh:
         assert fh.read(5) == b"%PDF-"
+    from teagle_core.artifact_metadata import media_metadata_violations
+    assert media_metadata_violations(p) == []
+
+
+def test_runtime_figure_exports_have_author_only_metadata(tmp_path):
+    svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><text x="5" y="25">x</text></svg>'
+    outputs = {
+        "svg": tmp_path / "figure.svg",
+        "png": tmp_path / "figure.png",
+        "pdf": tmp_path / "figure.pdf",
+    }
+    widgets.save_svg(svg, str(outputs["svg"]))
+    widgets.render_png(svg, str(outputs["png"]), scale=1)
+    widgets.render_pdf(svg, str(outputs["pdf"]))
+    from teagle_core.artifact_metadata import media_metadata_violations
+    for path in outputs.values():
+        assert media_metadata_violations(path) == [], path
+
+
+def test_pdf_export_failure_preserves_existing_file(tmp_path, monkeypatch):
+    """Postprocessing failure must not replace an existing journal figure with a partial PDF."""
+    from teagle_core import artifact_metadata
+
+    path = tmp_path / "figure.pdf"
+    original = b"existing validated PDF"
+    path.write_bytes(original)
+    monkeypatch.setattr(
+        artifact_metadata,
+        "clean_pdf_metadata",
+        lambda _path: (_ for _ in ()).throw(OSError("synthetic metadata-cleaning failure")),
+    )
+    svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"/>'
+    with pytest.raises(OSError, match="synthetic metadata-cleaning failure"):
+        widgets.render_pdf(svg, str(path))
+    assert path.read_bytes() == original
+    assert not (tmp_path / "figure.pdf.part").exists()

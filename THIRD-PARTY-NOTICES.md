@@ -14,7 +14,8 @@ in `app/backend/requirements.txt`; the provenance manifest of every run records 
 | [pyhmmer](https://github.com/althonos/pyhmmer) | 0.12.1 | MIT | HMMER3 profile search, in-process |
 | [openpyxl](https://openpyxl.readthedocs.io/) | 3.1.5 | MIT | XLSX table export |
 | et_xmlfile | (openpyxl dependency) | MIT | XLSX writing |
-| [certifi](https://github.com/certifi/python-certifi) | 2026.6.17 | MPL-2.0 | CA bundle for NCBI/Ensembl requests |
+| [certifi](https://github.com/certifi/python-certifi) | 2026.7.22 | MPL-2.0 | CA bundle for NCBI/Ensembl requests |
+| [pypdf](https://github.com/py-pdf/pypdf) | 6.15.0 | BSD-3-Clause | PDF metadata minimisation while preserving document navigation |
 | Pfam-A TE domain profiles (`data/te_domains.hmm`) | Pfam 37.x | CC0-1.0 | Protein-domain panel |
 | [Cascadia Code / Cascadia Mono](https://github.com/microsoft/cascadia-code) | — | SIL OFL 1.1 | Bundled UI typeface |
 | [Roboto](https://github.com/googlefonts/roboto) | — | Apache-2.0 | Bundled UI typeface |

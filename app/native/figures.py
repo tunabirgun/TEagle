@@ -703,22 +703,35 @@ def svg_dotheat(m: dict, W: float = 620, theme: str = "dark", for_export: bool =
 # "other" repeats are drawn in neutral greys: they are real repeats but NOT transposable elements, and the
 # figure must not let them read as TE content.
 _TE_CLASS_COLOUR = {"LTR": OK["LTR"], "LINE": OK["RT"], "SINE": OK["RNaseH"], "DNA": OK["TIR"],
-                    "RC": OK["GAG"], "Retroposon": OK["PR"]}
+                    "RC": OK["GAG"], "Retroposon": OK["PR"], "PLE": OK["RT"]}
 _NONTE_COLOUR = {"tandem": "#9aa3ad", "other": "#c3ccd6"}
 
 
-def _te_class_of(family: str, kind: str) -> str:
-    if kind != "TE":
-        return kind
-    return (family or "").split("/")[0]
+def _te_library_footer(r: dict) -> tuple[str, str | None]:
+    """Return library-specific figure footnotes; custom-library output must never imply a Dfam search."""
+    kind = str(r.get("library_kind") or "").strip()
+    raw_custom = r.get("custom_library")
+    custom = raw_custom if isinstance(raw_custom, dict) else {}
+    is_custom = bool(custom) or kind.lower() == "user" or kind.lower().startswith("user-supplied")
+    if is_custom:
+        name = str(custom.get("name") or "unnamed user FASTA")
+        sha = str(custom.get("sha256") or "unavailable")
+        return (f"Interspersed-repeat homology used user-supplied FASTA {name}; absent repeat models cannot be matched.",
+                f"Library SHA-256: {sha}. TE coverage requires recognized #class/family headers; simple/low-complexity is separate.")
+    label = kind or "installed Dfam partitions"
+    version = r.get("dfam_version")
+    if version and "dfam" not in label.lower():
+        label += f" (Dfam {version})"
+    return (f"Homology to {label}; families absent from it cannot appear.", None)
 
 
 def svg_te_composition(r: dict, W: float = 900, theme: str = "light") -> str:
-    """Stacked composition bar: what share of the assembly each TE class covers, then tandem/other, then
-    the unannotated remainder. The remainder is drawn explicitly — a composition figure that plotted only
-    what was found would imply the rest had been examined and shown to be empty."""
+    """Independent union-coverage bars for the whole-genome RepeatMasker result.
+
+    Repeat-name/model aggregates are deliberately not stacked: intervals assigned to different models can overlap.
+    The all-repeat union and its unannotated complement form one partition; TE, tandem and other are separate
+    kind-specific unions that may overlap one another and therefore must not be added."""
     gbp = float(r.get("genome_bp") or 0)
-    fams = r.get("families") or []
     # honour the panel's background mode: the figure carries text and a frame, and painting them in a
     # fixed dark ink left the whole figure unreadable on the dark track (and made the DARK/WHITE buttons
     # look broken, because nothing changed when they were pressed).
@@ -730,45 +743,46 @@ def svg_te_composition(r: dict, W: float = 900, theme: str = "light") -> str:
     if gbp <= 0:
         return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="60">'
                 f'<rect width="{W}" height="60" fill="{paper}"/></svg>')
-    agg = {}
-    for f in fams:
-        key = _te_class_of(f.get("family", ""), f.get("kind", "other"))
-        agg[key] = agg.get(key, 0) + (f.get("bp") or 0)
-    te_keys = [k for k in agg if k not in ("tandem", "other")]
-    te_keys.sort(key=lambda k: -agg[k])
-    order = te_keys + [k for k in ("tandem", "other") if agg.get(k)]
-    used = sum(agg.values())
-    H, barH, top, padx = 168, 34, 34, 12
-    x, out = padx, [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
-                    f'viewBox="0 0 {W} {H}" font-family="{FIGFONT}">',
-                    f'<rect width="{W}" height="{H}" fill="{paper}"/>']
-    out.append(f'<text x="{padx}" y="20" font-size="12" fill="{ink}">Share of the {gbp/1e6:.1f} Mb assembly '
-               f'covered, by repeat class</text>')
-    barW = W - 2 * padx
-    for k in order:
-        frac = agg[k] / gbp
-        w = max(0.0, frac * barW)
-        col = _NONTE_COLOUR.get(k) or _TE_CLASS_COLOUR.get(k, "#888888")
-        out.append(f'<rect x="{x:.2f}" y="{top}" width="{w:.2f}" height="{barH}" fill="{col}">'
-                   f'<title>{esc(k)}: {100*frac:.2f}% ({agg[k]:,} bp)</title></rect>')
-        x += w
-    rest = max(0.0, gbp - used)
-    out.append(f'<rect x="{x:.2f}" y="{top}" width="{max(0.0, (rest/gbp)*barW):.2f}" height="{barH}" '
-               f'fill="none" stroke="{rule}" stroke-dasharray="3 3">'
-               f'<title>not annotated as a repeat: {100*rest/gbp:.2f}%</title></rect>')
-    out.append(f'<rect x="{padx}" y="{top}" width="{barW}" height="{barH}" fill="none" stroke="{rule}"/>')
-    ly, lx = top + barH + 22, padx
-    for k in order + ["unannotated"]:
-        col = ("none" if k == "unannotated" else (_NONTE_COLOUR.get(k) or _TE_CLASS_COLOUR.get(k, "#888888")))
-        pct = (100 * (rest if k == "unannotated" else agg[k]) / gbp)
-        out.append(f'<rect x="{lx}" y="{ly-9}" width="11" height="11" fill="{col}" '
-                   f'stroke="{rule if k == "unannotated" else col}"/>')
-        lab = f"{k} {pct:.2f}%"
-        out.append(f'<text x="{lx+16}" y="{ly}" font-size="11" fill="{ink}">{esc(lab)}</text>')
-        lx += 16 + 7.2 * len(lab) + 16
-        if lx > W - 140:
-            lx = padx; ly += 18
-    out.append(f'<text x="{padx}" y="{H-6}" font-size="10" fill="{faint}">Homology to the installed Dfam library '
-               f'only — families absent from it cannot appear, so unannotated is not "no repeat".</text>')
+
+    def union_bp(field: str) -> float:
+        try:
+            value = float(r.get(field) or 0)
+        except (TypeError, ValueError):
+            value = 0.0
+        return min(gbp, max(0.0, value))
+
+    total_bp = union_bp("total_bp")
+    rest = max(0.0, gbp - total_bp)  # only the all-repeat union has a valid assembly complement
+    rows = [
+        ("All repeats (union)", total_bp, "#4c78a8", False),
+        ("Transposable elements (union)", union_bp("te_bp"), _TE_CLASS_COLOUR["LTR"], False),
+        ("Tandem repeats (union)", union_bp("tandem_bp"), _NONTE_COLOUR["tandem"], False),
+        ("Other/unclassified annotations (union)", union_bp("other_bp"), _NONTE_COLOUR["other"], False),
+        ("Not annotated as repeat", rest, "none", True),
+    ]
+    footer1, footer2 = _te_library_footer(r)
+    H, barH, gap, top, padx, labelW = (244 if footer2 else 230), 18, 8, 42, 12, 184
+    barX, barW = padx + labelW, max(1.0, W - (padx + labelW) - padx)
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
+           f'viewBox="0 0 {W} {H}" font-family="{FIGFONT}">',
+           f'<rect width="{W}" height="{H}" fill="{paper}"/>',
+           f'<text x="{padx}" y="19" font-size="12" fill="{ink}">Share of the {gbp/1e6:.1f} Mb assembly '
+           f'covered by independent interval unions</text>']
+    for i, (label, bp, colour, dashed) in enumerate(rows):
+        y = top + i * (barH + gap)
+        pct = 100.0 * bp / gbp
+        width = (bp / gbp) * barW
+        out.append(f'<text x="{padx}" y="{y+13}" font-size="10.5" fill="{ink}">{esc(label)} {pct:.2f}%</text>')
+        out.append(f'<rect x="{barX}" y="{y}" width="{barW:.2f}" height="{barH}" fill="none" stroke="{rule}"/>')
+        attrs = (f'fill="none" stroke="{rule}" stroke-dasharray="3 3"' if dashed
+                 else f'fill="{colour}"')
+        out.append(f'<rect x="{barX}" y="{y}" width="{width:.2f}" height="{barH}" {attrs}>'
+                   f'<title>{esc(label)}: {pct:.2f}% ({int(round(bp)):,} bp)</title></rect>')
+    note_y = top + len(rows) * (barH + gap) + 3
+    out.append(f'<text x="{padx}" y="{note_y}" font-size="10" fill="{faint}">Independent union bars: TE, tandem and other/unclassified '
+               f'can overlap and must not be summed. All repeats and not annotated are complementary.</text>')
+    out.append(f'<text x="{padx}" y="{H-(19 if footer2 else 7)}" font-size="10" fill="{faint}">{esc(footer1)}</text>')
+    if footer2:
+        out.append(f'<text x="{padx}" y="{H-5}" font-size="9.5" fill="{faint}">{esc(footer2)}</text>')
     out.append("</svg>")
     return "".join(out)

@@ -18,11 +18,11 @@ open(_verinfo, "w", encoding="utf-8").write(f"""VSVersionInfo(
                     OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
   kids=[
     StringFileInfo([StringTable('040904B0', [
-      StringStruct('CompanyName', 'Tuna Birgün'),
+      StringStruct('CompanyName', 'Tuna Birgun'),
       StringStruct('FileDescription', 'TEagle - Transposable Elements Assay Terminal'),
       StringStruct('FileVersion', '{VERSION}'),
       StringStruct('InternalName', 'TEagle'),
-      StringStruct('LegalCopyright', 'Copyright (C) 2026 Tuna Birgün. Licensed under AGPL-3.0-or-later.'),
+      StringStruct('LegalCopyright', 'Copyright (C) 2026 Tuna Birgun. Licensed under AGPL-3.0-or-later.'),
       StringStruct('OriginalFilename', 'TEagle.exe'),
       StringStruct('ProductName', 'TEagle'),
       StringStruct('ProductVersion', '{VERSION}')])]),
@@ -102,11 +102,11 @@ def _collect_runtime_package(package):
 
 
 # C-extension packages + openpyxl (XLSX table export): pull binaries, runtime data and dynamic submodules
-for pkg in ("primer3", "pyhmmer", "openpyxl", "certifi"):
+for pkg in ("primer3", "pyhmmer", "openpyxl", "certifi", "pypdf"):
     d, b, h = _collect_runtime_package(pkg)
     datas += d; binaries += b; hiddenimports += h
 hiddenimports = [m for m in hiddenimports if m != _SHIM]
-hiddenimports += ["pyhmmer.platform", "pyhmmer.platform.win32", "openpyxl", "et_xmlfile", "certifi"]
+hiddenimports += ["pyhmmer.platform", "pyhmmer.platform.win32", "openpyxl", "et_xmlfile", "certifi", "pypdf"]
 
 # trim the bundle: exclude heavy Qt modules the app never imports (keeps the installer small)
 excludes = [
@@ -114,6 +114,9 @@ excludes = [
     # openpyxl's three try/except optional accelerators. TEagle's XLSX export writes str/int/float cells and a
     # bold header only: no ws.add_image (PIL), no numpy scalars, and the stdlib ElementTree writer is equivalent.
     "numpy", "PIL", "lxml",
+    # pypdf can optionally inspect and rewrite embedded font programs through fontTools. TEagle only
+    # clones PDF objects and removes document metadata; the optional font-rewrite path is never used.
+    "fontTools",
     # ViennaRNA is NOT redistributable under AGPL-3.0: its licence forbids redistribution for a fee and
     # asks that commercial inclusion be cleared with the authors, which GPL forbids adding. oligoqc
     # already guards `import RNA`, so an absent ViennaRNA degrades to primer3-only with the cross-check
@@ -150,7 +153,7 @@ _ALLOWED_TOP = {
     "PySide6", "shiboken6",                                  # PySide6==6.11.1 (+ its shiboken6 runtime)
     "primer3", "pyhmmer", "psutil", "typing_extensions",     # primer3-py, pyhmmer (+psutil, typing_extensions)
     "openpyxl", "et_xmlfile",                                # openpyxl (+ its only dependency)
-    "certifi",
+    "certifi", "pypdf",
     "teagle_core", "teagle_native", "main", "engine", "engine_worker", "envcheck", "server",
     "figures", "widgets", "sample", "theme", "fonts", "install_dialog",   # app/backend + app/native
     "_pyi_rth_utils",                                        # PyInstaller runtime shim

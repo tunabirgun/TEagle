@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import engine
 from engine import BadRequest
-from teagle_core import appdirs
+from teagle_core import appdirs, primers
 
 WEB = appdirs.resource("web") or os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "web"))
 MIME = {".html": "text/html", ".css": "text/css", ".js": "application/javascript",
@@ -114,8 +114,12 @@ def make_server(host="127.0.0.1", port=8765):
 
 def serve(host="127.0.0.1", port=8765):
     srv = make_server(host, port)
-    print(f"TEagle backend on http://{host}:{port}  (primer3 {primers.PRIMER3_VERSION})")
-    srv.serve_forever()
+    bound_host, bound_port = srv.server_address[:2]
+    print(f"TEagle backend on http://{bound_host}:{bound_port}  (primer3 {primers.PRIMER3_VERSION})")
+    try:
+        srv.serve_forever()
+    finally:
+        srv.server_close()
 
 
 if __name__ == "__main__":
