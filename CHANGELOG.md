@@ -36,6 +36,7 @@ This release changes the scientific-result, provenance, source-identity, primer-
 - The backend installer states the derived default Dfam transfer and extracted size before work starts, distinguishes additional variable package/time costs, and explains the global `.wslconfig` boundary. Retry text now distinguishes resumable Dfam archives from NCBI Datasets genome ZIPs, which restart after interruption.
 - Backend storage checks now use the smaller of the free space reported inside WSL and the free space on the Windows volume holding its sparse virtual disk. The installer and whole-genome cost dialog disclose both values, preventing a large Dfam partition, genome download, or annotation from starting against space the Windows host cannot provide.
 - The held miniprot tier is not provisioned by the default backend and its dormant legacy API route is disabled; it is not a shipped 3.9.0 feature.
+- Continuous integration now installs the exact test-only dependency closure from `requirements-test.txt`; these packages remain outside the shipped runtime.
 
 ## [3.8.1] — 2026-08-13
 

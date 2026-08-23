@@ -24,6 +24,8 @@ INNO_SCRIPT = ROOT / "installer" / "teagle.iss"
 INNO_METADATA = ROOT / "installer" / "sanitize_inno_metadata.py"
 IMPORT_GATE = ROOT / "installer" / "check_runtime_imports.py"
 BUILD_LOCK = ROOT / "installer" / "requirements-build.txt"
+TEST_LOCK = ROOT / "requirements-test.txt"
+CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 
 
 def _locked_pyinstaller_version(path: Path = BUILD_LOCK) -> str:
@@ -48,6 +50,37 @@ def _locked_inno_version(path: Path = BUILD_LOCK) -> str:
 
 
 INNO_PIN = _locked_inno_version()
+
+
+def _assert_ci_test_dependency_contract(workflow: str, requirements: str) -> None:
+    assert "python -m pip install -r requirements-test.txt" in workflow
+    assert "python -m pip install -r app/backend/requirements.txt pytest" not in workflow
+    assert requirements.splitlines() == [
+        "-r app/backend/requirements.txt",
+        "matplotlib==3.11.1",
+        "python-docx==1.2.0",
+        "pytest==9.1.1",
+    ]
+
+
+def test_ci_uses_the_exact_test_dependency_closure():
+    workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+    requirements = TEST_LOCK.read_text(encoding="utf-8")
+    _assert_ci_test_dependency_contract(workflow, requirements)
+
+    with pytest.raises(AssertionError):
+        _assert_ci_test_dependency_contract(
+            workflow.replace(
+                "python -m pip install -r requirements-test.txt",
+                "python -m pip install -r app/backend/requirements.txt pytest",
+            ),
+            requirements,
+        )
+    with pytest.raises(AssertionError):
+        _assert_ci_test_dependency_contract(
+            workflow,
+            requirements.replace("matplotlib==3.11.1\n", ""),
+        )
 
 
 def _stage_preflight(

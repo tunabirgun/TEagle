@@ -1,0 +1,4 @@
+-r app/backend/requirements.txt
+matplotlib==3.11.1
+python-docx==1.2.0
+pytest==9.1.1
