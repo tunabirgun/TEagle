@@ -36,12 +36,36 @@ def _assert_cleanup_target_contract(iss: str) -> None:
 
 
 # ---------- elevated .bat ----------
+def _assert_wsl2_bat_contract(bat: str) -> None:
+    assert "%~dp0" in bat and "TEAGLE_WSL_LOG" in bat
+    assert "EnableDelayedExpansion" in bat
+    assert bat.count('set "TEAGLE_INSTALL_RC=!ERRORLEVEL!"') == 2
+    marker = next(line for line in bat.splitlines() if "DONE-WSL" in line)
+    assert "!TEAGLE_INSTALL_RC!" in marker and "%ERRORLEVEL%" not in marker
+    assert bat.index("wsl.exe --status") < bat.index("DONE-WSL")
+
+
 def test_wsl2_bat_script_has_install_fallback_and_terminal_marker():
-    bat = wsl._wsl2_bat_script(r"C:\tmp\wsl.log")
+    bat = wsl._wsl2_bat_script()
     assert "wsl.exe --install -d Ubuntu --no-launch" in bat      # primary: register distro, no OOBE
     assert "retrying: wsl --install" in bat                      # fallback for older wsl.exe
     assert "--set-default-version 2" in bat and "|| rem" in bat  # tolerant pre-reboot
-    assert "DONE-WSL" in bat                                     # terminal marker the poller stops on
+    _assert_wsl2_bat_contract(bat)
+
+
+def test_wsl2_bat_preserves_install_rc_and_never_embeds_unicode_user_path():
+    bat = wsl._wsl2_bat_script()
+    bat.encode("ascii")                                         # staging is byte-preserving, never errors="ignore"
+    assert "İpek" not in bat and "C:\\Users" not in bat       # cmd resolves the Unicode directory via %~dp0
+    mutants = [
+        bat.replace("!TEAGLE_INSTALL_RC! (restart", "%ERRORLEVEL% (restart", 1),
+        bat.replace("%~dp0", "C:\\Users\\İpek\\AppData\\Local\\TEagle\\", 1),
+        bat.replace('set "TEAGLE_INSTALL_RC=!ERRORLEVEL!"', "rem lost install rc", 1),
+    ]
+    for mutant in mutants:
+        with pytest.raises((AssertionError, UnicodeEncodeError)):
+            mutant.encode("ascii")
+            _assert_wsl2_bat_contract(mutant)
 
 
 def test_windows_clean_install_preserves_shared_micromamba_root():

@@ -11,15 +11,168 @@ Error taxonomy (consumed by the Qt worker, obs 4702):
   - raises anything else      -> unexpected fault (HTTP 500 / error banner + traceback to log)
 """
 from __future__ import annotations
-import hashlib, re, time
+import copy, hashlib, re, time
 
 from teagle_core import (sequtil, structural, primers, provenance, fetch,
-                         domains, classify, refs, wsl, timing, genomepcr, oligoqc, retroviral)
+                         domains, classify, refs, wsl, timing, genomepcr, oligoqc, retroviral, gff3)
 import envcheck
 
 
 class BadRequest(Exception):
     """A malformed client request — surfaced as HTTP 400 / an inline user message, never a 500."""
+
+
+ANALYSIS_RESULT_SCHEMA = "1.0"
+ANALYSIS_RESULT_FORMAT = "TEagle analysis result"
+ANALYSIS_STATUS_COMPLETE = "complete"
+ANALYSIS_STATUS_COMPLETE_WITH_INVALID_RECORDS = "complete_with_invalid_records"
+ANALYSIS_STATUS_COMPLETE_WITH_STAGE_FAILURES = "complete_with_stage_failures"
+ANALYSIS_STATUS_COMPLETE_WITH_STAGE_FAILURES_AND_INVALID_RECORDS = "complete_with_stage_failures_and_invalid_records"
+ANALYSIS_STATUS_NO_INPUT = "no_input"
+ANALYSIS_STATUS_NO_VALID_RECORDS = "no_valid_records"
+ANALYSIS_STATUSES = frozenset({
+    ANALYSIS_STATUS_COMPLETE,
+    ANALYSIS_STATUS_COMPLETE_WITH_INVALID_RECORDS,
+    ANALYSIS_STATUS_COMPLETE_WITH_STAGE_FAILURES,
+    ANALYSIS_STATUS_COMPLETE_WITH_STAGE_FAILURES_AND_INVALID_RECORDS,
+    ANALYSIS_STATUS_NO_INPUT,
+    ANALYSIS_STATUS_NO_VALID_RECORDS,
+})
+ANALYSIS_EXPORTABLE_STATUSES = frozenset({
+    ANALYSIS_STATUS_COMPLETE,
+    ANALYSIS_STATUS_COMPLETE_WITH_INVALID_RECORDS,
+    ANALYSIS_STATUS_COMPLETE_WITH_STAGE_FAILURES,
+    ANALYSIS_STATUS_COMPLETE_WITH_STAGE_FAILURES_AND_INVALID_RECORDS,
+})
+ANALYSIS_STAGE_NAMES = ("structural", "orfs", "domains", "classification", "retroviral")
+
+
+def derive_analysis_status(records: list) -> str:
+    """Derive the only valid top-level status from record validity and structured stage outcomes."""
+    if not records:
+        return ANALYSIS_STATUS_NO_INPUT
+    valid = [rec for rec in records if rec.get("valid") is True]
+    if not valid:
+        return ANALYSIS_STATUS_NO_VALID_RECORDS
+    invalid_present = len(valid) != len(records)
+    stage_failure = any(rec.get("processing", {}).get(stage, {}).get("status") == "failed"
+                        for rec in valid for stage in ANALYSIS_STAGE_NAMES)
+    if stage_failure and invalid_present:
+        return ANALYSIS_STATUS_COMPLETE_WITH_STAGE_FAILURES_AND_INVALID_RECORDS
+    if stage_failure:
+        return ANALYSIS_STATUS_COMPLETE_WITH_STAGE_FAILURES
+    if invalid_present:
+        return ANALYSIS_STATUS_COMPLETE_WITH_INVALID_RECORDS
+    return ANALYSIS_STATUS_COMPLETE
+
+
+def _nonnegative_int(value) -> bool:
+    return not isinstance(value, bool) and isinstance(value, int) and value >= 0
+
+
+def _analysis_processing_valid(rec: dict) -> bool:
+    """Validate the complete per-record stage universe and each outcome's exact schema."""
+    required = {"id", "valid", "invalid", "composition", "structural", "domains", "classification",
+                "orfs", "seq", "seq_preview", "notes", "processing", "identitySource"}
+    if (not isinstance(rec, dict) or not required.issubset(rec) or
+            not isinstance(rec["id"], str) or not isinstance(rec["seq"], str) or
+            not isinstance(rec["seq_preview"], str) or
+            not isinstance(rec["invalid"], list) or not isinstance(rec["composition"], dict) or
+            not isinstance(rec["structural"], list) or not isinstance(rec["domains"], list) or
+            not isinstance(rec["orfs"], list) or not isinstance(rec["notes"], list) or
+            not isinstance(rec["processing"], dict) or
+            set(rec["processing"]) != set(ANALYSIS_STAGE_NAMES)):
+        return False
+    identity = {"id": rec["id"]}
+    if "idSha256" in rec:
+        identity["idSha256"] = rec["idSha256"]
+    source_kind = rec.get("identitySource")
+    if source_kind == "local_input":
+        digest = identity.get("idSha256")
+        if (not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest) or
+                identity["id"] != f"record_{digest[:12]}"):
+            return False
+    elif source_kind == "validated_fetch":
+        if "idSha256" in identity or not gff3.is_public_record_id(identity["id"]):
+            return False
+    elif source_kind == "generated":
+        if identity != gff3.public_record_identity(identity["id"], trust="generated"):
+            return False
+    else:
+        return False
+    processing = rec["processing"]
+    if rec.get("valid") is False:
+        return (bool(rec["invalid"]) and not rec["structural"] and not rec["domains"] and not rec["orfs"] and
+                rec["classification"] is None and rec.get("retroviral") is None and
+                all(processing[stage] == {"status": "not_run"} for stage in ANALYSIS_STAGE_NAMES))
+    if rec.get("valid") is not True or rec["invalid"]:
+        return False
+
+    structural_state = processing["structural"]
+    if structural_state.get("status") == "complete":
+        if set(structural_state) != {"status", "count"} or not _nonnegative_int(structural_state["count"]):
+            return False
+        if structural_state["count"] != len(rec["structural"]):
+            return False
+    elif (structural_state.get("status") != "failed" or
+          set(structural_state) != {"status", "errorType"} or
+          not isinstance(structural_state["errorType"], str) or not structural_state["errorType"] or
+          rec["structural"]):
+        return False
+
+    orf_state = processing["orfs"]
+    if orf_state.get("status") == "complete":
+        if (set(orf_state) != {"status", "count"} or not _nonnegative_int(orf_state["count"]) or
+                orf_state["count"] != len(rec["orfs"])):
+            return False
+    elif (orf_state.get("status") != "failed" or set(orf_state) != {"status", "errorType"} or
+          not isinstance(orf_state["errorType"], str) or not orf_state["errorType"] or rec["orfs"]):
+        return False
+
+    domain_state = processing["domains"]
+    if domain_state.get("status") in {"complete", "partial"}:
+        keys = {"status", "count", "orfsScanned", "orfsNotScanned"}
+        if set(domain_state) != keys or not all(_nonnegative_int(domain_state[k]) for k in keys - {"status"}):
+            return False
+        if (domain_state["count"] != len(rec["domains"]) or
+                (domain_state["status"] == "partial") != (domain_state["orfsNotScanned"] > 0)):
+            return False
+        if orf_state["status"] == "complete":
+            expected_scanned = min(orf_state["count"], domains.MAX_ORFS_SCANNED)
+            if (domain_state["orfsScanned"] != expected_scanned or
+                    domain_state["orfsNotScanned"] != orf_state["count"] - expected_scanned):
+                return False
+    elif (domain_state.get("status") != "failed" or set(domain_state) != {"status", "errorType"} or
+          not isinstance(domain_state["errorType"], str) or not domain_state["errorType"] or rec["domains"]):
+        return False
+
+    classification_state = processing["classification"]
+    classification_status = classification_state.get("status")
+    if classification_status in {"complete", "withheld"}:
+        if (set(classification_state) != {"status"} or not isinstance(rec["classification"], dict) or
+                rec["classification"].get("outcome") != classification_status):
+            return False
+    elif (classification_status != "failed" or set(classification_state) != {"status", "errorType"} or
+          not isinstance(classification_state["errorType"], str) or not classification_state["errorType"] or
+          rec["classification"] is not None):
+        return False
+
+    retroviral_state = processing["retroviral"]
+    retroviral_status = retroviral_state.get("status")
+    if retroviral_status == "complete":
+        if (set(retroviral_state) != {"status", "detected"} or
+                not isinstance(retroviral_state["detected"], bool) or
+                retroviral_state["detected"] != (rec.get("retroviral") is not None) or
+                classification_status != "complete"):
+            return False
+    elif retroviral_status == "not_run":
+        if retroviral_state != {"status": "not_run"} or rec.get("retroviral") is not None or classification_status == "complete":
+            return False
+    elif (retroviral_status != "failed" or set(retroviral_state) != {"status", "errorType"} or
+          not isinstance(retroviral_state["errorType"], str) or not retroviral_state["errorType"] or
+          rec.get("retroviral") is not None or classification_status != "complete"):
+        return False
+    return True
 
 
 # ---------- request-value coercion (encodes hard-won fixes: NaN max_mm, float tp, non-string species) ----------
@@ -193,26 +346,61 @@ def _detector_parameters():
     }
 
 
+def _validated_operation_source(source, records):
+    return provenance.validate_source_context(source, records)
+
+
+def _operation_record_identity(source_context, record_id, index=0):
+    if source_context.get("inputType") in {"fetched_accession", "fetched_coordinate"}:
+        bindings = source_context.get("records") or []
+        if index < len(bindings):
+            return {**gff3.public_record_identity(bindings[index]["id"], trust="validated_fetch"),
+                    "identitySource": "validated_fetch"}
+    identity = gff3.public_record_identity(record_id)
+    return {**identity, "identitySource": "local_input"}
+
+
 def analyze(seq_text: str, source: dict | None = None):
     recs = sequtil.parse_fasta(seq_text)
+    validated_source = provenance.validate_source_context(source, recs)
+    input_type = validated_source["inputType"]
+    identities = []
+    if input_type == "fetched_accession":
+        identities = [gff3.public_record_identity(validated_source["accession"], trust="validated_fetch")]
+    elif input_type == "fetched_coordinate":
+        identities = [gff3.public_record_identity(
+            f"{region['chrAccession']}:{region['start']}-{region['end']}", trust="validated_fetch")
+            for region in validated_source["regions"]]
+    else:
+        generated_bare = isinstance(seq_text, str) and ">" not in seq_text and len(recs) == 1
+        identities = [gff3.public_record_identity(rid, trust="generated" if generated_bare else "local_input")
+                      for rid, _seq in recs]
     # RNA input (normalized U->T by parse_fasta): detect U in the SEQUENCE body only, never in a header line
     _body = "".join(l for l in seq_text.splitlines() if not l.startswith(">")) if isinstance(seq_text, str) else ""
     rna = "U" in _body.upper()
     out = []
-    for rid, seq in recs:
+    for (rid, seq), identity in zip(recs, identities):
         ok, bad = sequtil.validate_iupac(seq)
-        rec = {"id": rid, "valid": ok,
+        not_run = {"status": "not_run"}
+        identity_source = ("validated_fetch" if input_type != "local_input" else
+                           ("generated" if "idSha256" not in identity else "local_input"))
+        rec = {**identity, "identitySource": identity_source, "valid": ok,
                "invalid": [{"pos": p, "char": c} for p, c in bad],
                "composition": sequtil.composition(seq),
                "structural": [], "domains": [], "classification": None, "orfs": [],
                # each record carries its OWN full sequence (the exact coordinate system its structural /
                # domain / ORF calls index), so a per-record export or dot plot never has to re-derive it
                # from the whole-input textbox — which concatenated every record for a multi-FASTA paste.
-               "seq": seq, "seq_preview": seq[:120], "notes": []}
+               "seq": seq, "seq_preview": seq[:120], "notes": [],
+               "processing": {stage: dict(not_run) for stage in ANALYSIS_STAGE_NAMES}}
         if ok:
+            structural_ok = True
             try:
                 rec["structural"] = structural.detect_all(seq)      # isolate: a detector fault must not 500 the whole analyze
+                rec["processing"]["structural"] = {"status": "complete", "count": len(rec["structural"])}
             except Exception as e:
+                structural_ok = False
+                rec["processing"]["structural"] = {"status": "failed", "errorType": type(e).__name__}
                 rec["notes"].append(f"structural detection unavailable: {type(e).__name__}")
             # The classification needs the ORF count before it can say anything honest about what was
             # searched, so the list is built here. scan_domains still calls find_orfs itself — find_orfs is
@@ -220,13 +408,26 @@ def analyze(seq_text: str, source: dict | None = None):
             # hits' `orf` indices address THIS list correctly. (An earlier version of this comment claimed
             # the computation was shared; it is not, and a comment that misstates a code property is the
             # kind of thing that later gets relied on.)
-            rec["orfs"] = sequtil.find_orfs(seq)
-            unscanned = max(0, len(rec["orfs"]) - domains.MAX_ORFS_SCANNED)
+            try:
+                rec["orfs"] = sequtil.find_orfs(seq)
+                rec["processing"]["orfs"] = {"status": "complete", "count": len(rec["orfs"])}
+                unscanned = max(0, len(rec["orfs"]) - domains.MAX_ORFS_SCANNED)
+            except Exception as e:
+                rec["processing"]["orfs"] = {"status": "failed", "errorType": type(e).__name__}
+                rec["notes"].append(f"ORF detection unavailable: {type(e).__name__}")
+                unscanned = 0
             domains_ok = True
             try:
                 rec["domains"] = domains.scan_domains(seq)
+                rec["processing"]["domains"] = {
+                    "status": "partial" if unscanned else "complete",
+                    "count": len(rec["domains"]),
+                    "orfsScanned": min(len(rec["orfs"]), domains.MAX_ORFS_SCANNED),
+                    "orfsNotScanned": unscanned,
+                }
             except Exception as e:
                 domains_ok = False        # empty because nothing RAN — classify must not read that as "absent"
+                rec["processing"]["domains"] = {"status": "failed", "errorType": type(e).__name__}
                 rec["notes"].append(f"domain scan unavailable: {type(e).__name__}")
             if unscanned and domains_ok:
                 # The profile search reads only the longest MAX_ORFS_SCANNED ORFs. Anything beyond that was
@@ -236,17 +437,28 @@ def analyze(seq_text: str, source: dict | None = None):
                     f"protein-domain search read the {domains.MAX_ORFS_SCANNED} longest ORFs of "
                     f"{len(rec['orfs'])}; {unscanned} shorter ORF(s) were not searched, so a domain listed as "
                     "not detected was not necessarily absent from the whole sequence")
-            rec["classification"] = classify.classify(rec["structural"], rec["domains"], seq=seq,
-                                                      domains_ok=domains_ok, orfs_unscanned=unscanned,
-                                                      orfs=rec["orfs"])
+            try:
+                rec["classification"] = classify.classify(rec["structural"], rec["domains"], seq=seq,
+                                                          domains_ok=domains_ok, orfs_unscanned=unscanned,
+                                                          orfs=rec["orfs"], structural_ok=structural_ok)
+                outcome = ((rec["classification"] or {}).get("outcome") or
+                           ("withheld" if rec["classification"] is None else "complete"))
+                rec["processing"]["classification"] = {"status": outcome}
+            except Exception as e:
+                rec["processing"]["classification"] = {"status": "failed", "errorType": type(e).__name__}
+                rec["notes"].append(f"classification unavailable: {type(e).__name__}")
             # retroviral transcript architecture (ERV only) — the correct coding-organisation model in place
             # of a host exon-intron gene model; None for non-ERVs, so it never overrides a normal record.
             rec["retroviral"] = None
-            try:
-                rec["retroviral"] = retroviral.transcript_architecture(
-                    rec["structural"], rec["domains"], rec["classification"], len(seq))
-            except Exception as e:                          # a retroviral-model fault must not fail the analysis
-                rec["notes"].append(f"retroviral architecture unavailable: {type(e).__name__}")
+            if rec["processing"]["classification"]["status"] == "complete":
+                try:
+                    rec["retroviral"] = retroviral.transcript_architecture(
+                        rec["structural"], rec["domains"], rec["classification"], len(seq))
+                    rec["processing"]["retroviral"] = {
+                        "status": "complete", "detected": rec["retroviral"] is not None}
+                except Exception as e:                          # a retroviral-model fault must not fail the analysis
+                    rec["processing"]["retroviral"] = {"status": "failed", "errorType": type(e).__name__}
+                    rec["notes"].append(f"retroviral architecture unavailable: {type(e).__name__}")
             if rna:
                 rec["notes"].append("RNA input — U was read as T (DNA equivalent) for all steps")
             if any(o.get("open_end") for o in rec["orfs"]):
@@ -256,20 +468,113 @@ def analyze(seq_text: str, source: dict | None = None):
         out.append(rec)
     joined = "".join(s for _, s in recs)
     any_dom = any(r["domains"] for r in out)
-    references = refs.for_run("analysis", domains=any_dom, fetched=bool(source))
+    references = refs.for_run("analysis", domains=any_dom, fetched=input_type != "local_input")
     dbs = ([{"name": "Pfam TE-domain profiles (bundled, CC0)", "file": "data/te_domains.hmm",
              "sha256": domains.HMM_SHA256}] if domains.HMM_SHA256 else [])
-    result = {"records": out, "references": references,
-              "provenance": provenance.build_manifest("analysis", joined,
-                            recs[0][0] if recs else "empty", _detector_parameters(),
-                            source=source, references=references, databases=dbs)}
+    result = {"resultSchemaVersion": ANALYSIS_RESULT_SCHEMA, "records": out, "references": references}
+    result["status"] = derive_analysis_status(out)
     if not recs:
         result["warning"] = "No sequence provided — paste, upload, or fetch a sequence first."
+    elif result["status"] == ANALYSIS_STATUS_NO_VALID_RECORDS:
+        result["warning"] = "No valid nucleotide record was available for analysis."
     elif len(recs) > 1:
-        result["warning"] = (f"{len(recs)} records found and all {len(recs)} were analysed. The detail view and "
+        valid_n = sum(rec.get("valid") is True for rec in out)
+        result["warning"] = (f"{len(recs)} records found and {valid_n} were valid for analysis. The detail view and "
                              f"every downstream step (primers, in-silico PCR, family naming, splice) act on the "
                              f"ONE record selected in the summary table — the first by default.")
+    result["resultPayloadSha256"] = scientific_result_sha256(result)
+    manifest_identity = (gff3.public_record_identity("multiple_records", trust="generated") if len(recs) > 1 else
+                         (identities[0] if identities else gff3.public_record_identity("record", trust="generated")))
+    manifest_identity["identitySource"] = (
+        "generated" if len(recs) != 1 else out[0]["identitySource"])
+    result["provenance"] = provenance.build_manifest(
+        "analysis", joined, manifest_identity["id"], _detector_parameters(),
+        source=validated_source, references=references, databases=dbs, input_identity=manifest_identity,
+        input_records=[{**identity, "identitySource": rec["identitySource"], "sequence": seq}
+                       for identity, rec, (_rid, seq) in zip(identities, out, recs)],
+        result_descriptor={"resultSchemaVersion": ANALYSIS_RESULT_SCHEMA,
+                           "resultPayloadSha256": result["resultPayloadSha256"]})
     return result
+
+
+def _scientific_result_payload(result: dict) -> dict:
+    payload = copy.deepcopy(result)
+    payload.pop("resultPayloadSha256", None)
+    payload.pop("format", None)
+    payload.pop("provenance", None)
+    return payload
+
+
+def scientific_result_sha256(result: dict) -> str:
+    """Hash the canonical scientific core without provenance or this digest (non-circular by design)."""
+    import json
+    encoded = json.dumps(_scientific_result_payload(result), ensure_ascii=False, allow_nan=False,
+                         sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def verify_scientific_result_payload(result: dict) -> bool:
+    try:
+        claimed = result.get("resultPayloadSha256")
+        return (isinstance(claimed, str) and len(claimed) == 64 and
+                scientific_result_sha256(result) == claimed.lower())
+    except (AttributeError, TypeError, ValueError):
+        return False
+
+
+def analysis_result_document(result: dict) -> dict:
+    """Build the versioned, complete JSON document exported for one analysis run."""
+    if not isinstance(result, dict) or result.get("resultSchemaVersion") != ANALYSIS_RESULT_SCHEMA:
+        raise ValueError("unsupported analysis result")
+    if result.get("status") not in ANALYSIS_EXPORTABLE_STATUSES:
+        raise ValueError("analysis has no exportable valid result")
+    document = copy.deepcopy(result)
+    document["format"] = ANALYSIS_RESULT_FORMAT
+    if not validate_analysis_result_document(document):
+        raise ValueError("analysis result is not bound to its provenance manifest")
+    return document
+
+
+def analysis_result_json_bytes(result: dict) -> bytes:
+    """Serialize an exportable result as strict UTF-8 JSON and reverify its bindings."""
+    import json
+
+    document = analysis_result_document(result)
+    encoded = json.dumps(
+        document, ensure_ascii=False, allow_nan=False, sort_keys=True, indent=2,
+    ).encode("utf-8")
+    decoded = json.loads(encoded)
+    if not validate_analysis_result_document(decoded):
+        raise ValueError("serialized analysis result failed seal verification")
+    return encoded
+
+
+def validate_analysis_result_document(document: dict) -> bool:
+    """Check the sealed result descriptor, scientific core, stages, and ordered input binding."""
+    try:
+        manifest = document.get("provenance")
+        if (document.get("format") != ANALYSIS_RESULT_FORMAT or
+                document.get("resultSchemaVersion") != ANALYSIS_RESULT_SCHEMA or
+                document.get("status") not in ANALYSIS_EXPORTABLE_STATUSES or
+                not provenance.verify_manifest(manifest)):
+            return False
+        descriptor = {"resultSchemaVersion": document["resultSchemaVersion"],
+                      "resultPayloadSha256": document.get("resultPayloadSha256")}
+        if manifest.get("resultDescriptor") != descriptor or not verify_scientific_result_payload(document):
+            return False
+        records = document.get("records")
+        bound = manifest["input"].get("records")
+        if (not isinstance(records, list) or not all(_analysis_processing_valid(rec) for rec in records) or
+                not isinstance(bound, list) or len(records) != len(bound)):
+            return False
+        observed = [{**({"id": str(rec["id"]), "identitySource": rec["identitySource"]} |
+                        ({"idSha256": rec["idSha256"]} if rec.get("idSha256") else {})),
+                     "length": len(rec["seq"]),
+                     "sha256": hashlib.sha256(rec["seq"].encode("utf-8")).hexdigest()}
+                    for rec in records]
+        return observed == bound and document["status"] == derive_analysis_status(records)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return False
 
 
 # ---------- accession fetch ----------
@@ -279,6 +584,8 @@ def run_fetch(body):
         raise BadRequest("accession must be a string")
     try:
         meta = fetch.retrieve(acc, refresh=bool(body.get("refresh")))
+        meta["sourceContext"] = provenance.normalize_source_context(
+            meta, sequtil.parse_fasta(meta.get("fasta") or ""))
         return {"ok": True, **meta}
     except fetch.FetchError as fe:
         return {"ok": False, "error": str(fe)}
@@ -309,6 +616,8 @@ def run_fetch_coords(body):
                                          refresh=bool(body.get("refresh")))
         else:
             raise fetch.CoordError("select an organism or enter a custom organism / assembly accession")
+        meta["sourceContext"] = provenance.normalize_source_context(
+            meta.get("source"), sequtil.parse_fasta(meta.get("fasta") or ""))
         return {"ok": True, **meta}
     except fetch.FetchError as fe:
         return {"ok": False, "error": str(fe)}
@@ -326,18 +635,20 @@ def run_annotate(body):
         raise BadRequest("no sequence")
     seq = recs[0][1]
     _require_nt(seq)
+    source_context = _validated_operation_source(body.get("source"), recs)
+    identity = _operation_record_identity(source_context, recs[0][0])
     sp = body.get("species")
     if sp is not None and not isinstance(sp, str):
         raise BadRequest("species must be a string")
     unc = bool(body.get("include_uncurated"))
     t0 = time.time()
-    r = wsl.annotate(f">{recs[0][0]}\n{seq}", species=(sp or None),
+    r = wsl.annotate(f">{identity['id']}\n{seq}", species=(sp or None),
                      timeout=int(_num(body.get("timeout"), 600)), include_uncurated=unc)
     if r.get("ok"):
         el = time.time() - t0
         timing.record("annotate", len(seq), el)
         r["elapsed_s"] = round(el, 1)
-        references = refs.for_run("annotate", fetched=bool(body.get("source")))
+        references = refs.for_run("annotate", fetched=source_context["inputType"] != "local_input")
         r["references"] = references
         # The Dfam entry is whatever famdb reported for the library actually installed — never a literal.
         # A library that cannot be identified seals an explicit marker instead of a version, because a run
@@ -365,7 +676,7 @@ def run_annotate(body):
              "library": r.get("library_kind")},
             not_run=["External NCBI Primer-BLAST", "De novo family discovery"],
             databases=[dfam_db, {"name": "RepeatMasker", "version": r.get("repeatmasker_version")}],
-            source=body.get("source"), references=references)
+            source=source_context, references=references, input_identity=identity)
     return r
 
 
@@ -379,20 +690,22 @@ def run_splice(body):
         raise BadRequest("no transcript sequence to align")
     _require_nt(grecs[0][1], "genomic sequence")
     _require_nt(trecs[0][1], "transcript")
+    source_context = _validated_operation_source(body.get("source"), grecs)
+    identity = _operation_record_identity(source_context, grecs[0][0])
     t0 = time.time()
-    r = wsl.splice_align(f">{grecs[0][0]}\n{grecs[0][1]}", f">{trecs[0][0]}\n{trecs[0][1]}",
+    r = wsl.splice_align(f">{identity['id']}\n{grecs[0][1]}", f">{trecs[0][0]}\n{trecs[0][1]}",
                          timeout=int(_num(body.get("timeout"), 180)))
     if r.get("ok"):
         el = time.time() - t0
         timing.record("splice", len(grecs[0][1]), el)
         r["elapsed_s"] = round(el, 1)
-        references = refs.for_run("splice", fetched=bool(body.get("source")))
+        references = refs.for_run("splice", fetched=source_context["inputType"] != "local_input")
         r["references"] = references
         r["provenance"] = provenance.build_manifest(
             "splice", grecs[0][1], grecs[0][0],
             {"tool": "minimap2", "preset": "splice", "minimap2": r.get("minimap2_version"),
              "transcript_sha256": hashlib.sha256(trecs[0][1].encode()).hexdigest()},   # seal the transcript too
-            source=body.get("source"), references=references)
+            source=source_context, references=references, input_identity=identity)
     return r
 
 
@@ -402,6 +715,8 @@ def run_miniprot(body):
     if not grecs:
         raise BadRequest("no genomic sequence")
     _require_nt(grecs[0][1], "genomic sequence")
+    source_context = _validated_operation_source(body.get("source"), grecs)
+    identity = _operation_record_identity(source_context, grecs[0][0])
     prot_text = body.get("protein", "")
     if not isinstance(prot_text, str):
         raise BadRequest("protein must be a string of FASTA / raw amino-acid sequence")
@@ -415,13 +730,13 @@ def run_miniprot(body):
     # hash the FASTA text (headers + record boundaries) so IDs and multi-record splits seal distinctly
     protein_sha = hashlib.sha256(protein_fasta.encode()).hexdigest()
     t0 = time.time()
-    r = wsl.protein_align(f">{grecs[0][0]}\n{grecs[0][1]}", protein_fasta,
+    r = wsl.protein_align(f">{identity['id']}\n{grecs[0][1]}", protein_fasta,
                           timeout=int(_num(body.get("timeout"), 180)))
     if r.get("ok"):
         el = time.time() - t0
         timing.record("homology", len(grecs[0][1]), el)
         r["elapsed_s"] = round(el, 1)
-        references = refs.for_run("homology", fetched=bool(body.get("source")))
+        references = refs.for_run("homology", fetched=source_context["inputType"] != "local_input")
         r["references"] = references
         # the reference protein IS the evidence: its sha256 must seal the run (different protein -> different result)
         r["provenance"] = provenance.build_manifest(
@@ -430,26 +745,91 @@ def run_miniprot(body):
              "protein_source": "user", "protein_sha256": protein_sha, "n_reference_proteins": len(precs)},
             not_run=["De novo ab-initio gene prediction (no transcript, no protein)",
                      "Curated TE-protein library (bundled default)"],
-            source=body.get("source"), references=references)
+            source=source_context, references=references, input_identity=identity)
     return r
 
 
 # ---------- primer design (Primer3) ----------
+def _sequence_record_binding(record_id, sequence, identity=None):
+    return {"index": 0, **(identity or gff3.public_record_identity(record_id)), "length": len(sequence),
+            "sha256": hashlib.sha256(sequence.encode()).hexdigest()}
+
+
+def _validate_sealed_primer_candidate(manifest, design_record, design_seq):
+    """Recompute candidate geometry against the exact design record and reject internal contradictions."""
+    if not provenance.verify_manifest(manifest) or manifest.get("runType") != "primer":
+        raise BadRequest("design_provenance is invalid or has an unsupported seal")
+    params = manifest.get("parameters") or {}
+    cand = params.get("candidate")
+    if not isinstance(cand, dict):
+        raise BadRequest("design_provenance does not bind a primer candidate")
+    top_input = manifest.get("input")
+    if not isinstance(top_input, dict):
+        raise BadRequest("design_provenance has no input binding")
+    for field in ("id", "length", "sha256"):
+        if top_input.get(field) != design_record[field]:
+            raise BadRequest("design_provenance top-level input contradicts its selected record")
+    if cand.get("selected_record") != design_record:
+        raise BadRequest("primer candidate is bound to a different design record")
+    try:
+        left = primers.endpoint_span(cand.get("left_pos"), len(design_seq), "candidate left_pos")
+        right = primers.endpoint_span(cand.get("right_pos"), len(design_seq), "candidate right_pos")
+        intended = primers.endpoint_span(
+            cand.get("intended_product_span"), len(design_seq), "candidate intended_product_span")
+        target = primers.start_length_region(cand.get("primer3_target"), len(design_seq), "candidate primer3_target")
+        included = primers.start_length_region(cand.get("included_region"), len(design_seq), "candidate included_region")
+        tolerance = primers.endpoint_tolerance(cand.get("intended_endpoint_tolerance_bp"))
+    except (TypeError, ValueError) as e:
+        raise BadRequest(str(e))
+    fwd, rev = cand.get("left_seq"), cand.get("right_seq")
+    if not isinstance(fwd, str) or not isinstance(rev, str):
+        raise BadRequest("design_provenance has invalid primer sequences")
+    if (left[1] - left[0] != len(fwd) or right[1] - right[0] != len(rev) or
+            left[1] > right[0]):
+        raise BadRequest("sealed primer spans contradict oligo lengths or orientation")
+    if design_seq[left[0]:left[1]].upper() != fwd.upper():
+        raise BadRequest("sealed forward-primer position contradicts the design template")
+    if sequtil.reverse_complement(design_seq[right[0]:right[1]]).upper() != rev.upper():
+        raise BadRequest("sealed reverse-primer position contradicts the design template")
+    derived_intended = [left[0], right[1]]
+    if intended != derived_intended or cand.get("product_size") != intended[1] - intended[0]:
+        raise BadRequest("sealed intended product or product size contradicts primer coordinates")
+    if cand.get("intended_contributors") != {"left": "F", "right": "R", "orientation": "F+R"}:
+        raise BadRequest("sealed intended primer contributors or orientation are invalid")
+    if target is not None and (intended[0] > target[0] or intended[1] < target[0] + target[1]):
+        raise BadRequest("sealed intended product does not span primer3_target")
+    if included is not None:
+        included_end = included[0] + included[1]
+        if (intended[0] < included[0] or intended[1] > included_end or
+                (target is not None and (target[0] < included[0] or target[0] + target[1] > included_end))):
+            raise BadRequest("sealed candidate geometry leaves included_region")
+    return cand, {"primer3_target": target, "included_region": included,
+                  "intended_product_span": intended,
+                  "intended_endpoint_tolerance_bp": tolerance}
+
+
 def run_primers(body):
+    if "target" in body or "included" in body:
+        raise BadRequest("use primer3_target and included_region; target/included are not accepted")
     recs = sequtil.parse_fasta(body.get("sequence", ""))
     if not recs:
         raise BadRequest("no sequence")
     seq = recs[0][1]
     _require_nt(seq)
+    source_context = _validated_operation_source(body.get("source"), recs)
+    identity = _operation_record_identity(source_context, recs[0][0])
     params = _clean_params(body.get("params", {}))
-    inc = body.get("included")
-    if inc is not None:                              # clamp the domain region to the template (never past the end)
-        if not (isinstance(inc, (list, tuple)) and len(inc) == 2):
-            raise BadRequest("included must be a [start, length] pair")
-        s0 = max(0, min(int(_num(inc[0], 0)), len(seq) - 1))
-        inc = [s0, max(1, min(int(_num(inc[1], 1)), len(seq) - s0))]
     try:
-        res = primers.design_primers(seq, params, body.get("target"), inc)
+        effective_params = primers.resolved_design_parameters(params)
+        target = primers.start_length_region(body.get("primer3_target"), len(seq), "primer3_target")
+        inc = primers.start_length_region(body.get("included_region"), len(seq), "included_region")
+        if target is not None and inc is not None:
+            if target[0] < inc[0] or target[0] + target[1] > inc[0] + inc[1]:
+                raise ValueError("primer3_target must be contained in included_region")
+    except (TypeError, ValueError) as e:
+        raise BadRequest(str(e))
+    try:
+        res = primers.design_primers(seq, effective_params, target, inc)
     except (ImportError, RuntimeError):                # environment fault (Primer3 unavailable) -> 500, not a user 400
         raise
     except Exception as e:
@@ -465,23 +845,41 @@ def run_primers(body):
             c["qc"] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
     res["oligoqc_engines"] = oligoqc.available()
     res["oligoqc_references"] = refs.oligoqc_refs()    # advisory-method citations — reported, NOT sealed
-    references = refs.for_run("primer")
+    references = refs.for_run("primer", fetched=source_context["inputType"] != "local_input")
     res["references"] = references
-    seal_params = dict(params)                        # the target/included region drives the design -> must be in the seal
-    if body.get("target") is not None:
-        seal_params["target"] = body.get("target")
-    if inc is not None:
-        seal_params["included"] = inc
-    res["provenance"] = provenance.build_manifest("primer", seq, recs[0][0], seal_params, references=references)
+    seal_params = dict(effective_params)
+    seal_params.update({"coordinateSystem": "0-based-half-open",
+                        "primer3_target": target, "included_region": inc})
+    res["provenance"] = provenance.build_manifest(
+        "primer", seq, identity["id"], seal_params, source=source_context, references=references,
+        input_identity=identity)
+    record_binding = _sequence_record_binding(identity["id"], seq, identity)
+    for c in res.get("candidates", []):
+        candidate = {
+            "id": c["id"], "left_seq": c["left_seq"], "right_seq": c["right_seq"],
+            "left_pos": c["left_pos"], "right_pos": c["right_pos"],
+            "product_size": c["product_size"], "primer3_target": c["primer3_target"],
+            "included_region": c["included_region"],
+            "intended_product_span": c["intended_product_span"],
+            "intended_endpoint_tolerance_bp": c["intended_endpoint_tolerance_bp"],
+            "intended_contributors": {"left": "F", "right": "R", "orientation": "F+R"},
+            "selected_record": record_binding,
+        }
+        c["design_provenance"] = provenance.build_manifest(
+            "primer", seq, identity["id"], {**seal_params, "candidate": candidate},
+            source=source_context, references=references, input_identity=identity)
     return res
 
 
 # ---------- in-silico PCR ----------
 def run_pcr(body):
+    if "target_span" in body:
+        raise BadRequest("target_span is ambiguous; supply primer3_target and intended_product_span separately")
     recs = sequtil.parse_fasta(body.get("sequence", ""))
     if not recs:
         raise BadRequest("no sequence")
     seq = recs[0][1]
+    source_context = _validated_operation_source(body.get("source"), recs)
     fwd, rev = body.get("fwd"), body.get("rev")
     if not fwd or not rev:
         raise BadRequest("fwd and rev primer sequences are required")
@@ -491,41 +889,117 @@ def run_pcr(body):
     _require_nt(fwd, "forward primer")     # a non-nucleotide primer must error, not scan as empty
     _require_nt(rev, "reverse primer")
     p = _clean_params(body.get("params", {}))
-    backgrounds = [{"id": recs[0][0] + " (input)", "seq": seq}]
+    assay_identity = _operation_record_identity(source_context, recs[0][0])
+    backgrounds = [{"id": assay_identity["id"], "source": assay_identity["id"] + " (input)", "seq": seq,
+                    "idSha256": assay_identity.get("idSha256")}]
     bg_raw = body.get("background", "")
     if not isinstance(bg_raw, str):
         raise BadRequest("background must be a string of FASTA / raw sequence")
     bg_text = bg_raw.strip()
     if bg_text:
         for bid, bseq in sequtil.parse_fasta(bg_text):
-            _require_nt(bseq, f"background '{bid}'")
-            backgrounds.append({"id": bid + " (custom background)", "seq": bseq})
-    ts = body.get("target_span")
-    if ts is not None and not (isinstance(ts, (list, tuple)) and len(ts) == 2
-            and all(isinstance(x, (int, float)) and not isinstance(x, bool)
-                    and x == x and abs(x) != float("inf") for x in ts)):    # reject NaN/Inf (would seal into the manifest)
-        raise BadRequest("target_span must be a [start, end] pair of finite numbers")
-    tp = max(0, int(_num(p.get("tp", 5), 5)))            # non-negative int; float/NaN already rejected by _clean_params
-    mm = max(0, int(_num(p.get("max_mm", 2), 2)))
+            identity = gff3.public_record_identity(bid)
+            _require_nt(bseq, f"background '{identity['id']}'")
+            backgrounds.append({"id": identity["id"],
+                                "source": identity["id"] + " (custom background)", "seq": bseq,
+                                "idSha256": identity.get("idSha256")})
+    design_manifest = body.get("design_provenance")
+    assay_record = _sequence_record_binding(assay_identity["id"], seq, assay_identity)
+    design_input = None
+    if design_manifest is not None:
+        design_text = body.get("design_sequence")
+        if not isinstance(design_text, str):
+            raise BadRequest("design_sequence is required to verify design_provenance")
+        design_recs = sequtil.parse_fasta(design_text)
+        if not design_recs:
+            raise BadRequest("design_sequence has no sequence record")
+        design_id, design_seq = design_recs[0]
+        _require_nt(design_seq, "design sequence")
+        if not provenance.verify_manifest(design_manifest):
+            raise BadRequest("design_provenance is invalid or has an unsupported seal")
+        bound_identity = design_manifest.get("input") or {}
+        source_kind = bound_identity.get("identitySource")
+        candidate_identity = gff3.public_record_identity(
+            design_id, trust=source_kind if source_kind in {"validated_fetch", "generated"} else "local_input")
+        candidate_identity["identitySource"] = source_kind or "local_input"
+        design_record = _sequence_record_binding(candidate_identity["id"], design_seq, candidate_identity)
+        cand, geometry = _validate_sealed_primer_candidate(
+            design_manifest, design_record, design_seq)
+        target, inc = geometry["primer3_target"], geometry["included_region"]
+        intended = geometry["intended_product_span"]
+        tolerance = geometry["intended_endpoint_tolerance_bp"]
+        expected_candidate = {
+            "left_seq": fwd, "right_seq": rev, "primer3_target": target,
+            "included_region": inc, "intended_product_span": intended,
+            "intended_endpoint_tolerance_bp": tolerance,
+        }
+        if any(cand.get(k) != v for k, v in expected_candidate.items()):
+            raise BadRequest("primer candidate geometry or sequence disagrees with design_provenance")
+        if any(body.get(k) != v for k, v in geometry.items()):
+            raise BadRequest("submitted primer geometry disagrees with design_provenance")
+        design_input = copy.deepcopy(design_manifest["input"])
+        same_design_record = design_record == assay_record
+        expected_assessment = "assess" if same_design_record else "withheld_template_mismatch"
+    else:
+        if body.get("design_sequence") is not None:
+            raise BadRequest("design_sequence requires design_provenance")
+        if any(body.get(k) is not None for k in (
+                "primer3_target", "included_region", "intended_product_span")):
+            raise BadRequest("design_provenance is required to assess designed-product geometry")
+        target = inc = intended = None
+        try:
+            tolerance = primers.endpoint_tolerance(body.get(
+                "intended_endpoint_tolerance_bp", primers.INTENDED_ENDPOINT_TOLERANCE_BP))
+        except (TypeError, ValueError) as e:
+            raise BadRequest(str(e))
+        same_design_record = False
+        expected_assessment = "not_run"
+    design_assessment = body.get("design_assessment", expected_assessment)
+    if design_assessment != expected_assessment:
+        raise BadRequest("design_assessment contradicts the design and assay record bindings")
+
+    tp = _num(p.get("tp", 5), 5)
+    mm = _num(p.get("max_mm", 2), 2)
     # The shortest 3'-proximal core that may be called a binding site. It changes which products are
     # reported for a tailed primer, so it is resolved here and written into the seal below rather than
     # left as a bare default inside the matcher where no manifest would record it.
-    ma = max(1, int(_num(p.get("min_anneal", primers.MIN_PRIMER_SIZE), primers.MIN_PRIMER_SIZE)))
-    pmin = int(_num(p.get("prod_min", 70), 70))
-    pmax = int(_num(p.get("prod_max", 1000), 1000))
+    ma = _num(p.get("min_anneal", primers.MIN_PRIMER_SIZE), primers.MIN_PRIMER_SIZE)
+    pmin = _num(p.get("prod_min", 70), 70)
+    pmax = _num(p.get("prod_max", 1000), 1000)
+    for name, value in (("tp", tp), ("max_mm", mm), ("min_anneal", ma),
+                        ("prod_min", pmin), ("prod_max", pmax)):
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise BadRequest(f"{name} must be an integer")
+    if tp < 0 or mm < 0:
+        raise BadRequest("tp and max_mm must be non-negative")
+    if ma < primers.MIN_PRIMER_SIZE or len(fwd) < ma or len(rev) < ma:
+        raise BadRequest(f"min_anneal must be at least {primers.MIN_PRIMER_SIZE} and no longer than either primer")
+    shortest_primer = min(len(fwd), len(rev))
+    if tp > shortest_primer or mm > shortest_primer:
+        raise BadRequest("tp and max_mm cannot exceed the shorter primer length")
+    if pmin < 1 or pmax < pmin:
+        raise BadRequest("product-size bounds must be positive and prod_min <= prod_max")
     try:
         amps = []
         pcr_stats = {}
         truncated = []
         for k, bg in enumerate(backgrounds):
             st = {}
-            amps += primers.in_silico_pcr(
-                fwd, rev, bg["seq"], bg["id"],
+            found = primers.in_silico_pcr(
+                fwd, rev, bg["seq"], bg["source"],
                 max_mm=mm, tp=tp, min_anneal=ma, prod_min=pmin, prod_max=pmax,
-                target_span=(list(ts) if (ts and k == 0) else None),  # on-target only on the input sequence
+                primer3_target=(target if k == 0 and same_design_record else None),
+                intended_product_span=(intended if k == 0 and same_design_record else None),
+                intended_endpoint_tolerance_bp=tolerance,
+                assess_design_geometry=(k == 0 and same_design_record),
                 stats=st)
+            if bg.get("idSha256"):
+                for amplicon in found:
+                    amplicon["sourceIdSha256"] = bg["idSha256"]
+                    amplicon["product_key"] = f"{amplicon.get('product_key', '')}:idsha256={bg['idSha256']}"
+            amps += found
             if st.get("amplicons_capped") or st.get("sites_capped"):
-                truncated.append(bg["id"])
+                truncated.append(bg["source"])
             pcr_stats = st or pcr_stats
     except (ValueError, TypeError) as e:
         raise BadRequest(f"in-silico PCR parameters rejected: {type(e).__name__}: {e}")
@@ -533,8 +1007,28 @@ def run_pcr(body):
     # happened to type, so a run left entirely at defaults sealed no thresholds at all — the same defect
     # _detector_parameters() was written to remove from the analysis path, still present here. Every number
     # that selects which products are reported now goes in, whether the caller set it or not.
+    assay_binding = dict(assay_record)
+    if source_context["inputType"] != "local_input":
+        assay_binding.update(provenance.public_source_fields(source_context, recs))
+    search_inputs = [{"role": "assay", **assay_binding}]
+    for bg in backgrounds[1:]:
+        binding = {"role": "background", **_sequence_record_binding(bg["id"], bg["seq"],
+                                                                       {"id": bg["id"], **({"idSha256": bg["idSha256"]}
+                                                                        if bg.get("idSha256") else {})})}
+        if bg.get("idSha256"):
+            binding["idSha256"] = bg["idSha256"]
+        search_inputs.append(binding)
     seal_p = dict(p)                                     # primers/target/background drive the result -> must be in the seal
-    seal_p.update({"fwd": fwd, "rev": rev, "target_span": (list(ts) if ts else None),
+    seal_p.update({"fwd": fwd, "rev": rev,
+                   "coordinateSystem": "0-based-half-open",
+                   "primer3_target": target, "included_region": inc,
+                   "intended_product_span": intended,
+                   "intended_endpoint_tolerance_bp": tolerance,
+                   "design_assessment": design_assessment,
+                   "design_manifest_sha256": (design_manifest.get("manifestSha256") if design_manifest else None),
+                   "design_input": design_input,
+                   "assay_input": assay_binding,
+                   "search_inputs": search_inputs,
                    "max_mm": mm, "tp": tp, "min_anneal": ma,
                    "prod_min": pmin, "prod_max": pmax,
                    "background_sha256": (hashlib.sha256(bg_text.encode()).hexdigest() if bg_text else None)})
@@ -545,20 +1039,38 @@ def run_pcr(body):
         warning = (f"in-silico PCR stopped early on {', '.join(truncated)}: the search caps at "
                    f"{pcr_stats.get('max_amplicons', 4000)} products and {pcr_stats.get('max_sites', 4000)} "
                    "binding sites per primer. The product list below is therefore INCOMPLETE — treat it as "
-                   "a lower bound on priming, not as an exhaustive off-target result.")
+                   "a lower bound on priming, not as an exhaustive product search.")
+    status = "partial_capped" if truncated else ("complete" if amps else "complete_zero_products")
+    unique_products = len({a["product_key"] for a in amps})
+    references = refs.for_run("in-silico-pcr", fetched=source_context["inputType"] != "local_input")
     return {
+        "status": status,
         "amplicons": amps,
+        "mechanismCount": len(amps),
+        "uniqueProductCount": unique_products,
         "truncated": bool(truncated),
         "truncatedOn": truncated,
         "warning": warning,
-        "backgroundsSearched": [bg["id"] for bg in backgrounds],
+        "backgroundsSearched": [bg["source"] for bg in backgrounds],
+        "bindings": {"design": design_input, "assay": assay_binding,
+                     "backgrounds": search_inputs[1:], "designAssessment": design_assessment},
         "notSearched": ["Reference assembly (needs WSL/NCBI)", "External NCBI Primer-BLAST",
                         "IUPAC-ambiguous template bases"],
         "criteria": {"max_mismatch": mm, "three_prime_strict": tp, "min_anneal": ma,
-                     "product_size": [pmin, pmax]},
-        "references": refs.for_run("in-silico-pcr"),
-        "provenance": provenance.build_manifest("in-silico-pcr", seq, recs[0][0], seal_p,
-                      references=refs.for_run("in-silico-pcr"))}
+                     "product_size": [pmin, pmax], "coordinateSystem": "0-based-half-open",
+                     "primer3_target": target, "included_region": inc,
+                     "intended_product_span": intended,
+                     "intended_endpoint_tolerance_bp": tolerance,
+                     "intended_product_status": ("assessed" if same_design_record and intended is not None
+                                                 else ("withheld" if design_assessment == "withheld_template_mismatch"
+                                                       else "not_run")),
+                     "target_coverage_status": ("assessed" if same_design_record and target is not None
+                                                else ("withheld" if design_assessment == "withheld_template_mismatch"
+                                                      else "not_run"))},
+        "references": references,
+        "provenance": provenance.build_manifest(
+            "in-silico-pcr", seq, assay_identity["id"], seal_p, source=source_context,
+            references=references, input_identity=assay_identity)}
 
 
 def _prime_vienna(candidates):

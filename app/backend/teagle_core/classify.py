@@ -87,11 +87,85 @@ def _refine_tsd(tsd, superfamily, seq):
         tsd.update(refined)                              # correct length/motif/coords/matched_expected in place
 
 
-def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, orfs=None):
+def _classify_without_structure(domains, domains_ok=True, orfs_unscanned=0):
+    """Classify only positive coding evidence when structural detection did not run."""
+    codes = [d.get("domain") for d in domains if d.get("domain")]
+    cset = set(codes)
+    ledger = [{"dependency": "structural", "status": "unavailable",
+               "statement": "the structural scan did not run; repeats, tails and target-site duplications are unassessed"}]
+    outcome = "complete"
+    klass, superfamily, te_class, order, completeness = "unclassified", None, "unclassified", None, None
+    if not domains_ok:
+        outcome = "withheld"
+        superfamily = "classification withheld (structural and domain scans unavailable)"
+        ledger.append({"dependency": "domains", "status": "unavailable",
+                       "statement": "the protein-domain scan did not run; coding evidence is unassessed"})
+    elif not cset:
+        outcome = "withheld"
+        superfamily = "classification withheld (structural scan unavailable)"
+        ledger.append({"dependency": "domains", "status": "complete",
+                       "statement": "no tested protein domain was detected; structural evidence is unavailable"})
+    elif "RT" in cset and "YR" in cset and "INT" not in cset:
+        klass, superfamily, te_class = ("Class I · retrotransposon",
+                                        "DIRS-group (coding architecture; structure unassessed)", "DIRS")
+        order = "–".join(_ordered(cset))
+        ledger.append({"dependency": "domains", "status": "complete",
+                       "statement": "reverse transcriptase plus tyrosine recombinase supports DIRS-group coding architecture"})
+    elif "RT" in cset and "INT" in cset:
+        klass, superfamily, te_class = ("Class I · retrotransposon",
+                                        "LTR retroelement (coding architecture; termini unassessed)", "LTR/unclassified")
+        order = "–".join(_ordered(cset))
+        ledger.append({"dependency": "domains", "status": "complete",
+                       "statement": "reverse transcriptase plus DDE integrase supports the LTR order from coding architecture"})
+    elif "TPase" in cset:
+        klass, superfamily, te_class = ("Class II · DNA transposon",
+                                        "DNA transposon (transposase detected; termini unassessed)", "DNA/unclassified")
+        order = "–".join(_ordered(cset))
+        completeness = {"tier": "coding evidence present (transposase); terminal structure unassessed",
+                        "kind": "DNA transposon (terminal structure unassessed)", "present": ["TPase"],
+                        "missing": [], "expected": ["TPase", "TIR (5′)", "TIR (3′)"],
+                        "unassessed": ["TIR (5′)", "TIR (3′)"], "scope": DOMAINS_TESTED}
+        ledger.append({"dependency": "domains", "status": "complete",
+                       "statement": "a transposase domain supports a Class II coding assignment; termini are unassessed"})
+    elif "HEL" in cset:
+        superfamily = "Helitron-family helicase present — superfamily not called"
+        ledger.append({"dependency": "domains", "status": "complete",
+                       "statement": "a Helitron-family helicase was detected; the untested terminal architecture prevents a superfamily call"})
+    elif "RT" in cset and cset & _RETRO_CORROBORATION:
+        klass, superfamily, te_class = ("Class I · retrotransposon",
+                                        "retrotransposon order unassigned (structure unavailable)", "retro/unassigned")
+        order = "–".join(_ordered(cset))
+        ledger.append({"dependency": "domains", "status": "complete",
+                       "statement": "reverse transcriptase plus corroborating coding modules supports a retroelement; order is unassigned"})
+    elif cset == {"RT"}:
+        outcome = "withheld"
+        superfamily = "reverse transcriptase, class unassigned"
+        ledger.append({"dependency": "domains", "status": "complete",
+                       "statement": "reverse transcriptase alone cannot distinguish a transposable element from another reverse-transcribing gene"})
+    else:
+        superfamily = f"{'–'.join(_ordered(cset))} domain(s) detected; transposable-element class unassigned"
+        ledger.append({"dependency": "domains", "status": "complete",
+                       "statement": "coding domains were detected but do not establish a transposable-element class"})
+    evidence = [item["statement"] for item in ledger]
+    explanation = (f"Classified as {te_class} (candidate confidence). Structural: unavailable. "
+                   f"Domains: {' · '.join(codes) or 'none'}. " + "; ".join(evidence) + ".")
+    return {"class": klass, "superfamily": superfamily, "te_class": te_class, "order": order,
+            "confidence": "Candidate", "evidence": evidence, "evidenceLedger": ledger,
+            "outcome": outcome, "explanation": explanation, "n_domains": len(cset), "is_erv": False,
+            "completeness": completeness, "domains_unavailable": not domains_ok,
+            "structural_unavailable": True, "orfs_unscanned": int(orfs_unscanned or 0)}
+
+
+def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, orfs=None,
+             structural_ok=True):
     """`domains_ok=False` means the protein-domain scan RAISED, so `domains` is empty because nothing ran —
     not because nothing is there. Without that distinction every domain-derived negative ("not detected:
     GAG, PR, RNaseH") is asserted from a scan that never happened, which is absence-of-evidence sold as
-    evidence-of-absence. The result is marked so the card can say "not assessed" instead of "not detected"."""
+    evidence-of-absence. ``structural_ok=False`` applies the same rule to structural negatives: an empty
+    list then means the detector failed, not that terminal evidence was absent."""
+    if not structural_ok:
+        return _classify_without_structure(domains, domains_ok=domains_ok, orfs_unscanned=orfs_unscanned)
+
     # Advisory rows are REPORTED evidence, never CREDITED evidence. A sub-threshold terminal repeat is
     # shown to the user precisely because it did not qualify, so it must not satisfy any has_* test —
     # otherwise the classifier treats a rejection as a confirmation. Belt and braces with the naming rule
@@ -511,8 +585,6 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
 
     dom_str = " · ".join(codes) or "none"
     struct_str = ", ".join(e["type"].split(" (")[0] for e in structural) or "none"
-    explanation = (f"Classified as {te_class} ({confidence.lower()} confidence). "
-                   f"Structural: {struct_str}. Domains: {dom_str}." + (" " + "; ".join(ev) + "." if ev else ""))
     if orfs_unscanned and domains_ok:
         # A partial version of the domains_ok problem: the search ran, but not over every ORF, so the
         # not-detected list is scoped to what was searched rather than to the sequence.
@@ -526,10 +598,15 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
         ev.insert(0, "the protein-domain scan did not run for this record, so no domain was tested — "
                      "any domain named or not named below is unassessed, not absent")
         confidence = "Candidate"
+    explanation = (f"Classified as {te_class} ({confidence.lower()} confidence). "
+                   f"Structural: {struct_str}. Domains: {dom_str}." + (" " + "; ".join(ev) + "." if ev else ""))
     return {"class": klass, "superfamily": superfamily, "te_class": te_class, "order": order,
-            "confidence": confidence, "evidence": ev, "explanation": explanation, "n_domains": ndom,
+            "confidence": confidence, "evidence": ev,
+            "evidenceLedger": [{"dependency": "combined", "status": "complete", "statement": item} for item in ev],
+            "outcome": "withheld" if not domains_ok and not credited else "complete",
+            "explanation": explanation, "n_domains": ndom,
             "is_erv": is_erv, "completeness": completeness, "domains_unavailable": not domains_ok,
-            "orfs_unscanned": int(orfs_unscanned or 0)}
+            "structural_unavailable": not structural_ok, "orfs_unscanned": int(orfs_unscanned or 0)}
 
 
 # Domain families TEagle can test (its bundled Pfam profile panel). A module absent from a result is only

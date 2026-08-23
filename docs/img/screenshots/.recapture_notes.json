@@ -1,37 +1,197 @@
 {
+ "_capture": {
+  "appVersion": "3.9.0",
+  "completedNs": 1787375729357565100,
+  "failures": [],
+  "outputs": {
+   "docs/img/coord_fetch.png": {
+    "height": 1070,
+    "sha256": "6cfd80a6f43b14b842124f31a6aec7f7dc293a46b701d25c0bd8116b0b4da5f2",
+    "width": 340
+   },
+   "docs/img/genome_scan.png": {
+    "height": 1227,
+    "sha256": "31577e32ef6622a0eed25b6199bc0cbf5165099d778b5ea5acbc2f45ee375562",
+    "width": 1109
+   },
+   "docs/img/installer.png": {
+    "height": 1048,
+    "sha256": "c6edb10c2942361c509b1cc7e5fcedfb19e7e4bd4e34962d339c51b1df0ca2b9",
+    "width": 900
+   },
+   "docs/img/overview.png": {
+    "height": 1150,
+    "sha256": "0580d00d7b96e3683662069677cdcce67d025213bd0ace393146c888ded5057a",
+    "width": 1500
+   },
+   "docs/img/pcr_gel.png": {
+    "height": 977,
+    "sha256": "45bf09217fa6070d6ebe6d9516907aa71c248f5220e188ee9a901398156ffaca",
+    "width": 1109
+   },
+   "docs/img/primers.png": {
+    "height": 752,
+    "sha256": "14143177234aec6c36f9039d52eb8bc959696cec3ec90236c45a615533767ef7",
+    "width": 1109
+   },
+   "docs/img/screenshots/genome_scan_no_locus.png": {
+    "height": 1213,
+    "sha256": "80a088a635ca2a73d060554ec1982dd267c5a6d66c3f2e9e2b17838f4f520ae6",
+    "width": 1109
+   },
+   "docs/img/screenshots/herv_h_partial.png": {
+    "height": 1950,
+    "sha256": "745b39acbef869ec8fd783bf3d72171fb8319b3072b73386d359a72f95743dc1",
+    "width": 1109
+   },
+   "docs/img/screenshots/herv_k_domains.png": {
+    "height": 1997,
+    "sha256": "5695df4a548c9a4d18835fac68ed5b9ccf3ffb5134e2abc77c051ca5e74c441e",
+    "width": 1109
+   },
+   "docs/img/screenshots/manage_genomes_panel.png": {
+    "height": 995,
+    "sha256": "da8f85c098ee985c8bc90905716680d5c0e62d148b4cf406ad839b617fc89c3e",
+    "width": 1180
+   },
+   "docs/img/screenshots/methods_databases.png": {
+    "height": 1908,
+    "sha256": "411fc566490b044f73e17647ea7ba592194ff38fee0a4b93d8b48e97e06b6007",
+    "width": 1109
+   },
+   "docs/img/screenshots/primer_structure_detail.png": {
+    "height": 460,
+    "sha256": "ca1ead49680fa7d0bd10d367d96bfa87b432caddb6e95a91ecd2693d2610d6f1",
+    "width": 640
+   },
+   "docs/img/screenshots/splice_multi_exon.png": {
+    "height": 728,
+    "sha256": "9a61064054dd4273617d8ce26ceb82bbcc7f7bc475ad61a3214058a75907164a",
+    "width": 1109
+   },
+   "docs/img/screenshots/subregion_picker.png": {
+    "height": 200,
+    "sha256": "5936cd33834b4943713351bf4437a5a6b4463fa30b0d4e312ce96a8d21079c67",
+    "width": 478
+   },
+   "report/manual_figures/card02_methods_foot.png": {
+    "height": 625,
+    "sha256": "53f42c8e1263bc0fa53ec4de01f8e74dedda5a58caabf8af4b800d9da879ddea",
+    "width": 1109
+   },
+   "report/manual_figures/card_coord.png": {
+    "height": 1070,
+    "sha256": "6cfd80a6f43b14b842124f31a6aec7f7dc293a46b701d25c0bd8116b0b4da5f2",
+    "width": 340
+   },
+   "report/manual_figures/card_coord_fetch.png": {
+    "height": 404,
+    "sha256": "2f001827ea954f12b4080cefd6d4b9748918b8bd3a9a607a3659c0e0e70149bb",
+    "width": 340
+   },
+   "report/manual_figures/card_genome.png": {
+    "height": 1227,
+    "sha256": "31577e32ef6622a0eed25b6199bc0cbf5165099d778b5ea5acbc2f45ee375562",
+    "width": 1109
+   },
+   "report/manual_figures/card_herv.png": {
+    "height": 1997,
+    "sha256": "5695df4a548c9a4d18835fac68ed5b9ccf3ffb5134e2abc77c051ca5e74c441e",
+    "width": 1109
+   },
+   "report/manual_figures/card_installer.png": {
+    "height": 1048,
+    "sha256": "c6edb10c2942361c509b1cc7e5fcedfb19e7e4bd4e34962d339c51b1df0ca2b9",
+    "width": 900
+   },
+   "report/manual_figures/card_pcr.png": {
+    "height": 977,
+    "sha256": "45bf09217fa6070d6ebe6d9516907aa71c248f5220e188ee9a901398156ffaca",
+    "width": 1109
+   },
+   "report/manual_figures/card_primer.png": {
+    "height": 752,
+    "sha256": "14143177234aec6c36f9039d52eb8bc959696cec3ec90236c45a615533767ef7",
+    "width": 1109
+   },
+   "report/manual_figures/card_prov.png": {
+    "height": 644,
+    "sha256": "1b918ec5c58e4197e1828f43d0ffdf72a2da91404e7e84ba42b58ed65dc98bf0",
+    "width": 1109
+   },
+   "report/manual_figures/card_splice.png": {
+    "height": 728,
+    "sha256": "9a61064054dd4273617d8ce26ceb82bbcc7f7bc475ad61a3214058a75907164a",
+    "width": 1109
+   },
+   "report/manual_figures/card_struct.png": {
+    "height": 1643,
+    "sha256": "3f58c5e9adb73b3c5d849717c3cd902f9cb6e7b37948730424cfa65aece02ddd",
+    "width": 1109
+   },
+   "report/manual_figures/card_wsl.png": {
+    "height": 421,
+    "sha256": "9e58d4f952c7316f29e46c70106f1c0defc87d07a0aa71bcc54641be6d79f711",
+    "width": 1109
+   },
+   "report/manual_figures/methods_databases.png": {
+    "height": 1908,
+    "sha256": "411fc566490b044f73e17647ea7ba592194ff38fee0a4b93d8b48e97e06b6007",
+    "width": 1109
+   },
+   "report/manual_figures/overview.png": {
+    "height": 1150,
+    "sha256": "0580d00d7b96e3683662069677cdcce67d025213bd0ace393146c888ded5057a",
+    "width": 1500
+   },
+   "report/manual_figures/primer_structure_detail.png": {
+    "height": 460,
+    "sha256": "ca1ead49680fa7d0bd10d367d96bfa87b432caddb6e95a91ecd2693d2610d6f1",
+    "width": 640
+   },
+   "report/manual_figures/subregion_picker.png": {
+    "height": 200,
+    "sha256": "5936cd33834b4943713351bf4437a5a6b4463fa30b0d4e312ce96a8d21079c67",
+    "width": 478
+   }
+  },
+  "schemaVersion": "1.0",
+  "startedNs": 1787375705189665700,
+  "status": "ok"
+ },
  "img": {
-  "coord_fetch.png": "panel 01 rail after a real NCBI coordinate fetch \u2014 chr13:33,016,423-33,066,143 \u00b7 GRCh38.p14 \u00b7 49,721 bp \u00b7 340x1070",
-  "genome_scan.png": "REAL on+off-target (1 on / 48 off) \u00b7 1109x1213",
-  "installer.png": "backend installer \u2014 per-component status, per-component Install (absent) or Repair (present), Install all, Check integrity, live log \u00b7 900x1048",
-  "overview.png": "header v3.7.0 \u00b7 1500x1150",
-  "pcr_gel.png": "panel 05 \u2014 staged pair, to-scale gel, 1 amplicon(s) on M11240 \u00b7 1109x981",
-  "primers.png": "panel 04 \u2014 5 ranked pairs on M11240, per-pair structure QC \u00b7 1109x738"
+  "coord_fetch.png": "panel 01 rail after a real NCBI coordinate fetch — chr13:33,016,423-33,066,143 · GRCh38.p14 · 49,721 bp · 340x1070",
+  "genome_scan.png": "REAL on+off-target (1 on / 48 off) · 1109x1227",
+  "installer.png": "backend installer — per-component status, per-component Install (absent) or Repair (present), Install all, Check integrity, live log · 900x1048",
+  "overview.png": "header v3.9.0 · 1500x1150",
+  "pcr_gel.png": "panel 05 — staged pair, to-scale gel, 1 amplicon(s) on M11240 · 1109x977",
+  "primers.png": "panel 04 — 5 ranked pairs on M11240, per-pair structure QC · 1109x752"
  },
  "man": {
-  "card02_methods_foot.png": "card 02 foot \u2014 protein-domain table + methods & databases panel \u00b7 1109x625",
-  "card_coord.png": "panel 01 rail after a real NCBI coordinate fetch \u2014 chr13:33,016,423-33,066,143 \u00b7 GRCh38.p14 \u00b7 49,721 bp \u00b7 340x1070",
-  "card_coord_fetch.png": "panel 01 coordinate fetch \u2014 chr13:33,016,423-33,066,143 \u00b7 GRCh38.p14 \u00b7 340x404",
-  "card_genome.png": "REAL on+off-target (1 on / 48 off) \u00b7 1109x1213",
-  "card_herv.png": "HERV-K113 GAG-POL-ENV + per-domain confidence + completeness tier \u00b7 1109x1796",
-  "card_installer.png": "backend installer \u2014 per-component status, per-component Install (absent) or Repair (present), Install all, Check integrity, live log \u00b7 900x1048",
-  "card_pcr.png": "panel 05 \u2014 staged pair, to-scale gel, 1 amplicon(s) on M11240 \u00b7 1109x981",
-  "card_primer.png": "panel 04 \u2014 5 ranked pairs on M11240, per-pair structure QC \u00b7 1109x738",
-  "card_prov.png": "core v3.7.0 \u00b7 1109x462",
-  "card_splice.png": "J00265 x NM_000207 -> 3 exons / 2 introns \u00b7 1109x719",
-  "card_struct.png": "captured by recapture_shots.py \u00b7 1109x1442",
-  "card_wsl.png": "M80343 -> L1HS \u00b7 1109x421",
-  "methods_databases.png": "methods & databases disclosure expanded \u00b7 1109x1707",
-  "overview.png": "header v3.7.0 \u00b7 1500x1150",
-  "primer_structure_detail.png": "primer3 vs ViennaRNA \u0394G, side by side \u00b7 640x460",
-  "subregion_picker.png": "pick an interval inside a feature \u00b7 478x200"
+  "card02_methods_foot.png": "card 02 foot — protein-domain table + methods & databases panel · 1109x625",
+  "card_coord.png": "panel 01 rail after a real NCBI coordinate fetch — chr13:33,016,423-33,066,143 · GRCh38.p14 · 49,721 bp · 340x1070",
+  "card_coord_fetch.png": "panel 01 coordinate fetch — chr13:33,016,423-33,066,143 · GRCh38.p14 · 340x404",
+  "card_genome.png": "REAL on+off-target (1 on / 48 off) · 1109x1227",
+  "card_herv.png": "HERV-K113 GAG-POL-ENV + per-domain confidence + completeness tier · 1109x1997",
+  "card_installer.png": "backend installer — per-component status, per-component Install (absent) or Repair (present), Install all, Check integrity, live log · 900x1048",
+  "card_pcr.png": "panel 05 — staged pair, to-scale gel, 1 amplicon(s) on M11240 · 1109x977",
+  "card_primer.png": "panel 04 — 5 ranked pairs on M11240, per-pair structure QC · 1109x752",
+  "card_prov.png": "core v3.9.0 · 1109x644",
+  "card_splice.png": "J00265 x NM_000207 -> 3 exons / 2 introns · 1109x728",
+  "card_struct.png": "captured by recapture_shots.py · 1109x1643",
+  "card_wsl.png": "M80343 — all 1 returned row(s): 1 TE-classified, 0 non-TE repeat, 0 unclassified · 1109x421",
+  "methods_databases.png": "methods & databases disclosure expanded · 1109x1908",
+  "overview.png": "header v3.9.0 · 1500x1150",
+  "primer_structure_detail.png": "primer3 vs ViennaRNA ΔG, side by side · 640x460",
+  "subregion_picker.png": "pick an interval inside a feature · 478x200"
  },
  "shots": {
-  "genome_scan_no_locus": "live scan with no design locus \u2014 neutral 'genomic priming site' wording",
+  "genome_scan_no_locus": "live scan with no design locus — neutral 'genomic priming site' wording",
   "herv_h_partial": "HERV-H partial tier, single 'not detected' line",
   "herv_k_domains": "HERV-K113 GAG-POL-ENV + per-domain confidence + completeness tier",
   "manage_genomes_panel": "full organism catalogue, per-row download/delete",
   "methods_databases": "methods & databases disclosure expanded",
-  "primer_structure_detail": "primer3 vs ViennaRNA \u0394G, side by side",
+  "primer_structure_detail": "primer3 vs ViennaRNA ΔG, side by side",
   "splice_multi_exon": "J00265 x NM_000207 -> 3 exons / 2 introns",
   "subregion_picker": "pick an interval inside a feature"
  }

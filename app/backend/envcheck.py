@@ -3,8 +3,8 @@
 On first run — and after any install or upgrade (detected via a signature over
 requirements.txt + the app version) — this verifies Python and the pinned Python
 packages, installs/repairs them via pip, and records the verified state so it does
-not reinstall every launch. It also probes optional backends (WebView2, WSL2) that
-gate advanced features. Nothing fails silently: a failed install is reported with
+not reinstall every launch. It also reports the optional WSL2 backend that gates
+advanced features. Nothing fails silently: a failed install is reported with
 the pip error, never treated as success.
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))       # project root
 REQ = appdirs.resource("requirements.txt") or os.path.join(HERE, "requirements.txt")
 STATE_DIR = appdirs.user_data_dir()                          # %LOCALAPPDATA%/TEagle when installed
 STATE = os.path.join(STATE_DIR, "env_state.json")
-MIN_PY = (3, 10)
+REQUIRED_PY = (3, 12)
 
 
 def _app_version() -> str:
@@ -78,8 +78,6 @@ def _write_state(sig: str, pkgs):
 
 def probe_backends() -> dict:
     """Optional backends that gate advanced features (report, never fail)."""
-    wv = os.path.isdir(r"C:\Program Files (x86)\Microsoft\EdgeWebView\Application") or \
-         os.path.isdir(r"C:\Program Files\Microsoft\EdgeWebView\Application")
     wsl = None
     exe = shutil.which("wsl")
     if exe:
@@ -93,14 +91,16 @@ def probe_backends() -> dict:
                 wsl = "no distro"
         except Exception:
             wsl = "error"
-    return {"webview2": bool(wv), "wsl2": wsl or "not found"}
+    return {"wsl2": wsl or "not found"}
 
 
 _IMPORT_NAME = {
     "primer3-py": "primer3",
     "pyhmmer": "pyhmmer",
+    "psutil": "psutil",
     "PySide6": "PySide6",
     "openpyxl": "openpyxl",
+    "et_xmlfile": "et_xmlfile",
     "certifi": "certifi",
     "pypdf": "pypdf",
     "ViennaRNA": "RNA",  # ViennaRNA imports as RNA when it is deliberately enabled.
@@ -138,7 +138,7 @@ def check() -> dict:
         pkgs.append((name, ver, inst, ok))
     sig = _signature(reqs)
     last = _read_state().get("signature")
-    py_ok = sys.version_info[:2] >= MIN_PY
+    py_ok = sys.version_info[:2] == REQUIRED_PY
     return {
         "python": ".".join(map(str, sys.version_info[:3])),
         "python_ok": py_ok,
@@ -161,7 +161,8 @@ def ensure(auto_install: bool = True, verbose: bool = True) -> dict:
     rep["installed_now"] = []
     rep["error"] = None
     if not rep["python_ok"]:
-        rep["error"] = f"Python {rep['python']} < required {'.'.join(map(str, MIN_PY))}"
+        rep["error"] = (f"Python {rep['python']} is unsupported; required "
+                        f"{'.'.join(map(str, REQUIRED_PY))}")
         return rep
     if rep["needs_install"] and auto_install and not FROZEN:   # packaged build ships its deps; nothing to pip-install
         if verbose:

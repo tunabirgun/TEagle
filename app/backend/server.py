@@ -23,9 +23,10 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def _send(self, code, body, ctype="application/json"):
-        data = body if isinstance(body, (bytes, bytearray)) else json.dumps(body).encode()
+        data = (body if isinstance(body, (bytes, bytearray)) else
+                json.dumps(body, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode("utf-8"))
         self.send_response(code)
-        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Type", ctype + "; charset=utf-8" if ctype == "application/json" else ctype)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -74,7 +75,6 @@ class Handler(BaseHTTPRequestHandler):
         "/api/eta": engine.run_eta,
         "/api/annotate": engine.run_annotate,
         "/api/splice": engine.run_splice,
-        "/api/miniprot": engine.run_miniprot,
         "/api/primers": engine.run_primers,
         "/api/pcr": engine.run_pcr,
         "/api/genome_pcr": engine.run_genome_pcr,

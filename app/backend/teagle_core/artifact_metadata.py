@@ -6,10 +6,13 @@ leave dangling package relationships or corrupt document XML.
 """
 from __future__ import annotations
 
+import io
 import os
 import posixpath
+import re
 import struct
 import tempfile
+import warnings
 import zlib
 from collections import Counter
 from pathlib import Path
@@ -30,6 +33,14 @@ _PNG_RENDERING_CHUNKS = {
     b"bKGD", b"hIST", b"pHYs", b"sPLT", b"tRNS",
 }
 _PNG_CANONICAL_AUTHOR = b"Author\0" + AUTHOR.encode("latin-1")
+_PNG_MAX_BYTES = 512 * 1024 * 1024
+_PNG_MAX_CHUNK_BYTES = 256 * 1024 * 1024
+_PNG_MAX_PIXELS = 100_000_000
+_PNG_VALID_DEPTHS = {
+    0: {1, 2, 4, 8, 16}, 2: {8, 16}, 3: {1, 2, 4, 8},
+    4: {8, 16}, 6: {8, 16},
+}
+_PNG_AUTHENTICITY_CHUNKS = {b"caBX"}
 
 _CONTENT_TYPES_PART = "[Content_Types].xml"
 _ROOT_RELS_PART = "_rels/.rels"
@@ -57,6 +68,40 @@ _OPTIONAL_METADATA_REL_TYPES = {
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties",
     "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail",
 }
+_CUSTOM_XML_REL_TYPE = (
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml"
+)
+_CUSTOM_XML_PROPS_REL_TYPE = (
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps"
+)
+_CUSTOM_XML_PROPS_CONTENT_TYPE = (
+    "application/vnd.openxmlformats-officedocument.customXmlProperties+xml"
+)
+_OOXML_UNSAFE_PART_PATTERNS = (
+    (re.compile(r"(^|/)vbaproject\.bin$", re.I), "macro project"),
+    (re.compile(r"(^|/)vbadata\.xml$", re.I), "macro data"),
+    (re.compile(r"^_xmlsignatures/", re.I), "package signature"),
+    (re.compile(r"(^|/)origin\.sigs$", re.I), "package signature origin"),
+    (re.compile(r"(^|/)activex/", re.I), "ActiveX part"),
+    (re.compile(r"(^|/)controls?/", re.I), "control part"),
+    (re.compile(r"(^|/)ctrlprops/", re.I), "control properties"),
+    (re.compile(r"(^|/)embeddings/", re.I), "embedded object"),
+)
+_OOXML_UNSAFE_REL_SUFFIXES = (
+    "/vbaproject", "/vbadata", "/digital-signature/origin",
+    "/digital-signature/signature", "/activexcontrol", "/control",
+    "/oleobject", "/package", "/attachedtemplate",
+)
+_OOXML_TRACKED_CHANGE_NAMES = {
+    "ins", "del", "movefrom", "moveto", "movefromrangestart",
+    "movefromrangeend", "movetorangestart", "movetorangeend",
+    "cellins", "celldel", "cellmerge",
+    "customxmlinsrangestart", "customxmlinsrangeend",
+    "customxmldelrangestart", "customxmldelrangeend",
+    "customxmlmovefromrangestart", "customxmlmovefromrangeend",
+    "customxmlmovetorangestart", "customxmlmovetorangeend",
+}
+_OOXML_FORM_NAMES = {"sdt", "ffdata", "formfield", "legacydrawing", "legacydrawinghf"}
 
 _WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 _WORD_2010_NS = "http://schemas.microsoft.com/office/word/2010/wordml"
@@ -67,10 +112,21 @@ _WORD_2016_CID_NS = (
 _WORD_2018_DU_NS = (
     "http://schemas.microsoft.com/office/word/2018/wordml/cex"
 )
+_BIBLIOGRAPHY_NS = (
+    "http://schemas.openxmlformats.org/officeDocument/2006/bibliography"
+)
+_CUSTOM_XML_NS = (
+    "http://schemas.openxmlformats.org/officeDocument/2006/customXml"
+)
+_UUID_PATTERN = re.compile(
+    r"^\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}$"
+)
 
 _SVG_NS = "http://www.w3.org/2000/svg"
 _RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 _XMLNS_NS = "http://www.w3.org/2000/xmlns/"
+_XML_NS = "http://www.w3.org/XML/1998/namespace"
+_XLINK_NS = "http://www.w3.org/1999/xlink"
 
 _CORE_XML = (
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -153,6 +209,192 @@ def _relationship_target_part(rels_part: str, relationship: Node) -> str | None:
 def _is_thumbnail_part(part_name: str) -> bool:
     key = part_name.casefold()
     return key.startswith("docprops/thumbnail.")
+
+
+def _is_custom_xml_item(part_name: str) -> bool:
+    key = part_name.casefold()
+    return (
+        key.startswith("customxml/")
+        and "/_rels/" not in key
+        and key.endswith(".xml")
+        and posixpath.basename(key).startswith("item")
+        and not posixpath.basename(key).startswith("itemprops")
+    )
+
+
+def _non_namespace_attribute_names(element: Node) -> set[str]:
+    return {
+        attribute.nodeName
+        for index in range(element.attributes.length)
+        if (attribute := element.attributes.item(index)).namespaceURI != _XMLNS_NS
+        and not attribute.nodeName.startswith("xmlns")
+    }
+
+
+def _has_non_whitespace_content(element: Node) -> bool:
+    return any(
+        child.nodeType == Node.ELEMENT_NODE
+        or (
+            child.nodeType in {Node.TEXT_NODE, Node.CDATA_SECTION_NODE}
+            and child.data.strip()
+        )
+        for child in element.childNodes
+    )
+
+
+def _empty_bibliography_residue_parts(
+    entries: dict[str, bytes],
+) -> tuple[set[str], list[str]]:
+    """Identify only the complete, empty Word bibliography custom XML package."""
+    names_by_key = {name.casefold(): name for name in entries}
+    drop_parts: set[str] = set()
+    problems: list[str] = []
+    for source_name, source_data in entries.items():
+        if not _is_custom_xml_item(source_name):
+            continue
+        try:
+            source_document = _parse_xml(source_data, source_name)
+        except ValueError as exc:
+            problems.append(f"invalid custom XML part: {exc}")
+            continue
+        source = source_document.documentElement
+        if (
+            source.namespaceURI != _BIBLIOGRAPHY_NS
+            or _local_name(source) != "Sources"
+            or _has_non_whitespace_content(source)
+        ):
+            continue
+        if _non_namespace_attribute_names(source) != {"SelectedStyle", "StyleName"}:
+            problems.append(
+                f"malformed empty Word bibliography customXml: {source_name}"
+            )
+            continue
+
+        directory = posixpath.dirname(source_name)
+        filename = posixpath.basename(source_name)
+        props_name = f"itemProps{filename[4:]}"
+        expected_props = posixpath.join(directory, props_name)
+        rels_name = posixpath.join(directory, "_rels", f"{filename}.rels")
+        rels_actual = names_by_key.get(rels_name.casefold())
+        if rels_actual is None:
+            problems.append(
+                f"malformed empty Word bibliography customXml: missing relationships for {source_name}"
+            )
+            continue
+        try:
+            item_relationships = _relationship_elements(
+                _parse_xml(entries[rels_actual], rels_actual), rels_actual
+            )
+        except ValueError as exc:
+            problems.append(f"malformed empty Word bibliography customXml: {exc}")
+            continue
+        if len(item_relationships) != 1:
+            problems.append(
+                f"malformed empty Word bibliography customXml: unexpected relationships for {source_name}"
+            )
+            continue
+        item_relationship = item_relationships[0]
+        props_target = _relationship_target_part(rels_actual, item_relationship)
+        if (
+            item_relationship.getAttribute("Type") != _CUSTOM_XML_PROPS_REL_TYPE
+            or props_target is None
+            or props_target.casefold() != expected_props.casefold()
+        ):
+            problems.append(
+                f"malformed empty Word bibliography customXml: invalid property relationship for {source_name}"
+            )
+            continue
+        props_actual = names_by_key.get(expected_props.casefold())
+        if props_actual is None:
+            problems.append(
+                f"malformed empty Word bibliography customXml: missing properties for {source_name}"
+            )
+            continue
+        try:
+            props_document = _parse_xml(entries[props_actual], props_actual)
+        except ValueError as exc:
+            problems.append(f"malformed empty Word bibliography customXml: {exc}")
+            continue
+        datastore = props_document.documentElement
+        datastore_id = datastore.getAttributeNS(_CUSTOM_XML_NS, "itemID")
+        schema_refs = _element_children(datastore)
+        if (
+            datastore.namespaceURI != _CUSTOM_XML_NS
+            or _local_name(datastore) != "datastoreItem"
+            or _non_namespace_attribute_names(datastore) != {"ds:itemID"}
+            or not _UUID_PATTERN.fullmatch(datastore_id)
+            or len(schema_refs) != 1
+            or schema_refs[0].namespaceURI != _CUSTOM_XML_NS
+            or _local_name(schema_refs[0]) != "schemaRefs"
+            or _non_namespace_attribute_names(schema_refs[0])
+        ):
+            problems.append(
+                f"malformed empty Word bibliography customXml: invalid datastore properties for {source_name}"
+            )
+            continue
+        schema_references = _element_children(schema_refs[0])
+        if (
+            len(schema_references) != 1
+            or schema_references[0].namespaceURI != _CUSTOM_XML_NS
+            or _local_name(schema_references[0]) != "schemaRef"
+            or _non_namespace_attribute_names(schema_references[0]) != {"ds:uri"}
+            or schema_references[0].getAttributeNS(_CUSTOM_XML_NS, "uri")
+            != _BIBLIOGRAPHY_NS
+        ):
+            problems.append(
+                f"malformed empty Word bibliography customXml: invalid schema reference for {source_name}"
+            )
+            continue
+
+        inbound: list[tuple[str, Node]] = []
+        for relationship_part, relationship_data in entries.items():
+            if not relationship_part.endswith(".rels") or relationship_part == rels_actual:
+                continue
+            try:
+                relationships = _relationship_elements(
+                    _parse_xml(relationship_data, relationship_part), relationship_part
+                )
+            except ValueError as exc:
+                problems.append(f"malformed empty Word bibliography customXml: {exc}")
+                inbound = []
+                break
+            inbound.extend(
+                (relationship_part, relationship)
+                for relationship in relationships
+                if _relationship_target_part(relationship_part, relationship)
+                and _relationship_target_part(relationship_part, relationship).casefold()
+                == source_name.casefold()
+            )
+        if len(inbound) != 1 or inbound[0][1].getAttribute("Type") != _CUSTOM_XML_REL_TYPE:
+            problems.append(
+                f"malformed empty Word bibliography customXml: invalid inbound relationship for {source_name}"
+            )
+            continue
+
+        try:
+            content_types = _parse_xml(entries[_CONTENT_TYPES_PART], _CONTENT_TYPES_PART)
+        except (KeyError, ValueError) as exc:
+            problems.append(f"malformed empty Word bibliography customXml: {exc}")
+            continue
+        overrides = [
+            element
+            for element in _element_children(content_types.documentElement)
+            if _local_name(element) == "Override"
+            and element.namespaceURI == _CONTENT_TYPES_NS
+            and _normalise_part_name(element.getAttribute("PartName"))
+            and _normalise_part_name(element.getAttribute("PartName")).casefold()
+            == expected_props.casefold()
+        ]
+        if (
+            len(overrides) != 1
+            or overrides[0].getAttribute("ContentType") != _CUSTOM_XML_PROPS_CONTENT_TYPE
+        ):
+            problems.append(
+                f"malformed empty Word bibliography customXml: invalid content type for {source_name}"
+            )
+            continue
+        drop_parts.update({source_name, rels_actual, props_actual})
+    return drop_parts, problems
 
 
 def _metadata_parts_to_drop(entries: dict[str, bytes]) -> set[str]:
@@ -289,6 +531,72 @@ def _all_elements(document: minidom.Document) -> list[Node]:
     return list(document.getElementsByTagName("*"))
 
 
+def _external_relationship_problem(part_name: str, relationship: Node) -> str | None:
+    target = relationship.getAttribute("Target").strip()
+    mode = relationship.getAttribute("TargetMode").casefold()
+    rel_type = relationship.getAttribute("Type").casefold()
+    parsed = urlsplit(target)
+    looks_machine_local = (
+        parsed.scheme.casefold() == "file"
+        or target.startswith(("\\\\", "//"))
+        or bool(re.match(r"^[A-Za-z]:[\\/]", target))
+    )
+    if mode == "external":
+        safe_hyperlink = (
+            rel_type.endswith("/hyperlink")
+            and parsed.scheme.casefold() in {"http", "https", "mailto"}
+        )
+        if not safe_hyperlink:
+            return f"external file relationship: {part_name} -> {target or '<empty>'}"
+    elif looks_machine_local:
+        return f"machine-local relationship target: {part_name} -> {target}"
+    return None
+
+
+def _ooxml_unsafe_features(entries: dict[str, bytes]) -> list[str]:
+    """Find package features whose meaning or authenticity a rewrite could invalidate."""
+    problems: list[str] = []
+    for name, data in entries.items():
+        key = name.casefold()
+        for pattern, label in _OOXML_UNSAFE_PART_PATTERNS:
+            if pattern.search(name):
+                problems.append(f"OOXML {label} cannot be rewritten: {name}")
+        if key == _CONTENT_TYPES_PART.casefold():
+            lowered = data.lower()
+            if b"macroenabled" in lowered or b"vbaproject" in lowered:
+                problems.append("OOXML macro-enabled content type cannot be rewritten")
+            if b"digital-signature" in lowered:
+                problems.append("OOXML signature content type cannot be rewritten")
+            if b"activex" in lowered or b"controlproperties" in lowered:
+                problems.append("OOXML ActiveX/control content type cannot be rewritten")
+        if name.endswith(".rels"):
+            try:
+                relationships = _relationship_elements(_parse_xml(data, name), name)
+            except ValueError:
+                continue
+            for relationship in relationships:
+                rel_type = relationship.getAttribute("Type").casefold()
+                if any(rel_type.endswith(suffix) for suffix in _OOXML_UNSAFE_REL_SUFFIXES):
+                    problems.append(
+                        f"OOXML unsafe relationship cannot be rewritten: {name} -> {rel_type}"
+                    )
+                external_problem = _external_relationship_problem(name, relationship)
+                if external_problem:
+                    problems.append(external_problem)
+        if key.startswith("word/") and key.endswith(".xml"):
+            try:
+                document = _parse_xml(data, name)
+            except ValueError:
+                continue
+            for element in _all_elements(document):
+                local = _local_name(element).casefold()
+                if local in _OOXML_TRACKED_CHANGE_NAMES:
+                    problems.append(f"OOXML tracked change cannot be rewritten: {name}:{local}")
+                if local in _OOXML_FORM_NAMES:
+                    problems.append(f"OOXML form/control cannot be rewritten: {name}:{local}")
+    return sorted(set(problems))
+
+
 def _clean_word_xml(part_name: str, data: bytes) -> bytes:
     document = _parse_xml(data, part_name)
     for element in _all_elements(document):
@@ -357,7 +665,14 @@ def clean_ooxml_metadata(path: str | os.PathLike[str]) -> None:
 
     if _CONTENT_TYPES_PART not in entries or _ROOT_RELS_PART not in entries:
         raise ValueError("OOXML package lacks content types or root relationships")
+    unsafe = _ooxml_unsafe_features(entries)
+    if unsafe:
+        raise ValueError("OOXML rewrite refused: " + "; ".join(unsafe))
     drop_parts = _metadata_parts_to_drop(entries)
+    bibliography_drop_parts, bibliography_problems = _empty_bibliography_residue_parts(entries)
+    if bibliography_problems:
+        raise ValueError("; ".join(bibliography_problems))
+    drop_parts.update(bibliography_drop_parts)
     drop_keys = {part.casefold() for part in drop_parts}
 
     fd, tmp_name = tempfile.mkstemp(
@@ -503,12 +818,21 @@ def ooxml_metadata_violations(path: str | os.PathLike[str]) -> list[str]:
         name for name, count in Counter(names).items() if count > 1
     )
     problems.extend(f"duplicate OOXML package part: {name}" for name in duplicate_names)
+    problems.extend(_ooxml_unsafe_features(entries))
     name_keys = {name.casefold(): name for name in names}
     drop_parts = {
         name
         for name in names
         if name.casefold() in _ALWAYS_DROP_PART_KEYS or _is_thumbnail_part(name)
     }
+    bibliography_drop_parts, bibliography_problems = _empty_bibliography_residue_parts(entries)
+    drop_parts.update(bibliography_drop_parts)
+    problems.extend(bibliography_problems)
+    problems.extend(
+        f"empty Word bibliography customXml residue retained: {part}"
+        for part in sorted(bibliography_drop_parts)
+        if part.casefold() in name_keys
+    )
 
     relationship_documents: dict[str, minidom.Document] = {}
     parsed_relationships: dict[str, list[Node]] = {}
@@ -596,13 +920,83 @@ def ooxml_metadata_violations(path: str | os.PathLike[str]) -> list[str]:
     return sorted(set(problems))
 
 
+def _pdf_unsafe_features(path: Path, reader=None) -> list[str]:
+    """Find authenticity- or functionality-bearing structures before PDF reconstruction."""
+    from pypdf import PdfReader
+    from pypdf.generic import ArrayObject, DictionaryObject, IndirectObject
+
+    problems: list[str] = []
+    raw = path.read_bytes()
+    if len(re.findall(rb"(?m)^%%EOF[ \t]*(?:\r?\n|$)", raw)) != 1:
+        problems.append("PDF incremental or ambiguous EOF history cannot be rewritten")
+        return problems
+    if reader is None:
+        reader = PdfReader(str(path), strict=True)
+    if reader.is_encrypted:
+        problems.append("encrypted PDF cannot be rewritten")
+        return problems
+    root = reader.root_object
+    if "/Perms" in root:
+        problems.append("PDF /Perms or DocMDP signature policy cannot be rewritten")
+    if "/AcroForm" in root:
+        problems.append("PDF AcroForm cannot be rewritten")
+    names = root.get("/Names")
+    if names is not None:
+        try:
+            names = names.get_object()
+            if "/EmbeddedFiles" in names:
+                problems.append("PDF embedded-file name tree cannot be rewritten")
+        except Exception as exc:
+            problems.append(f"PDF name tree cannot be validated: {exc}")
+
+    seen: set[tuple[int, int] | int] = set()
+
+    def walk(value) -> None:
+        if isinstance(value, IndirectObject):
+            marker = (value.idnum, value.generation)
+            if marker in seen:
+                return
+            seen.add(marker)
+            try:
+                value = value.get_object()
+            except Exception as exc:
+                problems.append(f"PDF indirect object cannot be validated: {exc}")
+                return
+        elif isinstance(value, (DictionaryObject, ArrayObject)):
+            marker = id(value)
+            if marker in seen:
+                return
+            seen.add(marker)
+        if isinstance(value, DictionaryObject):
+            field_type = str(value.get("/FT", ""))
+            object_type = str(value.get("/Type", ""))
+            subtype = str(value.get("/Subtype", ""))
+            if field_type == "/Sig" or object_type == "/Sig" or "/ByteRange" in value:
+                problems.append("PDF signature dictionary cannot be rewritten")
+            if subtype == "/FileAttachment" or any(key in value for key in ("/EmbeddedFiles", "/EF", "/AF")):
+                problems.append("PDF attachment or embedded file cannot be rewritten")
+            if str(value.get("/TransformMethod", "")) == "/DocMDP":
+                problems.append("PDF DocMDP transform cannot be rewritten")
+            for child in value.values():
+                walk(child)
+        elif isinstance(value, ArrayObject):
+            for child in value:
+                walk(child)
+
+    walk(root)
+    return sorted(set(problems))
+
+
 def clean_pdf_metadata(path: str | os.PathLike[str]) -> None:
     """Retain document navigation and pages, but only the author metadata."""
     from pypdf import PdfReader, PdfWriter
     from pypdf.generic import NameObject
 
     target = Path(path)
-    reader = PdfReader(str(target))
+    unsafe = _pdf_unsafe_features(target)
+    if unsafe:
+        raise ValueError("PDF rewrite refused: " + "; ".join(unsafe))
+    reader = PdfReader(str(target), strict=True)
     writer = PdfWriter()
     # Clone the catalog so bookmarks, named destinations, page mode, forms and
     # initial-view settings survive. Remove the metadata reference and then
@@ -620,7 +1014,12 @@ def clean_pdf_metadata(path: str | os.PathLike[str]) -> None:
     try:
         with open(tmp_name, "wb") as stream:
             writer.write(stream)
-        os.replace(tmp_name, target)
+            stream.flush()
+            os.fsync(stream.fileno())
+        problems = media_metadata_violations(tmp_name, expected_format=".pdf")
+        if problems:
+            raise ValueError("cleaned PDF failed validation: " + "; ".join(problems))
+        _replace_file(tmp_name, target)
     finally:
         if os.path.exists(tmp_name):
             os.unlink(tmp_name)
@@ -635,6 +1034,8 @@ def _png_chunk(chunk_type: bytes, payload: bytes) -> bytes:
 
 def _png_chunks(payload: bytes) -> list[tuple[bytes, bytes]]:
     """Parse and CRC-check a complete PNG without an image-decoding dependency."""
+    if len(payload) > _PNG_MAX_BYTES:
+        raise ValueError("PNG exceeds the bounded decoder input limit")
     if not payload.startswith(_PNG_SIGNATURE):
         raise ValueError("missing PNG signature")
     chunks: list[tuple[bytes, bytes]] = []
@@ -646,8 +1047,8 @@ def _png_chunks(payload: bytes) -> list[tuple[bytes, bytes]]:
         if len(payload) - offset < 12:
             raise ValueError("truncated PNG chunk")
         length = struct.unpack(">I", payload[offset:offset + 4])[0]
-        if length > 0x7FFFFFFF:
-            raise ValueError("PNG chunk length exceeds the specification limit")
+        if length > _PNG_MAX_CHUNK_BYTES:
+            raise ValueError("PNG chunk exceeds the bounded decoder limit")
         end = offset + 12 + length
         if end > len(payload):
             raise ValueError("PNG chunk length exceeds the file")
@@ -694,7 +1095,111 @@ def _png_chunks(payload: bytes) -> list[tuple[bytes, bytes]]:
         raise ValueError("PNG contains no IDAT chunk")
     if chunks[-1] != (b"IEND", b""):
         raise ValueError("IEND must be the final empty PNG chunk")
+    _validate_png_structure(chunks)
     return chunks
+
+
+def _validate_png_structure(chunks: list[tuple[bytes, bytes]]) -> None:
+    ihdr = chunks[0][1]
+    width, height, depth, color, compression, filter_method, interlace = struct.unpack(
+        ">IIBBBBB", ihdr
+    )
+    if not width or not height or width * height > _PNG_MAX_PIXELS:
+        raise ValueError("PNG dimensions are zero or exceed the bounded pixel limit")
+    if color not in _PNG_VALID_DEPTHS or depth not in _PNG_VALID_DEPTHS[color]:
+        raise ValueError("invalid PNG bit-depth/color-type combination")
+    if compression != 0 or filter_method != 0 or interlace not in {0, 1}:
+        raise ValueError("unsupported PNG compression, filter, or interlace method")
+    palettes = [payload for chunk_type, payload in chunks if chunk_type == b"PLTE"]
+    if color == 3 and not palettes:
+        raise ValueError("indexed PNG has no PLTE chunk")
+    if color in {0, 4} and palettes:
+        raise ValueError("grayscale PNG must not contain a PLTE chunk")
+    if palettes:
+        entries = len(palettes[0]) // 3
+        if not len(palettes[0]) or len(palettes[0]) % 3 or entries > 256:
+            raise ValueError("invalid PNG PLTE length")
+        if color == 3 and entries > 2 ** depth:
+            raise ValueError("PNG palette exceeds the indexed bit depth")
+    for chunk_type, payload in chunks:
+        if chunk_type == b"pHYs" and (
+            len(payload) != 9 or payload[-1] not in {0, 1}
+        ):
+            raise ValueError("invalid PNG pHYs chunk")
+        if chunk_type == b"iCCP":
+            separator = payload.find(b"\0")
+            if separator < 1 or separator > 79 or separator + 2 > len(payload):
+                raise ValueError("invalid PNG iCCP chunk")
+            if payload[separator + 1] != 0:
+                raise ValueError("unsupported PNG iCCP compression method")
+            try:
+                profile = zlib.decompress(payload[separator + 2:])
+            except zlib.error as exc:
+                raise ValueError(f"invalid compressed PNG ICC profile: {exc}") from exc
+            if not profile or len(profile) > 32 * 1024 * 1024:
+                raise ValueError("PNG ICC profile is empty or exceeds the bounded limit")
+
+
+def _strict_png_decode(payload: bytes, chunks: list[tuple[bytes, bytes]]) -> None:
+    """Decode with the bundled Qt runtime used by the frozen application."""
+    from PySide6.QtCore import QBuffer, QByteArray, QIODevice
+    from PySide6.QtGui import QImageReader
+
+    width, height = struct.unpack(">II", chunks[0][1][:8])
+    buffer = QBuffer()
+    buffer.setData(QByteArray(payload))
+    if not buffer.open(QIODevice.OpenModeFlag.ReadOnly):
+        raise ValueError("Qt PNG decoder buffer could not be opened")
+    reader = QImageReader(buffer, b"png")
+    reader.setDecideFormatFromContent(True)
+    image = reader.read()
+    if image.isNull():
+        raise ValueError(f"Qt PNG decoder rejected the image: {reader.errorString()}")
+    if image.width() != width or image.height() != height:
+        raise ValueError("Qt PNG decoder dimensions disagree with IHDR")
+
+
+def independent_pillow_png_decode(payload: bytes) -> None:
+    """Run the development-only independent decoder check when Pillow is available."""
+    from PIL import Image
+
+    chunks = _png_chunks(payload)
+    width, height = struct.unpack(">II", chunks[0][1][:8])
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(io.BytesIO(payload)) as candidate:
+                if candidate.format != "PNG" or candidate.size != (width, height):
+                    raise ValueError("Pillow PNG decoder disagrees with IHDR")
+                candidate.load()
+    except (OSError, SyntaxError, Image.DecompressionBombWarning) as exc:
+        raise ValueError(f"Pillow PNG decoder rejected the image: {exc}") from exc
+
+
+def png_decoder_evidence() -> dict[str, str]:
+    """Return the strict decoder identities used by this runtime."""
+    from PySide6.QtCore import qVersion
+
+    evidence = {"primary": f"Qt {qVersion()} QImageReader PNG"}
+    try:
+        from PIL import __version__ as pillow_version
+    except ImportError:
+        evidence["independent"] = "Pillow unavailable"
+    else:
+        evidence["independent"] = f"Pillow {pillow_version}"
+    return evidence
+
+
+def _png_unsafe_features(chunks: list[tuple[bytes, bytes]]) -> list[str]:
+    problems: list[str] = []
+    chunk_types = {chunk_type for chunk_type, _ in chunks}
+    if b"eXIf" in chunk_types:
+        problems.append("PNG EXIF/orientation metadata cannot be safely rewritten")
+    for chunk_type in sorted(chunk_types & _PNG_AUTHENTICITY_CHUNKS):
+        problems.append(
+            f"PNG authenticity-bearing {chunk_type.decode('ascii')} chunk cannot be rewritten"
+        )
+    return problems
 
 
 def _png_metadata_problems(chunks: list[tuple[bytes, bytes]]) -> list[str]:
@@ -718,7 +1223,12 @@ def _png_metadata_problems(chunks: list[tuple[bytes, bytes]]) -> list[str]:
 def clean_png_metadata(path: str | os.PathLike[str]) -> None:
     """Preserve PNG image chunks and replace optional metadata with one author field."""
     target = Path(path)
-    chunks = _png_chunks(target.read_bytes())
+    original = target.read_bytes()
+    chunks = _png_chunks(original)
+    unsafe = _png_unsafe_features(chunks)
+    if unsafe:
+        raise ValueError("PNG rewrite refused: " + "; ".join(unsafe))
+    _strict_png_decode(original, chunks)
     cleaned = bytearray(_PNG_SIGNATURE)
     for index, (chunk_type, payload) in enumerate(chunks):
         if chunk_type not in _PNG_CRITICAL_CHUNKS and chunk_type not in _PNG_RENDERING_CHUNKS:
@@ -728,6 +1238,7 @@ def clean_png_metadata(path: str | os.PathLike[str]) -> None:
             cleaned.extend(_png_chunk(b"tEXt", _PNG_CANONICAL_AUTHOR))
     result = bytes(cleaned)
     result_chunks = _png_chunks(result)
+    _strict_png_decode(result, result_chunks)
     violations = _png_metadata_problems(result_chunks)
     if violations:
         raise ValueError("invalid cleaned PNG metadata: " + "; ".join(violations))
@@ -742,6 +1253,56 @@ def _svg_metadata_elements(document: minidom.Document) -> list[Node]:
         for element in _all_elements(document)
         if _local_name(element) == "metadata" and element.namespaceURI == svg_namespace
     ]
+
+
+def _xml_comments(node: Node) -> list[Node]:
+    comments: list[Node] = []
+    for child in node.childNodes:
+        if child.nodeType == Node.COMMENT_NODE:
+            comments.append(child)
+        comments.extend(_xml_comments(child))
+    return comments
+
+
+def _svg_reference_is_external(value: str) -> bool:
+    value = value.strip().strip('"\'')
+    if not value or value.startswith("#") or value.casefold().startswith("data:"):
+        return False
+    return True
+
+
+def _svg_unsafe_features(document: minidom.Document, raw: bytes) -> list[str]:
+    problems: list[str] = []
+    if re.search(br"<!\s*(?:DOCTYPE|ENTITY)\b", raw, flags=re.I):
+        problems.append("SVG DTD or entity declaration cannot be rewritten")
+    for element in _all_elements(document):
+        local = _local_name(element).casefold()
+        if local == "script":
+            problems.append("SVG script cannot be rewritten")
+        for index in range(element.attributes.length):
+            attribute = element.attributes.item(index)
+            attr_local = (attribute.localName or attribute.nodeName.rsplit(":", 1)[-1]).casefold()
+            if attribute.namespaceURI == _XML_NS and attr_local == "base":
+                problems.append("SVG xml:base cannot be rewritten")
+            if attr_local in {"href", "src"} and _svg_reference_is_external(attribute.value):
+                problems.append(f"SVG external or file reference cannot be rewritten: {attribute.value}")
+            if attr_local == "style":
+                for reference in re.findall(r"url\(([^)]+)\)", attribute.value, flags=re.I):
+                    if _svg_reference_is_external(reference):
+                        problems.append(f"SVG external style reference cannot be rewritten: {reference}")
+                if re.search(r"@import\b", attribute.value, flags=re.I):
+                    problems.append("SVG external style import cannot be rewritten")
+        if local == "style":
+            text = "".join(
+                child.data for child in element.childNodes
+                if child.nodeType in {Node.TEXT_NODE, Node.CDATA_SECTION_NODE}
+            )
+            for reference in re.findall(r"url\(([^)]+)\)", text, flags=re.I):
+                if _svg_reference_is_external(reference):
+                    problems.append(f"SVG external stylesheet reference cannot be rewritten: {reference}")
+            if re.search(r"@import\b", text, flags=re.I):
+                problems.append("SVG external stylesheet import cannot be rewritten")
+    return sorted(set(problems))
 
 
 def _svg_author_metadata(document: minidom.Document) -> Node:
@@ -787,8 +1348,15 @@ def clean_svg_metadata(path: str | os.PathLike[str]) -> None:
     except (ExpatError, ValueError) as exc:
         raise ValueError(f"invalid SVG: {target}: {exc}") from exc
     root = document.documentElement
-    if _local_name(root).casefold() != "svg":
+    if _local_name(root).casefold() != "svg" or root.namespaceURI != _SVG_NS:
         raise ValueError(f"invalid SVG root: {target}")
+    unsafe = _svg_unsafe_features(document, original)
+    if unsafe:
+        raise ValueError("SVG rewrite refused: " + "; ".join(unsafe))
+    for comment in _xml_comments(document):
+        if comment.parentNode is not None:
+            comment.parentNode.removeChild(comment)
+            comment.unlink()
     for metadata in _svg_metadata_elements(document):
         if metadata.parentNode is not None:
             metadata.parentNode.removeChild(metadata)
@@ -800,7 +1368,23 @@ def clean_svg_metadata(path: str | os.PathLike[str]) -> None:
             root.removeChild(child)
             child.unlink()
     root.insertBefore(_svg_author_metadata(document), root.firstChild)
-    _atomic_write_bytes(target, document.toxml(encoding="utf-8"), suffix=".svg")
+    payload = document.toxml(encoding="utf-8")
+    payload = b"\n".join(
+        b"" if not line.strip(b" \t") else line
+        for line in payload.split(b"\n")
+    )
+    try:
+        candidate = minidom.parseString(payload)
+    except (ExpatError, ValueError) as exc:
+        raise ValueError(f"cleaned SVG is invalid: {exc}") from exc
+    problems = _svg_unsafe_features(candidate, payload)
+    if not _svg_metadata_is_author_only(candidate):
+        problems.append("SVG metadata is not author-only RDF/DC")
+    if _xml_comments(candidate):
+        problems.append("SVG XML comment retained")
+    if problems:
+        raise ValueError("cleaned SVG failed validation: " + "; ".join(sorted(set(problems))))
+    _atomic_write_bytes(target, payload, suffix=".svg")
 
 
 def _non_namespace_attributes(element: Node) -> list[Node]:
@@ -852,15 +1436,23 @@ def _svg_metadata_is_author_only(document: minidom.Document) -> bool:
     return item_text == AUTHOR
 
 
-def media_metadata_violations(path: str | os.PathLike[str]) -> list[str]:
+def media_metadata_violations(
+    path: str | os.PathLike[str], *, expected_format: str | None = None,
+) -> list[str]:
     """Return semantic PDF/PNG/SVG metadata-policy violations."""
     target = Path(path)
-    suffix = target.suffix.lower()
+    suffix = (expected_format or target.suffix).lower()
     problems: list[str] = []
     if suffix == ".pdf":
         from pypdf import PdfReader
 
-        reader = PdfReader(str(target))
+        try:
+            problems.extend(_pdf_unsafe_features(target))
+            if problems:
+                return sorted(set(problems))
+            reader = PdfReader(str(target), strict=True)
+        except Exception as exc:
+            return [f"invalid PDF: {exc}"]
         metadata = {
             str(key): str(value)
             for key, value in (reader.metadata or {}).items()
@@ -874,22 +1466,32 @@ def media_metadata_violations(path: str | os.PathLike[str]) -> list[str]:
             problems.append("PDF document ID retained")
     elif suffix == ".png":
         try:
-            chunks = _png_chunks(target.read_bytes())
+            raw = target.read_bytes()
+            chunks = _png_chunks(raw)
+            problems.extend(_png_unsafe_features(chunks))
+            if problems:
+                return sorted(set(problems))
+            _strict_png_decode(raw, chunks)
         except ValueError as exc:
             problems.append(f"invalid PNG: {exc}")
         else:
             problems.extend(_png_metadata_problems(chunks))
     elif suffix == ".svg":
+        raw = target.read_bytes()
         try:
-            document = minidom.parseString(target.read_bytes())
+            document = minidom.parseString(raw)
         except (ExpatError, ValueError) as exc:
             problems.append(f"invalid SVG: {exc}")
         else:
             root = document.documentElement
-            if _local_name(root).casefold() != "svg":
+            if _local_name(root).casefold() != "svg" or root.namespaceURI != _SVG_NS:
                 problems.append("invalid SVG root")
-            elif not _svg_metadata_is_author_only(document):
-                problems.append("SVG metadata is not author-only RDF/DC")
+            else:
+                problems.extend(_svg_unsafe_features(document, raw))
+                if _xml_comments(document):
+                    problems.append("SVG XML comment retained")
+                if not _svg_metadata_is_author_only(document):
+                    problems.append("SVG metadata is not author-only RDF/DC")
     else:
         raise ValueError(f"unsupported media file: {target}")
     return sorted(set(problems))

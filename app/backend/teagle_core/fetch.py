@@ -171,10 +171,10 @@ def parse_feature_table(text: str) -> list:
     return feats
 
 
-def _dedup(ivs: list) -> list:
+def _dedup(ivs: list, identity_fields=()) -> list:
     seen, out = set(), []
     for iv in ivs:
-        k = (iv["start"], iv["end"])
+        k = (iv["start"], iv["end"], *(iv.get(field) for field in identity_fields))
         if k not in seen:
             seen.add(k)
             out.append(iv)
@@ -186,11 +186,26 @@ def build_gene_model(feats: list) -> dict:
     explicit features when present, else derived from spliced (joined) CDS/mRNA coordinates."""
     def collect(kind):
         out = []
+        group_index = 0
         for f in feats:
             if f["type"] == kind:
+                group_index += 1
                 label = f["qualifiers"].get("number") or f["qualifiers"].get("gene") or f["qualifiers"].get("product") or ""
-                for iv in f["intervals"]:
-                    out.append({**iv, "note": label})
+                intervals = [dict(iv) for iv in f["intervals"]]
+                if kind == "CDS":
+                    strands = {iv.get("strand", "+") for iv in intervals}
+                    strand = next(iter(strands)) if len(strands) == 1 else None
+                    intervals.sort(key=lambda iv: iv["start"], reverse=(strand == "-"))
+                    raw_start = f["qualifiers"].get("codon_start")
+                    phase = int(raw_start) - 1 if str(raw_start or "") in {"1", "2", "3"} else None
+                    for iv in intervals:
+                        row = {**iv, "note": label, "cds_group": f"cds_{group_index}", "phase": phase}
+                        out.append(row)
+                        length = iv["end"] - iv["start"]
+                        phase = ((3 - ((length - phase) % 3)) % 3
+                                 if phase is not None and length > phase else None)
+                else:
+                    out.extend({**iv, "note": label} for iv in intervals)
         return out
     exons, introns, cds, mrna = collect("exon"), collect("intron"), collect("CDS"), collect("mRNA")
     derived_exons = derived_introns = False
@@ -203,7 +218,8 @@ def build_gene_model(feats: list) -> dict:
             if b["start"] > a["end"]:
                 introns.append({"start": a["end"], "end": b["start"], "strand": a.get("strand", "+"), "note": ""})
         derived_introns = bool(introns)
-    exons, introns, cds = _dedup(exons), _dedup(introns), _dedup(cds)
+    exons, introns = _dedup(exons), _dedup(introns)
+    cds = _dedup(cds, ("strand", "phase", "cds_group"))
     # the record's OWN annotated transcripts (mRNA /transcript_id = NM_/XM_) — a splice picker offers these so a
     # user does not have to hunt for the matching transcript. Aligning one back to its own record is a CONSISTENCY
     # check (same annotation source), NOT independent confirmation — the UI relabels accordingly.

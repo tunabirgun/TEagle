@@ -3,7 +3,7 @@ Outputs, all recolored from the same currentColor SVG:
   installer/teagle.ico            multi-size app/installer icon, mid-teal on transparent
   report/figures/teagle-mark-dark.pdf/.png  dark-ink title-page logo (vector + raster)
 Run: python app/native/assets/render_brand.py"""
-import io, os
+import io, os, sys
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import QByteArray, QBuffer, QRectF, QSizeF, QMarginsF
 from PySide6.QtGui import QImage, QPainter, QPdfWriter, QPageSize
@@ -12,6 +12,8 @@ from PIL import Image, ImageFilter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
+sys.path.insert(0, os.path.join(ROOT, "app", "backend"))
+from teagle_core.artifact_metadata import clean_pdf_metadata, clean_png_metadata
 SVG = os.path.join(HERE, "teagle-mark.svg")
 ICON_TEAL = "#12B39A"                                    # OS chrome, reads on light + dark taskbars
 DARK_INK  = "#141B21"                                    # report title page on white paper
@@ -71,8 +73,10 @@ def main():
     wizard_images()                                      # Inno Setup wizard eagle logos (BMP)
 
     figdir = os.path.join(ROOT, "report", "figures"); os.makedirs(figdir, exist_ok=True)
-    Image.open(io.BytesIO(_png(DARK_INK, 900))).save(os.path.join(figdir, "teagle-mark-dark.png"))
-    print("wrote", os.path.join(figdir, "teagle-mark-dark.png"))
+    mark_png = os.path.join(figdir, "teagle-mark-dark.png")
+    Image.open(io.BytesIO(_png(DARK_INK, 900))).save(mark_png)
+    clean_png_metadata(mark_png)
+    print("wrote", mark_png)
 
     r = _renderer(DARK_INK); s = r.defaultSize(); ar = s.width() / s.height()
     w_mm = 40.0; h_mm = w_mm / ar
@@ -82,6 +86,7 @@ def main():
     pw.setPageMargins(QMarginsF(0, 0, 0, 0))
     p = QPainter(pw)
     r.render(p, QRectF(0, 0, p.viewport().width(), p.viewport().height())); p.end()
+    clean_pdf_metadata(pdf)
     print("wrote", pdf)
 
 if __name__ == "__main__":

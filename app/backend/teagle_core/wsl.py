@@ -7,7 +7,7 @@ part of a command); the only interpolated values are a self-generated run-id and
 strictly-validated species token. No shell-string concatenation of untrusted input.
 """
 from __future__ import annotations
-import os, subprocess, re, secrets, threading, hashlib
+import os, subprocess, re, secrets, threading, hashlib, base64, shutil
 from . import appdirs
 
 # Suppress the console-window flash when the windowed GUI spawns wsl.exe (Windows only; 0 elsewhere).
@@ -45,22 +45,92 @@ def resolve_distro():
         return _distro_cache
     try:
         out = subprocess.run(["wsl.exe", "-l", "-v"], capture_output=True, timeout=15, creationflags=_NO_WINDOW)
+        if out.returncode != 0:
+            _distro_cache = None
+            return None
         txt = _decode(out.stdout).replace("\x00", "")
         default, names = None, []
-        for line in txt.splitlines()[1:]:            # skip the header row
+        for line in txt.splitlines():
             s = line.strip()
             if not s:
                 continue
             star = s.startswith("*")
-            parts = s.lstrip("*").split()
-            if parts:
-                names.append(parts[0])
+            row = re.fullmatch(r"(.+?)\s+\S+\s+[12]", s.lstrip("*").strip())
+            if row:
+                name = row.group(1).strip()
+                names.append(name)
                 if star:
-                    default = parts[0]
+                    default = name
         _distro_cache = default or (names[0] if names else None)
     except Exception:
         _distro_cache = None
     return _distro_cache
+
+
+def _windows_backing_free_bytes(distro: str | None = None) -> int | None:
+    """Free bytes on the Windows volume that must grow the selected WSL2 virtual disk.
+
+    WSL's ext4 filesystem can advertise nearly a terabyte while the sparse VHDX sits on a Windows
+    volume with only a few gigabytes left. The registry BasePath is the authoritative location. If an
+    older/custom registration does not expose it, the user-profile volume is a conservative fallback.
+    Paths never leave this helper or enter logs/provenance.
+    """
+    if os.name != "nt":
+        return None
+    distro = distro or resolve_distro()
+    try:
+        import winreg
+        root_path = r"Software\Microsoft\Windows\CurrentVersion\Lxss"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, root_path) as root:
+            index = 0
+            while True:
+                try:
+                    child_name = winreg.EnumKey(root, index)
+                except OSError:
+                    break
+                index += 1
+                try:
+                    with winreg.OpenKey(root, child_name) as child:
+                        name = str(winreg.QueryValueEx(child, "DistributionName")[0])
+                        if distro and name.casefold() != distro.casefold():
+                            continue
+                        base_path = os.path.expandvars(str(winreg.QueryValueEx(child, "BasePath")[0]))
+                        return int(shutil.disk_usage(base_path).free)
+                except (OSError, ValueError):
+                    continue
+    except (ImportError, OSError):
+        pass
+    try:
+        return int(shutil.disk_usage(os.path.expanduser("~")).free)
+    except OSError:
+        return None
+
+
+def _effective_free_bytes(wsl_free: int, host_free: int | None) -> int:
+    """The space an expanding WSL2 VHDX can really use: the smaller positive limit."""
+    wsl_free = max(0, int(wsl_free or 0))
+    if host_free is None or int(host_free) < 0:
+        return wsl_free
+    return min(wsl_free, int(host_free))
+
+
+def _disk_capacity(wsl_free: int) -> dict:
+    host_free = _windows_backing_free_bytes()
+    effective = _effective_free_bytes(wsl_free, host_free)
+    gib = 1073741824
+    wsl_gb = round(wsl_free / gib, 1)
+    host_gb = round(host_free / gib, 1) if host_free is not None else None
+    effective_gb = round(effective / gib, 1)
+    limited_by = ("Windows backing volume" if host_free is not None and host_free < wsl_free
+                  else "WSL filesystem")
+    note = f"Usable backend storage: {effective_gb:.1f} GiB ({limited_by}). WSL reports {wsl_gb:.1f} GiB"
+    if host_gb is not None:
+        note += f"; its Windows backing volume has {host_gb:.1f} GiB free."
+    else:
+        note += ". Windows backing-volume capacity could not be measured."
+    return {"wsl_free_bytes": wsl_free, "windows_free_bytes": host_free, "effective_free_bytes": effective,
+            "wsl_disk_free_gb": wsl_gb, "windows_disk_free_gb": host_gb,
+            "disk_free_gb": effective_gb, "disk_limited_by": limited_by, "disk_note": note}
 
 
 def _wsl(script: str, stdin: bytes | None = None, timeout: int = 600):
@@ -173,7 +243,7 @@ def env_status() -> dict:
         st["dfam_uncurated"] = ("dfam_unc_root=1" in out) and ("dfam_unc_euk=1" in out)
         mm = re.search(r"^(\d+\.\d+[\w.-]*)$", out.strip().splitlines()[-1]) if out.strip() else None
         st["minimap2"] = mm.group(1) if mm else None
-        st["ready"] = bool(st["repeatmasker"] and st["dfam"])
+        st["ready"] = bool(st["repeatmasker"] and st["dfam"] and st["dfam_library"])
     except Exception as e:
         st["error"] = str(e)[:120]
     return st
@@ -387,6 +457,11 @@ set -uo pipefail
 cd "$HOME" || { echo "[teagle] FAILED: cannot cd to HOME"; exit 1; }
 export MAMBA_ROOT_PREFIX="$HOME/micromamba"
 MM="$HOME/bin/micromamba"; ENV="$HOME/micromamba/envs/te"
+HOST_FREE_B=__HOST_FREE_B__
+effective_free_b(){
+  local wsl_b=${1:-0}
+  if [ "$HOST_FREE_B" -ge 0 ] && [ "$HOST_FREE_B" -lt "$wsl_b" ]; then echo "$HOST_FREE_B"; else echo "$wsl_b"; fi
+}
 # ViennaRNA lives in its OWN env, never in 'te'. Solved against te (python 3.14) the resolver picks
 # viennarna 2.4.7 py36 — an old build whose Python bindings cannot load, and a DIFFERENT version from
 # the in-process package, which would make the same primer report a different dG depending on install
@@ -491,7 +566,70 @@ def _dfam_step(key: str) -> str:
 echo "[teagle] STEP {key} START"
 mkdir -p "$FAMDIR" || fail "mkdir famdb"
 cd "$FAMDIR" || fail "cd famdb"
-if [ -f "{fname}" ]; then echo "[teagle] {fname} already present — delete it inside WSL to force a fresh download"; else
+dfam_file_valid() {{
+  [ -f "$1" ] || return 1
+  [ "$(stat -c %s "$1" 2>/dev/null || echo 0)" = "$2" ] || return 1
+  # Return 0 only for a verified file, 1 for a definitively invalid file, and 2 when the verifier itself
+  # is unavailable/broken. A verifier failure must preserve the multi-gigabyte destination for repair.
+  local marker rc
+  marker=$(mktemp "${{TMPDIR:-/tmp}}/teagle-dfam-verify.XXXXXX") || return 2
+  if [ -x "$MM" ] && [ -d "$ENV/conda-meta" ]; then
+    "$MM" run -n te python - "$1" "$marker" <<'PY'
+import sys
+from pathlib import Path
+
+def invalid(message):
+    print(message, file=sys.stderr)
+    Path(sys.argv[2]).write_text("invalid", encoding="ascii")
+    raise SystemExit(1)
+
+try:
+    import h5py
+except Exception as exc:
+    print(f"HDF5 verifier unavailable: {{exc}}", file=sys.stderr)
+    raise SystemExit(2)
+try:
+    with h5py.File(sys.argv[1], "r") as db:
+        if not list(db.keys()):
+            invalid("invalid HDF5 file: no top-level groups")
+except (OSError, ValueError) as exc:
+    invalid(f"invalid HDF5 file: {{exc}}")
+PY
+  else
+    python3 - "$1" "$marker" <<'PY'
+import sys
+from pathlib import Path
+try:
+    with open(sys.argv[1], "rb") as stream:
+        header = stream.read(8)
+except OSError as exc:
+    print(f"HDF5 header verifier unavailable: {{exc}}", file=sys.stderr)
+    raise SystemExit(2)
+if header != bytes.fromhex("894844460d0a1a0a"):
+    Path(sys.argv[2]).write_text("invalid", encoding="ascii")
+    raise SystemExit(1)
+PY
+  fi
+  rc=$?
+  if [ "$rc" -eq 0 ]; then rm -f "$marker"; return 0; fi
+  if [ -s "$marker" ]; then rm -f "$marker"; return 1; fi
+  rm -f "$marker"
+  return 2
+}}
+need_download=1
+if [ -f "{fname}" ]; then
+  dfam_file_valid "{fname}" {unpacked}; dfam_state=$?
+  if [ "$dfam_state" -eq 0 ]; then
+    echo "[teagle] {fname} verified — pinned name, exact size, and readable HDF5 structure"
+    need_download=0
+  elif [ "$dfam_state" -eq 1 ]; then
+    echo "[teagle] {fname} is corrupt or does not match the pinned Dfam 4.0 partition — replacing it"
+    rm -f "{fname}" || fail "remove invalid {fname}"
+  else
+    fail "could not verify {fname} because the HDF5 verifier is unavailable; the existing file was preserved — repair micromamba/FamDB, then run Repair again"
+  fi
+fi
+if [ "$need_download" -eq 1 ]; then
   # A genuinely fresh Ubuntu WSL has python3 but often has neither curl nor wget. Keep curl as the
   # preferred path when present, but use only the Python standard library otherwise. The fallback sends
   # a Range request when a partial archive exists; if a server ignores it, a completed full response
@@ -589,11 +727,12 @@ PY
   # Gate on what this file still needs. The unpacked size is measured ({unpacked_h}) because a gzip
   # trailer records the original size only modulo 4 GiB and this library is far larger than that.
   need_b=$(space_need "$total_b" {archive} "$have_b" {unpacked})
-  avail_b=$(df -B1 --output=avail . 2>/dev/null | tail -1 | tr -dc '0-9')
+  wsl_avail_b=$(df -B1 --output=avail . 2>/dev/null | tail -1 | tr -dc '0-9')
+  avail_b=$(effective_free_b "${{wsl_avail_b:-0}}")
   # an EMPTY reading means df could not answer and the gate cannot judge; a reading of 0 means a full
   # disk, which must fail rather than be waved through as "unknown"
   if [ -n "$avail_b" ] && [ "$avail_b" -lt "$need_b" ]; then
-    fail "not enough disk space in WSL for {fname}: $(hr $avail_b) free, $(hr $need_b) needed (it unpacks to $(hr {unpacked}), and the archive sits beside it until it does)"
+    fail "not enough usable disk for {fname}: $(hr $avail_b) free after applying the smaller WSL/Windows backing-volume limit, $(hr $need_b) needed (it unpacks to $(hr {unpacked}), and the archive sits beside it until it does)"
   fi
   if [ "$total_b" -gt 0 ]; then
     echo "[teagle] downloading {fname}.gz — $(hr $total_b) total, $(hr $have_b) already here (resumes where it stopped if interrupted)"
@@ -649,6 +788,13 @@ PY
   fi
   echo "[teagle] decompressing {fname}.gz$slow"
   gunzip -f "{fname}.gz" || fail "gunzip {fname}"
+  dfam_file_valid "{fname}" {unpacked}; dfam_state=$?
+  if [ "$dfam_state" -eq 1 ]; then
+    rm -f "{fname}"
+    fail "decompressed {fname} failed the pinned size/HDF5 identity check and was removed"
+  elif [ "$dfam_state" -ne 0 ]; then
+    fail "decompressed {fname} could not be verified because the HDF5 verifier is unavailable; the file was preserved — repair micromamba/FamDB, then run Repair again"
+  fi
   echo "[teagle] decompressed {fname} — $(hr $(stat -c %s "{fname}" 2>/dev/null || echo 0)) on disk"
 fi
 cd "$HOME"
@@ -815,6 +961,20 @@ echo "[teagle] STEP famdb_conf OK"
 # its step + parser stay in the code, dormant, ready to re-enable when the homology UI ships.
 _ALL_STEPS = ["micromamba", "repeatmasker", "minimap2", "genomescan", "viennarna", "dfam_root", "dfam_curated", "famdb_conf"]
 
+_DEFAULT_DFAM_DOWNLOAD_B = sum(_DFAM_ARCHIVE_B[k] for k in _DFAM_FILES if k in _ALL_STEPS)
+_DEFAULT_DFAM_INSTALLED_B = sum(_DFAM_UNPACKED_B[k] for k in _DFAM_FILES if k in _ALL_STEPS)
+_DEFAULT_INSTALL_COST = (
+    f"The default Dfam data download is {_DEFAULT_DFAM_DOWNLOAD_B / 1048576:.0f} MiB and occupies "
+    f"{_gib(_DEFAULT_DFAM_INSTALLED_B)} after extraction. Pinned package downloads, solver time, and "
+    "their additional disk use vary by connection and the existing WSL environment; the installer checks "
+    "Dfam free space before each transfer."
+)
+_WSLCONFIG_GUIDE = (
+    "WSL2 shares Windows resources. To set global limits, edit %UserProfile%\\.wslconfig under [wsl2] "
+    "(for example memory=8GB and processors=4), then run wsl --shutdown only after installs and analyses "
+    "have stopped."
+)
+
 # component metadata surfaced to the install dialog (order = install order)
 _COMP_META = [
     ("wsl2",         "WSL2 + Linux distro",       False, "Windows Subsystem for Linux — hosts the Dfam / RepeatMasker stack."),
@@ -849,6 +1009,8 @@ _COMP_META = [
 
 def _build_script(keys) -> str:
     script = _PRELUDE + "".join(_STEP[k] for k in keys) + '\necho "[teagle] DONE $(date -u +%FT%TZ)"\n'
+    host_free = _windows_backing_free_bytes()
+    script = script.replace("__HOST_FREE_B__", str(host_free if host_free is not None else -1))
     # force LF: bash chokes on CRLF (a heredoc terminator "PY\r" never matches "PY"), and a
     # Windows checkout with core.autocrlf=true could otherwise deliver a \r-poisoned script.
     return script.replace("\r\n", "\n").replace("\r", "\n")
@@ -866,7 +1028,7 @@ def _run_attached():
     # Hold the WSL session open for the whole run: a detached (nohup) process is reaped by WSL2
     # when the launching session exits, so the script must run inside a long-lived attached call.
     try:
-        _wsl('bash "$HOME/teagle_wsl_install.sh"', timeout=7200)
+        _wsl_script('bash "$HOME/teagle_wsl_install.sh"\n', timeout=7200)
     except Exception:
         pass
 
@@ -880,7 +1042,11 @@ def _start_thread(script: str) -> dict:
         _, out, _ = _wsl_script(_LOCK_LIVE, timeout=20)
         if "LIVE" in out:
             return {"started": False, "error": "install already running"}
-        _wsl('cat > "$HOME/teagle_wsl_install.sh"', stdin=script.encode(), timeout=30)
+        payload = base64.b64encode(script.encode("utf-8")).decode("ascii")
+        rc, _, err = _wsl_script(
+            f"printf '%s' '{payload}' | base64 -d > \"$HOME/teagle_wsl_install.sh\"\n", timeout=30)
+        if rc != 0:
+            return {"started": False, "error": f"could not stage install script: {err.strip()[:120]}"}
     except Exception as e:
         return {"started": False, "error": str(e)[:160]}
     _install_thread = threading.Thread(target=_run_attached, daemon=True)
@@ -926,14 +1092,15 @@ elif vrv=$("$MM" run -n teagle-vrna python -c "import RNA;print(RNA.__version__)
 else
   echo "viennarna=broken/unusable"
 fi
-echo "dfam_root=$([ -f "$FAMDIR/dfam40.0.h5" ] && echo 1 || echo 0)"
-echo "dfam_curated=$([ -f "$FAMDIR/dfam40.curated.consensus.0.h5" ] && echo 1 || echo 0)"
+echo "dfam_root=$([ "$(stat -c %s "$FAMDIR/dfam40.0.h5" 2>/dev/null || echo 0)" = "__DFAM_ROOT_SIZE__" ] && echo 1 || echo 0)"
+echo "dfam_curated=$([ "$(stat -c %s "$FAMDIR/dfam40.curated.consensus.0.h5" 2>/dev/null || echo 0)" = "__DFAM_CURATED_SIZE__" ] && echo 1 || echo 0)"
 echo "dfam_unc_root=$([ -f "$FAMDIR/dfam40.uncurated.consensus.0.h5" ] && echo 1 || echo 0)"
 echo "dfam_unc_euk=$([ -f "$FAMDIR/dfam40.uncurated.consensus.1.h5" ] && echo 1 || echo 0)"
 echo "famdb_conf=$( { ls "$ENV"/share/famdb-*/famdb.conf >/dev/null 2>&1 || [ -f "$ENV/share/RepeatMasker/famdb.conf" ]; } && echo 1 || echo 0)"
+echo "famdb_loads=$("$MM" run -n te famdb.py info >/dev/null 2>&1 && echo 1 || echo 0)"
 if [ -d "$HOME/.teagle_install.lock" ] && [ -f "$HOME/.teagle_install.lock/pid" ] && kill -0 "$(cat "$HOME/.teagle_install.lock/pid" 2>/dev/null)" 2>/dev/null; then echo "installing=1"; else echo "installing=0"; fi
-echo "disk_free_gb=$(df -BG --output=avail "$HOME" 2>/dev/null | tail -1 | tr -dc '0-9')"
-'''.replace("__ISPCR_VERSION__", _CONDA_PINS["ispcr"]).replace("__DATASETS_VERSION__", _CONDA_PINS["ncbi-datasets-cli"]).replace("__FATOTWOBIT_VERSION__", _CONDA_PINS["ucsc-fatotwobit"])
+echo "disk_free_bytes=$(df -B1 --output=avail "$HOME" 2>/dev/null | tail -1 | tr -dc '0-9')"
+'''.replace("__ISPCR_VERSION__", _CONDA_PINS["ispcr"]).replace("__DATASETS_VERSION__", _CONDA_PINS["ncbi-datasets-cli"]).replace("__FATOTWOBIT_VERSION__", _CONDA_PINS["ucsc-fatotwobit"]).replace("__DFAM_ROOT_SIZE__", str(_DFAM_UNPACKED_B["dfam_root"])).replace("__DFAM_CURATED_SIZE__", str(_DFAM_UNPACKED_B["dfam_curated"]))
 
 
 def components_status() -> dict:
@@ -956,13 +1123,15 @@ def components_status() -> dict:
             comp["wsl2"]["guide"] = ("Click Install WSL to install WSL2 + Ubuntu (needs Administrator; "
                                      "a Windows restart may be required before first use).")
         comp["wsl2"]["installable"] = win           # the dialog shows an in-app Install WSL button on Windows
-        return {"wsl2": False, "installing": _wsl2_installing(),
-                "ready": False, "components": [comp[c[0]] for c in _COMP_META]}
+        return {"wsl2": False, "installing": _wsl2_installing(), "ready": False,
+                "install_cost": _DEFAULT_INSTALL_COST, "resource_guide": _WSLCONFIG_GUIDE,
+                "components": [comp[c[0]] for c in _COMP_META]}
     try:
         rc, out, err = _wsl_script(_STATUS_PROBE, timeout=90)
     except Exception as e:
         comp["wsl2"]["detail"] = f"probe failed: {str(e)[:80]}"
         return {"wsl2": True, "installing": False, "ready": False,
+                "install_cost": _DEFAULT_INSTALL_COST, "resource_guide": _WSLCONFIG_GUIDE,
                 "components": [comp[c[0]] for c in _COMP_META], "error": str(e)[:120]}
     kv = {}
     for line in out.splitlines():
@@ -1000,10 +1169,19 @@ def components_status() -> dict:
     present("dfam_curated", kv.get("dfam_curated") == "1", "present" if kv.get("dfam_curated") == "1" else "missing")
     for _k in ("dfam_unc_root", "dfam_unc_euk"):      # optional: absent is a normal state, not "missing"
         present(_k, kv.get(_k) == "1", "present" if kv.get(_k) == "1" else "not installed (optional)")
-    present("famdb_conf", kv.get("famdb_conf") == "1", "configured" if kv.get("famdb_conf") == "1" else "missing")
-    ready = all(comp[k]["ok"] for k in ("repeatmasker", "dfam_root", "dfam_curated"))
+    famdb_ok = kv.get("famdb_conf") == "1" and kv.get("famdb_loads") == "1"
+    famdb_detail = ("configured; library opens successfully" if famdb_ok else
+                    ("configuration present, but FamDB cannot open the library" if kv.get("famdb_conf") == "1"
+                     else "missing configuration"))
+    present("famdb_conf", famdb_ok, famdb_detail)
+    ready = all(comp[k]["ok"] for k in ("repeatmasker", "dfam_root", "dfam_curated", "famdb_conf"))
+    wsl_free_bytes = int(kv.get("disk_free_bytes") or 0)
+    if not wsl_free_bytes and kv.get("disk_free_gb"):
+        wsl_free_bytes = int(float(kv["disk_free_gb"]) * 1073741824)
+    capacity = _disk_capacity(wsl_free_bytes)
     return {"wsl2": True, "installing": kv.get("installing") == "1", "ready": ready,
-            "disk_free_gb": kv.get("disk_free_gb"), "components": [comp[c[0]] for c in _COMP_META]}
+            "install_cost": _DEFAULT_INSTALL_COST, "resource_guide": _WSLCONFIG_GUIDE,
+            "components": [comp[c[0]] for c in _COMP_META], **capacity}
 
 
 # which Dfam partitions the default install ships, and which are installed only on request — read off
@@ -1017,7 +1195,7 @@ MM="$HOME/bin/micromamba"; ENV="$HOME/micromamba/envs/te"; VRNAENV="$HOME/microm
 echo "=RM="; "$MM" run -n te RepeatMasker -v 2>&1 | head -1
 echo "=MM="; "$ENV/bin/minimap2" --version 2>&1 | head -1
 echo "=FAMDB="; "$MM" run -n te famdb.py info 2>&1 | grep -iE "version|families|consensus" | head -3
-echo "=FILES="; for f in ''' + " ".join(_DFAM_FILES[k][0] for k in _DFAM_REQUIRED) + r'''; do if [ -f "$FAMDIR/$f" ]; then echo "present $f $(stat -c %s "$FAMDIR/$f" 2>/dev/null)"; else echo "MISSING $f"; fi; done
+echo "=FILES="; for spec in ''' + " ".join(f"{_DFAM_FILES[k][0]}:{_DFAM_UNPACKED_B[k]}" for k in _DFAM_REQUIRED) + r'''; do f=${spec%%:*}; expected=${spec##*:}; got=$(stat -c %s "$FAMDIR/$f" 2>/dev/null || echo 0); if [ "$got" = "$expected" ]; then echo "present $f $got"; elif [ -f "$FAMDIR/$f" ]; then echo "INVALID $f size=$got expected=$expected"; else echo "MISSING $f"; fi; done
 echo "=OPTFILES="; for f in ''' + " ".join(_DFAM_FILES[k][0] for k in _DFAM_OPTIONAL) + r'''; do if [ -f "$FAMDIR/$f" ]; then echo "present $f"; else echo "absent $f"; fi; done
 echo "=SCAN="
 # The pinned UCSC isPcr/faToTwoBit builds deliberately return 255 for a no-argument usage request.
@@ -1159,21 +1337,25 @@ def _wsl2_installing() -> bool:
     return bool(log) and "DONE-WSL" not in log and "[teagle] FAILED" not in log
 
 
-def _wsl2_bat_script(log: str) -> str:
+def _wsl2_bat_script() -> str:
     """The elevated batch: install WSL2 + Ubuntu (no interactive launch), tolerant of pre-reboot state,
-    logging everything (incl. a terminal DONE-WSL marker) to the Windows-side `log` the dialog polls."""
+    logging everything (incl. a terminal DONE-WSL marker) beside the batch file for the dialog to poll."""
     return (
         "@echo off\r\n"
-        f'> "{log}" echo [teagle] installing WSL2 + Ubuntu (elevated)\r\n'
-        f'wsl.exe --install -d Ubuntu --no-launch >> "{log}" 2>&1\r\n'
-        "if %ERRORLEVEL% NEQ 0 (\r\n"
-        f'  >> "{log}" echo [teagle] first attempt returned %ERRORLEVEL%; retrying: wsl --install\r\n'
-        f'  wsl.exe --install >> "{log}" 2>&1\r\n'
+        "setlocal EnableExtensions EnableDelayedExpansion\r\n"
+        f'set "TEAGLE_WSL_LOG=%~dp0{_WIN_WSL_LOG}"\r\n'
+        '> "%TEAGLE_WSL_LOG%" echo [teagle] installing WSL2 + Ubuntu (elevated)\r\n'
+        'wsl.exe --install -d Ubuntu --no-launch >> "%TEAGLE_WSL_LOG%" 2>&1\r\n'
+        'set "TEAGLE_INSTALL_RC=!ERRORLEVEL!"\r\n'
+        "if not \"!TEAGLE_INSTALL_RC!\"==\"0\" (\r\n"
+        '  >> "%TEAGLE_WSL_LOG%" echo [teagle] first attempt returned !TEAGLE_INSTALL_RC!; retrying: wsl --install\r\n'
+        '  wsl.exe --install >> "%TEAGLE_WSL_LOG%" 2>&1\r\n'
+        '  set "TEAGLE_INSTALL_RC=!ERRORLEVEL!"\r\n'
         ")\r\n"
-        f'wsl.exe --set-default-version 2 >> "{log}" 2>&1 || rem VirtualMachinePlatform is inactive until reboot\r\n'
-        f'>> "{log}" echo [teagle] wsl --status:\r\n'
-        f'wsl.exe --status >> "{log}" 2>&1\r\n'
-        f'>> "{log}" echo [teagle] DONE-WSL %ERRORLEVEL% (restart Windows if the distro is not usable yet, then reopen this installer)\r\n'
+        'wsl.exe --set-default-version 2 >> "%TEAGLE_WSL_LOG%" 2>&1 || rem VirtualMachinePlatform is inactive until reboot\r\n'
+        '>> "%TEAGLE_WSL_LOG%" echo [teagle] wsl --status:\r\n'
+        'wsl.exe --status >> "%TEAGLE_WSL_LOG%" 2>&1\r\n'
+        '>> "%TEAGLE_WSL_LOG%" echo [teagle] DONE-WSL !TEAGLE_INSTALL_RC! (restart Windows if the distro is not usable yet, then reopen this installer)\r\n'
     )
 
 
@@ -1192,8 +1374,8 @@ def install_wsl2() -> dict:
     bat = os.path.join(d, "install_wsl.bat")
     log = os.path.join(d, _WIN_WSL_LOG)
     try:
-        with open(bat, "w", encoding="ascii", errors="ignore", newline="") as f:
-            f.write(_wsl2_bat_script(log))
+        with open(bat, "w", encoding="ascii", newline="") as f:
+            f.write(_wsl2_bat_script())
         with open(log, "w", encoding="utf-8", newline="") as f:
             f.write("[teagle] launching the elevated WSL installer - accept the Windows (UAC) prompt...\n")
     except Exception as e:
@@ -1590,6 +1772,11 @@ set -uo pipefail
 cd "$HOME" || exit 1
 export MAMBA_ROOT_PREFIX="$HOME/micromamba"
 ENV="$HOME/micromamba/envs/te"
+HOST_FREE_B=__HOST_FREE_B__
+effective_free_b(){
+  local wsl_b=${1:-0}
+  if [ "$HOST_FREE_B" -ge 0 ] && [ "$HOST_FREE_B" -lt "$wsl_b" ]; then echo "$HOST_FREE_B"; else echo "$wsl_b"; fi
+}
 ACC="__ACC__"
 GDIR="$HOME/teagle_genomes/$ACC"
 LOG="$HOME/teagle_genome_prepare.log"
@@ -1621,10 +1808,11 @@ echo $$ > "$LOCK/pid"
 trap 'rm -rf "$LOCK" 2>/dev/null' EXIT
 if [ -f "$GDIR/.done" ] && [ -f "$GDIR/meta.txt" ]; then verify_prepared || exit 1; exit 0; fi   # another prepare finished while we waited
 cd "$GDIR"
-avail=$(df -BG --output=avail . 2>/dev/null | tail -1 | tr -dc '0-9'); avail=${avail:-0}
+wsl_avail_b=$(df -B1 --output=avail . 2>/dev/null | tail -1 | tr -dc '0-9')
+avail_b=$(effective_free_b "${wsl_avail_b:-0}")
 # blanket floor sized for a mammalian genome's peak (extracted FASTA ~3G + 2bit ~0.8G); the zip is freed
 # before the conversion to keep the peak below this.
-[ "$avail" -ge 8 ] || { echo "FAIL insufficient disk (${avail}G free, need >=8G for a genome)"; exit 1; }
+[ "$avail_b" -ge 8589934592 ] || { echo "FAIL insufficient usable disk ($((avail_b/1073741824))G free after applying the smaller WSL/Windows backing-volume limit, need >=8G for a genome)"; exit 1; }
 plog "downloading $ACC (NCBI Datasets) — can take several minutes for a large genome"
 # NCBI Datasets transfers of large genomes routinely drop mid-stream, and the API rate-limits (harder when the app
 # has also been fetching sequences from NCBI). datasets can't resume — it writes a fresh zip each time — so a blip
@@ -1687,9 +1875,13 @@ def genome_prepare(accession: str, assembly_name: str = "", timeout: int = 3600)
     if "yes" not in out:
         return {"ok": False, "error": "genome-scan tools not installed in the WSL backend (run Install backend)"}
     try:
-        rc, out, err = _wsl_script(_PREP_SCRIPT.replace("__ACC__", accession), timeout=timeout)
+        host_free = _windows_backing_free_bytes()
+        script = (_PREP_SCRIPT.replace("__ACC__", accession)
+                  .replace("__HOST_FREE_B__", str(host_free if host_free is not None else -1)))
+        rc, out, err = _wsl_script(script, timeout=timeout)
     except subprocess.TimeoutExpired:
-        return {"ok": False, "error": f"genome preparation timed out after {timeout}s (large genome — try again to resume)"}
+        return {"ok": False, "error": (f"genome preparation timed out after {timeout}s; try again, but the "
+                                       "NCBI genome ZIP restarts because Datasets does not resume partial ZIPs")}
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
     meta = _parse_meta(out)
@@ -1808,6 +2000,11 @@ set -uo pipefail
 cd "$HOME" || exit 1
 export MAMBA_ROOT_PREFIX="$HOME/micromamba"
 ENV="$HOME/micromamba/envs/te"
+HOST_FREE_B=__HOST_FREE_B__
+effective_free_b(){
+  local wsl_b=${1:-0}
+  if [ "$HOST_FREE_B" -ge 0 ] && [ "$HOST_FREE_B" -lt "$wsl_b" ]; then echo "$HOST_FREE_B"; else echo "$wsl_b"; fi
+}
 ACC="__ACC__"
 GDIR="$HOME/teagle_genomes/$ACC"
 ADIR="$GDIR/annot"
@@ -1860,8 +2057,10 @@ GENOME_SHA=$(sha256sum "$FNA" | cut -d' ' -f1)
 # extra requirement is one FASTA. Derived from the actual file, never a fixed number.
 FBYTES=$(stat -c %s "$FNA" 2>/dev/null || echo 0)
 NEEDG=$(( FBYTES / 1073741824 + 2 ))
-availg=$(df -BG --output=avail "$GDIR" 2>/dev/null | tail -1 | tr -dc '0-9'); availg=${availg:-0}
-[ "$availg" -ge "$NEEDG" ] || { echo "FAIL insufficient disk (${availg}G free, need >=${NEEDG}G to annotate this genome)"; exit 1; }
+wsl_avail_b=$(df -B1 --output=avail "$GDIR" 2>/dev/null | tail -1 | tr -dc '0-9')
+avail_b=$(effective_free_b "${wsl_avail_b:-0}")
+need_b=$(( NEEDG * 1073741824 ))
+[ "$avail_b" -ge "$need_b" ] || { echo "FAIL insufficient usable disk ($((avail_b/1073741824))G free after applying the smaller WSL/Windows backing-volume limit, need >=${NEEDG}G to annotate this genome)"; exit 1; }
 
 # 3) split into contig chunks of ~CHUNKBP bases (one streaming pass; a contig is never split in half, so
 # every RepeatMasker coordinate stays a real coordinate on a real contig).
@@ -2116,7 +2315,7 @@ def dfam_lineage_families(species: str, include_uncurated: bool = False) -> dict
 
 
 def annotate_budget(genome_bytes: int = 0) -> dict:
-    """CPU / RAM / disk the annotation may use, measured INSIDE WSL.
+    """CPU / RAM / disk the annotation may use, bounded by WSL and its Windows backing volume.
 
     WSL2 caps cores and memory independently of the Windows host (.wslconfig), so the host's numbers would
     over-promise. RepeatMasker's -pa starts N parallel RMBlast jobs, each needing its own memory, so the
@@ -2126,13 +2325,15 @@ def annotate_budget(genome_bytes: int = 0) -> dict:
         rc, out, _ = _wsl_script(
             'echo "cores=$(nproc 2>/dev/null || echo 0)"\n'
             'echo "memkb=$(awk \'/MemTotal/ {print $2}\' /proc/meminfo 2>/dev/null || echo 0)"\n'
-            'echo "availg=$(df -BG --output=avail "$HOME" 2>/dev/null | tail -1 | tr -dc \'0-9\')"\n', timeout=45)
+            'echo "availb=$(df -B1 --output=avail "$HOME" 2>/dev/null | tail -1 | tr -dc \'0-9\')"\n', timeout=45)
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
     d = dict(l.split("=", 1) for l in out.splitlines() if "=" in l)
     cores = int(d.get("cores") or 0)
     mem_gb = round(int(d.get("memkb") or 0) / 1048576, 1)
-    avail_gb = int(d.get("availg") or 0)
+    wsl_free = int(d.get("availb") or 0)
+    capacity = _disk_capacity(wsl_free)
+    avail_gb = capacity["disk_free_gb"]
     # ~2 GB per RMBlast job is the working figure for a Dfam-sized library; keep one core for the UI.
     by_cpu = max(1, cores - 1)
     by_ram = max(1, int(mem_gb // 2))
@@ -2141,7 +2342,10 @@ def annotate_budget(genome_bytes: int = 0) -> dict:
     return {"ok": True, "cores": cores, "mem_gb": mem_gb, "avail_gb": avail_gb,
             "recommended_threads": threads, "limited_by": ("memory" if by_ram < by_cpu else "cores"),
             "disk_needed_gb": need_gb,
-            "disk_ok": (avail_gb >= need_gb) if need_gb else None}
+            "disk_ok": (avail_gb >= need_gb) if need_gb else None,
+            "wsl_avail_gb": capacity["wsl_disk_free_gb"],
+            "windows_avail_gb": capacity["windows_disk_free_gb"],
+            "disk_limited_by": capacity["disk_limited_by"], "disk_note": capacity["disk_note"]}
 
 
 def stage_library(path: str) -> dict:
@@ -2240,9 +2444,11 @@ def genome_annotate(accession: str, species: str | None = None, threads: int = 4
         spsig = (f"species:{species or 'all'}"
                  + f"|parts:{hashlib.sha256(_parts.encode()).hexdigest()[:12]}"
                  + f"|unc:{int(bool(include_uncurated))}")  # curated-only vs +uncurated is a different search
+    host_free = _windows_backing_free_bytes()
     script = (_ANNOT_SCRIPT.replace("__ACC__", accession).replace("__PA__", str(max(1, int(threads))))
               .replace("__CHUNKBP__", str(max(1, int(chunk_mb)) * 1_000_000))
-              .replace("__SENS__", sens).replace("__SPSIG__", spsig).replace("__SP__", sp))
+              .replace("__SENS__", sens).replace("__SPSIG__", spsig).replace("__SP__", sp)
+              .replace("__HOST_FREE_B__", str(host_free if host_free is not None else -1)))
     try:
         rc, out, err = _wsl_script(script, timeout=timeout)
     except subprocess.TimeoutExpired:

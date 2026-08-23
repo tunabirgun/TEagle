@@ -13,7 +13,7 @@ benchmarks/raw/tool_capability_matrix.json, which records the publication or doc
 cell. Where that research flagged a cell as lower-confidence, the flag travels with it into Table S1.
 """
 from __future__ import annotations
-import csv, json, os, re, sys
+import csv, json, os, re, sys, tempfile, zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, "benchmarks", "raw", "tool_capability_matrix.json")
@@ -23,6 +23,10 @@ OUT = os.path.join(ROOT, "manuscript", "tables")
 sys.path[:0] = [os.path.join(ROOT, "app", "backend")]
 import engine                                              # noqa: E402
 from teagle_core import __version__ as TEAGLE_VERSION      # noqa: E402  single source of truth
+from teagle_core.artifact_metadata import (  # noqa: E402
+    clean_ooxml_metadata,
+    ooxml_metadata_violations,
+)
 
 # Both counted rather than written down, so the table cannot claim a coverage the manifest does not
 # have. They are DIFFERENT numbers and the cell must not conflate them: the seal carries N_SEALED
@@ -61,45 +65,41 @@ VERDICT_AXES = {k for k, _, _ in AXES} - {"input_granularity", "export_formats",
 GLYPH = {"yes": "yes", "no": "no", "partial": "partial",
          "not applicable": "n.a.", "not documented": "n.d."}
 
-# TEagle's own row. Each value is followed by the module that implements it - the claim and its evidence
-# travel together, so a reviewer can check any cell against the source tree.
+# TEagle's own row. Implementation evidence is supplied with the version-locked source, without exposing
+# repository-internal paths in the reader-facing supplementary table.
 TEAGLE = {
     "name": "TEagle",
     "current_version": f"{TEAGLE_VERSION} (this work)",
     "primary_reference": "This work.",
     "input_granularity": "single element — one sequence per analysis, from an accession, a file or pasted "
-                         "text; a whole assembly is read only by the primer off-target scan "
-                         "(app/backend/engine.py)",
+                         "text; a whole assembly is read only by the primer off-target scan",
     "denovo_structural": "yes — terminal repeat, terminal inverted repeat and target-site duplication "
-                         "detectors with published thresholds (app/backend/teagle_core/structural.py)",
-    "protein_domain_classify": "yes — bundled 30-model Pfam-A panel searched with HMMER via pyhmmer "
-                               "(app/backend/teagle_core/domains.py)",
+                         "detectors with published thresholds",
+    "protein_domain_classify": "yes — bundled 30-model Pfam-A panel searched with HMMER via pyhmmer",
     "homology_family_naming": "partial — optional Dfam naming through RepeatMasker in the installed WSL2 "
                               "environment; the core application does not require it",
     "wicker_superfamily_call": "yes — Wicker et al. 2007 class and superfamily from structural and domain "
-                               "evidence (app/backend/teagle_core/classify.py)",
+                               "evidence",
     "explicit_abstention": "yes — withholds the superfamily where translation order is unreadable across "
                            "strands, states when the domain scan did not run, and reports how many reading "
-                           "frames were left unsearched (app/backend/teagle_core/classify.py)",
-    "confidence_reporting": "yes — a confidence level and a separate domain completeness, reported as "
-                            "two independent axes",
+                           "frames were left unsearched",
+    "confidence_reporting": "yes — per-domain call confidence, separate domain completeness, and "
+                            "coding-structure/reading-frame status, reported as three independent axes",
     "primer_design": "yes — Primer3 in-process, with QC on each pair",
     "in_silico_pcr": "yes — predicted amplicons against the supplied template",
     "genome_offtarget_scan": "yes — isPcr against a whole assembly, in the optional WSL2 environment",
     "provenance_record": "yes — content-addressed manifest carrying application and database versions, "
                          f"checksums, the input hash and {N_SEALED} sealed parameters, {N_THRESHOLDS} of "
                          "them detector thresholds read from the signatures of the functions that apply "
-                         f"them and the remaining {N_SEALED - N_THRESHOLDS} module-level constants "
-                         "(app/backend/engine.py::_detector_parameters)",
+                         f"them and the remaining {N_SEALED - N_THRESHOLDS} module-level constants",
     "gui_no_commandline": "yes — native desktop application; no command line at any point",
     "offline_capable": "yes — the scientific core is bundled and runs with no network; only accession "
                        "fetch and optional Dfam naming need connectivity",
-    "export_formats": "GFF3, BED, FASTA, XLSX, CSV, TSV, JSON provenance manifest, and SVG/PNG/PDF figures "
-                      "(app/native/widgets.py, app/native/main.py)",
+    "export_formats": "GFF3, BED, FASTA, XLSX, CSV, TSV, JSON provenance manifest, and SVG/PNG/PDF figures",
     "license": "AGPL-3.0-or-later",
     "platform": "Windows 10/11 64-bit; optional components in an app-installed WSL2 environment",
     "what_it_does_better": "—",
-    "sources": f"This work; TEagle {TEAGLE_VERSION} source tree.",
+    "sources": f"This work; TEagle {TEAGLE_VERSION} source and verification evidence supplied with the submission.",
 }
 
 
@@ -139,6 +139,71 @@ def write_csv(path, header, rows):
         w.writerows(rows)
 
 
+def _write_clean_ooxml(path, writer):
+    """Write and verify an OOXML package before atomically replacing the destination."""
+    target = os.path.abspath(path)
+    parent = os.path.dirname(target)
+    os.makedirs(parent, exist_ok=True)
+    stem, suffix = os.path.splitext(os.path.basename(target))
+    fd, temporary = tempfile.mkstemp(prefix=f".{stem}.", suffix=suffix, dir=parent)
+    os.close(fd)
+    try:
+        writer(temporary)
+        if suffix.lower() == ".docx":
+            _force_times_new_roman_package(temporary)
+        clean_ooxml_metadata(temporary)
+        violations = ooxml_metadata_violations(temporary)
+        if violations:
+            raise RuntimeError(
+                f"metadata verification failed for {os.path.basename(target)}: "
+                + "; ".join(violations))
+        os.replace(temporary, target)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+_RFONTS = re.compile(rb"<w:rFonts\b[^>]*(?:/>|>\s*</w:rFonts>)")
+_THEME_TYPEFACE = re.compile(
+    rb'(<a:(?:latin|ea|cs|font)\b[^>]*\btypeface=")[^"]*(")')
+
+
+def _force_times_new_roman_package(path):
+    """Make Times New Roman the only Word-package font, including bullets and equations."""
+    replacement = (
+        b'<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" '
+        b'w:cs="Times New Roman" w:eastAsia="Times New Roman"/>')
+    fd, rewritten = tempfile.mkstemp(prefix=".tnr.", suffix=".docx", dir=os.path.dirname(path))
+    os.close(fd)
+    try:
+        with zipfile.ZipFile(path, "r") as source, zipfile.ZipFile(rewritten, "w") as target:
+            for info in source.infolist():
+                data = source.read(info.filename)
+                if info.filename.startswith("word/") and info.filename.endswith(".xml"):
+                    data = _RFONTS.sub(replacement, data)
+                    if info.filename == "word/numbering.xml":
+                        data = data.replace('w:val="\uf0b7"'.encode("utf-8"),
+                                            'w:val="\u2022"'.encode("utf-8"))
+                    elif info.filename == "word/theme/theme1.xml":
+                        data = _THEME_TYPEFACE.sub(
+                            lambda match: match.group(1) + b"Times New Roman" + match.group(2), data)
+                    elif info.filename == "word/fontTable.xml":
+                        data = (
+                            b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                            b'<w:fonts xmlns:w="http://schemas.openxmlformats.org/'
+                            b'wordprocessingml/2006/main"><w:font w:name="Times New Roman"/>'
+                            b'</w:fonts>')
+                    elif info.filename == "word/settings.xml":
+                        data = re.sub(
+                            rb'(<m:mathFont\b[^>]*\bm:val=")[^"]*(")',
+                            rb'\1Times New Roman\2', data)
+                target.writestr(info, data)
+        os.replace(rewritten, path)
+    finally:
+        if os.path.exists(rewritten):
+            os.unlink(rewritten)
+
+
 def write_xlsx(path, header, rows, title):
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
@@ -162,7 +227,7 @@ def write_xlsx(path, header, rows, title):
               for col in zip(header, *rows)] if rows else []
     for i, wdt in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = wdt
-    wb.save(path)
+    _write_clean_ooxml(path, wb.save)
 
 
 def write_docx(path, header, rows, caption):
@@ -200,10 +265,79 @@ def write_docx(path, header, rows, caption):
             run = cells[i].paragraphs[0].add_run(str(v or ""))
             run.font.size = Pt(6)
             run.font.name = "Times New Roman"
-    doc.save(path)
+    _write_clean_ooxml(path, doc.save)
+
+
+def write_expanded_docx(path, header, rows, caption):
+    """Write the full sourced matrix as readable per-tool field/value tables."""
+    from docx import Document
+    from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.shared import Mm, Pt, RGBColor
+
+    doc = Document()
+    section = doc.sections[0]
+    section.page_width, section.page_height = Mm(210), Mm(297)
+    section.left_margin = section.right_margin = Mm(16)
+    section.top_margin = section.bottom_margin = Mm(16)
+    normal = doc.styles["Normal"]
+    normal.font.name = "Times New Roman"
+    normal.font.size = Pt(9)
+    normal.font.color.rgb = RGBColor(0, 0, 0)
+
+    title = doc.add_paragraph()
+    title.paragraph_format.keep_with_next = True
+    run = title.add_run(caption)
+    run.bold = True
+    run.font.name = "Times New Roman"
+    run.font.size = Pt(10)
+
+    for index, row in enumerate(rows):
+        if index:
+            doc.add_page_break()
+        heading = doc.add_paragraph()
+        heading.paragraph_format.keep_with_next = True
+        run = heading.add_run(str(row[0]))
+        run.bold = True
+        run.font.name = "Times New Roman"
+        run.font.size = Pt(12)
+
+        table = doc.add_table(rows=1, cols=2)
+        table.style = "Table Grid"
+        table.autofit = False
+        widths = (Mm(47), Mm(131))
+        header_cells = table.rows[0].cells
+        for cell, text, width in zip(header_cells, ("Field", "Value"), widths):
+            cell.width = width
+            cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.TOP
+            paragraph = cell.paragraphs[0]
+            paragraph.paragraph_format.space_after = Pt(0)
+            run = paragraph.add_run(text)
+            run.bold = True
+            run.font.name = "Times New Roman"
+            run.font.size = Pt(9)
+        row_properties = table.rows[0]._tr.get_or_add_trPr()
+        repeat = OxmlElement("w:tblHeader")
+        repeat.set(qn("w:val"), "true")
+        row_properties.append(repeat)
+
+        for field, value in zip(header, row):
+            cells = table.add_row().cells
+            for cell, text, width, bold in zip(cells, (field, value), widths, (True, False)):
+                cell.width = width
+                cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.TOP
+                paragraph = cell.paragraphs[0]
+                paragraph.paragraph_format.space_after = Pt(0)
+                run = paragraph.add_run(str(text or ""))
+                run.bold = bold
+                run.font.name = "Times New Roman"
+                run.font.size = Pt(9)
+    _write_clean_ooxml(path, doc.save)
 
 
 def main():
+    skip_xlsx = "--skip-xlsx" in sys.argv[1:]
     if not os.path.exists(RAW):
         print(f"missing {RAW} - run the capability-matrix workflow first")
         return 1
@@ -219,12 +353,13 @@ def main():
     # a truncated cell from a complete one, and the .csv/.xlsx/.docx all handle the full string.
     r1 = [[t["name"], t["current_version"].split("(")[0].strip()]
           + [compact(t[k], k) for k, _, _ in keep] for t in tools]
-    cap1 = ("Table 4. Functional comparison of TEagle with fifteen widely used transposable-element and "
+    cap1 = ("Table 4. Functional comparison of TEagle with fifteen selected transposable-element and "
             "primer-design tools. Verdicts: yes; partial; no; n.a. where the capability lies outside the "
             "tool's design scope; n.d. where no such capability is documented but the tool does not place it "
             "out of scope. Full justification and sources for every cell are in Table S1.")
     write_csv(os.path.join(OUT, "table4_tool_comparison.csv"), h1, r1)
-    write_xlsx(os.path.join(OUT, "table4_tool_comparison.xlsx"), h1, r1, "Table 4")
+    if not skip_xlsx:
+        write_xlsx(os.path.join(OUT, "table4_tool_comparison.xlsx"), h1, r1, "Table 4")
     write_docx(os.path.join(OUT, "table4_tool_comparison.docx"), h1, r1, cap1)
 
     # ---- Table S1: full sourced matrix --------------------------------------------------------------
@@ -233,15 +368,18 @@ def main():
     rs = [[t["name"], t["current_version"], t["primary_reference"]]
           + [t[k] for k, _, _ in AXES] + [t.get("what_it_does_better", ""), t.get("sources", "")]
           for t in tools]
-    caps = ("Table S1. Functional comparison of TEagle with fifteen widely used tools, with the full "
+    caps = ("Table S1. Functional comparison of TEagle with fifteen selected tools, with the full "
             "justification and source for every cell. Comparator cells are sourced to each tool's own "
-            "publication or documentation; TEagle's cells cite the module that implements the behaviour.")
+            "publication or documentation; TEagle's cells are documented against the version-locked "
+            "source and verification evidence supplied with the submission.")
     write_csv(os.path.join(OUT, "tableS1_tool_comparison_sourced.csv"), hs, rs)
-    write_xlsx(os.path.join(OUT, "tableS1_tool_comparison_sourced.xlsx"), hs, rs, "Table S1")
-    write_docx(os.path.join(OUT, "tableS1_tool_comparison_sourced.docx"), hs, rs, caps)
+    if not skip_xlsx:
+        write_xlsx(os.path.join(OUT, "tableS1_tool_comparison_sourced.xlsx"), hs, rs, "Table S1")
+    write_expanded_docx(os.path.join(OUT, "tableS1_tool_comparison_sourced.docx"), hs, rs, caps)
 
-    print(f"Table 4  : {len(r1)} rows x {len(h1)} cols  -> .csv .xlsx .docx")
-    print(f"Table S1 : {len(rs)} rows x {len(hs)} cols  -> .csv .xlsx .docx")
+    formats = ".csv .docx" if skip_xlsx else ".csv .xlsx .docx"
+    print(f"Table 4  : {len(r1)} rows x {len(h1)} cols  -> {formats}")
+    print(f"Table S1 : {len(rs)} rows x {len(hs)} cols  -> {formats}")
     print()
     print("Verdict distribution on the abstention axis (the paper's central claim):")
     for t in tools:

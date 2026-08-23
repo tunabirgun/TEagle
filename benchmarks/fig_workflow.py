@@ -23,6 +23,10 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt                                            # noqa: E402
 from matplotlib.patches import FancyBboxPatch, FancyArrowPatch, Rectangle  # noqa: E402
+try:                                                                        # noqa: E402
+    from .figures import write_clean_figure
+except ImportError:                                                         # direct script execution
+    from figures import write_clean_figure
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, "app", "backend")]
@@ -37,7 +41,7 @@ OI = {"orange": "#E69F00", "skyblue": "#56B4E9", "green": "#009E73",
       "blue": "#0072B2", "vermillion": "#D55E00", "purple": "#CC79A7", "black": "#000000"}
 
 plt.rcParams.update({
-    "font.family": "sans-serif", "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
+    "font.family": "serif", "font.serif": ["Times New Roman"],
     "pdf.fonttype": 42, "svg.fonttype": "none",
     "savefig.bbox": "tight", "savefig.pad_inches": 0.03,
 })
@@ -85,7 +89,7 @@ def main():
     # bundled / optional boundary -------------------------------------------------------------------
     ax.add_patch(Rectangle((0.020, 0.070), 0.720, 0.855, fill=False, linestyle=(0, (5, 3)),
                            linewidth=0.9, edgecolor=OI["green"], zorder=1))
-    ax.text(0.024, 0.935, "Bundled — runs offline, permissively licensed", fontsize=6.0,
+    ax.text(0.024, 0.935, "Bundled — runs offline", fontsize=6.0,
             color=OI["green"], fontweight="bold", ha="left", va="bottom")
     ax.text(CO, 0.935, "Optional, installed WSL2 environment", fontsize=6.0,
             color=OI["vermillion"], fontweight="bold", ha="left", va="bottom")
@@ -155,7 +159,8 @@ def main():
 
     os.makedirs(OUT, exist_ok=True)
     for ext in ("pdf", "svg", "png"):
-        fig.savefig(os.path.join(OUT, f"fig_workflow.{ext}"), dpi=600 if ext == "png" else None)
+        write_clean_figure(
+            fig, os.path.join(OUT, f"fig_workflow.{ext}"), dpi=600 if ext == "png" else None)
     plt.close(fig)
     print(f"wrote fig_workflow.pdf / .svg / .png  ({N_PROFILES} profiles, TEagle {TEAGLE_VERSION})")
 

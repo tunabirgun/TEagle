@@ -15,7 +15,9 @@ A copy that can silently stop being a copy is worse than no copy, because the RE
 These tests fail the moment the equality the package claims stops holding.
 """
 from __future__ import annotations
+import csv
 import filecmp
+import json
 import os
 
 import pytest
@@ -73,6 +75,36 @@ def test_reviewer_package_copy_matches_its_source(copy, original):
     assert filecmp.cmp(original, copy, shallow=False), (
         f"{rel_c} has drifted from {rel_o}. The reviewer package promises to be a copy, so regenerate "
         f"or re-copy it in the same commit as the change that made them differ.")
+
+
+def test_table_s1_reports_all_three_reliability_axes():
+    """The capability table must track confidence, completeness and coding structure separately."""
+    path = os.path.join(RESULTS, "tableS1_tool_comparison_sourced.csv")
+    with open(path, encoding="utf-8-sig", newline="") as stream:
+        teagle = next(row for row in csv.DictReader(stream) if row["Tool"] == "TEagle")
+    cell = teagle["Per-call confidence reported"]
+    assert "three independent axes" in cell
+    assert "per-domain call confidence" in cell
+    assert "domain completeness" in cell
+    assert "coding-structure/reading-frame status" in cell
+    assert "two independent axes" not in cell
+
+
+def test_table_s1_reference_ledger_tracks_verified_release_records():
+    """Version-sensitive comparator fields must retain their checked official-source values."""
+    path = os.path.join(ROOT, "benchmarks", "raw", "tool_capability_matrix.json")
+    with open(path, encoding="utf-8") as stream:
+        rows = {row["name"]: row for row in json.load(stream)["tools"]}
+    assert "v7.3.1" in rows["Earl Grey"]["current_version"]
+    assert "2026-08-11" in rows["Earl Grey"]["current_version"]
+    assert "17 Nov 2025" in rows["TEsorter"]["current_version"]
+    assert "DANTE v0.2.10" in rows["DANTE (and DANTE_LTR)"]["current_version"]
+    assert "DANTE_LTR v0.4.0.5" in rows["DANTE (and DANTE_LTR)"]["current_version"]
+    assert "Biology (Basel) 2026;15(1):59" in rows["TEclass2"]["primary_reference"]
+    assert "published online 29 Dec 2025" in rows["TEclass2"]["current_version"]
+    assert "9 Mar 2026" in rows["LTR_retriever"]["current_version"]
+    assert rows["LTR_FINDER"]["license"].startswith("MIT")
+    assert "target.iplantcollaborative.org" not in rows["MITE-Hunter"]["sources"]
 
 
 def test_the_scripts_the_readme_names_are_present():

@@ -12,7 +12,10 @@ Conventions, so the figures read as one set and survive a journal's production p
     python benchmarks/figures.py
 """
 from __future__ import annotations
-import json, math, os, sys
+import json, math, os, re, sys, tempfile
+from collections import Counter
+from pathlib import Path
+from xml.dom import Node, minidom
 
 import matplotlib
 matplotlib.use("Agg")
@@ -21,6 +24,14 @@ import matplotlib.pyplot as plt                                    # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, "benchmarks", "raw")
 OUT = os.path.join(ROOT, "benchmarks", "figures")
+_REPOSITORY_ROOT = ROOT if os.path.isdir(os.path.join(ROOT, "app", "backend")) else os.path.dirname(ROOT)
+sys.path[:0] = [os.path.join(_REPOSITORY_ROOT, "app", "backend")]
+from teagle_core.artifact_metadata import (  # noqa: E402
+    clean_pdf_metadata,
+    clean_png_metadata,
+    clean_svg_metadata,
+    media_metadata_violations,
+)
 
 # Okabe & Ito (2008), as used throughout the application
 OI = {"orange": "#E69F00", "skyblue": "#56B4E9", "green": "#009E73",
@@ -30,14 +41,15 @@ MM = 1 / 25.4
 SINGLE, DOUBLE = 89 * MM, 183 * MM
 
 plt.rcParams.update({
-    "font.family": "sans-serif",
-    "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
+    "font.family": "serif",
+    "font.serif": ["Times New Roman"],
     "font.size": 8, "axes.labelsize": 8, "axes.titlesize": 9,
     "xtick.labelsize": 7, "ytick.labelsize": 7, "legend.fontsize": 7,
     "axes.linewidth": 0.6, "xtick.major.width": 0.6, "ytick.major.width": 0.6,
     "axes.spines.top": False, "axes.spines.right": False,
     "figure.dpi": 150, "savefig.bbox": "tight", "savefig.pad_inches": 0.02,
     "pdf.fonttype": 42, "svg.fonttype": "none",      # keep text as text, not outlines
+    "svg.hashsalt": "teagle-figures-v1",
 })
 
 
@@ -53,10 +65,175 @@ def wilson(k: int, n: int, z: float = 1.959963985):
     return p, max(0.0, centre - half), min(1.0, centre + half)
 
 
+_MEDIA_CLEANERS = {
+    ".pdf": clean_pdf_metadata,
+    ".png": clean_png_metadata,
+    ".svg": clean_svg_metadata,
+}
+_MATPLOTLIB_SVG_PREAMBLES = tuple(
+    (
+        '<?xml version="1.0" encoding="utf-8" standalone="no"?>' + newline
+        + '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"' + newline
+        + '  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' + newline
+    ).encode("ascii")
+    for newline in ("\n", "\r\n")
+)
+
+
+def _strip_controlled_matplotlib_svg_preamble(path):
+    """Remove only Matplotlib's fixed declaration and SVG 1.1 PUBLIC DTD."""
+    target = Path(path)
+    payload = target.read_bytes()
+    for preamble in _MATPLOTLIB_SVG_PREAMBLES:
+        if payload.startswith(preamble) and payload[len(preamble):].startswith(b"<svg"):
+            target.write_bytes(payload[len(preamble):])
+            return
+    raise ValueError("Matplotlib SVG preamble drifted; refusing to rewrite an unknown DTD")
+
+
+_GENERATOR_AXIS_ID = re.compile(r"^matplotlib\.axis_([0-9]+)$")
+_URL_REFERENCE = re.compile(r"url\(\s*(['\"]?)#([^)'\"\s]+)\1\s*\)", re.I)
+_CSS_ID_SELECTOR = re.compile(r"#((?:\\.|[A-Za-z0-9_-])+)(?=\s*[,\{])")
+
+
+def _svg_reference_targets(document):
+    references = Counter()
+    for element in document.getElementsByTagName("*"):
+        for index in range(element.attributes.length):
+            attribute = element.attributes.item(index)
+            value = attribute.value
+            local = (attribute.localName or attribute.nodeName.rsplit(":", 1)[-1]).casefold()
+            if local == "href" and value.startswith("#") and len(value) > 1:
+                references[value[1:]] += 1
+            for match in _URL_REFERENCE.finditer(value):
+                references[match.group(2)] += 1
+            if local in {"aria-labelledby", "aria-describedby"}:
+                references.update(value.split())
+            elif local in {"begin", "end"}:
+                references.update(
+                    token.rsplit(".", 1)[0]
+                    for token in re.split(r"\s*;\s*", value)
+                    if "." in token and not token.rsplit(".", 1)[0].replace(".", "").isdigit()
+                )
+        if (element.localName or element.nodeName.rsplit(":", 1)[-1]).casefold() == "style":
+            css = "".join(
+                child.data for child in element.childNodes
+                if child.nodeType in {Node.TEXT_NODE, Node.CDATA_SECTION_NODE}
+            )
+            for match in _URL_REFERENCE.finditer(css):
+                references[match.group(2)] += 1
+            references.update(match.group(1).replace("\\.", ".") for match in _CSS_ID_SELECTOR.finditer(css))
+    return references
+
+
+def _replace_svg_reference(value, mapping):
+    if value.startswith("#") and value[1:] in mapping:
+        value = "#" + mapping[value[1:]]
+
+    def replace_url(match):
+        target = mapping.get(match.group(2), match.group(2))
+        quote = match.group(1)
+        return f"url({quote}#{target}{quote})"
+
+    return _URL_REFERENCE.sub(replace_url, value)
+
+
+def _neutralize_controlled_matplotlib_svg_ids(path):
+    """Rename only known generator-owned axis IDs and preserve every reference."""
+    target = Path(path)
+    document = minidom.parseString(target.read_bytes())
+    elements = list(document.getElementsByTagName("*"))
+    original_ids = [element.getAttribute("id") for element in elements if element.hasAttribute("id")]
+    if len(original_ids) != len(set(original_ids)):
+        raise ValueError("SVG contains duplicate IDs")
+    before_references = _svg_reference_targets(document)
+    if not set(before_references).issubset(original_ids):
+        raise ValueError("SVG contains a reference to a missing ID")
+
+    occupied = set(original_ids)
+    mapping = {}
+    for old in original_ids:
+        match = _GENERATOR_AXIS_ID.fullmatch(old)
+        if not match:
+            continue
+        candidate = f"plot-axis-{int(match.group(1))}"
+        suffix = 2
+        while candidate in occupied or candidate in mapping.values():
+            candidate = f"plot-axis-{int(match.group(1))}-{suffix}"
+            suffix += 1
+        mapping[old] = candidate
+        occupied.add(candidate)
+
+    if not mapping:
+        return
+    for element in elements:
+        if element.hasAttribute("id") and element.getAttribute("id") in mapping:
+            element.setAttribute("id", mapping[element.getAttribute("id")])
+        for index in range(element.attributes.length):
+            attribute = element.attributes.item(index)
+            local = (attribute.localName or attribute.nodeName.rsplit(":", 1)[-1]).casefold()
+            value = _replace_svg_reference(attribute.value, mapping)
+            if local in {"aria-labelledby", "aria-describedby"}:
+                value = " ".join(mapping.get(token, token) for token in value.split())
+            elif local in {"begin", "end"}:
+                for old, new in mapping.items():
+                    value = re.sub(rf"(?<![A-Za-z0-9_.-]){re.escape(old)}(?=\.)", new, value)
+            attribute.value = value
+        if (element.localName or element.nodeName.rsplit(":", 1)[-1]).casefold() == "style":
+            for child in element.childNodes:
+                if child.nodeType not in {Node.TEXT_NODE, Node.CDATA_SECTION_NODE}:
+                    continue
+                child.data = _replace_svg_reference(child.data, mapping)
+                for old, new in mapping.items():
+                    child.data = re.sub(
+                        rf"#{re.escape(old)}(?![A-Za-z0-9_.-])", f"#{new}", child.data)
+                    escaped_old = old.replace(".", r"\.")
+                    child.data = re.sub(
+                        rf"#{re.escape(escaped_old)}(?![A-Za-z0-9_.\\-])", f"#{new}", child.data)
+
+    after_ids = [element.getAttribute("id") for element in elements if element.hasAttribute("id")]
+    after_references = _svg_reference_targets(document)
+    expected_references = Counter()
+    for reference, count in before_references.items():
+        expected_references[mapping.get(reference, reference)] += count
+    if after_references != expected_references or not set(after_references).issubset(after_ids):
+        raise ValueError("SVG ID reference closure changed during neutralization")
+    if any(_GENERATOR_AXIS_ID.fullmatch(value) for value in after_ids):
+        raise ValueError("SVG generator-owned axis ID remains after neutralization")
+    target.write_bytes(document.documentElement.toxml(encoding="utf-8"))
+
+
+def write_clean_figure(fig, path, *, dpi=None):
+    """Write, clean and verify a figure before atomically replacing its destination."""
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    cleaner = _MEDIA_CLEANERS.get(target.suffix.lower())
+    if cleaner is None:
+        raise ValueError(f"unsupported figure format: {target.suffix}")
+    fd, temporary = tempfile.mkstemp(
+        prefix=f".{target.stem}.", suffix=target.suffix, dir=target.parent)
+    os.close(fd)
+    try:
+        fig.savefig(temporary, dpi=dpi)
+        if target.suffix.lower() == ".svg":
+            _strip_controlled_matplotlib_svg_preamble(temporary)
+            _neutralize_controlled_matplotlib_svg_ids(temporary)
+        cleaner(temporary)
+        violations = media_metadata_violations(temporary)
+        if violations:
+            raise RuntimeError(
+                f"metadata verification failed for {target.name}: " + "; ".join(violations))
+        os.replace(temporary, target)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
 def save(fig, stem):
     os.makedirs(OUT, exist_ok=True)
     for ext in ("pdf", "svg", "png"):
-        fig.savefig(os.path.join(OUT, f"{stem}.{ext}"), dpi=600 if ext == "png" else None)
+        write_clean_figure(
+            fig, os.path.join(OUT, f"{stem}.{ext}"), dpi=600 if ext == "png" else None)
     plt.close(fig)
     print(f"  wrote {stem}.pdf / .svg / .png")
 

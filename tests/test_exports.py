@@ -1,7 +1,7 @@
 """Image-export integrity: every figure must export to valid SVG and a correctly-sized PNG in every
 background mode (dark / light / uv / mono / transparent), single-row and wrapped multi-row gels alike.
 Runs headless via the same save_svg / render_png the export buttons call."""
-import builtins, os, re, struct, sys, tempfile, zlib
+import builtins, hashlib, os, re, struct, sys, tempfile, zlib
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 
@@ -18,6 +18,56 @@ import figures, widgets
 
 _app = QApplication.instance() or QApplication([])
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+
+
+def test_capped_table_sort_applies_to_complete_export_and_visible_prefix():
+    from PySide6.QtCore import Qt
+
+    table = widgets.DataTable(["id", "score"])
+    rows = [["r0", 5], ["r1", 2], ["r2", 9], ["r3", 1]]
+    table.set_complete_rows(rows, 2)
+    table.sortItems(1, Qt.DescendingOrder)
+    _app.processEvents()
+    exported = table.rows_data()
+    displayed = [[table._value(i, j) for j in range(table.columnCount())]
+                 for i in range(table.rowCount())]
+    assert [int(row[1]) for row in exported] == [9, 5, 2, 1]
+    assert displayed == [[str(value) for value in row] for row in exported[:2]]
+    assert [table._orig(i) for i in range(table.rowCount())] == [2, 0]
+
+
+@pytest.mark.parametrize("source", [r"C:\Users\person\private\sample.fa",
+                                     "/home/person/private/sample.fa", "../../private/sample.fa"])
+def test_gel_vector_raster_pdf_and_tooltips_use_public_record_identity(source, tmp_path):
+    from teagle_core.gff3 import public_record_id
+
+    public_id = public_record_id(source)
+    data = {"lanes": [{"label": "P1", "amplicons": [{"length": 180, "product_length": 180,
+             "source": source, "start": 0, "end": 180, "on_target": True,
+             "fwd_mm": 0, "rev_mm": 0}]}]}
+    svg = figures.svg_gel(data, "white")
+    regions = figures.gel_regions(data)
+    assert source not in svg and public_id in svg
+    assert source not in regions[0]["tip"] and public_id in regions[0]["tip"]
+    png = tmp_path / "gel.png"
+    pdf = tmp_path / "gel.pdf"
+    widgets.render_png(svg, str(png), scale=2)
+    widgets.render_pdf(svg, str(pdf))
+    assert not QImage(str(png)).isNull() and pdf.read_bytes().startswith(b"%PDF")
+    assert source.encode("utf-8") not in png.read_bytes() and source.encode("utf-8") not in pdf.read_bytes()
+
+
+def test_gel_public_record_role_label_requires_full_digest_binding():
+    from teagle_core.gff3 import public_record_identity
+
+    identity = public_record_identity("patient_042")
+    public_source = identity["id"] + " (input)"
+    data = {"lanes": [{"label": "P1", "amplicons": [{"length": 180, "source": public_source,
+             "sourceIdSha256": identity["idSha256"], "start": 0, "end": 180,
+             "fwd_mm": 0, "rev_mm": 0}]}]}
+    svg = figures.svg_gel(data, "white")
+    regions = figures.gel_regions(data)
+    assert public_source in svg and public_source in regions[0]["tip"]
 
 
 def _png_chunk(chunk_type, data):
@@ -326,6 +376,64 @@ def test_dot_pdf_export_is_a_valid_vector_pdf(tmp_path):
     assert media_metadata_violations(p) == []
 
 
+@pytest.mark.parametrize("panel_kind", ["figure", "genome"])
+def test_figure_and_genome_panels_expose_pdf_bound_to_their_current_svg(panel_kind, monkeypatch, tmp_path):
+    from PySide6.QtWidgets import QPushButton
+    calls = []
+    out = str(tmp_path / f"{panel_kind}.pdf")
+    monkeypatch.setattr(widgets.QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
+    monkeypatch.setattr(widgets, "render_pdf", lambda svg, path: calls.append((svg, path)))
+    if panel_kind == "figure":
+        panel = widgets.FigurePanel(
+            lambda bg: f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><text>{bg}</text></svg>',
+            "figure")
+        expected = panel.build_fn(panel.bg)
+    else:
+        panel = widgets.GenomePanel(figures.svg_genome, "genome")
+        panel.set_model({"length": 100, "tracks": [{"name": "feature", "features": [
+            {"start": 10, "end": 40, "label": "bound", "color": "#0072B2"}]}]})
+        expected = panel._cur_svg(920, **panel._export_target())
+    pdf = next(button for button in panel.findChildren(QPushButton) if button.text().upper() == "PDF")
+    pdf.click()
+    assert calls == [(expected, out)]
+    panel.deleteLater()
+
+
+def test_svg_png_pdf_export_is_deterministic_across_two_runs(tmp_path):
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 80">'
+           '<rect width="160" height="80" fill="white"/><text x="12" y="42">same source</text></svg>')
+    writers = {
+        "svg": widgets.save_svg,
+        "png": lambda source, path: widgets.render_png(source, path, scale=2),
+        "pdf": widgets.render_pdf,
+    }
+    for extension, writer in writers.items():
+        first, second = tmp_path / f"first.{extension}", tmp_path / f"second.{extension}"
+        writer(svg, str(first)); writer(svg, str(second))
+        assert hashlib.sha256(first.read_bytes()).digest() == hashlib.sha256(second.read_bytes()).digest()
+
+
+def test_svg_png_pdf_share_semantic_source_with_tolerant_rendered_equivalence(tmp_path):
+    fitz = pytest.importorskip("fitz")
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 80">'
+           '<rect width="160" height="80" fill="white"/><rect x="20" y="15" width="35" height="25" fill="#0072B2"/>'
+           '<text x="65" y="38" fill="black">bound source</text></svg>')
+    png, pdf = tmp_path / "figure.png", tmp_path / "figure.pdf"
+    widgets.render_png(svg, str(png), scale=2)
+    widgets.render_pdf(svg, str(pdf))
+    doc = fitz.open(str(pdf))
+    assert len(doc) == 1 and doc[0].rect.width > doc[0].rect.height
+
+    image = QImage(str(png))
+    png_ink = sum(image.pixelColor(x, y).lightness() < 245
+                  for y in range(image.height()) for x in range(image.width())) / (image.width() * image.height())
+    pix = doc[0].get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+    samples = memoryview(pix.samples)
+    pdf_ink = sum(min(samples[i:i + pix.n]) < 245 for i in range(0, len(samples), pix.n)) / (pix.width * pix.height)
+    assert png_ink > 0.03 and pdf_ink > 0.03
+    assert abs(png_ink - pdf_ink) < 0.04       # renderer antialiasing may differ; semantic occupancy must not
+
+
 def test_runtime_figure_exports_have_author_only_metadata(tmp_path):
     svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><text x="5" y="25">x</text></svg>'
     outputs = {
@@ -450,3 +558,23 @@ def test_pdf_export_failure_preserves_existing_file(tmp_path, monkeypatch):
         widgets.render_pdf(svg, str(path))
     assert path.read_bytes() == original
     assert not (tmp_path / "figure.pdf.part").exists()
+
+
+@pytest.mark.parametrize("kind", ["svg", "png"])
+def test_svg_and_png_postprocessing_failure_preserves_existing_file(kind, tmp_path, monkeypatch):
+    from teagle_core import artifact_metadata
+
+    path = tmp_path / f"figure.{kind}"
+    original = b"existing validated figure"
+    path.write_bytes(original)
+    cleaner = "clean_svg_metadata" if kind == "svg" else "clean_png_metadata"
+    monkeypatch.setattr(
+        artifact_metadata,
+        cleaner,
+        lambda _path: (_ for _ in ()).throw(OSError("synthetic metadata-cleaning failure")),
+    )
+    svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><rect width="100" height="50"/></svg>'
+    with pytest.raises(OSError, match="synthetic metadata-cleaning failure"):
+        (widgets.save_svg if kind == "svg" else widgets.render_png)(svg, str(path))
+    assert path.read_bytes() == original
+    assert not (tmp_path / f"figure.{kind}.part").exists()

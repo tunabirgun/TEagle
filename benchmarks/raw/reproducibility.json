@@ -8,7 +8,7 @@
   "run_at_defaults": true,
   "sealed_parameters": 9
  },
- "elapsed_s": 0.4,
+ "elapsed_s": 0.5,
  "fidelity": {
   "coverage_complete": true,
   "derivation": "engine._detector_parameters() via inspect.signature - never restated as a literal",
@@ -26,10 +26,10 @@
   "keys_derived_but_not_sealed": [],
   "keys_sealed_but_not_derived": [],
   "mismatches": [],
-  "sealed_parameters": 21,
+  "sealed_parameters": 23,
   "serialised_matches_live_derivation": true
  },
- "generated": "2026-08-06T19:17:28",
+ "generated": "2026-08-07T10:30:29",
  "replicates": 10,
  "seal_contents": {
   "database_checksums": [
@@ -38,7 +38,7 @@
   "databases_recorded": [
    "Pfam TE-domain profiles (bundled, CC0)"
   ],
-  "parameters_recorded": 21,
+  "parameters_recorded": 23,
   "reference_dois": [
    "10.1038/nrg2165",
    "10.1093/hr/uhac017",
@@ -79,21 +79,21 @@
  "stability": {
   "A": {
    "distinct_seal_hashes": 1,
-   "seal_sha256": "f675220f8f693bb6241406918d73be4c5a12f3b4ca2b57fae54994df905ed64d",
+   "seal_sha256": "003688253d4b08816826832d2f9e61445ba7132e65bc48cbc69e02f529d5b217",
    "stable": true
   },
   "A_one_base_changed": {
    "distinct_seal_hashes": 1,
-   "seal_sha256": "775331fa77a64c1f5720f6747d74f7fa11dce3f9e0859b00bbc7b855a03d396e",
+   "seal_sha256": "67468007ea9b20f3d5c8c29026ea685937bd570f55b410231dcb3f5ca7236218",
    "stable": true
   },
   "B": {
    "distinct_seal_hashes": 1,
-   "seal_sha256": "f92a08b6b76d23f1dc9aa684c89dc161ce38650b6c89954bac270e854847e97b",
+   "seal_sha256": "85c7cd81efcb454d5bcb2ca2eb4dbda69859cb9b67bafc15b1384e5023675637",
    "stable": true
   }
  },
- "teagle_version": "3.7.0",
+ "teagle_version": "3.8.0",
  "volatile_fields_excluded": [
   "createdUtc"
  ]

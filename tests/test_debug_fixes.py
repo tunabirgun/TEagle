@@ -1,6 +1,8 @@
 """Regression tests for defects found by the three debug loops (2026-07-18):
 N-run structural fabrication, O(n^2) find_orfs, lowercase primers, amplicon cap,
 seal refetch-invariance + unused-tool scoping, and classify robustness/formatting."""
+import pytest
+
 from teagle_core import structural, classify, primers, provenance, sequtil, refs
 
 
@@ -62,25 +64,33 @@ def test_lowercase_primers_match_uppercase():
 
 def test_in_silico_pcr_output_is_capped():
     rep = "ACGTACGTACGTACGTACGT" * 100               # highly repetitive -> many binding sites
-    amps = primers.in_silico_pcr("ACGTACGTACGT", "ACGTACGTACGT", rep, max_mm=3, tp=0, prod_min=1, prod_max=3000)
+    amps = primers.in_silico_pcr("ACGTACGTACGTACGTACGT", "ACGTACGTACGTACGTACGT", rep,
+                                 max_mm=3, tp=0, prod_min=1, prod_max=3000)
     assert len(amps) <= 4000                          # bounded, does not blow up memory
 
 
-def test_tp_negative_does_not_disable_three_prime_rule():
-    # a huge/negative tp must be clamped, not hang or silently disable the 3' check
+def test_tp_out_of_range_is_rejected_instead_of_disabling_or_saturating_three_prime_rule():
+    # Invalid strict-tip lengths would either disable slicing or silently saturate at primer length.
     fwd, rev, seq = _amplifying_template()
-    assert isinstance(primers.in_silico_pcr(fwd, rev, seq, tp=-5), list)
-    assert isinstance(primers.in_silico_pcr(fwd, rev, seq, tp=10 ** 9), list)
+    with pytest.raises(ValueError, match="non-negative"):
+        primers.in_silico_pcr(fwd, rev, seq, tp=-5)
+    with pytest.raises(ValueError, match="shorter primer"):
+        primers.in_silico_pcr(fwd, rev, seq, tp=10 ** 9)
+    with pytest.raises(ValueError, match="shorter primer"):
+        primers.in_silico_pcr(fwd, rev, seq, max_mm=10 ** 9)
 
 
-# --- provenance seal: refetch-invariant, and never carries an unused tool's version ---
-def test_seal_invariant_to_fasta_header():
+# --- provenance seal: binds public local identity, and never carries an unused tool's version ---
+def test_seal_binds_publicized_local_header_identity():
     a = sequtil.parse_fasta(">M11240.1 desc\nACGTACGTACGTACGTACGTACGTACGTACGT\n")
     b = sequtil.parse_fasta(">ENA|M11240|M11240.1 desc\nACGTACGTACGTACGTACGTACGTACGTACGT\n")
     ma = provenance.build_manifest("analysis", a[0][1], a[0][0], {"orf_min_aa": 40})
     mb = provenance.build_manifest("analysis", b[0][1], b[0][0], {"orf_min_aa": 40})
-    assert ma["input"]["id"] != mb["input"]["id"]            # header recorded verbatim...
-    assert ma["manifestSha256"] == mb["manifestSha256"]      # ...but not sealed
+    assert ma["input"]["id"] != mb["input"]["id"]
+    assert ma["input"]["identitySource"] == mb["input"]["identitySource"] == "local_input"
+    assert ma["input"]["sha256"] == mb["input"]["sha256"]
+    assert ma["input"]["idSha256"] != mb["input"]["idSha256"]
+    assert ma["manifestSha256"] != mb["manifestSha256"]
 
 
 def test_in_silico_pcr_run_does_not_cite_primer3():

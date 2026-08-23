@@ -1,12 +1,6 @@
 # Screenshots
 
-Captured from the native app at v3.0.0, light theme, 1920x1080, UI scale 1.0. Every figure is a real run:
-GenBank specimens (M11240 copia, M12927 gypsy, M80343 LINE, X01005 Tc1, X05424 hAT, AY037928 HERV-K113,
-AJ289709 HERV-H), a real NCBI coordinate fetch, a real insulin splice alignment (J00265 x NM_000207), and
-live WSL-backed runs (RepeatMasker/Dfam, isPcr against the cached *Drosophila* assembly). No figure contains
-synthesised results. Regenerate with `python verification/recapture_shots.py` followed by
-`python verification/screenshot_runs.py`; the second writes `screenshots/manifest.txt`, which lists every
-file and what it shows.
+The present files were captured from the native TEagle 3.9.0 app in the light theme at 1920x1080, with a 1500x1150 window and UI scale 1.0. Every accepted figure is a real run: GenBank specimens (M11240 copia, M12927 gypsy, M80343 LINE, X01005 Tc1, X05424 hAT, AY037928 HERV-K113, AJ289709 HERV-H), a real NCBI coordinate fetch, a real insulin splice alignment (J00265 x NM_000207), and live WSL-backed runs (RepeatMasker/Dfam and isPcr against the cached *Drosophila* assembly). No figure contains synthesised results. The capture sequence was `python verification/recapture_shots.py` followed by `python verification/screenshot_runs.py`; the recapture sidecar and `screenshots/manifest.txt` bind the accepted files to their dimensions and SHA-256 hashes and record what each figure shows.
 
 | File | Shows |
 |---|---|

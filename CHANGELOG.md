@@ -9,6 +9,34 @@ The application version is defined once in `app/backend/teagle_core/__init__.py`
 every run provenance manifest, and the packaged executable's Windows file-version
 metadata. Release QA separately reconciles the documentation with that source.
 
+## [3.9.0] — 2026-08-23
+
+This release changes the scientific-result, provenance, source-identity, primer-geometry, lifecycle, and export contracts. It therefore requires a new benchmark rather than inheriting the v3.8.0 measurements. The frozen Windows bundle and installer passed the release self-test, dependency, metadata, and clean-machine installation gates on Windows 10 and Windows 11. The optional WSL backend installer and repair paths passed hermetic adversarial validation; a genuinely fresh networked WSL installation remains a separate evidence gate. No new 3.9.0 classification, assay, or prospective benchmark result is claimed.
+
+### Changed
+
+- Analysis results now use schema 1.0. Each valid record carries exact per-stage states for structural detection, ORF detection, domain scanning, classification, and retroviral interpretation. `complete`, `partial`, `withheld`, `failed`, and `not_run` are distinct outcomes; a failed or unexecuted stage cannot be interpreted as an observed zero. The top-level status is derived from the record states, and empty or wholly invalid input cannot produce a complete-result export.
+- Provenance manifests now use schema 0.2 with the `teagle-json-utf8-v1` canonicalization contract. The complete scientific result carries an independent SHA-256 payload digest, and the manifest binds that digest and result-schema version. Export revalidates the manifest, payload digest, stage schemas, ordered record identities, and status derivation. These are unkeyed integrity checks, not authentication or proof of authorship, and the manifest does not archive referenced inputs or dependencies.
+- Source-context schema 1.0 is now the only route by which fetched identity crosses into analysis and downstream operations. Exact NCBI/ENA accession or NCBI-coordinate contexts bind provider fields to ordered record identifiers, lengths, and sequence hashes. A mismatched, incomplete, or forged context is downgraded atomically to local input. Local and uploaded FASTA headers are represented in public exports by neutral hash-bound identifiers even when they resemble accessions; validated public identifiers retain only canonical accession-bound source URLs.
+- Editing, loading, fetching, or replacing a specimen now invalidates every dependent result and export. Monotonic request generations discard late callbacks from superseded analysis or PCR requests, and JSON export rechecks that the retained result is current.
+- Primer3 target, included region, primer coordinates, and intended product are now explicit separate 0-based half-open quantities. Candidate geometry is checked against Primer3 output and template sequence before it is returned. Numeric request parameters must be finite and within their declared ranges; invalid values fail rather than being silently clamped or coerced.
+- Local in-silico PCR now separates a primer-binding mechanism from the physical product it produces. It independently reports an intended-endpoint match and Primer3-target coverage; `on_target` is their conjunction only when design-bound target geometry exists. Without that geometry the assessment is unavailable, not off-target. Non-templated 5′ tails are excluded from the annealing span but included in the full predicted product and size-window check. Binding-site and product caps remain explicit partial results.
+- Native tables export to XLSX, CSV, and TSV; native figures export to SVG, PNG, and vector PDF; record and feature sequences export to FASTA; element annotations export to GFF3/BED; and fetched or splice-derived gene models export to GFF3/BED/FASTA. The native provenance panel exports a manifest or complete result only after strict revalidation. The legacy browser remains intentionally narrower: CSV/TSV tables, SVG/PNG figures, FASTA, and gene/splice GFF3/BED/FASTA are available, while XLSX, PDF, provenance JSON, and complete-result JSON are disabled.
+- Export filenames and identifiers now follow the same trust boundary as the scientific records. Scientific caveats, coordinate conventions, full computed row sets, and current sort order travel with native table exports; capped on-screen views no longer imply truncated export data.
+- Controlled Office, PDF, SVG, and PNG writers use a fail-closed metadata policy. The checks reject unsupported active content, signatures, encryption, forms, attachments, external references, or structurally ambiguous containers where applicable. Optional creator, generator, timestamp, tracking, and machine-local fields are removed only for supported controlled outputs; this is not a claim that arbitrary third-party files can be sanitized safely.
+- The historical v3.8.0 evidence package retains its aggregate scores and a compact sequence-free provenance index. Legacy sequence-bearing per-case detector manifests are no longer tracked; exact regeneration requires refetching the cited public accessions with the version-locked runner.
+
+### Fixed
+
+- Multi-record analysis binds every record in order and exposes all records rather than silently treating record 1 as the complete result. Downstream actions use the explicitly selected record.
+- Classification can now be explicitly withheld without being conflated with failure or absence, and stale analysis widgets cannot retain working export actions after invalidation.
+- Annotation, gene-model, splice-model, sequence, ORF, domain, primer, PCR, family, and whole-genome result exports retain their visible qualifications and exact coordinate semantics.
+- The elevated WSL installer now preserves the actual `wsl --install` return code through later status probes and derives its log path inside the batch file, so a non-ASCII Windows user profile is not corrupted by ASCII staging. Linux install scripts are staged and executed through STDIN/base64 transport rather than a quote-sensitive `bash -lc` argument.
+- Dfam repair now validates the pinned filename, exact extracted size, and HDF5 readability, replaces only an invalid target partition, and verifies the result after extraction. Backend readiness now requires the FamDB configuration and a successful `famdb.py info` load in addition to RepeatMasker and both required Dfam partitions.
+- The backend installer states the derived default Dfam transfer and extracted size before work starts, distinguishes additional variable package/time costs, and explains the global `.wslconfig` boundary. Retry text now distinguishes resumable Dfam archives from NCBI Datasets genome ZIPs, which restart after interruption.
+- Backend storage checks now use the smaller of the free space reported inside WSL and the free space on the Windows volume holding its sparse virtual disk. The installer and whole-genome cost dialog disclose both values, preventing a large Dfam partition, genome download, or annotation from starting against space the Windows host cannot provide.
+- The held miniprot tier is not provisioned by the default backend and its dormant legacy API route is disabled; it is not a shipped 3.9.0 feature.
+
 ## [3.8.1] — 2026-08-13
 
 This patch corrects whole-genome coverage and provenance, cached-genome integrity, Windows cleanup scope,
@@ -103,8 +131,8 @@ Supersedes 3.7.0, which was published and then **retracted**; see the note under
   itself checked for constants that have started being used.
 - **An excluded development accession had entered the validation corpus.** The benchmark specification
   names five bundled example accessions as development data. One of them, `X01005`, was
-  included as an ordinary case in the retrospective external corpus. It was removed so the corpus matches
-  the documented exclusion rule. The development-example-excluded retrospective external corpus is 43
+  included as an ordinary case in the retrospective literature-derived corpus. It was removed so the corpus matches
+  the documented exclusion rule. The development-example-excluded retrospective literature-derived corpus is 43
   records carrying 36 distinct literal organism annotations; its re-indexed output supersedes the earlier
   output and is archived with the v3.8.0 benchmark
   evidence at https://doi.org/10.5281/zenodo.21848814.

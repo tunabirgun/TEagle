@@ -165,9 +165,9 @@ def test_every_record_is_classified_not_only_the_first():
         assert r["composition"]["length"] > 0
 
 
-def test_multi_record_warning_states_that_all_were_analysed():
+def test_multi_record_warning_states_valid_record_count_and_selection_scope():
     from teagle_core import examples
     res = engine.analyze("".join(examples.load(a) for a in ("M11240", "X01005")))
     w = res["warning"].lower()
-    assert "were analysed" in w or "all" in w
+    assert "2 records found and 2 were valid for analysis" in w
     assert "selected" in w, "the warning must say downstream steps follow the SELECTED record"

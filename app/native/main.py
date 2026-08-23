@@ -3,7 +3,7 @@ column of collapsible result cards. All science runs in-process through the shar
 GUI thread via engine_worker.Engine. This module wires the analyze workflow, primer/PCR, WSL family
 annotation, splice detection, provenance and exports."""
 from __future__ import annotations
-import gzip, html, json, os, re, sys
+import gzip, html, json, math, os, re, sys
 
 from PySide6.QtCore import Qt, QTimer, QByteArray, QSettings, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import (QGuiApplication, QFont, QPixmap, QPainter, QIcon, QCursor, QShortcut,
@@ -27,11 +27,65 @@ import widgets
 from widgets import FigurePanel, GenomePanel, DataTable, BusyBar
 from sample import make_sample
 import theme as theme_mod
-from teagle_core import appdirs, classify           # classify.DOMAINS_TESTED = the tested-profile panel (scope caveat)
+from teagle_core import appdirs, classify, sequtil  # classify.DOMAINS_TESTED = the tested-profile panel (scope caveat)
 from teagle_core.wsl import (curated_coverage_sentence as _curated_coverage,
                              dfam_coverage_counts as _dfam_coverage_counts)  # measured, never retyped on a panel
 from teagle_core import domains as domains_mod      # DOMAIN_INFO: the methods panel is derived from it, never retyped
 from teagle_core import structural as structural_mod   # MIN_TSD/MAX_TSD: the TSD method text states the real window
+from teagle_core import primers as primers_mod
+
+
+def _safe_export_stem(value, default="record", *, trust="local_input"):
+    """Filesystem-safe deterministic stem for any identifier supplied by a record or backend."""
+    from teagle_core.gff3 import safe_filename_stem
+    return safe_filename_stem(value, default=default, trust=trust)
+
+
+def _public_record_id(value):
+    """Neutral outward record ID, retaining only application-owned PCR role suffixes."""
+    from teagle_core.gff3 import public_record_label
+    return public_record_label(value)
+
+
+def _record_public_identity(record):
+    """Return an already engine-validated record identity, or fail closed to a local-input identity."""
+    from teagle_core.gff3 import public_record_identity
+    raw = str((record or {}).get("id") or "record")
+    source = (record or {}).get("identitySource")
+    digest = (record or {}).get("idSha256")
+    if source == "local_input" and isinstance(digest, str):
+        digest = digest.lower()
+        if re.fullmatch(r"[0-9a-f]{64}", digest) and raw == f"record_{digest[:12]}":
+            return {"id": raw, "idSha256": digest, "identitySource": source}
+    if source in {"validated_fetch", "generated"} and digest is None:
+        expected = public_record_identity(raw, trust=source)
+        if expected == {"id": raw}:
+            return {"id": raw, "identitySource": source}
+    return {**public_record_identity(raw), "identitySource": "local_input"}
+
+
+def _record_public_id(record):
+    return _record_public_identity(record)["id"]
+
+
+def _record_export_stem(record, default="record"):
+    from teagle_core.gff3 import safe_filename_stem
+    identity = _record_public_identity(record)
+    if identity.get("idSha256"):
+        return safe_filename_stem(f"record_{identity['idSha256']}", default=default, trust="generated")
+    trust = "generated" if identity.get("idSha256") else identity["identitySource"]
+    return safe_filename_stem(identity["id"], default=default, trust=trust)
+
+
+def _amplicon_public_source(amplicon):
+    from teagle_core.gff3 import bound_public_record_label
+    return bound_public_record_label(amplicon.get("source"), amplicon.get("sourceIdSha256"))
+
+
+def _manifest_export_stem(manifest_input, default="run"):
+    inp = manifest_input or {}
+    return _record_export_stem({"id": inp.get("id"), "idSha256": inp.get("idSha256"),
+                                "identitySource": inp.get("identitySource")}, default)
 
 
 def _SIG(fn, name):
@@ -108,6 +162,8 @@ GLOSS = {
     "Feature": "Structural hallmark found in the sequence — e.g. LTR, TIR, target-site duplication, poly-A tail.",
     "Coords (0-based)": "Location in the sequence, 0-based half-open [start, end).",
     "Coords": "Location of this amplicon in the searched sequence, 0-based half-open [start, end).",
+    "Template span": "Length of the half-open interval copied from the searched template.",
+    "Product len": "Full predicted PCR-product length, including incorporated non-templated 5′ primer tails.",
     # the genome scan reports isPcr's own coordinates verbatim — a DIFFERENT convention from every other table here
     "Coords (1-based)": "Location of this product in the scanned assembly, exactly as isPcr reports it: "
                         "1-based INCLUSIVE [start, end] — so Len = end − start + 1, not end − start.",
@@ -145,10 +201,13 @@ GLOSS = {
               "because only a base-paired 3′ end is extended by polymerase. More negative = worse.",
     "Struct": "Worst secondary-structure flag for the pair — ok / caution / warn — across hairpin, self-dimer, hetero-dimer and 3′-end.",
     "Pair": "Which designed primer pair produced this amplicon.",
+    "Mechanism": "Contributing primer identities and orientation plus the 0-based half-open product endpoints. "
+                 "Several mechanisms may describe one physical product.",
     "Source": "The sequence that was searched — your specimen or a custom background.",
     "Mism F/R": "Mismatches in the forward / reverse primer binding site (the 3′ end is kept exact).",
-    "Call": "On-target = amplicon at the intended locus; off-target = amplified elsewhere; priming site = a "
-            "genome-wide product with no single intended locus (a bare-consensus whole-genome scan).",
+    "Call": "For a design-bound local PCR, on-target requires the intended F+R endpoints and coverage of the "
+            "Primer3 target. Without a Primer3 target, target status is unassessed; other products are additional "
+            "products, not experimentally established off-targets. A genome-wide priming site has no bound locus.",
     "Class/family": "TE class and superfamily (Wicker 2007 scheme), e.g. LTR/Copia.",
     "Dfam family": "The specific named family in the Dfam library, e.g. Copia_I or L1HS.",
     "Str": "Strand of the match — + forward, − reverse complement.",
@@ -164,11 +223,20 @@ _FLAG_MARK = {"ok": "", "caution": "!", "warn": "!!"}  # non-colour severity mar
 
 
 def _amp_call(a, has_locus=True):
-    """The ONE call label for an amplicon (table, gel tooltip, FASTA header, caption counts all read it).
-    on/off/single are disjoint buckets in the engine (primers.py forces on=False for a self-priming
-    product), so single-primer is its own call and never reads as 'off-target'."""
+    """One evidence-bounded call label for local PCR and genome-scan products."""
     if a.get("single_primer"):
         return "single-primer"
+    if "matches_intended_product" in a:
+        if a.get("matches_intended_product") is True:
+            if a.get("covers_primer3_target") is True:
+                return "intended product; target covered"
+            if a.get("covers_primer3_target") is False:
+                return "intended product; target not covered"
+            return "intended product; target coverage unavailable"
+        if a.get("covers_primer3_target") is True:
+            return "additional; covers target"
+        return ("additional product" if a.get("matches_intended_product") is False
+                else "product; intended/target assessment unavailable")
     if a.get("on_target"):
         return "on-target"
     return "off-target" if has_locus else "priming site"
@@ -176,7 +244,7 @@ def _amp_call(a, has_locus=True):
 
 def _amp_kind(a, has_locus=True):
     """The same call as a punctuation-free FASTA-header token (ontarget / offtarget / singleprimer / primingsite)."""
-    return _amp_call(a, has_locus).replace("-", "").replace(" ", "")
+    return _amp_call(a, has_locus).replace("-", "").replace(" ", "").replace(";", "")
 
 
 def _metric_cell(parts):
@@ -341,6 +409,36 @@ class CollapsibleCard(QFrame):
         _clear_layout(self.bodylay)
 
 
+def _disable_result_exports(root):
+    """Fail closed every export surface retained from a result widget being removed."""
+    if root is None:
+        return
+    buttons = ([root] if isinstance(root, QPushButton) else []) + root.findChildren(QPushButton)
+    for button in buttons:
+        label = button.text().strip().upper()
+        if not (button.property("resultExport") or "EXPORT" in label or label in {"SVG", "PNG", "PDF"}):
+            continue
+        button.setEnabled(False)
+        if button.property("resultExportDisabled"):
+            continue
+        try:
+            button.clicked.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+        button.setProperty("resultExportDisabled", True)
+    tables = ([root] if isinstance(root, DataTable) else []) + root.findChildren(DataTable)
+    for table in tables:
+        table.setEnabled(False)
+        table.setContextMenuPolicy(Qt.NoContextMenu)
+        if table.property("resultExportDisabled"):
+            continue
+        try:
+            table.customContextMenuRequested.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+        table.setProperty("resultExportDisabled", True)
+
+
 def _clear_layout(layout):
     """Recursively remove every widget AND nested sub-layout from `layout`. A widget-only clear
     (setParent(None) on it.widget()) leaves addLayout'd sub-layouts — the 'Structural evidence' /
@@ -350,6 +448,7 @@ def _clear_layout(layout):
         it = layout.takeAt(0)
         w = it.widget()
         if w is not None:
+            _disable_result_exports(w)
             w.setParent(None)
         else:
             sub = it.layout()
@@ -429,7 +528,7 @@ def _sl(text):
 def _export_table_btn(table, base, parent):
     """Visible Excel/CSV/TSV export for a DataTable: the button pops a format menu, then a save dialog
     pre-set to the chosen type. Exports in the table's current on-screen (sorted) order."""
-    b = QPushButton("Export table"); b.setProperty("sm", True)
+    b = QPushButton("Export table"); b.setProperty("sm", True); b.setProperty("resultExport", True)
     table.export_base = base                          # the right-click Export… proposes the SAME filename as this button
     def pop():
         fmt = widgets.pick_table_format(b, b.mapToGlobal(b.rect().bottomLeft()))
@@ -437,6 +536,102 @@ def _export_table_btn(table, base, parent):
             widgets.export_table(table.export_headers(), table.rows_data(), base, parent, fmt=fmt,
                                  notes=getattr(table, "export_notes", None))
     b.clicked.connect(lambda _=False: pop())
+    return b
+
+
+def _fasta_text(records, line_width=60, identifiers_are_public=False):
+    """Deterministic FASTA for already-derived records: (identifier, sequence, optional description)."""
+    chunks = []
+    for item in records:
+        ident, sequence = item[0], item[1]
+        description = item[2] if len(item) > 2 else ""
+        supplied_digest = item[3] if len(item) > 3 else None
+        ident = str(ident)
+        ident = ident[1:] if ident.startswith(">") else ident
+        if identifiers_are_public or supplied_digest:
+            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]*", ident):
+                raise ValueError("derived FASTA identifier is not safe")
+        else:
+            from teagle_core.gff3 import public_record_identity
+            identity = public_record_identity(ident)
+            ident = identity["id"]
+            supplied_digest = supplied_digest or identity.get("idSha256")
+        digest = None
+        if supplied_digest:
+            digest = str(supplied_digest).lower()
+            if (not re.fullmatch(r"[0-9a-f]{64}", digest) or
+                    ident != f"record_{digest[:12]}" and not ident.startswith(f"record_{digest[:12]}_")):
+                raise ValueError("record identity SHA-256 does not match the public FASTA identifier")
+        ident = re.sub(r"\s+", "_", ident) or "record"
+        sequence = re.sub(r"\s+", "", str(sequence)).upper()
+        if not sequence:
+            continue
+        if supplied_digest:
+            description = (str(description).strip() + f" record_sha256={digest}").strip()
+        header = ident + ((" " + str(description).strip()) if str(description).strip() else "")
+        chunks.append(">" + header)
+        chunks.extend(sequence[i:i + line_width] for i in range(0, len(sequence), line_width))
+    return "\n".join(chunks) + ("\n" if chunks else "")
+
+
+def _orfs_fasta(rec):
+    seq = rec.get("seq") or ""
+    identity = _record_public_identity(rec)
+    rid, digest = identity["id"], identity.get("idSha256")
+    records = []
+    for i, feature in enumerate(rec.get("orfs") or [], 1):
+        start, end = feature["start"], feature["end"]
+        dna = seq[start:end]
+        if feature.get("strand") == "-":
+            dna = sequtil.reverse_complement(dna)
+        records.append((f"{rid}_ORF_{i}", dna,
+                        f"coords={start}-{end} strand={feature.get('strand', '+')} frame={feature.get('frame', '')}",
+                        digest))
+    return _fasta_text(records, identifiers_are_public=True)
+
+
+def _domains_fasta(rec):
+    identity = _record_public_identity(rec)
+    rid, digest = identity["id"], identity.get("idSha256")
+    return _fasta_text([
+        (f"{rid}_domain_{i}_{domain.get('domain') or 'domain'}", domain.get("protein") or "",
+         f"nt={domain.get('nt', ['?', '?'])[0]}-{domain.get('nt', ['?', '?'])[1]} "
+         f"strand={domain.get('strand', '+')} pfam={domain.get('pfam') or '—'}", digest)
+        for i, domain in enumerate(rec.get("domains") or [], 1)
+        if domain.get("protein")
+    ], identifiers_are_public=True)
+
+
+def _splice_exons_fasta(result, genomic_sequence, record_id="splice_locus", record_id_sha256=None,
+                         identity_source="generated"):
+    seq = re.sub(r"\s+", "", genomic_sequence or "").upper()
+    identity = _record_public_identity({"id": record_id, "idSha256": record_id_sha256,
+                                        "identitySource": identity_source})
+    record_id, digest = identity["id"], identity.get("idSha256")
+    strand = result.get("strand", "+")
+    records = []
+    for i, exon in enumerate(result.get("exons") or [], 1):
+        start, end = exon["start"], exon["end"]
+        dna = seq[start:end]
+        if strand == "-":
+            dna = sequtil.reverse_complement(dna)
+        records.append((f"{record_id}_exon_{i}", dna, f"coords={start}-{end} strand={strand}", digest))
+    return _fasta_text(records, identifiers_are_public=True)
+
+
+def _full_records_fasta(records):
+    bound = []
+    for record in records or []:
+        identity = _record_public_identity(record)
+        sequence = record.get("seq") or ""
+        bound.append((identity["id"], sequence, f"length={len(sequence)}", identity.get("idSha256")))
+    return _fasta_text(bound, identifiers_are_public=True)
+
+
+def _export_fasta_btn(label, fasta_fn, base, parent):
+    """Visible, invalidation-aware FASTA export backed by a callable so it cannot drift from current data."""
+    b = QPushButton(label); b.setProperty("sm", True); b.setProperty("resultExport", True)
+    b.clicked.connect(lambda _=False: widgets.save_fasta(fasta_fn(), base, parent))
     return b
 
 
@@ -473,6 +668,9 @@ class MainWindow(QMainWindow):
         self.state = {"seq": "", "source": None, "last_rec": None}
         self._loading = False                                 # True while a programmatic load writes the specimen box
         self._pcr_gen = 0                                     # monotonic in-silico-PCR batch id (drops stale sibling results)
+        self._analyze_gen = 0                                 # monotonic analysis id (drops stale/out-of-order callbacks)
+        self._active_analyze_gen = None
+        self._analysis_requests = {}
         self._analyze_inflight = False                        # gates Run analysis alongside "is there a sequence yet?"
         self._design_inflight = False                         # one primer design at a time (self._design_tmpl is shared state)
         self._genome_inflight = False                         # one whole-genome isPcr scan at a time
@@ -968,9 +1166,9 @@ class MainWindow(QMainWindow):
         self._grid_fields(grid, [("pcrMM", "Max mismatches", "2"), ("pcrTP", "3′ exact bases", "5"),
                                  ("pcrPmin", "Prod min (bp)", "70"), ("pcrPmax", "Prod max (bp)", "1000")], cols=4)
         card.bodylay.addLayout(grid)
-        card.bodylay.addWidget(_sl("Optional custom background (FASTA) — off-target search"))
+        card.bodylay.addWidget(_sl("Optional custom background (FASTA) — additional-product search"))
         self.pcrBg = QTextEdit(); self.pcrBg.setMaximumHeight(round(60 * theme_mod.UI_SCALE))
-        self.pcrBg.setPlaceholderText("Optional: paste extra background sequence(s) to reveal off-target amplicons.")
+        self.pcrBg.setPlaceholderText("Optional: paste extra background sequence(s) to reveal additional predicted products.")
         card.bodylay.addWidget(self.pcrBg)
         row = QHBoxLayout()
         self.runPcrBtn = QPushButton("Run loaded pairs"); self.runPcrBtn.setProperty("primary", True)
@@ -1010,7 +1208,8 @@ class MainWindow(QMainWindow):
         card.bodylay.addLayout(srow)
         self._refresh_genome_dropdown()                       # render from cached prepared set (empty at first build)
         gnote = QLabel("Off-target check: runs a local isPcr scan of a designed pair against a downloaded RefSeq "
-                       "genome. Products are listed on-target first and sealed with the assembly version + checksum.")
+                       "genome. Results are sealed with the assembly version + checksum. With a design locus, "
+                       "intended-locus sites are listed before additional sites.")
         gnote.setObjectName("orient"); gnote.setWordWrap(True); card.bodylay.addWidget(gnote)
         self.genomeBody = QVBoxLayout(); gb = QWidget(); gb.setLayout(self.genomeBody)
         self.genomeBody.addWidget(_empty("Design a primer pair (panel 04) and download a genome, then scan here."))
@@ -1081,7 +1280,10 @@ class MainWindow(QMainWindow):
         """Programmatic specimen load (fetch / upload / sample). Wrapped in the _loading guard so the
         textChanged handler keeps state['seq'] in sync but does NOT treat the load as a user edit that
         would wipe the source the loader is about to set."""
+        self._invalidate_analysis("The specimen changed — run analysis to create current results and provenance.",
+                                  cancel_request=True)
         self.state["features"] = None                         # drop a prior accession's gene model (fetch re-sets it after)
+        self.state["coord_region"] = None                     # only a successful coordinate fetch may re-bind this
         self._splice_tx_origin = "external"                   # a new specimen invalidates any prior record-transcript flag
         self._loading = True
         try:
@@ -1093,16 +1295,65 @@ class MainWindow(QMainWindow):
         txt = self.seq.toPlainText()
         body = "".join(l for l in txt.splitlines() if not l.startswith(">"))
         self.charCount.setText(f"{len(body)} nt")
+        if not self._loading and (self.state.get("analysis") is not None or
+                                  self.state.get("prov_manifest") is not None or
+                                  self._active_analyze_gen is not None):
+            self._invalidate_analysis("The sequence changed — the previous result is stale. Run analysis again.",
+                                      cancel_request=True)
         # Arm Run analysis exactly when there is something to analyse — never while a run is already in
         # flight, or a keystroke mid-analysis would re-enable the button _run_analysis just disabled.
         self.runBtn.setEnabled(bool(body.strip()) and not self._analyze_inflight)
         self.state["seq"] = txt.strip()                       # specimen tracks the box: splice/annotate read this
         if not self._loading:
+            self.state["coord_region"] = None                 # typed/pasted content has no verified genome-space binding
             if self.state.get("source") is not None:
                 self.state["source"] = None                   # a genuine edit no longer matches the fetched identity
                 self.accMeta.setText(""); self.coordMeta.setText("")
                 self.state["features"] = None
             self._update_splice_ref()                         # refresh the 'Genomic reference' label to the edited specimen
+
+    def _invalidate_analysis(self, message, cancel_request=False):
+        """Remove result/export state that no longer describes the specimen or active request."""
+        if cancel_request and self._active_analyze_gen is not None:
+            self._analysis_requests.pop(self._active_analyze_gen, None)
+            self._active_analyze_gen = None
+            self._analyze_inflight = False
+        for key in ("analysis", "records", "last_rec", "record_index", "selected_record",
+                    "analyzed_seq", "analyzed_clean", "prov_manifest", "prov_manifest_all",
+                    "lastPrimers", "candidates", "pcrPairs", "lastPcr", "lastGenomeScan",
+                    "family", "family_seq", "splice", "splice_seq"):
+            self.state.pop(key, None)
+        self.state["analysis_state"] = "stale"
+        # A retained Python wrapper remains callable after setParent(None). Every result container is
+        # sanitized now and again by _clear_layout before detachment, so neither clicks nor table context
+        # menus from a previous analysis generation can export after any invalidation path.
+        roots = [getattr(self, "card_struct", None), getattr(self, "card_prov", None)]
+        for name in ("primBody", "pcrBody", "wslBody", "spliceBody", "genomeBody"):
+            layout = getattr(self, name, None)
+            roots.append(layout.parentWidget() if layout is not None else None)
+        for root in roots:
+            _disable_result_exports(root)
+        if hasattr(self, "designBtn"):
+            self.designBtn.setEnabled(False)
+            self.designHint.setText("run analysis first")
+        if hasattr(self, "card_struct"):
+            self.card_struct.clear_body()
+            self.card_struct.bodylay.addWidget(_empty(message))
+        if hasattr(self, "primBody"):
+            self._set_body(self.primBody, _empty("Run analysis before designing primers."))
+        if hasattr(self, "pcrBody"):
+            self._set_body(self.pcrBody, _empty("Load a current primer pair, then run pair-aware amplicon search."))
+        if hasattr(self, "pcrQueueBox"):
+            self._render_pcr_queue()
+        if hasattr(self, "wslBody"):
+            self._set_body(self.wslBody, _empty("Run family annotation on the current specimen."))
+        if hasattr(self, "spliceBody"):
+            self._set_body(self.spliceBody, _empty("Align a transcript to the current specimen to resolve splicing."))
+        if hasattr(self, "genomeBody"):
+            self._reset_genome_scan("The specimen changed — design a current primer pair before scanning a genome.")
+        if hasattr(self, "card_prov"):
+            self.card_prov.clear_body()
+            self.card_prov.bodylay.addWidget(_empty(message))
 
     def _apply_example(self, fasta):
         self._set_seq(fasta)
@@ -1201,11 +1452,18 @@ class MainWindow(QMainWindow):
         seq = self.seq.toPlainText().strip()
         if not seq:
             return self._banner("paste, upload, or fetch a sequence first")
+        self._invalidate_analysis("Analysis is running — provenance will appear when this request completes.")
+        self._analyze_gen += 1
+        generation = self._analyze_gen
+        self._active_analyze_gen = generation
+        self._analysis_requests[generation] = {"sequence": seq, "source": dict(self.state["source"] or {})}
         self.state["seq"] = seq
         self.state["analyzed_seq"] = seq                  # snapshot the sequence the reported feature coords index
+        self.state["analysis_state"] = "running"
         self._analyze_inflight = True
         self.runBtn.setEnabled(False); self.runBtn.setText("… analysing")
-        self.engine.submit("analyze", {"sequence": seq, "source": self.state["source"]}, key="analyze")
+        self.engine.submit("analyze", {"sequence": seq, "source": self.state["source"]},
+                           key=f"analyze#{generation}")
 
     # ---------- results routing ----------
     def _on_done(self, key, res):
@@ -1218,8 +1476,12 @@ class MainWindow(QMainWindow):
             self._render_env(res)
         elif key == "fetch":
             self._on_fetch(res)
-        elif key == "analyze":
-            self._on_analyze(res)
+        elif key.startswith("analyze#"):
+            try:
+                generation = int(key.split("#", 1)[1])
+            except ValueError:
+                return
+            self._on_analyze(res, generation)
         elif key == "wsl_status":
             self._on_wsl_status(res)
         elif key == "annotate":
@@ -1260,6 +1522,7 @@ class MainWindow(QMainWindow):
         elif key == "primers":
             self._design_inflight = False
             self._pending_domain = None                       # a failed routed design must not leave a stale re-anchor or busy body
+            self._invalidate_primer_results()
             self.designBtn.setEnabled(True); self.designBtn.setText("Design primers")
             self._set_body(self.primBody, _note("Primer design failed — adjust the parameters or region, then try again."))
         elif key == "annotate":
@@ -1298,6 +1561,17 @@ class MainWindow(QMainWindow):
                     pass
 
     def _on_user_error(self, key, msg):
+        if key.startswith("analyze#"):
+            try:
+                generation = int(key.split("#", 1)[1])
+            except ValueError:
+                return
+            self._analysis_requests.pop(generation, None)
+            if generation != self._active_analyze_gen:
+                return
+            self._active_analyze_gen = None
+            self._invalidate_analysis("Analysis failed — no result or provenance from this request is current.")
+            key = "analyze"
         if key.startswith("pcr#"):                            # a failed pair fills its slot so the batch still renders
             self._pcr_slot(key, {"error": msg, "amplicons": []})
         elif key == "genome_pcr":
@@ -1319,6 +1593,17 @@ class MainWindow(QMainWindow):
         if key == "genome_prepare_log":
             return                                            # a background poll blip: never banner, never spam a traceback
         sys.stderr.write(trace + "\n")                        # log the trace for diagnosis (all real faults)
+        if key.startswith("analyze#"):
+            try:
+                generation = int(key.split("#", 1)[1])
+            except ValueError:
+                return
+            self._analysis_requests.pop(generation, None)
+            if generation != self._active_analyze_gen:
+                return
+            self._active_analyze_gen = None
+            self._invalidate_analysis("Analysis failed — no result or provenance from this request is current.")
+            key = "analyze"
         if key == "health":                                   # state the backend is down IN WORDS — the chip must not
             self.statusTxt.setText("backend unavailable")     # rely on the LED hue alone, nor keep saying "connecting…"
             self.led.setProperty("live", False); self._repolish(self.led)
@@ -1452,15 +1737,33 @@ class MainWindow(QMainWindow):
                  for r in regions]
         self.coordMeta.setText(f"{res.get('assemblyName','')} · {res.get('organism','')}{cached}{ncbi}<br>" + "<br>".join(lines))
         _kb_links(self.coordMeta)                             # text now carries a link -> re-arm the tab stop
-        self.state["source"] = res.get("source", {})
+        from teagle_core import provenance
+        parsed = sequtil.parse_fasta(self.state.get("seq", ""))
+        source_context = (provenance.validate_source_context(res.get("sourceContext"), parsed)
+                          if res.get("sourceContext") is not None else
+                          provenance.normalize_source_context(res.get("source"), parsed))
+        self.state["source"] = dict(source_context)
         # Keep the fetched region so an annotation export can be anchored back into genome space. Analysis
         # runs on the FIRST region only (stated in the panel), so only that one can be anchored.
-        self.state["coord_region"] = dict(regions[0]) if regions else None
+        records = sequtil.parse_fasta(self.state.get("seq", ""))
+        bindings = self.state["source"].get("records") or []
+        if (regions and records and bindings and
+                self.state["source"].get("inputType") == "fetched_coordinate"):
+            _record_id, sequence = records[0]
+            bound = dict(regions[0])
+            bound["_record_id"] = bindings[0]["id"]
+            bound["_sequence_sha256"] = sequtil.sha256(sequence)
+            bound["_source_binding"] = json.dumps(self.state["source"], sort_keys=True, ensure_ascii=False,
+                                                    allow_nan=False, default=str)
+            self.state["coord_region"] = bound
+        else:
+            self.state["coord_region"] = None
         self.state["features"] = None
 
     def _on_fetch(self, res):
         self._set_fetch_enabled(True)                         # fetch settled — allow the next one
         if not res.get("ok"):
+            self.state["coord_region"] = None
             self.accMeta.setText(""); self.coordMeta.setText("")
             return self._banner(res.get("error", "fetch failed"))
         self._clear_banner()
@@ -1480,15 +1783,26 @@ class MainWindow(QMainWindow):
             self.accMeta.setText(f"{acc} · {org} · {length} bp{cached}{link}<br>{res.get('title','')}")
             _kb_links(self.accMeta)                           # text now carries a link -> re-arm the tab stop
             self.coordMeta.setText("")                    # clear the other specimen identity
-            self.state["source"] = {k: res.get(k) for k in ("accession", "organism", "title", "length", "moltype") if res.get(k) is not None}
-            self.state["source"]["sourceUrl"] = src_url        # traceable RECORDS link (display/provenance label, not sealed)
+            from teagle_core import provenance
+            parsed = sequtil.parse_fasta(seqtext)
+            source_context = (provenance.validate_source_context(res.get("sourceContext"), parsed)
+                              if res.get("sourceContext") is not None else
+                              provenance.normalize_source_context(res, parsed))
+            self.state["source"] = dict(source_context)
             self.state["features"] = res.get("features")
         # auto-fill species for WSL family annotation if present
         if hasattr(self, "wslSpecies") and org:
             self._set_species(org)
         self._update_splice_ref()
 
-    def _on_analyze(self, res):
+    def _on_analyze(self, res, generation=None):
+        if generation is None:
+            return
+        request = None
+        request = self._analysis_requests.pop(generation, None)
+        if generation != self._active_analyze_gen or request is None:
+            return
+        self._active_analyze_gen = None
         self._analyze_inflight = False
         self.runBtn.setEnabled(bool(self.seq.toPlainText().strip())); self.runBtn.setText("Run analysis")
         self._clear_banner()
@@ -1496,13 +1810,28 @@ class MainWindow(QMainWindow):
             self._banner(res["warning"], level="warn")
         recs = res.get("records", [])
         if not recs:
+            self._invalidate_analysis("Analysis returned no records — no result or provenance is current.")
+            return
+        manifest = res.get("provenance")
+        if not isinstance(manifest, dict) or manifest.get("runType") != "analysis":
+            self._invalidate_analysis("Analysis returned no valid provenance — its result was not accepted.")
+            return
+        import engine
+        try:
+            engine.analysis_result_document(res)
+        except ValueError:
+            self._invalidate_analysis("Analysis did not match its provenance binding — its result was not accepted.")
             return
         self.state["analysis"] = res
         self.state["records"] = recs
-        self.state["analyzed_clean"] = self._clean_seq(self.state.get("analyzed_seq", ""))   # snapshot, not the live box — a keystroke mid-analysis must not defeat the stale-block guard
+        snapshot = request["sequence"] if request else (self.state.get("analyzed_seq") or "".join(r.get("seq", "") for r in recs))
+        self.state["analyzed_seq"] = snapshot
+        self.state["analyzed_clean"] = self._clean_seq(snapshot)   # snapshot, not the live box — a keystroke mid-analysis must not defeat the stale-block guard
+        self.state["analysis_state"] = "current"
         self._reset_genome_scan("New specimen analysed — the previous whole-genome scan described different "
                                 "primers. Design a pair (panel 04), then scan here.")
-        self._show_record(0)
+        self._show_record(next((i for i, rec in enumerate(recs) if rec.get("valid")), 0))
+        self._render_provenance(manifest)
 
     # engine.analyze already classifies EVERY record; the UI used to take records[0] and discard the rest,
     # so a user arriving with a shortlist saw one answer and no indication the others had been computed.
@@ -1519,6 +1848,10 @@ class MainWindow(QMainWindow):
         rec = recs[index]
         self.state["last_rec"] = rec
         self.state["record_index"] = index
+        bound = ((res.get("provenance") or {}).get("input") or {}).get("records") or []
+        self.state["selected_record"] = (dict(bound[index], index=index) if index < len(bound)
+                                          else {"id": rec.get("id"), "index": index,
+                                                "length": len(rec.get("seq", ""))})
         # Bind every downstream step (primer design, in-silico PCR, splice, annotate, feature slicing) to
         # THIS record's own sequence. state["seq"]/["analyzed_seq"] otherwise hold the raw textbox, which
         # for a multi-FASTA paste is all records concatenated — so selecting a non-first record would
@@ -1566,16 +1899,21 @@ class MainWindow(QMainWindow):
             comp = r.get("completeness") or cl.get("completeness") or {}
             doms = sorted({d["domain"] for d in (r.get("domains") or [])})
             struct = sorted({e["type"].split(" (")[0] for e in (r.get("structural") or [])})
-            rows.append([i + 1, r.get("id", ""), f"{(r.get('composition') or {}).get('length', 0):,}",
-                         f"{(r.get('composition') or {}).get('gc', 0)}%",
+            processing = "; ".join(f"{stage}={state.get('status', '—')}"
+                                   for stage, state in (r.get("processing") or {}).items()) or "—"
+            composition = r.get("composition") or {}
+            rows.append([i + 1, _record_public_id(r),
+                         f"{(r.get('composition') or {}).get('length', 0):,}",
+                         f"{composition.get('gc', 0)}%", f"{composition.get('n', 0)}%",
+                         f"{composition.get('ambiguous', 0)}%",
                          "valid" if r.get("valid") else "INVALID",
                          cl.get("te_class") or "—", cl.get("confidence") or "—",
                          "·".join(doms) or "—", ", ".join(struct) or "—",
-                         comp.get("tier") or "—"])
+                         comp.get("tier") or "—", processing])
         return rows
 
-    _RECORD_HEADERS = ["#", "Record", "Length", "GC", "Input", "Class", "Confidence",
-                       "Domains", "Structural", "Completeness"]
+    _RECORD_HEADERS = ["#", "Record", "Length", "GC", "N", "Ambiguous", "Input", "Class",
+                       "Confidence", "Domains", "Structural", "Completeness", "Processing"]
 
     def _accent_link(self, href, text):
         return f"<a href='{href}' style='color:{theme_mod.ACCENT[self.theme]};text-decoration:none'>{text}</a>"
@@ -1642,7 +1980,7 @@ class MainWindow(QMainWindow):
         m = dotplot.self_matrix(seq, k=k)
         guides = [{"start": e[q][0], "end": e[q][1], "color": theme_mod.OK.get("LTR", "#0072B2")}
                   for e in struct for q in ("five_prime", "three_prime") if e.get(q)]
-        rid = (rec.get("id") or "locus").split()[0]
+        rid = _record_public_id(rec).split()[0]
         # ONE reused window (hidden, not destroyed, on close) whose body is re-populated per record — never a
         # rebuilt widget, which is what collapsed a reused dialog in an earlier release.
         dlg = getattr(self, "_selfsim_dlg", None)
@@ -1658,13 +1996,36 @@ class MainWindow(QMainWindow):
             self._uppercase_buttons()
         panel = dlg._panel
         dlg.setWindowTitle(f"Self-similarity — {rid}")
-        panel.base_name = f"TEagle_{rid}_selfsim"
+        panel.base_name = f"TEagle_{_record_export_stem(rec, 'locus')}_selfsim"
         panel.apply_app_theme(self.theme)
         panel.zoom = None                                 # fit the new record to the window
         panel.set_matrix(m, guides=guides, threshold=dotplot.above_chance(m), scope=dotplot.scope_note(m))
         dlg.show(); dlg.raise_(); dlg.activateWindow()
         panel._fit()
         self._uppercase_buttons()
+
+    def _bound_coord_region(self, rec):
+        """Return the coordinate region only when it is still bound to this exact record and source."""
+        reg = self.state.get("coord_region") or {}
+        rec_id = _record_public_id(rec)
+        rec_seq = rec.get("seq") or ""
+        source = self.state.get("source") or {}
+        if source.get("inputType") != "fetched_coordinate":
+            return {}
+        from teagle_core import provenance
+        if provenance.validate_source_context(source, [(rec_id, rec_seq)]) != source:
+            return {}
+        try:
+            source_binding = json.dumps(source, sort_keys=True, ensure_ascii=False,
+                                        allow_nan=False, default=str)
+        except (TypeError, ValueError):
+            return {}
+        if (reg.get("chrAccession") and reg.get("strand") != 2 and rec_seq and
+                reg.get("_record_id") == rec_id and
+                reg.get("_sequence_sha256") == sequtil.sha256(rec_seq) and
+                reg.get("_source_binding") == source_binding):
+            return reg
+        return {}
 
     def _export_annotation(self, rec):
         """Write the record's annotation as GFF3 or BED.
@@ -1682,14 +2043,16 @@ class MainWindow(QMainWindow):
         # Genome-anchored variants, offered ONLY when this record demonstrably came from a coordinate fetch
         # of the plus strand. A locus-relative file intersected against a chromosome-space track returns
         # zero overlaps and says nothing about it, which is the failure a bioinformatician hits first.
-        reg = self.state.get("coord_region") or {}
-        anchorable = bool(reg.get("chrAccession")) and reg.get("strand") != 2 and self.state.get("source")
+        stale_reg = self.state.get("coord_region") or {}
+        reg = self._bound_coord_region(rec)
+        rec_id = _record_public_id(rec)
+        anchorable = bool(reg)
         a_gff_g = a_bed_g = None
         if anchorable:
             menu.addSeparator()
             a_gff_g = menu.addAction(f"GFF3, genome-anchored on {reg.get('chromLabel') or reg['chrAccession']}")
             a_bed_g = menu.addAction(f"BED, genome-anchored on {reg.get('chromLabel') or reg['chrAccession']}")
-        elif reg.get("strand") == 2:
+        elif stale_reg.get("strand") == 2:
             # a minus-strand fetch is reverse-complemented, so locus coordinates run against the chromosome.
             # Mapping them back is a flip, not an offset — refuse rather than ship a subtly wrong file.
             a_note = menu.addAction("Genome-anchored export unavailable (minus-strand fetch)")
@@ -1699,12 +2062,14 @@ class MainWindow(QMainWindow):
             return
         anchored = chosen in (a_gff_g, a_bed_g) and anchorable
         fmt = "gff3" if chosen in (a_gff, a_gff_g) else "bed"
-        seqid = (rec.get("id") or "locus").split()[0]
+        seqid = rec_id.split()[0]
         # 0-based genome coordinate of the locus's first base; the fetch reports 1-based inclusive starts
         offset = int(reg.get("start", 1)) - 1 if anchored else 0
         if anchored:
             seqid = reg["chrAccession"]
-        base = f"TEagle_{seqid}"
+        base_stem = (_safe_export_stem(seqid, "locus", trust="validated_fetch") if anchored else
+                     _record_export_stem(rec, "locus"))
+        base = f"TEagle_{base_stem}"
         path, _ = QFileDialog.getSaveFileName(self, f"Export {fmt.upper()}", base + "." + fmt,
                                               f"{fmt.upper()} (*.{fmt})")
         if not path:
@@ -1715,38 +2080,111 @@ class MainWindow(QMainWindow):
         # paste — embedding that after ##FASTA would contradict this record's own coordinates)
         seq = rec.get("seq") or None
         span = ((int(reg["start"]), int(reg["stop"])) if anchored else None)
+        identity = ({"id": seqid, "identitySource": "validated_fetch"} if anchored else
+                    _record_public_identity(rec))
+        writer_trust = identity["identitySource"]
         text = (gff3.to_gff3(rec, seqid=seqid, sequence=seq,
-                             source_note=f"TEagle {teagle_version()}", offset=offset, region_span=span)
-                if fmt == "gff3" else gff3.to_bed(rec, seqid=seqid, offset=offset))
+                             source_note=f"TEagle {teagle_version()}", offset=offset, region_span=span,
+                             identity_trust=writer_trust, record_id_sha256=identity.get("idSha256"))
+                if fmt == "gff3" else gff3.to_bed(
+                    rec, seqid=seqid, offset=offset, identity_trust=writer_trust,
+                    record_id_sha256=identity.get("idSha256")))
         with widgets.atomic_write(path, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(text)
         self._banner(f"Annotation written to {os.path.basename(path)}.", level="success")
 
-    def _render_record_table(self, card):
-        """Per-record summary for a multi-record input, above the selected record's detail."""
-        recs = self.state.get("records") or []
-        if len(recs) < 2:
+    def _export_gene_model(self, model, sequence, record_id, model_kind, export_format=None,
+                           identity_source=None, record_id_sha256=None):
+        """Export the exact fetched/splice model shown by its GenomePanel through the shared writers."""
+        from PySide6.QtWidgets import QMenu
+        from teagle_core import gff3
+
+        extension = export_format
+        if extension is None:
+            menu = QMenu(self)
+            actions = {
+                menu.addAction("GFF3 (.gff3) — exon/intron/CDS coordinates + source sequence"): "gff3",
+                menu.addAction("BED (.bed) — intervals only"): "bed",
+                menu.addAction("Exon FASTA (.fasta)" if model_kind == "splice_alignment"
+                               else "Exon/CDS FASTA (.fasta)"): "fasta",
+            }
+            extension = actions.get(menu.exec(QCursor.pos()))
+            if extension is None:
+                return
+        if extension not in {"gff3", "bed", "fasta"}:
+            raise ValueError(f"unsupported model export format: {extension}")
+        identity = _record_public_identity({"id": record_id, "identitySource": identity_source,
+                                            "idSha256": record_id_sha256})
+        writer_trust = identity["identitySource"]
+        record_id = identity["id"]
+        stem_trust = "generated" if identity.get("idSha256") else writer_trust
+        stem = gff3.safe_filename_stem(record_id, trust=stem_trust)
+        base = f"TEagle_{stem}_{'splice_model' if model_kind == 'splice_alignment' else 'gene_model'}"
+        path, _ = QFileDialog.getSaveFileName(
+            self, f"Export {extension.upper()}", base + "." + extension,
+            f"{extension.upper()} (*.{extension})")
+        if not path:
             return
-        rows = self._record_summary_rows(recs, limit=self._MAX_RECORDS)
+        if not path.lower().endswith("." + extension):
+            path += "." + extension
+        try:
+            if extension == "gff3":
+                text = gff3.gene_model_to_gff3(model, record_id, sequence=sequence,
+                                                source=f"TEagle {APP_VERSION}", model_kind=model_kind,
+                                                identity_trust=writer_trust,
+                                                record_id_sha256=identity.get("idSha256"))
+            elif extension == "bed":
+                text = gff3.gene_model_to_bed(model, record_id, sequence_length=len(self._norm_seq(sequence)),
+                                               source=f"TEagle {APP_VERSION}", model_kind=model_kind,
+                                               identity_trust=writer_trust,
+                                               record_id_sha256=identity.get("idSha256"))
+            else:
+                feature_types = ("exon",) if model_kind == "splice_alignment" else ("exon", "CDS")
+                text = gff3.gene_model_to_fasta(
+                    model, sequence, record_id, feature_types=feature_types,
+                    identity_trust=writer_trust, record_id_sha256=identity.get("idSha256"))
+            with widgets.atomic_write(path, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write(text)
+        except (OSError, ValueError) as exc:
+            self._banner(f"The {extension.upper()} model export was not written: {exc}", level="warn")
+            return
+        self._banner(f"Model export written to {os.path.basename(path)}.", level="success")
+
+    def _render_record_table(self, card):
+        """Common summary for one or many records, above the selected record's detail."""
+        recs = self.state.get("records") or []
+        if not recs:
+            return
+        rows = self._record_summary_rows(recs, limit=None)
         t = DataTable(self._RECORD_HEADERS, GLOSS)
-        t.set_rows(rows)
         if len(recs) > self._MAX_RECORDS:
-            # the widget shows the first _MAX_RECORDS; the file gets all of them (see rows_data)
-            t.full_rows = lambda: self._record_summary_rows(recs, limit=None)
+            t.set_complete_rows(rows, self._MAX_RECORDS)
+            t.export_notes = [f"Screen shows the first {self._MAX_RECORDS} of {len(recs)} records under the current "
+                              "column sort and direction. The export contains all records in that same order; "
+                              "the displayed rows are its exact prefix."]
+        else:
+            t.set_rows(rows)
+            t.export_notes = ["The export contains the complete record summary in the table's current sort order."]
         t.set_row_menu(lambda r: [("Show this record below", lambda i=r: self._show_record(i))])
         sel = self.state.get("record_index", 0)
-        head = QLabel(f"<b>{len(recs)} records analysed</b> — every one was classified; the detail below is "
-                      f"record {sel + 1}. Right-click a row to show it, or export the table."
-                      + (f" Showing the first {self._MAX_RECORDS} of {len(recs)}."
+        head = QLabel(f"<b>{len(recs)} record{'s' if len(recs) != 1 else ''} analysed</b> — the summary preserves "
+                      "composition, classification, completeness, and every processing-stage outcome; the complete "
+                      "versioned result remains the JSON export in Run provenance. "
+                      f"The detail below is record {sel + 1}. Right-click a row to show it."
+                      + (f" Showing the first {self._MAX_RECORDS} of {len(recs)} under the current sort; the export "
+                           "contains all records in that order, with these displayed rows as its exact prefix."
                          if len(recs) > self._MAX_RECORDS else ""))
         head.setTextFormat(Qt.RichText); head.setWordWrap(True); head.setObjectName("cardmeta")
-        wrap = QWidget(); wl = QVBoxLayout(wrap)
-        wl.setContentsMargins(0, 0, 0, 0); wl.setSpacing(theme_mod.sp(6))
-        wl.addWidget(head); wl.addWidget(t)
+        card.bodylay.addWidget(head); card.bodylay.addWidget(t)
         frow = QHBoxLayout(); frow.addStretch(1)
-        frow.addWidget(_export_table_btn(t, "TEagle_records", self))
-        wl.addLayout(frow)
-        card.bodylay.addWidget(wrap)
+        record_base = ("TEagle_multiple_records" if len(recs) > 1 else
+                       f"TEagle_{_record_export_stem(recs[0], 'record')}")
+        frow.addWidget(_export_fasta_btn(
+            "Export full records (FASTA)",
+            lambda rs=recs: _full_records_fasta(rs),
+            record_base, self))
+        frow.addWidget(_export_table_btn(t, record_base + "_summary", self))
+        card.bodylay.addLayout(frow)
 
     def _render_struct_card(self, rec, res):
         card = self.card_struct
@@ -1924,6 +2362,11 @@ class MainWindow(QMainWindow):
                                                      src_seq=rec.get("seq")))
             t.setMaximumHeight(round(160 * theme_mod.UI_SCALE))
             card.bodylay.addWidget(t)
+            orow = QHBoxLayout(); orow.addStretch(1)
+            orow.addWidget(_export_fasta_btn("Export ORFs (DNA FASTA)", lambda r=rec: _orfs_fasta(r),
+                                             "TEagle_ORFs_DNA", self))
+            orow.addWidget(_export_table_btn(t, "TEagle_ORFs", self))
+            card.bodylay.addLayout(orow)
 
         # domains (right-click → copy protein/DNA/FASTA/coords, design primer here)
         doms = rec.get("domains", [])
@@ -1955,7 +2398,11 @@ class MainWindow(QMainWindow):
                            "sideways — or collapse the specimen panel (Ctrl+B) — to reach every column.")
             dhint.setObjectName("orient"); dhint.setTextFormat(Qt.RichText); dhint.setWordWrap(True)
             card.bodylay.addWidget(dhint)
-            drow = QHBoxLayout(); drow.addStretch(1); drow.addWidget(_export_table_btn(t, "TEagle_domains", self))
+            drow = QHBoxLayout(); drow.addStretch(1)
+            if _domains_fasta(rec):
+                drow.addWidget(_export_fasta_btn("Export domain proteins (FASTA)", lambda r=rec: _domains_fasta(r),
+                                                 "TEagle_domain_proteins", self))
+            drow.addWidget(_export_table_btn(t, "TEagle_domains", self))
             card.bodylay.addLayout(drow)
 
         # Self-similarity: the one view that looks for repeats WITHOUT being told what to expect, so it
@@ -2017,6 +2464,16 @@ class MainWindow(QMainWindow):
                 gvg = GenomePanel(svg_genome, "TEagle_genemodel"); gvg.apply_app_theme(self.theme); gvg.set_model(gmodel)
                 gvg.set_feature_menu(self._region_menu); gvg.setMinimumHeight(round(200 * theme_mod.UI_SCALE))
                 gmlay.addWidget(gvg)
+            gmrow = QHBoxLayout(); gmrow.addStretch(1)
+            gmexport = QPushButton("Export gene model ▾"); gmexport.setProperty("sm", True)
+            gmexport.setProperty("resultExport", True)
+            gmexport.setToolTip("Export the displayed exon/intron/CDS model as GFF3, BED, or feature FASTA")
+            gmexport.clicked.connect(lambda _=False, model=gm, sequence=rec.get("seq") or "",
+                                     record_id=rec.get("id") or "record", source=rec.get("identitySource"),
+                                     digest=rec.get("idSha256"):
+                                     self._export_gene_model(model, sequence, record_id, "fetched_gene_model",
+                                                             identity_source=source, record_id_sha256=digest))
+            gmrow.addWidget(gmexport); gmlay.addLayout(gmrow)
             ptr = QPushButton("For exon–intron from a supplied transcript, use Splice detection →")   # ANNOTATED vs MEASURED
             ptr.setProperty("link", True); ptr.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
             ptr.clicked.connect(lambda: self._scroll_to(self.card_splice))
@@ -2195,6 +2652,31 @@ class MainWindow(QMainWindow):
         else:
             body = t
         return "".join(body.split()).upper().replace("U", "T")
+
+    def _operation_input(self, text=None):
+        """Bind a downstream operation to the exact serialized fetched-source record, when available."""
+        raw = self.state.get("seq", "") if text is None else text
+        sequence = self._norm_seq(raw)
+        source = dict(self.state.get("source") or {})
+        if source.get("inputType") not in {"fetched_accession", "fetched_coordinate"}:
+            return raw, source
+        digest = sequtil.sha256(sequence)
+        record = self.state.get("last_rec") or {}
+        matches = [(index, binding) for index, binding in enumerate(source.get("records") or [])
+                   if binding.get("length") == len(sequence) and binding.get("sha256") == digest and
+                   (not record.get("id") or binding.get("id") == record.get("id"))]
+        if len(matches) != 1:
+            return raw, source
+        index, binding = matches[0]
+        source["records"] = [dict(binding)]
+        if source["inputType"] == "fetched_coordinate":
+            regions = source.get("regions") or []
+            if index >= len(regions):
+                return raw, source
+            source["regions"] = [dict(regions[index])]
+            source["accession"] = source["regions"][0]["chrAccession"]
+            source["sourceUrl"] = f"https://www.ncbi.nlm.nih.gov/nuccore/{source['accession']}"
+        return f">{binding['id']}\n{sequence}", source
 
     def _slice(self, s, e, seq=None):
         # panel-01 feature coords index the ANALYZED snapshot, not the live box (which splice/annotate submit);
@@ -2500,7 +2982,7 @@ class MainWindow(QMainWindow):
         # same call as the band tooltip, the amplicon table and its FASTA export (single-primer is its own
         # bucket; on/off only mean something with a design locus)
         kind = _amp_kind(a, region.get("has_locus", True))
-        label = f"amplicon_{pair}_{start}-{end}_{a.get('length','')}bp_{kind}"
+        label = f"amplicon_{pair}_{start}-{end}_{a.get('product_length', a.get('length',''))}bp_{kind}"
         items = [("Copy FASTA", lambda: self._copy(f">{label}\n{seq}"))]
         if start is not None and end is not None:
             items.append((f"Copy coords ({start}–{end})", lambda: self._copy(f"{start}-{end}")))
@@ -2536,7 +3018,7 @@ class MainWindow(QMainWindow):
         "standard":   dict(pMin=150, pMax=500, pTm=60, pMinS=18, pMaxS=27, pNum=5, pOptS=20, pTmMin=57, pTmMax=63, pGcMin=40, pGcMax=60, pPolyX=4, pGcClamp=0),
         "qpcr":       dict(pMin=70, pMax=150, pTm=60, pMinS=18, pMaxS=24, pNum=5, pOptS=20, pTmMin=58, pTmMax=62, pGcMin=40, pGcMax=60, pPolyX=4, pGcClamp=1),
         "highspec":   dict(pMin=150, pMax=500, pTm=62, pMinS=20, pMaxS=26, pNum=8, pOptS=22, pTmMin=60, pTmMax=64, pGcMin=45, pGcMax=60, pPolyX=3, pGcClamp=2),
-        "permissive": dict(pMin=100, pMax=1000, pTm=58, pMinS=17, pMaxS=30, pNum=10, pOptS=20, pTmMin=52, pTmMax=65, pGcMin=30, pGcMax=70, pPolyX=5, pGcClamp=0),
+        "permissive": dict(pMin=100, pMax=1000, pTm=58, pMinS=18, pMaxS=30, pNum=10, pOptS=20, pTmMin=52, pTmMax=65, pGcMin=30, pGcMax=70, pPolyX=5, pGcClamp=0),
     }
 
     def _apply_preset(self, name):
@@ -2547,29 +3029,59 @@ class MainWindow(QMainWindow):
             if k in self.pfields:
                 self.pfields[k].setText(str(v))
 
-    def _numfield(self, fid, default):
-        t = self.pfields[fid].text().strip()
-        if t == "":
-            return default
+    def _primer_number(self, fid, label, *, integer=False, minimum=None, maximum=None):
+        raw = self.pfields[fid].text().strip()
         try:
-            f = float(t)
-            return int(f) if f.is_integer() else f
+            value = float(raw)
         except ValueError:
-            return default
+            raise ValueError(f"{label} must be numeric")
+        if not math.isfinite(value):
+            raise ValueError(f"{label} must be finite")
+        if integer and not value.is_integer():
+            raise ValueError(f"{label} must be an integer")
+        value = int(value) if integer else value
+        if minimum is not None and value < minimum:
+            raise ValueError(f"{label} must be at least {minimum}")
+        if maximum is not None and value > maximum:
+            raise ValueError(f"{label} must be at most {maximum}")
+        return value
 
     def _read_primer_params(self):
-        p = {"prod_min": self._numfield("pMin", 150), "prod_max": self._numfield("pMax", 500),
-             "opt_tm": self._numfield("pTm", 60), "min_size": self._numfield("pMinS", 18),
-             "max_size": self._numfield("pMaxS", 27), "num_return": self._numfield("pNum", 5),
-             "opt_size": self._numfield("pOptS", 20), "min_tm": self._numfield("pTmMin", 57),
-             "max_tm": self._numfield("pTmMax", 63), "min_gc": self._numfield("pGcMin", 40),
-             "max_gc": self._numfield("pGcMax", 60), "max_poly_x": self._numfield("pPolyX", 4)}
-        clamp = self._numfield("pGcClamp", 0)
-        if clamp and clamp > 0:
-            p["gc_clamp"] = clamp
+        p = {
+            "prod_min": self._primer_number("pMin", "Minimum product size", integer=True, minimum=1),
+            "prod_max": self._primer_number("pMax", "Maximum product size", integer=True, minimum=1),
+            "opt_tm": self._primer_number("pTm", "Optimal Tm"),
+            "min_size": self._primer_number("pMinS", "Minimum primer size", integer=True,
+                                             minimum=primers_mod.MIN_PRIMER_SIZE),
+            "max_size": self._primer_number("pMaxS", "Maximum primer size", integer=True,
+                                             minimum=primers_mod.MIN_PRIMER_SIZE),
+            "num_return": self._primer_number("pNum", "Number of pairs", integer=True, minimum=1),
+            "opt_size": self._primer_number("pOptS", "Optimal primer size", integer=True,
+                                             minimum=primers_mod.MIN_PRIMER_SIZE),
+            "min_tm": self._primer_number("pTmMin", "Minimum Tm"),
+            "max_tm": self._primer_number("pTmMax", "Maximum Tm"),
+            "min_gc": self._primer_number("pGcMin", "Minimum GC", minimum=0, maximum=100),
+            "max_gc": self._primer_number("pGcMax", "Maximum GC", minimum=0, maximum=100),
+            "max_poly_x": self._primer_number("pPolyX", "Maximum homopolymer", integer=True, minimum=1),
+            "gc_clamp": self._primer_number("pGcClamp", "GC clamp", integer=True, minimum=0),
+        }
+        if p["prod_min"] > p["prod_max"]:
+            raise ValueError("Minimum product size cannot exceed maximum product size")
+        if not p["min_size"] <= p["opt_size"] <= p["max_size"]:
+            raise ValueError("Primer sizes must satisfy minimum ≤ optimal ≤ maximum")
+        if not p["min_tm"] <= p["opt_tm"] <= p["max_tm"]:
+            raise ValueError("Tm values must satisfy minimum ≤ optimal ≤ maximum")
+        if p["min_gc"] > p["max_gc"]:
+            raise ValueError("Minimum GC cannot exceed maximum GC")
         return p
 
     # =================== primer design ===================
+    def _invalidate_primer_results(self):
+        self.state["lastPrimers"] = None
+        self.state["candidates"] = []
+        self.pcrStageAll.setEnabled(False)
+        self._refresh_scan_picker()
+
     def _design_block(self, seq=None):
         """ONE guard for BOTH design entry points: one design at a time, a non-empty template, and — when the
         template IS the panel-01 specimen (seq is None) — a non-stale one. The stale test is deliberately not
@@ -2587,22 +3099,43 @@ class MainWindow(QMainWindow):
         self._clear_banner()
         if self._design_block():
             return
+        self._invalidate_primer_results()
+        try:
+            params = self._read_primer_params()
+        except ValueError as e:
+            self._set_body(self.primBody, _note(f"Primer design not run — {e}.", "warn"))
+            return self._banner(str(e))
         self._design_inflight = True
         self.designBtn.setEnabled(False); self.designBtn.setText("◴ designing…")
         self._reset_genome_scan("Primers redesigned — the previous whole-genome scan described the earlier "
                                 "pair. Re-scan the pair you want to check.")
-        self._design_tmpl = self.state["seq"]             # remember the template these candidates index (for PCR on-target)
-        self.engine.submit("primers", {"sequence": self.state["seq"], "params": self._read_primer_params()}, key="primers")
+        operation_sequence, operation_source = self._operation_input(self.state["seq"])
+        self._design_tmpl = operation_sequence             # remember the exact bound template submitted for PCR on-target
+        self.engine.submit("primers", {"sequence": operation_sequence, "params": params,
+                                        "source": operation_source}, key="primers")
 
     def _design_for_domain(self, start, end, label, seq=None):
         self._clear_banner()
         if self._design_block(seq):
             return
         tmpl = seq if seq is not None else self.state.get("seq", "")
-        inc = [start, max(60, end - start)]
+        clean_tmpl = self._norm_seq(tmpl)
+        self._invalidate_primer_results()
+        if (isinstance(start, bool) or isinstance(end, bool) or not isinstance(start, int) or
+                not isinstance(end, int) or start < 0 or end <= start or end > len(clean_tmpl)):
+            return self._banner("The selected domain has invalid coordinates; primers were not designed.")
+        full_explicit_template = seq is not None and start == 0 and end == len(clean_tmpl)
+        target = None if full_explicit_template else [start, end - start]
+        included = None if full_explicit_template else [0, len(clean_tmpl)]
+        try:
+            params = self._read_primer_params()
+        except ValueError as e:
+            self._set_body(self.primBody, _note(f"Primer design not run — {e}.", "warn"))
+            return self._banner(str(e))
         self._scroll_to(self.card_primer)                 # bring the primer designer up so the user lands on the next phase
         self.designBtn.setEnabled(False); self.designBtn.setText("◴ designing…")   # same busy cue as the toolbar design path
-        self._set_body(self.primBody, BusyBar(f"Designing primers for {label}…"))  # in-flight, not empty (same cue as annotate/splice)
+        action = "on" if target is None else "that flank and span"
+        self._set_body(self.primBody, BusyBar(f"Designing primers {action} {label}…"))
         self._pending_domain = label
         self._design_inflight = True
         # Same invalidation as the toolbar design path. Deliberately at REQUEST time, not in _render_primers:
@@ -2610,9 +3143,15 @@ class MainWindow(QMainWindow):
         # light/dark switch. Over-eager here costs a re-scan prompt; under-eager leaves a stale verdict.
         self._reset_genome_scan("Primers redesigned — the previous whole-genome scan described the earlier "
                                 "pair. Re-scan the pair you want to check.")
-        self._design_tmpl = tmpl                          # candidates' left/right_pos index THIS template, not always panel-01
-        self.engine.submit("primers", {"sequence": tmpl, "params": self._read_primer_params(),
-                                        "included": inc}, key="primers")
+        if seq is None:
+            operation_sequence, operation_source = self._operation_input(tmpl)
+        else:
+            operation_sequence, operation_source = tmpl, None
+        self._design_tmpl = operation_sequence           # candidates' left/right_pos index THIS template, not always panel-01
+        self.engine.submit("primers", {"sequence": operation_sequence, "params": params,
+                                        "primer3_target": target,
+                                        "included_region": included,
+                                        "source": operation_source}, key="primers")
 
     def _on_primers(self, d):
         self._design_inflight = False
@@ -2630,9 +3169,11 @@ class MainWindow(QMainWindow):
         _clear_layout(self.primBody)                          # recursive: also removes the addLayout'd "Primer pairs" header row
         self.state["lastPrimers"] = d                         # keep for a theme toggle -> re-render with the new palette's flag colours
         cands = d.get("candidates", [])
-        tmpl_sig = self._norm_seq(getattr(self, "_design_tmpl", self.state.get("seq", "")))
+        design_tmpl = getattr(self, "_design_tmpl", self.state.get("seq", ""))
+        tmpl_sig = self._norm_seq(design_tmpl)
         for c in cands:                                       # tag each pair with the template its coords index
             c["_tmpl_sig"] = tmpl_sig
+            c["_design_sequence"] = design_tmpl
         self.state["candidates"] = cands
         self._refresh_scan_picker()                           # keep card-06's in-card scan picker in sync with designed pairs
         self.pcrStageAll.setEnabled(bool(cands))
@@ -2665,6 +3206,15 @@ class MainWindow(QMainWindow):
                 rows.append(base + ["—", "—", "—", "—", "n/a", c["penalty"]])
                 styles.append([None] * 12); tips.append([None] * 12); exports.append([None] * 12)
         t.set_rows(rows, styles=styles, tips=tips, exports=exports)
+        t.export_notes = [
+            "Secondary-structure values are delta-G (kcal/mol); more negative is worse. Warn is <= -9 on "
+            "any column; caution thresholds are hairpin <= -2, dimers <= -5, and 3-prime end <= -6. "
+            "Primer3 is independently cross-checked with ViennaRNA when available. Exported delta-G cells "
+            "contain the bare numeric value; display-only warning marks are omitted. These predictions are "
+            "advisory and are not a wet-lab guarantee.",
+            "A routed domain design requires the pair to flank and span that target; an untargeted general "
+            "design leaves target status unassessed.",
+        ]
         t.set_row_menu(lambda r: [("→ send to in-silico PCR", lambda rr=r: self._add_pcr_pair(cands[rr])),
                                   ("Secondary-structure detail", lambda rr=r: self._structure_detail(cands[rr])),
                                   ("Scan whole genome for off-targets", lambda rr=r: self._scan_genome(cands[rr])),
@@ -2693,7 +3243,9 @@ class MainWindow(QMainWindow):
                       "engines side by side. Advisory — not a wet-lab guarantee.")
         note.setObjectName("orient"); note.setWordWrap(True); self.primBody.addWidget(note)
         hint = QLabel("Right-click a pair → “send to in-silico PCR”, or stage all in panel 05. "
-                      "Scroll the table sideways — or collapse the specimen panel (Ctrl+B) — to see every column.")
+                      "A routed domain design uses the domain as Primer3's required target, so returned pairs flank and "
+                      "span it; the general Design button has no target and target status remains unassessed. Scroll the "
+                      "table sideways — or collapse the specimen panel (Ctrl+B) — to see every column.")
         hint.setObjectName("orient"); hint.setWordWrap(True); self.primBody.addWidget(hint)
 
     def _structure_detail(self, c):
@@ -2721,20 +3273,25 @@ class MainWindow(QMainWindow):
             t.set_rows(data, styles=styles)
             t.setMinimumHeight(round(230 * theme_mod.UI_SCALE)); lay.addWidget(t)
             cd = qc.get("conditions", {}); eng = qc.get("engines", {})
-            meta = QLabel(f"ΔG in kcal/mol at {cd.get('temp_c','?')} °C, {cd.get('mv_conc','?')} mM Na⁺, "
-                          f"{cd.get('dv_conc','?')} mM Mg²⁺, {cd.get('dna_conc','?')} nM oligo (IDT-comparable). "
-                          f"Primer3 {eng.get('primer3','?')} (SantaLucia 1998, thal) cross-checked against ViennaRNA "
-                          f"{eng.get('viennarna','?')} (DNA Mathews-2004, independent). Dimer ΔG is the intermolecular "
-                          "binding energy. More negative = more stable = worse; warn is ΔG ≤ −9 on any structure (IDT rule of "
-                          "thumb), caution varies by type (hairpin ≤ −2, dimers ≤ −5, 3′-end ≤ −6). The 3′-end is reported as "
-                          "its own axis because it isolates the interaction that blocks polymerase extension. Neither "
-                          "reproduces IDT’s mfold/UNAFold numbers exactly — this is an "
-                          "independent second opinion; agreement within ~1–2 kcal/mol is the useful signal.")
+            meta_text = (f"ΔG in kcal/mol at {cd.get('temp_c','?')} °C, {cd.get('mv_conc','?')} mM Na⁺, "
+                         f"{cd.get('dv_conc','?')} mM Mg²⁺, {cd.get('dna_conc','?')} nM oligo (IDT-comparable). "
+                         f"Primer3 {eng.get('primer3','?')} (SantaLucia 1998, thal) cross-checked against ViennaRNA "
+                         f"{eng.get('viennarna','?')} (DNA Mathews-2004, independent). Dimer ΔG is the intermolecular "
+                         "binding energy. More negative = more stable = worse; warn is ΔG ≤ −9 on any structure (IDT rule of "
+                         "thumb), caution varies by type (hairpin ≤ −2, dimers ≤ −5, 3′-end ≤ −6). The 3′-end is reported as "
+                         "its own axis because it isolates the interaction that blocks polymerase extension. Neither "
+                         "reproduces IDT’s mfold/UNAFold numbers exactly — this is an "
+                         "independent second opinion; agreement within ~1–2 kcal/mol is the useful signal.")
+            t.export_notes = [meta_text]
+            meta = QLabel(meta_text)
             meta.setObjectName("orient"); meta.setWordWrap(True); lay.addWidget(meta)
             srow = QHBoxLayout(); srow.addWidget(QLabel("Methods:"))
             for k in ("SantaLucia1998", "Owczarzy2008", "ViennaRNA"):
                 srow.addWidget(self._src_link(k))
-            srow.addStretch(1); lay.addLayout(srow)
+            srow.addStretch(1)
+            pair_id = _safe_export_stem(c.get("id"), "pair", trust="generated")
+            srow.addWidget(_export_table_btn(t, f"TEagle_{pair_id}_secondary_structure", self))
+            lay.addLayout(srow)
         row = QHBoxLayout(); row.addStretch(1)
         copy = QPushButton("Copy"); copy.clicked.connect(lambda: self._copy(self._structure_text(c)))
         copy.setAccessibleName("Copy the secondary-structure ΔG values as text")
@@ -2761,7 +3318,9 @@ class MainWindow(QMainWindow):
     # =================== PCR queue ===================
     @staticmethod
     def _pcr_key(c):
-        return c["left_seq"] + "|" + c["right_seq"]
+        seal = (c.get("design_provenance") or {}).get("manifestSha256", "")
+        span = c.get("intended_product_span")
+        return c["left_seq"] + "|" + c["right_seq"] + "|" + seal + "|" + json.dumps(span)
 
     def _add_pcr_pair(self, c):
         pairs = self.state.setdefault("pcrPairs", [])
@@ -2839,27 +3398,57 @@ class MainWindow(QMainWindow):
         pairs = self.state.get("pcrPairs", [])
         if not pairs:
             return self._banner("Load at least one primer pair first.")
-        p = {"max_mm": self._numfield("pcrMM", 2), "tp": self._numfield("pcrTP", 5),
-             "prod_min": self._numfield("pcrPmin", 70), "prod_max": self._numfield("pcrPmax", 1000)}
+        try:
+            p = {"max_mm": self._primer_number("pcrMM", "Maximum mismatches", integer=True, minimum=0),
+                 "tp": self._primer_number("pcrTP", "3′ exact bases", integer=True, minimum=0),
+                 "prod_min": self._primer_number("pcrPmin", "Minimum PCR product size", integer=True, minimum=1),
+                 "prod_max": self._primer_number("pcrPmax", "Maximum PCR product size", integer=True, minimum=1)}
+            if p["prod_min"] > p["prod_max"]:
+                raise ValueError("Minimum PCR product size cannot exceed maximum PCR product size")
+            if any(len(str(c.get(k, ""))) < primers_mod.MIN_PRIMER_SIZE
+                   for c in pairs for k in ("left_seq", "right_seq")):
+                raise ValueError(f"Each primer must contain at least {primers_mod.MIN_PRIMER_SIZE} bases")
+            shortest_primer = min(len(str(c[k])) for c in pairs for k in ("left_seq", "right_seq"))
+            if p["tp"] > shortest_primer or p["max_mm"] > shortest_primer:
+                raise ValueError("3′ exact bases and maximum mismatches cannot exceed the shortest primer length")
+        except ValueError as e:
+            return self._banner(str(e))
         bg = self.pcrBg.toPlainText()
         # _tmpl_sig uses _norm_seq while the stale-gate uses _clean_seq; a post-analysis edit adding a gap/digit
         # could pass the gate yet flip this sig -> spurious OFF-target (fails safe, never a false on-target).
-        cur_sig = self._norm_seq(self.state["seq"])           # on-target only when the pair was designed on THIS template
+        operation_sequence, operation_source = self._operation_input(self.state["seq"])
+        cur_sig = self._norm_seq(operation_sequence)           # on-target only when the pair was designed on THIS template
+        assay_records = sequtil.parse_fasta(operation_sequence)
+        assay_record = assay_records[0] if assay_records else None
         self._pcr_gen += 1                                     # new batch id: results from a superseded batch are dropped
         self._pcr_run = {"gen": self._pcr_gen, "results": [None] * len(pairs)}
         self.runPcrBtn.setEnabled(False); self.runPcrBtn.setText("◴ running…")
         for i, c in enumerate(pairs):
-            # a pair designed on a different template (family/splice/amplicon) has coords that do not index
-            # state["seq"]; passing its target_span here would fabricate a false on-target call -> omit it
-            ts = [c["left_pos"][0], c["right_pos"][1]] if c.get("_tmpl_sig") == cur_sig else None
-            body = {"sequence": self.state["seq"], "background": bg, "fwd": c["left_seq"], "rev": c["right_seq"],
-                    "target_span": ts, "params": p}
+            # Geometry is assessed only on the exact record sealed by this candidate's design manifest.
+            # A family/splice/amplicon candidate does not index state["seq"], so all design geometry is withheld.
+            sealed = isinstance(c.get("design_provenance"), dict)
+            design_records = sequtil.parse_fasta(c.get("_design_sequence", "")) if sealed else []
+            bound = bool(sealed and design_records and assay_record == design_records[0] and
+                         c.get("_tmpl_sig") == cur_sig)
+            body = {"sequence": operation_sequence, "background": bg, "fwd": c["left_seq"], "rev": c["right_seq"],
+                    "primer3_target": (c.get("primer3_target") if sealed else None),
+                    "included_region": (c.get("included_region") if sealed else None),
+                    "intended_product_span": (c.get("intended_product_span") if sealed else None),
+                    "intended_endpoint_tolerance_bp": c.get(
+                        "intended_endpoint_tolerance_bp", 0),
+                    "design_provenance": (c.get("design_provenance") if sealed else None),
+                    "design_sequence": (c.get("_design_sequence") if sealed else None),
+                    "design_assessment": ("assess" if bound else
+                                          ("withheld_template_mismatch"
+                                           if sealed else "not_run")),
+                    "source": operation_source, "params": p}
             self.engine.submit("pcr", body, key=f"pcr#{self._pcr_gen}#{i}")
 
     def _scan_genome(self, cand, org=None):
-        """Whole-genome scan of one primer pair via LOCAL isPcr against a downloaded RefSeq assembly. Fast
-        once the genome is cached; if it is not yet downloaded the backend replies need_prepare and we offer
-        a one-time download. Every genome-wide amplicon is an off-target candidate (not a validated band).
+        """Whole-genome scan of one primer pair via LOCAL isPcr against a downloaded RefSeq assembly. Runtime
+        depends on genome size, the installed isPcr build and cached RefSeq assembly, local hardware, and the
+        fixed candidate-product-size cap. If the genome is not cached, the backend replies need_prepare and we
+        offer a one-time download. Every genome-wide amplicon is an off-target candidate (not a validated band).
         `org` is captured at scan start so a later dropdown change can't retarget an in-flight scan/download."""
         self._clear_banner()
         if self._genome_inflight or self._genome_prep_inflight:
@@ -2874,8 +3463,9 @@ class MainWindow(QMainWindow):
         self._pending_scan = {"cand": cand, "org": org}        # cand + org captured so a download resumes the SAME target
         self._genome_inflight = True
         self.card_genome.expand()
-        self._render_genome_busy(f"Scanning the {org} genome locally (isPcr) for priming sites "
-                                 "(up to ~1–2 min on a large genome)…")
+        self._render_genome_busy(f"Scanning the {org} genome locally (isPcr) for priming sites. Runtime depends "
+                                 "on genome size, the installed isPcr build and cached RefSeq assembly, local "
+                                 "hardware, and the fixed candidate-product-size cap…")
         # fixed wide window (isPcr defaults) — decoupled from the local-PCR size fields the user never sets for a
         # right-click genome scan (coupling them silently capped genome products at the pcrPmax default of 1 kb)
         p = {"min_perfect": 15, "min_good": 15, "prod_max": 4000, "prod_min": 0}
@@ -3390,9 +3980,10 @@ class MainWindow(QMainWindow):
             custom_path = st.get("custom_library")
             library_mode = st.get("library_mode")
             lines = [
-                f"<b>This machine (WSL):</b> {b.get('cores')} cores · {b.get('mem_gb')} GB RAM · "
-                f"{b.get('avail_gb')} GB free. TEagle will use {b.get('recommended_threads')} parallel "
+                f"<b>This machine (WSL compute):</b> {b.get('cores')} cores · {b.get('mem_gb')} GB RAM. "
+                f"TEagle will use {b.get('recommended_threads')} parallel "
                 f"RepeatMasker jobs (limited by {b.get('limited_by')}).",
+                f"<b>Storage:</b> {b.get('disk_note') or (str(b.get('avail_gb')) + ' GiB usable')}",
                 f"<b>Disk needed:</b> about {gb} GB — the genome sequence is fetched once and kept, and the "
                 "work chunks are removed as they finish.",
                 "<b>Time:</b> a fly-sized genome (~140 Mb) takes minutes to about an hour here; a mammalian "
@@ -3419,8 +4010,9 @@ class MainWindow(QMainWindow):
                              "The selected curated + uncurated Dfam search cannot be run as configured.")
                 warn.show(); start.setEnabled(False); return
             if b.get("disk_ok") is False:
-                warn.setText(f"Not enough free disk in WSL — about {gb} GB is needed. Free space, or remove a "
-                             "cached genome from this manager, then try again.")
+                warn.setText(f"Not enough usable disk — about {gb} GB is needed after applying the smaller "
+                             "WSL filesystem and Windows backing-volume limit. Free space, or remove a cached "
+                             "genome from this manager, then try again.")
                 warn.show(); start.setEnabled(False); return
             # Threshold rationale: measured on this backend, a lineage Dfam covers usefully has hundreds
             # of models (D. melanogaster 399, H. sapiens 1439) while an uncovered one has single digits
@@ -3647,6 +4239,9 @@ class MainWindow(QMainWindow):
              library["report"],
              f"- Sensitivity {r.get('sensitivity')} · {r.get('chunks')} chunks · "
              f"complete: {bool(r.get('complete'))}", ""]
+        if not r.get("complete"):
+            L += ["> **Incomplete run.** Counts, percentages, and rows are partial lower bounds. No assembly-wide "
+                  "absence, coverage, or exhaustive-family claim is supported.", ""]
         if r.get("coverage_warning"):
             L += ["> **Coverage warning.** " + r["coverage_warning"], ""]
         L += ["## Scope and limits", "",
@@ -3710,6 +4305,7 @@ class MainWindow(QMainWindow):
         lay = QVBoxLayout(w)
         lay.setContentsMargins(theme_mod.sp(14), theme_mod.sp(12), theme_mod.sp(14), theme_mod.sp(12))
         lay.setSpacing(theme_mod.sp(8))
+        accession_stem = _safe_export_stem(r.get("accession"), "assembly", trust="validated_fetch")
         head = QLabel(f"{r.get('species')} · {r.get('accession')}")
         hf = head.font(); hf.setBold(True); hf.setPointSizeF(hf.pointSizeF() + 2); head.setFont(hf); lay.addWidget(head)
         # headline numbers: the TE share is stated separately from every repeat, because they are different
@@ -3741,20 +4337,34 @@ class MainWindow(QMainWindow):
         scope.setObjectName("orient"); scope.setWordWrap(True); lay.addWidget(scope)
         if r.get("coverage_warning"):
             cw = QLabel(r["coverage_warning"]); cw.setObjectName("errbanner"); cw.setWordWrap(True); lay.addWidget(cw)
+        complete_note = ("The run completed all submitted assembly chunks. Library scope and sensitivity still "
+                         "limit absence claims." if r.get("complete") else
+                         "The run is incomplete: all counts, percentages, and rows are partial lower bounds. "
+                         "No assembly-wide absence, coverage, or exhaustive-family claim is supported.")
+        completion = QLabel(complete_note)
+        completion.setObjectName("orient" if r.get("complete") else "errbanner")
+        completion.setWordWrap(True); lay.addWidget(completion)
         repeat_names = r.get("repeat_names") or []
         t = DataTable([c[0] for c in self._ANNOT_COLS], dict(self._ANNOT_COLS))
         t.set_rows([[row["repeat_name"], row.get("class_family"), self._annot_kind_label(row), row["n"], row["bp"],
                      row.get("percent"), row["divergence"]] for row in repeat_names])
+        t.export_notes = [library["scope"], complete_note,
+                          "TE, tandem, other, and unclassified categories are independently unioned and non-additive. "
+                          "Repeat-name/model rows use within-name unions and must not be summed to recover a headline. "
+                          "Divergence is an alignment-span-weighted raw percentage, not an age estimate."]
+        if r.get("coverage_warning"):
+            t.export_notes.append(str(r["coverage_warning"]))
         # Row menu matched to what the row IS. A landscape row is a per-name/model AGGREGATE, not a locus, so
         # it offers no "design primer here" or "copy sequence" — there is no single sequence behind it.
         # A tandem/other row additionally says why it is not counted as a transposable element.
         t.set_row_menu(lambda r, _rows=repeat_names: self._annot_row_menu(_rows[r]) if r < len(_rows) else [])
         t.setMinimumHeight(round(260 * theme_mod.UI_SCALE)); lay.addWidget(t)
         # FigurePanel re-renders on theme/zoom, so it takes a builder (bg -> svg), not a rendered string.
-        fig = FigurePanel(lambda bg, _r=r: figures.svg_te_composition(_r, theme=bg), "TEagle_TE_landscape")
+        fig = FigurePanel(lambda bg, _r=r: figures.svg_te_composition(_r, theme=bg),
+                          f"TEagle_TE_landscape_{accession_stem}")
         fig.setMinimumHeight(round(190 * theme_mod.UI_SCALE)); lay.addWidget(fig)
         row = QHBoxLayout(); row.addStretch(1)
-        row.addWidget(_export_table_btn(t, f"TEagle_TE_landscape_{r.get('accession')}", self))
+        row.addWidget(_export_table_btn(t, f"TEagle_TE_landscape_{accession_stem}", self))
         # A genome run is sealed like every other result, so the seal has to be reachable from the result
         # — otherwise the run is reproducible in principle and not in practice. The report carries the
         # same hedges the screen shows, so an exported file cannot read as an unqualified claim.
@@ -3762,15 +4372,14 @@ class MainWindow(QMainWindow):
         rep.setToolTip("The summary table plus what was searched, what the numbers mean, and the limits "
                        "stated on this screen — the same hedges, in the file.")
         rep.clicked.connect(lambda: self._save_text(self._annot_report_md(r),
-                                                    f"TEagle_TE_landscape_{r.get('accession')}", "md"))
+                                                    f"TEagle_TE_landscape_{accession_stem}", "md"))
         row.addWidget(rep)
         manb = QPushButton("Export manifest (.json)"); manb.setProperty("sm", True)
         manb.setToolTip("The sealed provenance record: tool and library versions, every parameter, the "
                         "genome checksum, and whether the run covered the whole assembly.")
         manb.setEnabled(bool(r.get("provenance")))
-        manb.clicked.connect(lambda: self._save_text(
-            json.dumps(r.get("provenance") or {}, indent=2, sort_keys=True),
-            f"TEagle_TE_landscape_{r.get('accession')}_manifest", "json"))
+        manb.clicked.connect(lambda: self._export_manifest_payload(
+            [r.get("provenance")], f"TEagle_TE_landscape_{accession_stem}_manifest"))
         row.addWidget(manb)
         close = QPushButton("Close"); close.setProperty("sm", True); close.clicked.connect(w.accept)
         row.addWidget(close); lay.addLayout(row)
@@ -3897,7 +4506,7 @@ class MainWindow(QMainWindow):
                 box = QMessageBox(self)
                 box.setWindowTitle("Download genome?")
                 box.setText(f"The {org} genome ({acc}) is not on this machine yet.\n\n"
-                            "Download it once now? It is kept locally so future scans are fast. "
+                            "Download it once now? It is kept locally for future scans. "
                             "Mammalian genomes are large (~1 GB download, a few minutes) and need ≥8 GB free disk "
                             "in WSL — extraction peaks near 4 GB (FASTA ~3 GB + 2bit ~0.8 GB) before the temporary "
                             "files are removed.")
@@ -3960,18 +4569,40 @@ class MainWindow(QMainWindow):
         cut = [f"P{i+1}" for i, dd in enumerate(results) if isinstance(dd, dict) and dd.get("truncated")]
         if cut:
             self._banner(f"in-silico PCR stopped early on {', '.join(cut)} — the product list is a lower "
-                         "bound on priming, not an exhaustive off-target result. Repetitive templates hit "
+                         "bound on priming, not an exhaustive product search. Repetitive templates hit "
                          "the search cap.", level="warn")
         lanes, amps, provs = [], [], []
+        statuses = []
         for idx, dd in enumerate(results):
             lane = f"P{idx+1}"
-            lanes.append({"label": lane, "amplicons": dd.get("amplicons", [])})
-            for a in dd.get("amplicons", []):
+            mechanisms = dd.get("amplicons", [])
+            status = "failed" if dd.get("error") else dd.get("status", "complete")
+            statuses.append({"pair": lane, "status": status, "error": dd.get("error")})
+            physical = {}
+            for a in mechanisms:
+                key = (a.get("product_key") or
+                       f"{a.get('source')}:{a.get('start')}:{a.get('end')}:"
+                       f"{a.get('product_length', a.get('length'))}")
+                prior_mechanisms = physical.get(key, {}).get("mechanism_keys", [])
+                if (key not in physical or
+                        (a.get("matches_intended_product") is True and
+                         physical[key].get("matches_intended_product") is not True) or
+                        (physical[key].get("single_primer") and not a.get("single_primer"))):
+                    physical[key] = dict(a)
+                    physical[key]["mechanism_keys"] = prior_mechanisms
+                physical[key]["mechanism_keys"].append(a.get("mechanism_key", "unknown"))
+            products = list(physical.values())
+            for a in products:
+                a["mechanism_count"] = len(a["mechanism_keys"])
+            lanes.append({"label": lane, "amplicons": products,
+                          "has_locus": any(a.get("on_target") is not None for a in products),
+                          "status": status})
+            for a in mechanisms:
                 amps.append({**a, "pair": lane})
             if dd.get("provenance"):
                 provs.append(dd["provenance"])
-        self.state["lastPcr"] = {"lanes": lanes, "amplicons": amps}
-        self._render_pcr(lanes, amps)
+        self.state["lastPcr"] = {"lanes": lanes, "amplicons": amps, "statuses": statuses}
+        self._render_pcr(lanes, amps, statuses)
         self._uppercase_buttons()
         if provs:
             self._render_provenance(provs[0])
@@ -3979,8 +4610,9 @@ class MainWindow(QMainWindow):
             # cover every lane on the gel, not just pair 1. Store the full list for _export_manifest.
             self.state["prov_manifest_all"] = provs
 
-    def _render_pcr(self, lanes, amps):
+    def _render_pcr(self, lanes, amps, statuses=None):
         _clear_layout(self.pcrBody)
+        amplicon_table = None
         gel = FigurePanel(lambda bg, L=lanes: figures.svg_gel({"lanes": L}, bg),
                           "TEagle_gel", modes=("dark", "white", "uv", "mono"),
                           hit_regions=figures.gel_regions({"lanes": lanes}), on_menu=self._gel_menu)
@@ -3988,11 +4620,13 @@ class MainWindow(QMainWindow):
         gel.setMinimumHeight(round(420 * theme_mod.UI_SCALE))
         self.pcrBody.addWidget(gel)
         if amps:
-            headers = ["Pair", "Source", "Coords", "Len", "Mism F/R", "Call"]
-            rows = [[a["pair"], a["source"], f"{a['start']}–{a['end']}", a["length"],
+            headers = ["Pair", "Mechanism", "Source", "Coords", "Template span", "Product len", "Mism F/R", "Call"]
+            rows = [[a["pair"], a.get("mechanism_key", "—"), _amplicon_public_source(a),
+                     f"{a['start']}–{a['end']}", a["length"], a.get("product_length", a["length"]),
                      f"{a.get('fwd_mm', '—')}/{a.get('rev_mm', '—')}",
                      _amp_call(a)] for a in amps]
             t = DataTable(headers, GLOSS)
+            amplicon_table = t
             t.set_rows(rows)
             t.set_row_menu(lambda r: self._feat_menu(amps[r]["start"], amps[r]["end"], "+",
                                                      f"amplicon_{amps[r]['pair']}", dna=amps[r].get("seq", "")))
@@ -4005,7 +4639,8 @@ class MainWindow(QMainWindow):
                     order = [tbl._orig(r) for r in range(tbl.rowCount())]      # follow the table's current (sorted) order
                     seq_amps = [aa[i] for i in order if 0 <= i < len(aa)] or aa
                     fasta = "\n".join(
-                        f">amplicon_{a['pair']}_{a['start']}-{a['end']}_{a['length']}bp_"
+                        f">amplicon_{a['pair']}_{a['start']}-{a['end']}_"
+                        f"{a.get('product_length', a['length'])}bp_"
                         f"{_amp_kind(a)}\n{a.get('seq','')}" for a in seq_amps)
                     widgets.save_fasta(fasta, "TEagle_amplicons", self)
                 cp = QPushButton("Export amplicons (FASTA)"); cp.setProperty("sm", True)   # export the sequences
@@ -4013,17 +4648,47 @@ class MainWindow(QMainWindow):
                 arow.addWidget(cp)
             self.pcrBody.addLayout(arow)
         else:
-            self.pcrBody.addWidget(_note("No amplicon predicted for any pair under the criteria.", "warn"))
-        onN = sum(1 for a in amps if a.get("on_target"))
-        spN = sum(1 for a in amps if a.get("single_primer"))
-        offN = len(amps) - onN - spN
-        parts = f"{len(lanes)} lane(s) · {onN} on-target · {offN} off-target" + (f" · {spN} single-primer" if spN else "")
-        note = QLabel(f"{parts} product(s) · ladder lane “L”. Products of equal size co-migrate into one band (a real "
-                      "gel cannot separate them), so a band can carry more than one product — a band carrying an "
-                      "off-target alongside the on-target is drawn in the off-target colour (not a clean on-target). "
-                      "Every product is listed in the table above. Intensity tracks priming efficiency. Not a claim of "
-                      "experimental specificity.")
+            partial_empty = any(s.get("status") == "partial_capped" for s in (statuses or []))
+            failed = sum(1 for s in (statuses or []) if s.get("status") == "failed")
+            if partial_empty:
+                msg = "No product was recorded before the capped search stopped; unsearched candidates remain."
+            elif failed:
+                msg = f"No products are available; {failed} pair(s) failed and were not assessed."
+            else:
+                msg = "The completed search recorded zero products under the stated computational criteria."
+            self.pcrBody.addWidget(_note(msg, "warn"))
+        products = [a for lane in lanes for a in lane.get("amplicons", [])]
+        intended_n = sum(1 for a in products if a.get("matches_intended_product") is True)
+        on_n = sum(1 for a in products if a.get("on_target") is True)
+        single_n = sum(1 for a in products if a.get("single_primer"))
+        unassessed_n = sum(1 for a in products if a.get("on_target") is None and not a.get("single_primer"))
+        partial = any(s.get("status") == "partial_capped" for s in (statuses or []))
+        failed = sum(1 for s in (statuses or []) if s.get("status") == "failed")
+        parts = (f"{len(lanes)} lane(s) · {len(amps)} amplification mechanism(s) · "
+                 f"{len(products)} unique physical product(s) · {intended_n} intended product call(s) · "
+                 f"{on_n} on-target")
+        if single_n:
+            parts += f" · {single_n} single-primer"
+        if unassessed_n:
+            parts += f" · {unassessed_n} target-unassessed"
+        if failed:
+            parts += f" · {failed} failed/not assessed"
+        if partial:
+            scope = (" Search caps were reached, so this is a lower bound on amplification mechanisms and no "
+                     "specificity conclusion is supported.")
+        elif failed:
+            scope = (" At least one pair failed and was not assessed, so no batch-wide absence or specificity "
+                     "conclusion is supported.")
+        else:
+            scope = " A complete local search does not establish experimental or genome-wide specificity."
+        note = QLabel(f"{parts} · ladder lane “L”. Equal-sized physical products co-migrate into one gel band; "
+                      f"the table retains each auditable primer-orientation mechanism.{scope}")
         note.setObjectName("orient"); note.setWordWrap(True); self.pcrBody.addWidget(note)
+        if amplicon_table is not None:
+            amplicon_table.export_notes = [
+                f"{parts}. Equal-sized physical products co-migrate into one gel band; the table retains each "
+                f"auditable primer-orientation mechanism.{scope}"
+            ]
         self._uppercase_buttons(self.pcrBody.parentWidget())   # export buttons are rebuilt with the results
 
     def _render_genome_scan(self, lanes, amps, summary):
@@ -4069,12 +4734,16 @@ class MainWindow(QMainWindow):
                                                         not amps[i].get("on_target", False),
                                                         amps[i]["source"], amps[i]["start"]))
         samps = [amps[i] for i in order]
+        scan_table = None
         if samps:
             # isPcr coordinates are 1-based inclusive and are kept verbatim — the header says so, so Len (end-start+1)
             # does not read as contradicting the span. 'Source' here is the assembly's own sequence name, not a specimen.
             t = DataTable(["Call", "Assembly seq", "Coords (1-based)", "Len", "Strand"], GLOSS)
-            t.set_rows([[_call(a), a["source"], f"{a['start']}–{a['end']}", a["length"], a.get("strand", "?")] for a in samps])
-            t.set_row_menu(lambda r: [("Copy locus", lambda a=samps[r]: self._copy(f"{a['source']}:{a['start']}-{a['end']}"))])
+            scan_table = t
+            t.set_rows([[_call(a), _amplicon_public_source(a), f"{a['start']}–{a['end']}",
+                         a["length"], a.get("strand", "?")] for a in samps])
+            t.set_row_menu(lambda r: [("Copy locus", lambda a=samps[r]: self._copy(
+                f"{_amplicon_public_source(a)}:{a['start']}-{a['end']}"))])
             t.setMaximumHeight(round(260 * theme_mod.UI_SCALE))
             self.genomeBody.addWidget(t)
             xrow = QHBoxLayout(); xrow.addStretch(1); xrow.addWidget(_export_table_btn(t, "TEagle_offtarget_scan", self))
@@ -4086,10 +4755,18 @@ class MainWindow(QMainWindow):
         sp = f" · {n_single} single-primer artefact(s)" if n_single else ""
         comig = (" An on-target that shares a band size with an off-target is drawn in the off-target colour — a "
                  "co-migration cannot be resolved on a gel — with the full split kept in the table above." if has_locus else "")
-        note = QLabel(f"{head}{sp}, listed above (on-target first).{comig} Every product is a candidate under isPcr's ≥15 bp "
+        listing = "listed above (on-target first)" if has_locus else "listed above"
+        export_listing = "listed on-target first" if has_locus else "listed"
+        note = QLabel(f"{head}{sp}, {listing}.{comig} Every product is a candidate under isPcr's ≥15 bp "
                       "3′-perfect rule — a specificity screen, not wet-lab-validated bands. The verdict is a heuristic "
                       "read of the count/spread; the numbers carry the claim.")
         note.setObjectName("orient"); note.setWordWrap(True); self.genomeBody.addWidget(note)
+        if scan_table is not None:
+            scan_table.export_notes = [
+                f"{head}{sp}, {export_listing}.{comig} Every product is a candidate under isPcr's "
+                ">=15 bp 3-prime-perfect rule: this is a computational specificity screen, not wet-lab-validated "
+                "bands. The verdict is a heuristic interpretation of the displayed counts and spread."
+            ]
         self._uppercase_buttons(self.genomeBody.parentWidget())   # this path has no post-render theme refresh
 
     # =================== WSL family annotation ===================
@@ -4170,7 +4847,7 @@ class MainWindow(QMainWindow):
             src = None
         else:
             seq = self.state.get("seq") or self.seq.toPlainText().strip()
-            src = self.state.get("source")
+            seq, src = self._operation_input(seq)
         if not seq:
             return self._banner("no sequence to annotate — load a specimen or paste one")
         self.state["family_seq"] = self._norm_seq(seq)    # hit coords index THIS sequence (backend-normalized), not always panel-01
@@ -4212,16 +4889,27 @@ class MainWindow(QMainWindow):
             cont = QWidget(); cl = QVBoxLayout(cont); cl.setContentsMargins(0, 0, 0, 0); cl.setSpacing(6)
             if nonte:
                 kinds = sorted({h["class_family"].replace("_", " ").lower() for h in nonte})
-                cl.addWidget(_note(f"RepeatMasker annotated this locus as {' and '.join(kinds)} — "
-                                   f"{len(nonte)} region(s). That is a result, not a failure: the sequence "
-                                   f"matches a tandem/low-complexity repeat, and no transposable-element "
-                                   f"family was found in it.", "info"))
-                cl.addWidget(self._repeat_table(nonte))
+                nonte_note = (f"RepeatMasker annotated this locus as {' and '.join(kinds)} — "
+                              f"{len(nonte)} region(s). That is a result, not a failure: the sequence "
+                              f"matches a tandem/low-complexity repeat, and no transposable-element "
+                              f"family was found in it.")
+                cl.addWidget(_note(nonte_note, "info"))
+                nonte_table = self._repeat_table(nonte)
+                nonte_table.export_notes = [nonte_note]
+                cl.addWidget(nonte_table)
+                nonte_row = QHBoxLayout(); nonte_row.addStretch(1)
+                nonte_row.addWidget(_export_table_btn(nonte_table, "TEagle_non_TE_repeats", self))
+                cl.addLayout(nonte_row)
             if unclassed:
-                cl.addWidget(_note(f"{len(unclassed)} repeat region(s) matched a Dfam entry whose class is "
-                                   f"unassigned ('Unknown'). A repeat is present; its type is not established.",
-                                   "info"))
-                cl.addWidget(self._repeat_table(unclassed))
+                unclassed_note = (f"{len(unclassed)} repeat region(s) matched a Dfam entry whose class is "
+                                  f"unassigned ('Unknown'). A repeat is present; its type is not established.")
+                cl.addWidget(_note(unclassed_note, "info"))
+                unclassed_table = self._repeat_table(unclassed)
+                unclassed_table.export_notes = [unclassed_note]
+                cl.addWidget(unclassed_table)
+                unclassed_row = QHBoxLayout(); unclassed_row.addStretch(1)
+                unclassed_row.addWidget(_export_table_btn(unclassed_table, "TEagle_unclassified_repeats", self))
+                cl.addLayout(unclassed_row)
             if not hits:
                 # Two independent conditions decide whether a family CAN be named, and the message names
                 # whichever is actually missing rather than guessing. Measured on Drosophila copia: with
@@ -4261,10 +4949,6 @@ class MainWindow(QMainWindow):
                                        "this is a genuine no-match rather than a gap in the installed "
                                        "library. The structural and protein-domain evidence above does "
                                        "not depend on this search.", "warn"))
-            frow = QHBoxLayout(); frow.addStretch(1)
-            if hits:
-                frow.addWidget(_export_table_btn(self._repeat_table(nonte + unclassed), "TEagle_repeats", self))
-            cl.addLayout(frow)
             self._set_body(self.wslBody, cont)
             return
         self.state["family"] = te
@@ -4298,21 +4982,47 @@ class MainWindow(QMainWindow):
                      _cons(h),
                      ("—" if h.get("cons_coverage_pct") is None else f"{h['cons_coverage_pct']}%"),
                      h.get("n_fragments", 1), h["score"]] for i, h in enumerate(te)])
+        family_notes = [
+            f"Searched {_dfam_lbl} with RepeatMasker {d.get('repeatmasker_version','')} for species "
+            f"{d.get('species','') or 'not set'}.",
+            "Search ran in RepeatMasker's quick mode (-qq), which is faster and less sensitive than a default "
+            "search. Divergence is the raw substitution percentage, not Kimura-corrected; consensus coverage and "
+            "divergence are alignment evidence, not a family-membership test.",
+        ]
+        t.export_notes = family_notes
         t.set_row_menu(lambda r: self._feat_menu(te[r]["q_start"], te[r]["q_end"], te[r]["strand"],
                                                  te[r]["family"], src_seq=self.state.get("family_seq")))
         cont = QWidget(); cl = QVBoxLayout(cont); cl.setContentsMargins(0, 0, 0, 0); cl.setSpacing(6)
         cl.addWidget(head); cl.addWidget(t)
         merged = [h for h in te if h.get("n_fragments", 1) > 1]
         if merged:
-            cl.addWidget(_note("; ".join(h["fragment_note"] for h in merged) +
-                               ". Merged so an interrupted element is one row, with the outermost query span "
-                               "and the summed consensus coverage.", "info"))
+            merged_note = ("; ".join(h["fragment_note"] for h in merged) +
+                           ". Merged so an interrupted element is one row, with the outermost query span "
+                           "and the summed consensus coverage.")
+            cl.addWidget(_note(merged_note, "info"))
+            t.export_notes.append(merged_note)
         cl.addWidget(_qq_note())
         if nonte or unclassed:                     # reported, never silently dropped
             extra = [f"{len(nonte)} tandem / low-complexity region(s)"] if nonte else []
             extra += [f"{len(unclassed)} repeat(s) of unassigned class"] if unclassed else []
             cl.addWidget(_note("Also annotated in this locus: " + " and ".join(extra) +
                                ", listed apart from the TE families above.", "info"))
+        def add_partition(partition, title, base, note_text):
+            if not partition:
+                return
+            cl.addWidget(_sl(title))
+            pt = self._repeat_table(partition)
+            pt.export_notes = [note_text] + family_notes
+            cl.addWidget(pt)
+            prow = QHBoxLayout(); prow.addStretch(1)
+            prow.addWidget(_export_table_btn(pt, base, self)); cl.addLayout(prow)
+
+        add_partition(nonte, "Tandem / low-complexity repeats", "TEagle_non_TE_repeats",
+                      "These rows are positive tandem/low-complexity repeat annotations reported separately; "
+                      "they are not transposable-element family calls.")
+        add_partition(unclassed, "Unclassified repeats", "TEagle_unclassified_repeats",
+                      "These rows matched repeat entries whose class is unassigned. A repeat is present, but its "
+                      "type is not established; exclusion from TE coverage is not evidence that it is non-TE.")
         frow = QHBoxLayout(); frow.addStretch(1); frow.addWidget(_export_table_btn(t, "TEagle_family", self))
         cl.addLayout(frow)
         self._set_body(self.wslBody, cont)
@@ -4339,10 +5049,11 @@ class MainWindow(QMainWindow):
             return self._banner("Load a genomic sequence first (fetch, upload, or paste, then Run analysis).")
         if not tx:
             return self._banner("Paste a transcript / cDNA / mRNA to align.")
+        genomic, source = self._operation_input(genomic)
         self.state["splice_seq"] = self._norm_seq(genomic)    # intron menus slice THIS (backend-normalized) sequence, not a later box edit
         self.spliceBtn.setEnabled(False); self.spliceBtn.setText("◴ aligning…")
         self._set_body(self.spliceBody, BusyBar("Aligning the transcript to the genomic sequence (minimap2 -x splice)…"))
-        self.engine.submit("splice", {"sequence": genomic, "transcript": tx, "source": self.state.get("source"),
+        self.engine.submit("splice", {"sequence": genomic, "transcript": tx, "source": source,
                                       "timeout": 300}, key="splice")
 
     def _on_splice(self, d):
@@ -4419,11 +5130,17 @@ class MainWindow(QMainWindow):
         if introns:
             headers = ["#", "Intron span (0-based)", "Len", "Splice site", "Canonical"]
             t = DataTable(headers, GLOSS)
+            t.export_notes = ["Introns inferred de novo by minimap2 splice alignment. Coordinates are 0-based "
+                              "half-open on the genomic sequence supplied to this run; canonical labels report "
+                              "the observed donor and acceptor motif, not independent transcript confirmation."]
             t.set_rows([[k + 1, f"{i['start']}–{i['end']}", i["end"] - i["start"], f"{i['donor']}…{i['acceptor']}",
                          "canonical" if i.get("canonical") else "non-canonical"] for k, i in enumerate(introns)])
             t.set_row_menu(lambda r: self._feat_menu(introns[r]["start"], introns[r]["end"], d.get("strand", "+"),
                                                      f"intron_{r+1}", src_seq=self.state.get("splice_seq")))
             cl.addWidget(t)
+            xrow = QHBoxLayout(); xrow.addStretch(1)
+            xrow.addWidget(_export_table_btn(t, "TEagle_splice_introns", self))
+            cl.addLayout(xrow)
         else:
             cl.addWidget(_empty("single exon — no introns detected"))
             # foot-gun guard for the common novice case (works for any input, not only fetched+annotated records):
@@ -4432,6 +5149,32 @@ class MainWindow(QMainWindow):
                                 "transcript OR a genomic slice pasted into the transcript box (a genomic slice has no "
                                 "spliced-out introns). To resolve splicing, align an mRNA / cDNA / EST, not genomic DNA.")
             slice_note.setWordWrap(True); slice_note.setObjectName("orient"); cl.addWidget(slice_note)
+        if d.get("exons") and self.state.get("splice_seq"):
+            splice_record = self.state.get("last_rec") or {}
+            splice_identity = (_record_public_identity(splice_record) if splice_record else
+                               {"id": "splice_locus", "identitySource": "generated"})
+            rid = splice_identity["id"].split()[0]
+            rid_sha256 = splice_identity.get("idSha256")
+            rid_source = splice_identity["identitySource"]
+            erow = QHBoxLayout(); erow.addStretch(1)
+            erow.addWidget(_export_fasta_btn(
+                "Export splice exons (FASTA)",
+                lambda result=d, sequence=self.state.get("splice_seq"), record_id=rid, digest=rid_sha256,
+                       source=rid_source: _splice_exons_fasta(result, sequence, record_id, digest, source),
+                "TEagle_splice_exons", self))
+            model_export = QPushButton("Export splice model ▾"); model_export.setProperty("sm", True)
+            model_export.setProperty("resultExport", True)
+            model_export.setToolTip("Export the displayed de-novo exon/intron model as GFF3, BED, or exon FASTA")
+            model_export.clicked.connect(
+                lambda _=False, result=d, sequence=self.state.get("splice_seq"), record_id=rid,
+                       digest=rid_sha256, source=rid_source:
+                self._export_gene_model({"exons": result.get("exons") or [],
+                                         "introns": result.get("introns") or [], "cds": [],
+                                         "strand": result.get("strand", ".")},
+                                        sequence, record_id, "splice_alignment",
+                                        identity_source=source, record_id_sha256=digest))
+            erow.addWidget(model_export)
+            cl.addLayout(erow)
         self._set_body(self.spliceBody, cont)
 
     # =================== provenance ===================
@@ -4470,27 +5213,77 @@ class MainWindow(QMainWindow):
                       "parameters, checksums) as a JSON file so the result stays reproducible outside TEagle.")
         eb.clicked.connect(self._export_manifest)
         erow.addWidget(eb); self.card_prov.bodylay.addLayout(erow)
+        if m.get("runType") == "analysis":
+            rrow = QHBoxLayout(); rrow.addStretch(1)
+            rb = QPushButton("Export analysis result (.json)"); rb.setProperty("sm", True)
+            rb.setToolTip("Write the complete versioned analysis result: every record, stage status, "
+                          "scientific output, reference and verified provenance binding.")
+            rb.clicked.connect(self._export_analysis_result)
+            rrow.addWidget(rb); self.card_prov.bodylay.addLayout(rrow)
         self._uppercase_buttons()
 
-    def _export_manifest(self):
+    def _export_manifest_payload(self, manifests, base):
+        """Strictly verify, serialize, and atomically write one or more sealed manifests."""
         import json
-        allm = self.state.get("prov_manifest_all") or ([self.state["prov_manifest"]]
-                                                        if self.state.get("prov_manifest") else [])
+        from teagle_core import provenance
+        allm = [m for m in manifests if isinstance(m, dict)]
         if not allm:
-            return self._banner("No run provenance to export — run an analysis first.")
-        rid = (str(allm[0].get("input", {}).get("id") or "run")).split()[0]
+            return self._banner("No run provenance to export — run the analysis first.")
         path, _ = QFileDialog.getSaveFileName(self, "Export provenance manifest",
-                                              f"TEagle_{rid}_manifest.json", "JSON (*.json)")
+                                              f"{base}.json", "JSON (*.json)")
         if not path:
             return
         if not path.lower().endswith(".json"):
             path += ".json"
-        # a batch (multi-pair in-silico PCR) seals one manifest PER pair — export them all so the file
-        # covers every lane shown, not just the first; a single run writes its one manifest as before.
-        payload = {"runs": allm} if len(allm) > 1 else allm[0]
-        with widgets.atomic_write(path, "w", encoding="utf-8", newline="\n") as fh:
-            json.dump(payload, fh, indent=2, ensure_ascii=False, sort_keys=True)
+        try:
+            encoded_runs = [provenance.manifest_json_bytes(manifest) for manifest in allm]
+            payload = (json.dumps({"runs": [json.loads(encoded) for encoded in encoded_runs]},
+                                  indent=2, ensure_ascii=False, allow_nan=False, sort_keys=True).encode("utf-8")
+                       if len(encoded_runs) > 1 else encoded_runs[0])
+            with widgets.atomic_write(path, "wb") as fh:
+                fh.write(payload)
+        except (OSError, TypeError, ValueError):
+            return self._banner("The provenance manifest failed its seal or strict JSON check and was not exported.")
         self._banner(f"Provenance manifest written to {os.path.basename(path)}.", level="success")
+
+    def _export_manifest(self):
+        allm = self.state.get("prov_manifest_all") or ([self.state["prov_manifest"]]
+                                                        if self.state.get("prov_manifest") else [])
+        if not allm:
+            return self._banner("No run provenance to export — run an analysis first.")
+        if allm[0].get("runType") == "analysis" and self.state.get("analysis_state") != "current":
+            return self._banner("That analysis provenance is stale — run analysis again before exporting.")
+        if len(allm) > 1:
+            stem = "batch"
+        elif allm[0].get("runType") == "analysis" and len(self.state.get("records") or []) > 1:
+            stem = "multiple_records"
+        else:
+            stem = _manifest_export_stem(allm[0].get("input", {}), "run")
+        return self._export_manifest_payload(allm, f"TEagle_{stem}_manifest")
+
+    def _export_analysis_result(self):
+        import engine
+        result = self.state.get("analysis")
+        manifest = self.state.get("prov_manifest")
+        if (self.state.get("analysis_state") != "current" or not isinstance(result, dict) or
+                not isinstance(manifest, dict) or manifest.get("runType") != "analysis" or
+                manifest.get("manifestSha256") != (result.get("provenance") or {}).get("manifestSha256")):
+            return self._banner("No current analysis result to export — run analysis again first.")
+        rid = ("multiple_records" if len(result.get("records") or []) > 1 else
+               _manifest_export_stem(manifest.get("input", {}), "analysis"))
+        path, _ = QFileDialog.getSaveFileName(self, "Export complete analysis result",
+                                              f"TEagle_{rid}_analysis.json", "JSON (*.json)")
+        if not path:
+            return
+        if not path.lower().endswith(".json"):
+            path += ".json"
+        try:
+            payload = engine.analysis_result_json_bytes(result)
+            with widgets.atomic_write(path, "wb") as fh:
+                fh.write(payload)
+        except (OSError, ValueError):
+            return self._banner("The analysis result failed its provenance binding or strict JSON check and was not exported.")
+        self._banner(f"Complete analysis result written to {os.path.basename(path)}.", level="success")
 
     def _set_body(self, layout, widget):
         _clear_layout(layout)                                 # recursive: also removes any addLayout'd sub-layouts
@@ -4593,28 +5386,23 @@ def selftest():
             problems.append("certifi CA bundle did not load into the TLS context")
     except Exception as e:
         problems.append(f"TLS trust-store self-check failed: {type(e).__name__}: {e}")
-    # Vector PDF export relies on metadata minimisation after Qt writes the page. Exercise the actual
-    # write-clean-read path so a frozen build cannot pass merely because the dependency imports.
+    # Vector PDF export relies on the shared SVG -> QPdfWriter path and metadata minimisation. Exercise
+    # the actual runtime writer so a frozen build cannot pass merely because the dependencies import.
     try:
         import tempfile
-        from pypdf import PdfReader, PdfWriter
-        from teagle_core.artifact_metadata import (
-            AUTHOR, clean_pdf_metadata, media_metadata_violations)
+        from pypdf import PdfReader
+        from teagle_core.artifact_metadata import media_metadata_violations
         with tempfile.TemporaryDirectory(prefix="teagle-selftest-") as temporary:
-            path = os.path.join(temporary, "metadata-cycle.pdf")
-            writer = PdfWriter()
-            writer.add_blank_page(width=72, height=72)
-            writer.add_metadata({"/Author": AUTHOR, "/Title": "metadata self-check"})
-            writer.write(path)
-            clean_pdf_metadata(path)
+            path = os.path.join(temporary, "figure-export.pdf")
+            widgets.render_pdf(svg, path)
             violations = media_metadata_violations(path)
             reader = PdfReader(path)
             if violations:
-                problems.append("PDF metadata-cleaning cycle failed: " + "; ".join(violations))
+                problems.append("PDF figure export metadata check failed: " + "; ".join(violations))
             if len(reader.pages) != 1:
-                problems.append("PDF metadata-cleaning cycle did not preserve its page")
+                problems.append("PDF figure export did not preserve its page")
     except Exception as e:
-        problems.append(f"PDF metadata-cleaning cycle crashed: {type(e).__name__}: {e}")
+        problems.append(f"PDF figure export self-check crashed: {type(e).__name__}: {e}")
     # the installer dialog must construct offscreen (it ships in the frozen build)
     try:
         from install_dialog import InstallDialog

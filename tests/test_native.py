@@ -1,7 +1,7 @@
 """Native (PySide6) app regression tests. Run headless via the offscreen Qt platform. Cover the
 figure builders, the engine worker's three-tier taxonomy, and the analyze -> design -> in-silico PCR
 workflow driven through the same in-process engine the GUI uses. Skipped if PySide6 is unavailable."""
-import os, sys, time
+import hashlib, json, os, sys, time
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
@@ -93,6 +93,17 @@ def win():
     w.close()
 
 
+def _accept_analysis(win, result, sequence=None):
+    sequence = sequence or "\n".join(f">{r['id']}\n{r['seq']}" for r in result.get("records", []))
+    win.seq.setPlainText(sequence)
+    win._analyze_gen += 1
+    generation = win._analyze_gen
+    win._active_analyze_gen = generation
+    win._analysis_requests[generation] = {"sequence": sequence, "source": {}}
+    win._analyze_inflight = True
+    win._on_analyze(result, generation)
+
+
 def test_rail_toggle_collapses_and_restores(win):
     # the specimen panel collapses to free width and reopens, restoring the split (state tracked explicitly,
     # since isVisible() is unreliable before the window is shown)
@@ -169,13 +180,56 @@ def test_coord_fetch_submits_and_renders(win):
     win._fetch_coord()
     assert ops[0] == ("fetch_coords", {"regions": "chr13:33,016,423-33,066,143", "strand": "-",
                                        "organism": "Homo sapiens", "customQuery": ""}, "fetch")
-    res = {"ok": True, "runType": "coordinate", "fasta": ">x\n" + "A" * 100 + "\n", "organism": "Homo sapiens",
+    from teagle_core import provenance
+    sequence = "A" * 100
+    raw_source = {
+        "accession": "NC_000013.11", "assemblyAccession": "GCF_000001405.40", "taxid": "9606",
+        "regions": [{"chrAccession": "NC_000013.11", "start": 1, "stop": 100, "strand": 2}],
+        "coordSystem": "1-based-inclusive", "retrievalType": "coordinate",
+        "source": "NCBI E-utilities (efetch seq_start/seq_stop)",
+        "endpoint": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
+        "retrievedUtc": "2026-08-21T00:00:00+00:00",
+    }
+    fasta = ">NC_000013.11:1-100(-)\n" + sequence + "\n"
+    source_context = provenance.normalize_source_context(
+        raw_source, [("NC_000013.11:1-100(-)", sequence)])
+    res = {"ok": True, "runType": "coordinate", "fasta": fasta, "organism": "Homo sapiens",
            "assemblyName": "GRCh38.p14", "displayLocus": "chr13:1-100",
            "regions": [{"chrAccession": "NC_000013.11", "start": 1, "stop": 100, "strand": 2, "chromLabel": "chr13"}],
-           "source": {"displayLocus": "chr13:1-100", "accession": "NC_000013.11", "runType": "coordinate"}}
+           "source": raw_source, "sourceContext": source_context}
     win._on_fetch(res)
     assert "chr13" in win.coordMeta.text() and win.accMeta.text() == ""
-    assert win.state["source"].get("displayLocus") == "chr13:1-100"
+    assert win.state["source"] == source_context and "displayLocus" not in win.state["source"]
+    assert win.state["coord_region"]["_record_id"] == "NC_000013.11:1-100"
+    assert win._bound_coord_region({"id": "NC_000013.11:1-100", "seq": sequence}) == {}  # minus-strand is fail closed
+    win._set_seq(">new\nACGT")
+    assert win.state["coord_region"] is None
+
+
+def test_plus_coordinate_binding_requires_exact_record_hash_and_source(win):
+    from teagle_core import provenance
+    accession, sequence = "NC_000001.11", "ACGTACGT"
+    record_id = f"{accession}:5-12"
+    raw_source = {
+        "accession": accession, "assemblyAccession": "GCF_000001405.40", "taxid": "9606",
+        "regions": [{"chrAccession": accession, "start": 5, "stop": 12, "strand": 1}],
+        "coordSystem": "1-based-inclusive", "retrievalType": "coordinate",
+        "source": "NCBI E-utilities (efetch seq_start/seq_stop)",
+        "endpoint": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
+        "retrievedUtc": "2026-08-21T00:00:00+00:00",
+    }
+    source_context = provenance.normalize_source_context(raw_source, [(record_id, sequence)])
+    res = {"ok": True, "runType": "coordinate", "fasta": f">{record_id}\n{sequence}\n", "organism": "test",
+           "assemblyName": "asm", "regions": [{"chrAccession": accession, "start": 5, "stop": 12,
+                                                  "strand": 1, "chromLabel": "chr1"}],
+           "source": raw_source, "sourceContext": source_context}
+    win._on_fetch(res)
+    rec = {"id": record_id, "identitySource": "validated_fetch", "seq": sequence}
+    assert win._bound_coord_region(rec)["start"] == 5
+    assert win._bound_coord_region({**rec, "seq": "ACGTACGA"}) == {}
+    assert win._bound_coord_region({**rec, "id": "other"}) == {}
+    win.state["source"] = {**win.state["source"], "accession": "OTHER"}
+    assert win._bound_coord_region(rec) == {}
 
 
 def test_coord_custom_organism_path(win):
@@ -233,8 +287,10 @@ def test_analyze_to_pcr_workflow(win):
     win._run_pcr()
     assert _spin(lambda: finished["v"], 40), "in-silico PCR did not complete"
     assert len(win.state["lastPcr"]["lanes"]) == len(cands)
-    # #11 happy path: a panel-01 design->stage->PCR must still call the intended amplicon on-target
-    assert any(a.get("on_target") for a in win.state["lastPcr"]["amplicons"]), "template-tagged pair lost its on-target call"
+    # A general design has an intended endpoint pair but no Primer3 target, so target status is explicitly unassessed.
+    assert any(a.get("matches_intended_product") is True for a in win.state["lastPcr"]["amplicons"])
+    assert all(a.get("on_target") is None for a in win.state["lastPcr"]["amplicons"]
+               if not a.get("single_primer"))
     assert win.card_prov.bodylay.count() >= 1        # provenance rendered
 
 
@@ -244,6 +300,262 @@ def test_staleness_guard_blocks_stale_primer(win):
     assert _spin(lambda: win.state.get("analyzed_clean"))
     win.seq.setPlainText("ACGTACGTACGTACGTACGTACGTACGTACGT")   # change sequence after analysis
     assert win._stale_block() is True                          # design must be blocked
+    assert win.state.get("analysis") is None
+    assert win.state.get("prov_manifest") is None
+
+
+def test_analysis_callback_generation_drops_out_of_order_result(win):
+    import engine
+    submitted = []
+    win.engine.submit = lambda op, body=None, key=None: submitted.append((op, body, key))
+    win.seq.setPlainText(">old\n" + "ACGT" * 20)
+    win._run_analysis()
+    old_key = submitted[-1][2]
+    win.seq.setPlainText(">new\n" + "TGCA" * 20)
+    win._run_analysis()
+    new_key = submitted[-1][2]
+    win._on_done(old_key, engine.run_analyze({"sequence": ">old\n" + "ACGT" * 20}))
+    assert win.state.get("analysis") is None and win.state.get("prov_manifest") is None
+    win._on_done(new_key, engine.run_analyze({"sequence": ">new\n" + "TGCA" * 20}))
+    from teagle_core.gff3 import public_record_id
+    assert win.state["analysis"]["records"][0]["id"] == public_record_id("new")
+    assert win.state["prov_manifest"]["runType"] == "analysis"
+
+
+def test_stale_analysis_failure_cannot_clear_newer_success(win):
+    import engine
+    submitted = []
+    win.engine.submit = lambda op, body=None, key=None: submitted.append((op, body, key))
+    win.seq.setPlainText(">old\n" + "ACGT" * 20); win._run_analysis()
+    old_key = submitted[-1][2]
+    win.seq.setPlainText(">new\n" + "TGCA" * 20); win._run_analysis()
+    new_key = submitted[-1][2]
+    win._on_done(new_key, engine.run_analyze({"sequence": ">new\n" + "TGCA" * 20}))
+    seal = win.state["prov_manifest"]["manifestSha256"]
+    win._on_user_error(old_key, "old request failed")
+    assert win.state["prov_manifest"]["manifestSha256"] == seal
+    assert win.state["analysis_state"] == "current"
+
+
+def test_new_analysis_and_failure_clear_prior_primer_manifest(win):
+    win.state["prov_manifest"] = {"runType": "primer", "manifestSha256": "f" * 64}
+    win.state["prov_manifest_all"] = [win.state["prov_manifest"]]
+    submitted = []
+    win.engine.submit = lambda op, body=None, key=None: submitted.append((op, body, key))
+    win.seq.setPlainText(">x\n" + "ACGT" * 20)
+    win._run_analysis()
+    assert win.state.get("prov_manifest") is None
+    win._on_user_error(submitted[-1][2], "bad input")
+    assert win.state.get("analysis") is None and win.state.get("prov_manifest_all") is None
+
+
+def test_analysis_result_json_export_is_current_and_bound(win, tmp_path, monkeypatch):
+    import engine, main
+    result = engine.run_analyze({"sequence": ">one\n" + "ACGT" * 20 + "\n>two\n" + "TGCA" * 20})
+    _accept_analysis(win, result)
+    out = str(tmp_path / "analysis.json")
+    proposed = []
+    monkeypatch.setattr(main.QFileDialog, "getSaveFileName",
+                        staticmethod(lambda *a, **k: (proposed.append(a[2]) or out, "")))
+    win._export_analysis_result()
+    assert proposed == ["TEagle_multiple_records_analysis.json"]
+    payload = json.loads(open(out, encoding="utf-8").read())
+    assert engine.validate_analysis_result_document(payload)
+    from teagle_core.gff3 import public_record_id
+    assert [r["id"] for r in payload["records"]] == [public_record_id("one"), public_record_id("two")]
+
+
+def test_manifest_export_reverifies_every_batch_seal_at_click_time(win, tmp_path, monkeypatch):
+    import copy, engine, main
+
+    result = engine.run_analyze({"sequence": ">one\n" + "ACGT" * 20})
+    _accept_analysis(win, result)
+    valid = copy.deepcopy(result["provenance"])
+    win.state["prov_manifest_all"] = [valid, copy.deepcopy(valid)]
+    out = tmp_path / "manifests.json"
+    monkeypatch.setattr(main.QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(out), "")))
+    win._export_manifest()
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert len(payload["runs"]) == 2
+
+    original = out.read_bytes()
+    win.state["prov_manifest_all"][1]["parameters"]["orf_min_aa"] += 1
+    monkeypatch.setattr(win, "_banner", lambda *a, **k: None)
+    win._export_manifest()
+    assert out.read_bytes() == original
+    assert not (tmp_path / "manifests.json.part").exists()
+
+
+@pytest.mark.parametrize("mutation", ["fake_seal", "excluded_nan"])
+def test_landscape_manifest_serializer_preserves_destination_on_click_time_failure(
+        win, tmp_path, monkeypatch, mutation):
+    import copy, engine, main
+
+    manifest = copy.deepcopy(engine.run_analyze({"sequence": ">one\n" + "ACGT" * 20})["provenance"])
+    if mutation == "fake_seal":
+        manifest["manifestSha256"] = "0" * 64
+    else:
+        manifest.setdefault("environment", {})["invalid"] = float("nan")
+    out = tmp_path / "landscape.json"
+    out.write_text("preserve\n", encoding="utf-8")
+    monkeypatch.setattr(main.QFileDialog, "getSaveFileName",
+                        staticmethod(lambda *a, **k: (str(out), "")))
+    monkeypatch.setattr(win, "_banner", lambda *a, **k: None)
+    win._export_manifest_payload([manifest], "TEagle_TE_landscape_safe_manifest")
+    assert out.read_text(encoding="utf-8") == "preserve\n"
+    assert not (tmp_path / "landscape.json.part").exists()
+
+
+def test_analysis_result_export_reverifies_payload_at_click_time(win, tmp_path, monkeypatch):
+    import engine, main
+
+    result = engine.run_analyze({"sequence": ">one\n" + "ACGT" * 20})
+    _accept_analysis(win, result)
+    out = tmp_path / "analysis.json"
+    out.write_text("validated existing result\n", encoding="utf-8")
+    monkeypatch.setattr(main.QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(out), "")))
+    monkeypatch.setattr(win, "_banner", lambda *a, **k: None)
+    win.state["analysis"]["records"][0]["composition"]["gc"] = 99.0
+    win._export_analysis_result()
+    assert out.read_text(encoding="utf-8") == "validated existing result\n"
+    assert not (tmp_path / "analysis.json.part").exists()
+
+
+def test_analysis_callback_rejects_tampered_provenance_binding(win):
+    import engine
+    result = engine.run_analyze({"sequence": ">x\n" + "ACGT" * 20})
+    result["provenance"]["parameters"]["orf_min_aa"] += 1
+    _accept_analysis(win, result)
+    assert win.state.get("analysis") is None
+    assert win.state.get("prov_manifest") is None
+
+
+def test_untracked_legacy_analysis_callbacks_fail_closed(win):
+    import engine
+    result = engine.run_analyze({"sequence": ">x\n" + "ACGT" * 20})
+    win._on_done("analyze", result)
+    assert win.state.get("analysis") is None
+    win._on_analyze(result)
+    assert win.state.get("analysis") is None
+
+
+@pytest.mark.parametrize("trigger", ["input_edit", "new_request", "failure", "cancel"])
+def test_stale_rendered_exports_cannot_open_after_invalidation(win, monkeypatch, trigger):
+    import engine, main
+    from PySide6.QtCore import QEvent, QPoint, Qt
+    from PySide6.QtWidgets import QPushButton
+    from widgets import DataTable
+    sequence = ">x\n" + "ACGT" * 30
+    _accept_analysis(win, engine.run_analyze({"sequence": sequence}), sequence)
+    downstream = (win.primBody, win.pcrBody, win.wslBody, win.spliceBody, win.genomeBody)
+    helper_controls = []
+    for index, layout in enumerate(downstream):
+        table = DataTable(["Value"]); table.set_rows([[index]])
+        button = main._export_table_btn(table, f"stale_{index}", win)
+        layout.addWidget(table); layout.addWidget(button)
+        helper_controls.append((table, button))
+    roots = (win.card_struct, win.card_prov) + tuple(layout.parentWidget() for layout in downstream)
+    stale_buttons = list(dict.fromkeys(b for root in roots
+                     for b in root.findChildren(QPushButton)
+                     if "EXPORT" in b.text().upper() or b.text().upper() in {"SVG", "PNG", "PDF"}))
+    stale_tables = list(dict.fromkeys(t for root in roots for t in root.findChildren(DataTable)))
+    assert all(button in stale_buttons and table in stale_tables for table, button in helper_controls)
+    assert {"SVG", "PNG"}.issubset({button.text().upper() for button in stale_buttons})
+    dialogs = []
+    monkeypatch.setattr(main.QFileDialog, "getSaveFileName",
+                        staticmethod(lambda *a, **k: (dialogs.append(a) or ("", ""))))
+    monkeypatch.setattr(main.widgets, "pick_table_format", lambda *a, **k: (dialogs.append(a) or None))
+    monkeypatch.setattr(win, "_export_annotation", lambda *a, **k: dialogs.append(a))
+    submitted = []
+    win.engine.submit = lambda op, body=None, key=None: submitted.append((op, body, key))
+    if trigger == "input_edit":
+        win.seq.setPlainText(">edited\n" + "TGCA" * 30)
+    else:
+        win._run_analysis()
+        if trigger == "failure":
+            win._on_user_error(submitted[-1][2], "failed")
+        elif trigger == "cancel":
+            win.seq.setPlainText(">cancelled\n" + "TGCA" * 30)
+    for button in stale_buttons:
+        assert not button.isEnabled()
+        button.click()
+    for table in stale_tables:
+        assert not table.isEnabled()
+        assert table.contextMenuPolicy() == Qt.NoContextMenu
+        table.customContextMenuRequested.emit(QPoint(0, 0))
+    assert dialogs == []
+    QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+    for button in stale_buttons:
+        try:
+            button.click()
+        except RuntimeError:
+            pass
+    assert dialogs == []
+    assert win.state.get("analysis") is None and win.state.get("prov_manifest") is None
+    assert not win.card_struct.findChildren(DataTable)
+    assert not [b for card in (win.card_struct, win.card_prov)
+                for b in card.findChildren(QPushButton)
+                if "EXPORT" in b.text().upper() or b.text().upper() in {"SVG", "PNG", "PDF"}]
+
+
+def test_accession_fetch_preserves_bounded_source_metadata(win):
+    accession = "M11240.1"
+    win._on_fetch({"ok": True, "fasta": f">{accession}\nACGT", "accession": accession, "organism": "test",
+                   "taxid": "9", "source": "NCBI nuccore",
+                   "endpoint": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
+                   "retrievedUtc": "2026-08-21T00:00:00+00:00",
+                   "sourceUrl": f"https://www.ncbi.nlm.nih.gov/nuccore/{accession}", "length": 4})
+    assert {k: win.state["source"][k] for k in
+            ("sourceContextVersion", "inputType", "accession", "taxid", "source", "endpoint", "retrievedUtc")} == {
+        "sourceContextVersion": "1.0", "inputType": "fetched_accession", "accession": accession,
+        "taxid": "9", "source": "ncbi_nuccore", "endpoint": "ncbi_efetch",
+        "retrievedUtc": "2026-08-21T00:00:00+00:00"}
+    assert win.state["source"]["records"] == [{"id": accession, "length": 4,
+                                                  "sha256": hashlib.sha256(b"ACGT").hexdigest()}]
+
+
+def test_native_operation_input_serializes_exact_selected_fetch_binding(win):
+    from teagle_core import provenance
+
+    accession = "M11240.1"
+    sequence = "ACGT" * 10
+    raw = {"accession": accession, "taxid": "7227", "source": "NCBI nuccore",
+           "endpoint": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
+           "retrievedUtc": "2026-08-21T00:00:00+00:00",
+           "sourceUrl": f"https://www.ncbi.nlm.nih.gov/nuccore/{accession}", "length": len(sequence)}
+    source = provenance.normalize_source_context(raw, [(accession, sequence)])
+    win.state.update(seq=sequence, source=source, last_rec={"id": accession})
+    operation_sequence, operation_source = win._operation_input()
+    assert operation_sequence == f">{accession}\n{sequence}"
+    assert provenance.validate_source_context(
+        json.loads(json.dumps(operation_source)), [(accession, sequence)]) == operation_source
+
+
+def test_native_operation_input_narrows_coordinate_wire_to_selected_region(win):
+    from teagle_core import provenance
+
+    sequences = ["ACGT", "TGCA"]
+    raw = {
+        "accession": "NC_000001.11", "assemblyAccession": "GCF_000001405.40", "taxid": "9606",
+        "regions": [
+            {"chrAccession": "NC_000001.11", "start": 1, "stop": 4, "strand": 1},
+            {"chrAccession": "NC_000002.12", "start": 9, "stop": 12, "strand": 2},
+        ],
+        "coordSystem": "1-based-inclusive", "retrievalType": "coordinate",
+        "source": "NCBI E-utilities (efetch seq_start/seq_stop)",
+        "endpoint": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
+        "retrievedUtc": "2026-08-21T00:00:00+00:00",
+    }
+    records = [("NC_000001.11:1-4", sequences[0]), ("NC_000002.12:9-12(-)", sequences[1])]
+    source = provenance.normalize_source_context(raw, records)
+    selected_id = "NC_000002.12:9-12"
+    win.state.update(seq=sequences[1], source=source, last_rec={"id": selected_id})
+    operation_sequence, operation_source = win._operation_input()
+    assert operation_sequence == f">{selected_id}\n{sequences[1]}"
+    assert operation_source["records"] == [source["records"][1]]
+    assert operation_source["regions"] == [source["regions"][1]]
+    assert operation_source["accession"] == "NC_000002.12"
+    assert provenance.validate_source_context(operation_source, [(selected_id, sequences[1])]) == operation_source
 
 
 def test_multi_record_analysis_does_not_false_trigger_stale_guard(win):
@@ -262,6 +574,321 @@ def test_multi_record_analysis_does_not_false_trigger_stale_guard(win):
     assert win.designBtn.isEnabled()
     # downstream design must now target the SELECTED record's own sequence (the original CRITICAL)
     assert win.state["seq"] == win.state["records"][1]["seq"]
+
+
+def test_single_record_gets_common_summary_and_full_record_fasta_surface(win):
+    import engine, main
+    from widgets import DataTable
+    from PySide6.QtWidgets import QPushButton
+
+    result = engine.run_analyze({"sequence": ">single specimen\n" + "ACGT" * 30})
+    _accept_analysis(win, result)
+    summary = next(table for table in win.card_struct.findChildren(DataTable)
+                   if table.export_base.endswith("_summary"))
+    assert summary.export_base == f"TEagle_{main._record_export_stem(result['records'][0])}_summary"
+    assert summary.rowCount() == 1
+    assert summary._headers[-1] == "Processing"
+    processing = summary.rows_data()[0][-1]
+    assert all(f"{stage}=" in processing for stage in engine.ANALYSIS_STAGE_NAMES)
+    labels = {button.text().upper() for button in win.card_struct.findChildren(QPushButton)}
+    assert "EXPORT FULL RECORDS (FASTA)" in labels and "EXPORT TABLE" in labels
+
+
+def test_rewritten_record_filename_uses_full_digest_not_collision_prone_prefix():
+    import main
+    from teagle_core.gff3 import public_record_identity
+
+    first = public_record_identity("patient_042")
+    second = {"id": first["id"], "idSha256": first["idSha256"][:12] + "f" * 52,
+              "identitySource": "local_input"}
+    assert main._record_export_stem({**first, "identitySource": "local_input"}) == f"record_{first['idSha256']}"
+    assert main._record_export_stem(second) != main._record_export_stem(
+        {**first, "identitySource": "local_input"})
+
+
+def test_fasta_rejects_resealed_compact_full_digest_mismatch():
+    import main
+    from teagle_core.gff3 import public_record_identity
+
+    identity = public_record_identity("patient_042")
+    with pytest.raises(ValueError, match="does not match"):
+        main._fasta_text([(identity["id"], "ACGT", "", "0" * 64)], identifiers_are_public=True)
+
+
+def test_bulk_fasta_builders_preserve_feature_sequence_and_strand():
+    import main
+    rec = {
+        "id": "locus one",
+        "seq": "AAACCCGGGTTT",
+        "orfs": [{"start": 0, "end": 6, "strand": "+", "frame": 1},
+                 {"start": 6, "end": 12, "strand": "-", "frame": 2}],
+        "domains": [{"domain": "RT", "nt": [1, 10], "strand": "+", "pfam": "PF00078",
+                     "protein": "MPEPTIDE"}],
+    }
+    orfs = main._orfs_fasta(rec)
+    from teagle_core.gff3 import public_record_id
+    rid = public_record_id(rec["id"])
+    from teagle_core.gff3 import _identity_sha256
+    digest = _identity_sha256(rec["id"])
+    assert f">{rid}_ORF_1 coords=0-6 strand=+ frame=1 record_sha256={digest}\nAAACCC" in orfs
+    assert f">{rid}_ORF_2 coords=6-12 strand=- frame=2 record_sha256={digest}\nAAACCC" in orfs
+    assert "MPEPTIDE" in main._domains_fasta(rec) and digest in main._domains_fasta(rec)
+    exons = main._splice_exons_fasta(
+        {"strand": "-", "exons": [{"start": 0, "end": 3}, {"start": 9, "end": 12}]},
+        rec["seq"], "splice")
+    splice_id = public_record_id("splice")
+    splice_digest = _identity_sha256("splice")
+    assert f">{splice_id}_exon_1 coords=0-3 strand=- record_sha256={splice_digest}\nTTT" in exons
+    assert f">{splice_id}_exon_2 coords=9-12 strand=- record_sha256={splice_digest}\nAAA" in exons
+
+
+@pytest.mark.parametrize("record_id", [
+    r"C:\Users\person\private\sample.fa",
+    "/home/person/private/sample.fa",
+    "../../private/sample.fa",
+    "patient_042",
+    "donor-A1",
+    "sample_tuna_birgun",
+    "descriptive specimen",
+])
+def test_native_summary_and_sequence_exports_never_repeat_local_record_ids(win, record_id):
+    import engine, main
+    from teagle_core.gff3 import public_record_id
+
+    result = engine.run_analyze({"sequence": f">{record_id}\n" + "ACGT" * 30})
+    public_id = public_record_id(record_id)
+    assert result["records"][0]["id"] == public_id
+    summary = win._record_summary_rows(result["records"])
+    assert summary[0][1] == public_id and record_id not in repr(summary)
+    rec = {"id": record_id, "seq": "ATG" + "AAA" * 45 + "TAA",
+           "orfs": [{"start": 0, "end": 141, "strand": "+", "frame": 1}],
+           "domains": [{"domain": "RT", "protein": "MPEPTIDE", "nt": [0, 24], "strand": "+"}]}
+    outputs = [main._fasta_text([(record_id, "ACGT", "full record")]),
+               main._fasta_text([(public_id, "ACGT", "full record",
+                                  result["records"][0]["idSha256"])]),
+               main._orfs_fasta(rec), main._domains_fasta(rec),
+               main._splice_exons_fasta({"strand": "+", "exons": [{"start": 0, "end": 4}]},
+                                         "ACGT", record_id)]
+    for output in outputs:
+        assert record_id not in output and public_id in output
+        assert result["records"][0]["idSha256"] in output
+
+
+def test_native_summary_and_fasta_preserve_public_accession(win):
+    import engine, main
+    from teagle_core import provenance
+
+    sequence = "ACGT" * 30
+    raw_source = {"accession": "M11240.1", "source": "NCBI nuccore",
+        "endpoint": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
+        "retrievedUtc": "2026-08-21T00:00:00+00:00",
+        "sourceUrl": "https://www.ncbi.nlm.nih.gov/nuccore/M11240.1", "length": len(sequence)}
+    source = provenance.normalize_source_context(raw_source, [("M11240.1", sequence)])
+    result = engine.run_analyze({"sequence": ">M11240.1\n" + sequence, "source": source})
+    assert win._record_summary_rows(result["records"])[0][1] == "M11240.1"
+    fasta = main._full_records_fasta(result["records"])
+    assert fasta.startswith(">M11240.1 ") and "record_sha256=" not in fasta
+
+
+def test_native_pcr_and_genome_scan_tables_use_public_sources(win):
+    from teagle_core.gff3 import public_record_id
+    from widgets import DataTable
+
+    raw = r"C:\Users\person\private\template.fa"
+    public_id = public_record_id(raw)
+    amp = {"pair": "P1", "mechanism_key": "F+R", "source": raw, "start": 1, "end": 181,
+           "length": 180, "product_length": 180, "fwd_mm": 0, "rev_mm": 0, "on_target": True,
+           "matches_intended_product": True, "seq": "A" * 180}
+    win._render_pcr([{"label": "P1", "amplicons": [amp], "has_locus": True}], [amp],
+                    [{"pair": "P1", "status": "complete", "error": None}])
+    pcr_table = next(table for table in win.pcrBody.parentWidget().findChildren(DataTable)
+                     if table.export_base == "TEagle_amplicons")
+    assert pcr_table.rows_data()[0][2] == public_id
+    win._render_genome_scan([{"label": "genome", "amplicons": [amp], "has_locus": True}], [amp],
+                            {"verdict": "fixture", "has_locus": True, "n_on": 1, "n_off": 0,
+                             "n_single": 0, "n_pair": 1, "per_source": []})
+    scan_table = next(table for table in win.genomeBody.parentWidget().findChildren(DataTable)
+                      if table.export_base == "TEagle_offtarget_scan")
+    assert scan_table.rows_data()[0][1] == public_id
+    assert raw not in repr(pcr_table.rows_data()) + repr(scan_table.rows_data())
+
+
+def test_no_te_repeat_exports_use_the_two_exact_displayed_tables(win, monkeypatch):
+    import main
+    from widgets import DataTable
+    from PySide6.QtWidgets import QPushButton
+
+    hits = [
+        {"class_family": "Simple_repeat", "family": "(AT)n", "q_start": 2, "q_end": 20,
+         "strand": "+", "divergence": 1.0, "score": 40},
+        {"class_family": "Unknown", "family": "Mystery", "q_start": 30, "q_end": 60,
+         "strand": "-", "divergence": 4.0, "score": 55},
+    ]
+    win._render_family({"hits": hits, "species": "test"})
+    root = win.wslBody.parentWidget()
+    tables = root.findChildren(DataTable)
+    assert len(tables) == 2
+    assert {table.export_base for table in tables} == {"TEagle_non_TE_repeats", "TEagle_unclassified_repeats"}
+    assert all(table.rowCount() == 1 and table.export_notes for table in tables)
+    captured = []
+    monkeypatch.setattr(main.widgets, "pick_table_format", lambda *a, **k: "csv")
+    monkeypatch.setattr(main.widgets, "export_table",
+                        lambda h, r, b, p, fmt=None, notes=None: captured.append((h, r, b, notes)))
+    buttons = [button for button in root.findChildren(QPushButton) if button.text().upper() == "EXPORT TABLE"]
+    assert len(buttons) == 2
+    for button in buttons:
+        button.click()
+    expected = {(table.export_base, tuple(tuple(row) for row in table.rows_data()), tuple(table.export_notes))
+                for table in tables}
+    observed = {(base, tuple(tuple(row) for row in rows), tuple(notes))
+                for _headers, rows, base, notes in captured}
+    assert observed == expected
+
+
+def test_mixed_te_repeat_result_renders_and_exports_all_three_exact_partitions(win, monkeypatch):
+    import main
+    from widgets import DataTable
+    from PySide6.QtWidgets import QPushButton
+
+    hits = [
+        {"class_family": "LTR/Gypsy", "family": "Gypsy", "q_start": 0, "q_end": 100,
+         "strand": "+", "divergence": 2.0, "score": 120},
+        {"class_family": "Simple_repeat", "family": "(AT)n", "q_start": 110, "q_end": 130,
+         "strand": "+", "divergence": 1.0, "score": 40},
+        {"class_family": "Unknown", "family": "Mystery", "q_start": 140, "q_end": 160,
+         "strand": "-", "divergence": 4.0, "score": 55},
+    ]
+    win._render_family({"hits": hits, "species": "test", "repeatmasker_version": "4.2",
+                        "include_uncurated": False})
+    root = win.wslBody.parentWidget()
+    tables = root.findChildren(DataTable)
+    assert {table.export_base for table in tables} == {
+        "TEagle_family", "TEagle_non_TE_repeats", "TEagle_unclassified_repeats"}
+    assert all(table.rowCount() == 1 and table.export_notes for table in tables)
+    captured = []
+    monkeypatch.setattr(main.widgets, "pick_table_format", lambda *a, **k: "tsv")
+    monkeypatch.setattr(main.widgets, "export_table",
+                        lambda h, r, b, p, fmt=None, notes=None: captured.append((r, b, notes)))
+    for button in root.findChildren(QPushButton):
+        if button.text().upper() == "EXPORT TABLE":
+            button.click()
+    assert {(base, tuple(tuple(row) for row in rows), tuple(notes)) for rows, base, notes in captured} == {
+        (table.export_base, tuple(tuple(row) for row in table.rows_data()), tuple(table.export_notes))
+        for table in tables}
+
+
+def test_orf_and_splice_tables_have_visible_exact_export_surfaces(win):
+    import engine
+    from widgets import DataTable
+    from PySide6.QtWidgets import QPushButton
+
+    seq = ">orf\nATG" + "AAA" * 45 + "TAA"
+    _accept_analysis(win, engine.run_analyze({"sequence": seq}), seq)
+    orf_table = next(table for table in win.card_struct.findChildren(DataTable)
+                     if table.export_base == "TEagle_ORFs")
+    assert orf_table.rowCount() >= 1
+    assert any(button.text().upper() == "EXPORT ORFS (DNA FASTA)"
+               for button in win.card_struct.findChildren(QPushButton))
+
+    win.state["splice_seq"] = "AAAGT" + "C" * 15 + "AGTTT"
+    win.state["last_rec"] = {"id": "splice_record"}
+    win._render_splice({"counts": {"exons": 2, "introns": 1}, "canonical_introns": 1, "strand": "+",
+                        "exons": [{"start": 0, "end": 3}, {"start": 22, "end": 25}],
+                        "introns": [{"start": 3, "end": 22, "donor": "GT", "acceptor": "AG", "canonical": True}]})
+    splice_root = win.spliceBody.parentWidget()
+    introns = next(table for table in splice_root.findChildren(DataTable)
+                   if table.export_base == "TEagle_splice_introns")
+    assert introns.rowCount() == 1 and introns.export_notes
+    labels = {button.text().upper() for button in splice_root.findChildren(QPushButton)}
+    assert {"EXPORT TABLE", "EXPORT SPLICE EXONS (FASTA)", "EXPORT SPLICE MODEL ▾"}.issubset(labels)
+
+
+@pytest.mark.parametrize("extension,marker", [
+    ("gff3", "##gff-version 3"), ("bed", "\texon_1|"), ("fasta", ".exon1")])
+def test_native_gene_model_export_routes_shared_coordinate_writer(win, monkeypatch, tmp_path,
+                                                                   extension, marker):
+    import main
+
+    out = tmp_path / f"model.{extension}"
+    monkeypatch.setattr(main.QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(out), "")))
+    model = {"exons": [{"start": 0, "end": 6, "strand": "+"}],
+             "introns": [{"start": 6, "end": 9, "strand": "+", "donor": "GT", "acceptor": "AG"}],
+             "cds": [{"start": 0, "end": 6, "strand": "+", "phase": 0}]}
+    win._export_gene_model(model, "ACGTACGTA", "safe", "fetched_gene_model", extension)
+    assert marker in out.read_text(encoding="utf-8")
+
+
+def test_native_gene_model_missing_cds_phase_refuses_only_gff3_and_preserves_destination(
+        win, monkeypatch, tmp_path):
+    import main
+
+    model = {"exons": [{"start": 0, "end": 6, "strand": "+"}],
+             "introns": [], "cds": [{"start": 0, "end": 6, "strand": "+"}]}
+    gff = tmp_path / "model.gff3"
+    gff.write_text("preserve", encoding="utf-8")
+    monkeypatch.setattr(main.QFileDialog, "getSaveFileName",
+                        staticmethod(lambda *a, **k: (str(gff), "")))
+    win._export_gene_model(model, "ACGTAC", "safe", "fetched_gene_model", "gff3")
+    assert gff.read_text(encoding="utf-8") == "preserve"
+
+    for extension in ("bed", "fasta"):
+        out = tmp_path / f"model.{extension}"
+        monkeypatch.setattr(main.QFileDialog, "getSaveFileName",
+                            staticmethod(lambda *a, _out=out, **k: (str(_out), "")))
+        win._export_gene_model(model, "ACGTAC", "safe", "fetched_gene_model", extension)
+        assert out.exists() and out.stat().st_size > 0
+
+
+def test_native_gene_model_validation_failure_preserves_existing_file(win, monkeypatch, tmp_path):
+    import main
+
+    out = tmp_path / "model.gff3"
+    out.write_text("validated existing model\n", encoding="utf-8")
+    monkeypatch.setattr(main.QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(out), "")))
+    messages = []
+    monkeypatch.setattr(win, "_banner", lambda message, level="error": messages.append((message, level)))
+    win._export_gene_model({"exons": [{"start": 0, "end": 99}], "introns": [], "cds": []},
+                           "ACGT", "safe", "fetched_gene_model", "gff3")
+    assert out.read_text(encoding="utf-8") == "validated existing model\n"
+    assert not (tmp_path / "model.gff3.part").exists()
+    assert messages and messages[-1][1] == "warn"
+
+
+def test_fetched_gene_model_has_visible_shared_export_hook(win):
+    import engine
+    from PySide6.QtWidgets import QPushButton
+
+    sequence = ">record\nATG" + "AAA" * 45 + "TAA"
+    result = engine.run_analyze({"sequence": sequence})
+    win.state["features"] = {"exons": [{"start": 0, "end": 30}], "introns": [],
+                             "cds": [{"start": 0, "end": 30}]}
+    _accept_analysis(win, result, sequence)
+    assert any(button.text().upper() == "EXPORT GENE MODEL ▾"
+               for button in win.card_struct.findChildren(QPushButton))
+
+
+def test_secondary_structure_detail_has_visible_table_export(win, monkeypatch):
+    from PySide6.QtWidgets import QApplication, QDialog, QPushButton
+    from widgets import DataTable
+
+    metric = {"p3": -2.5, "vrna": -2.0, "flag": "caution", "agree": "agree"}
+    candidate = {
+        "id": "P1", "left_seq": "ACGTACGTACGT", "right_seq": "TGCATGCATGCA",
+        "qc": {"ok": True, "left": {"hairpin": metric, "self_dimer": metric},
+               "right": {"hairpin": metric, "self_dimer": metric},
+               "hetero_dimer": metric, "end_stability": metric,
+               "conditions": {"temp_c": 37, "mv_conc": 50, "dv_conc": 1.5, "dna_conc": 250},
+               "engines": {"primer3": "x", "viennarna": "y"}},
+    }
+    monkeypatch.setattr(QDialog, "exec", lambda self: 0)
+    win._structure_detail(candidate)
+    dialog = next(widget for widget in QApplication.topLevelWidgets()
+                  if isinstance(widget, QDialog) and widget.windowTitle().startswith("Secondary structure"))
+    table = dialog.findChild(DataTable)
+    assert table.export_base == "TEagle_P1_secondary_structure"
+    assert table.rowCount() == 6 and table.export_notes
+    assert any(button.text().upper() == "EXPORT TABLE" for button in dialog.findChildren(QPushButton))
+    dialog.close()
 
 
 # ---------- specimen-identity / stale-state provenance integrity (Loop-1 fixes) ----------
@@ -296,8 +923,8 @@ def test_re_render_struct_card_no_duplicate_headers(win):
     seq = fixture_seq("M11240"); win.state["seq"] = seq; win.state["analyzed_seq"] = seq
     def n_headers():
         return sum(1 for w in win.card_struct.findChildren(QLabel) if w.text() == "STRUCTURAL EVIDENCE")
-    win._on_analyze(engine.run_analyze({"sequence": seq})); a = n_headers()
-    win._on_analyze(engine.run_analyze({"sequence": seq})); b = n_headers()
+    _accept_analysis(win, engine.run_analyze({"sequence": seq}), seq); a = n_headers()
+    _accept_analysis(win, engine.run_analyze({"sequence": seq}), seq); b = n_headers()
     assert a == 1 and b == 1                                  # exactly one header, not accumulating across runs
 
 
@@ -316,6 +943,9 @@ def test_genome_scan_renders_in_its_own_panel(win):
 
 
 def test_on_genome_pcr_renders_sealed_advisory(win):
+    from PySide6.QtWidgets import QLabel
+    from widgets import DataTable
+
     win._genome_inflight = True
     win._on_genome_pcr({"ok": True, "organism": "Saccharomyces cerevisiae", "assemblyName": "R64",
         "assemblyAccession": "GCF_000146045.2", "n_seqs": 17,
@@ -328,6 +958,15 @@ def test_on_genome_pcr_renders_sealed_advisory(win):
     lp = win.state["lastGenomeScan"]                          # genome scan now renders in its OWN panel, not the PCR card
     assert len(lp["amplicons"]) == 1 and lp["lanes"][0]["advisory"] is True
     assert win._genome_inflight is False
+    visible = " ".join(label.text() for label in win.genomeBody.parentWidget().findChildren(QLabel))
+    whole_card = " ".join(label.text() for label in win.card_genome.findChildren(QLabel))
+    scan_table = next(table for table in win.genomeBody.parentWidget().findChildren(DataTable)
+                      if table.export_base == "TEagle_offtarget_scan")
+    exported = " ".join(scan_table.export_notes)
+    assert "genomic priming site" in visible and "genomic priming site" in exported
+    assert "on-target first" not in visible and "on-target first" not in exported
+    assert "products are listed on-target first" not in whole_card.lower()
+    assert "with a design locus" in whole_card.lower()
 
 
 def test_genome_prepare_resumes_pending_scan(win):
@@ -569,17 +1208,148 @@ def test_set_seq_clears_prior_gene_model(win):
     assert win.state["features"] is None
 
 
-def test_pcr_omits_target_span_for_mismatched_template(win):
-    # a pair designed on a different template than the PCR sequence must NOT assert a (false) on-target
+def test_pcr_omits_all_design_geometry_for_mismatched_template(win):
+    # A pair designed on another template must not assert endpoint identity or target coverage.
     seq = ">x\n" + "ACGT" * 60
     win.state["seq"] = seq
     win.state["analyzed_clean"] = win._clean_seq(seq)          # pass the stale-gate
-    win.state["pcrPairs"] = [{"left_seq": "ACGTACGT", "right_seq": "TTTTGGGG",
-                              "left_pos": [0, 8], "right_pos": [30, 38], "_tmpl_sig": "SOME-OTHER-TEMPLATE"}]
+    win.state["pcrPairs"] = [{"left_seq": "ACGTACGTACGTACGTAC", "right_seq": "TTTTGGGGTTTTGGGGTT",
+                              "left_pos": [0, 18], "right_pos": [30, 48], "_tmpl_sig": "SOME-OTHER-TEMPLATE"}]
     bodies = []
     win.engine.submit = lambda op, body=None, key=None: bodies.append(body)
     win._run_pcr()
-    assert bodies and bodies[0]["target_span"] is None         # mismatched template -> no target_span (off-target only)
+    assert bodies
+    for field in ("primer3_target", "included_region", "intended_product_span", "design_provenance"):
+        assert bodies[0][field] is None
+    assert bodies[0]["design_assessment"] == "not_run"  # fixture has no sealed candidate ancestry
+
+
+def test_pcr_marks_sealed_candidate_geometry_withheld_on_template_mismatch(win):
+    seq = ">x\n" + "ACGT" * 60
+    win.state["seq"] = seq
+    win.state["analyzed_clean"] = win._clean_seq(seq)
+    win.state["pcrPairs"] = [{"left_seq": "ACGTACGTACGTACGTAC", "right_seq": "TTTTGGGGTTTTGGGGTT",
+                              "left_pos": [0, 18], "right_pos": [30, 48],
+                              "_tmpl_sig": "OTHER", "design_provenance": {"manifestSha256": "x"},
+                              "primer3_target": [10, 5], "included_region": [0, 40],
+                              "intended_product_span": [0, 48], "_design_sequence": ">design\n" + "TGCA" * 60}]
+    bodies = []
+    win.engine.submit = lambda op, body=None, key=None: bodies.append(body)
+    win._run_pcr()
+    assert bodies[0]["design_assessment"] == "withheld_template_mismatch"
+    assert bodies[0]["design_provenance"] == {"manifestSha256": "x"}
+    assert bodies[0]["intended_product_span"] == [0, 48]
+    assert bodies[0]["design_sequence"].startswith(">design")
+
+
+def test_domain_design_routes_domain_as_primer3_target(win):
+    seq = "ACGT" * 100
+    win.state["seq"] = seq
+    win.state["analyzed_clean"] = win._clean_seq(seq)
+    submitted = []
+    win.engine.submit = lambda op, body=None, key=None: submitted.append((op, body, key))
+    win._design_for_domain(80, 140, "reverse-transcriptase domain")
+    assert submitted and submitted[0][0] == "primers"
+    body = submitted[0][1]
+    assert body["primer3_target"] == [80, 60]
+    assert body["included_region"] == [0, len(seq)]
+
+
+def test_full_explicit_subsequence_routes_to_general_design_not_whole_template_target(win):
+    seq = "ACGT" * 100
+    submitted = []
+    win.engine.submit = lambda op, body=None, key=None: submitted.append((op, body, key))
+    win._design_for_domain(0, len(seq), "selected amplicon", seq=seq)
+    body = submitted[0][1]
+    assert body["primer3_target"] is None and body["included_region"] is None
+
+
+def test_invalid_primer_gui_value_fails_closed_and_clears_prior_candidates(win):
+    seq = "ACGT" * 100
+    win.state["seq"] = seq; win.seq.setPlainText(seq)
+    win.state["analyzed_clean"] = win._clean_seq(seq)
+    win.state["candidates"] = [{"id": "old"}]; win.state["lastPrimers"] = {"candidates": [{"id": "old"}]}
+    win.pcrStageAll.setEnabled(True)
+    win.pfields["pMin"].setText("not-a-number")
+    submitted = []
+    win.engine.submit = lambda *a, **k: submitted.append((a, k))
+    win._design()
+    assert not submitted and win.state["candidates"] == [] and win.state["lastPrimers"] is None
+    assert not win.pcrStageAll.isEnabled()
+
+
+def test_failed_primer_request_clears_candidates_and_stage_all(win):
+    win.state["candidates"] = [{"id": "old"}]; win.state["lastPrimers"] = {"candidates": [{"id": "old"}]}
+    win.pcrStageAll.setEnabled(True)
+    win._on_user_error("primers", "invalid primer parameters")
+    assert win.state["candidates"] == [] and win.state["lastPrimers"] is None
+    assert not win.pcrStageAll.isEnabled()
+
+
+def test_pcr_queue_keeps_same_oligos_with_distinct_sealed_intended_spans(win):
+    common = {"left_seq": "A" * 18, "right_seq": "T" * 18, "product_size": 100}
+    first = {**common, "intended_product_span": [10, 110],
+             "design_provenance": {"manifestSha256": "1" * 64}}
+    second = {**common, "intended_product_span": [20, 120],
+              "design_provenance": {"manifestSha256": "2" * 64}}
+    win._add_pcr_pair(first); win._add_pcr_pair(second)
+    assert len(win.state["pcrPairs"]) == 2
+
+
+@pytest.mark.parametrize("updates", [{"pcrTP": "2.9"}, {"pcrTP": "19"},
+                                      {"pcrMM": "-1"}, {"pcrMM": "19"},
+                                      {"pcrPmin": "500", "pcrPmax": "100"}])
+def test_invalid_pcr_gui_values_do_not_submit(win, updates):
+    seq = ">x\n" + "ACGT" * 80
+    win.state["seq"] = seq; win.seq.setPlainText(seq)
+    win.state["analyzed_clean"] = win._clean_seq(seq)
+    win.state["pcrPairs"] = [{"left_seq": "A" * 18, "right_seq": "T" * 18}]
+    for field, value in updates.items():
+        win.pfields[field].setText(value)
+    submitted = []
+    win.engine.submit = lambda *a, **k: submitted.append((a, k))
+    win._run_pcr()
+    assert not submitted
+
+
+def test_partial_and_failed_pcr_wording_cannot_claim_exhaustive_absence(win):
+    from PySide6.QtWidgets import QLabel
+    from widgets import DataTable
+    amp = {"pair": "P1", "source": "s", "start": 10, "end": 210, "length": 200,
+           "product_length": 200, "product_key": "s:10:210:200", "mechanism_key": "s:F+R:10:210:200",
+           "fwd_mm": 0, "rev_mm": 0, "single_primer": False,
+           "matches_intended_product": None, "covers_primer3_target": None, "on_target": None,
+           "seq": "A" * 200}
+    lane = {"label": "P1", "amplicons": [amp], "has_locus": False, "status": "partial_capped"}
+    win._render_pcr([lane], [amp], [{"pair": "P1", "status": "partial_capped", "error": None}])
+    text = " ".join(l.text() for l in win.pcrBody.parentWidget().findChildren(QLabel)).lower()
+    table_text = " ".join(t.item(r, c).text() for t in win.pcrBody.parentWidget().findChildren(DataTable)
+                          for r in range(t.rowCount()) for c in range(t.columnCount()) if t.item(r, c)).lower()
+    assert "lower bound" in text
+    for forbidden in ("no additional products", "no off-target", "exhaustive search complete"):
+        assert forbidden not in text and forbidden not in table_text
+    win._render_pcr([{"label": "P1", "amplicons": [], "has_locus": False,
+                      "status": "partial_capped"}], [],
+                    [{"pair": "P1", "status": "partial_capped", "error": None}])
+    capped_empty = " ".join(l.text() for l in win.pcrBody.parentWidget().findChildren(QLabel)).lower()
+    assert "capped search stopped" in capped_empty and "completed search recorded zero" not in capped_empty
+    win._render_pcr([{"label": "P1", "amplicons": [], "has_locus": False, "status": "failed"}], [],
+                    [{"pair": "P1", "status": "failed", "error": "failure"}])
+    failed_text = " ".join(l.text() for l in win.pcrBody.parentWidget().findChildren(QLabel)).lower()
+    assert "failed and was not assessed" in failed_text
+    assert "no additional products" not in failed_text and "no off-target" not in failed_text
+
+
+def test_local_amplicon_wording_distinguishes_unassessed_and_additional():
+    import main
+    assert main._amp_call({"single_primer": False, "matches_intended_product": True,
+                           "covers_primer3_target": None, "on_target": None}) == "intended product; target coverage unavailable"
+    assert main._amp_call({"single_primer": False, "matches_intended_product": True,
+                           "covers_primer3_target": False, "on_target": False}) == "intended product; target not covered"
+    assert main._amp_call({"single_primer": False, "matches_intended_product": False,
+                           "covers_primer3_target": True, "on_target": False}) == "additional; covers target"
+    assert main._amp_call({"single_primer": False, "matches_intended_product": False,
+                           "covers_primer3_target": False, "on_target": False}) == "additional product"
 
 
 def test_label_ink_accepts_3char_hex():
@@ -600,18 +1370,28 @@ def test_design_blocked_after_box_edit(win):
 
 def test_user_edit_drops_fetched_source(win):
     # after a fetch, editing the box means the specimen is no longer that accession -> source must clear
-    win._on_fetch({"ok": True, "accession": "M11240", "organism": "Drosophila melanogaster",
-                   "title": "copia", "length": 5146, "fasta": ">M11240.1\n" + "ACGT" * 30})
-    assert win.state["source"] and win.state["source"].get("accession") == "M11240"
+    accession, sequence = "M11240.1", "ACGT" * 30
+    win._on_fetch({"ok": True, "accession": accession, "organism": "Drosophila melanogaster",
+                   "title": "copia", "length": len(sequence), "fasta": f">{accession}\n{sequence}",
+                   "taxid": "7227", "source": "NCBI nuccore",
+                   "endpoint": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
+                   "retrievedUtc": "2026-08-21T00:00:00+00:00",
+                   "sourceUrl": f"https://www.ncbi.nlm.nih.gov/nuccore/{accession}"})
+    assert win.state["source"] and win.state["source"].get("accession") == accession
     win.seq.setPlainText("ACGTACGTACGTACGTACGTACGT")           # genuine user edit
     assert win.state["source"] is None and win.accMeta.text() == ""
 
 
 def test_programmatic_load_keeps_source(win):
     # the _loading guard: a fetch's own setPlainText must NOT null the source it is about to set
-    win._on_fetch({"ok": True, "accession": "X05424", "organism": "Nicotiana", "title": "t",
-                   "length": 100, "fasta": ">X05424.1\n" + "ACGT" * 25})
-    assert win.state["source"] and win.state["source"].get("accession") == "X05424"
+    accession, sequence = "X05424.1", "ACGT" * 25
+    win._on_fetch({"ok": True, "accession": accession, "organism": "Nicotiana", "title": "t",
+                   "length": len(sequence), "fasta": f">{accession}\n{sequence}", "taxid": "4097",
+                   "source": "NCBI nuccore",
+                   "endpoint": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
+                   "retrievedUtc": "2026-08-21T00:00:00+00:00",
+                   "sourceUrl": f"https://www.ncbi.nlm.nih.gov/nuccore/{accession}"})
+    assert win.state["source"] and win.state["source"].get("accession") == accession
 
 
 def test_seq_tracks_box_not_stale_after_refetch(win):
@@ -633,6 +1413,7 @@ def test_pcr_batch_renders_despite_a_failing_pair(win):
                               "rev_mm": 0, "on_target": True, "source": "s", "seq": "ACGT"}]})
     win._pcr_slot("pcr#6#1", {"error": "boom", "amplicons": []})              # failed pair
     assert win.state["lastPcr"] and len(win.state["lastPcr"]["lanes"]) == 2   # gel rendered, both lanes present
+    assert [s["status"] for s in win.state["lastPcr"]["statuses"]] == ["complete", "failed"]
     assert win.runPcrBtn.isEnabled()                                          # button re-enabled after batch
 
 
@@ -851,16 +1632,17 @@ def test_frozen_selftest_exercises_the_certifi_tls_context():
     assert "get_ca_certs()" in source
 
 
-def test_frozen_selftest_exercises_a_pdf_metadata_cleaning_cycle():
-    """Importability is insufficient: the frozen build must write, clean and read a tiny artifact."""
+def test_frozen_selftest_exercises_the_actual_pdf_figure_export_path():
+    """Importability is insufficient: the frozen build must render, clean and read a tiny figure."""
     import inspect
     import main
     source = inspect.getsource(main.selftest)
     for expected in (
-        "TemporaryDirectory", "PdfWriter", "writer.write", "clean_pdf_metadata",
-        "media_metadata_violations", "PdfReader", "len(reader.pages)",
+            "TemporaryDirectory", "widgets.render_pdf",
+            "media_metadata_violations", "PdfReader", "len(reader.pages)",
     ):
         assert expected in source
+    assert "from pypdf import PdfReader, PdfWriter" not in source  # a blank PDF bypasses the runtime figure writer
 
 
 def _budget_result(mode, request_id, families=None):
@@ -870,6 +1652,27 @@ def _budget_result(mode, request_id, families=None):
     if families is not None:
         result["library_families_for_species"] = families
     return result
+
+
+def test_annotation_budget_discloses_and_enforces_the_windows_backing_volume_limit(win):
+    from PySide6.QtWidgets import QLabel, QPushButton, QComboBox
+    cost, warn, start, gsel, ssel = QLabel(), QLabel(), QPushButton(), QComboBox(), QComboBox()
+    warn.hide()
+    win._annot_cost_widgets = (cost, warn, start, gsel, ssel)
+    win._annot_cost_state = {"organism": "Saccharomyces cerevisiae", "custom_library": None,
+                             "library_mode": "dfam_curated", "budget_request_id": 10}
+    result = _budget_result("dfam_curated", 10, families=9)
+    result.update({"avail_gb": 35.0, "wsl_avail_gb": 950.0, "windows_avail_gb": 35.0,
+                   "disk_limited_by": "Windows backing volume", "disk_needed_gb": 42,
+                   "disk_ok": False,
+                   "disk_note": ("Usable backend storage: 35.0 GiB (Windows backing volume). "
+                                 "WSL reports 950.0 GiB; its Windows backing volume has 35.0 GiB free.")})
+    win._on_annotate_budget(result)
+    rendered = (cost.text() + " " + warn.text()).lower()
+    assert "wsl reports 950.0 gib" in rendered
+    assert "windows backing volume has 35.0 gib free" in rendered
+    assert "smaller wsl filesystem and windows backing-volume limit" in rendered
+    assert not start.isEnabled() and not warn.isHidden()
 
 
 def test_custom_annotation_budget_has_no_dfam_copy_or_warning(win):

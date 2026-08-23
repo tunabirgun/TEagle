@@ -41,16 +41,17 @@ download into a separate WSL environment (`teagle-vrna`) on the user's machine a
 
 ## Installed by the user into the optional WSL2 backend
 
-These are fetched from bioconda by the in-app installer and run as separate processes. TEagle does not
-redistribute them; they are listed because their terms affect what you may do with the results.
+These are fetched by the in-app installer and run as separate processes. TEagle does not redistribute
+them; the installer pins their versions separately from the native Python requirements, and they are
+listed because their terms affect what you may do with the results.
 
 | Tool | Licence | Note |
 |---|---|---|
 | [RepeatMasker](https://www.repeatmasker.org/) | Open Software License 2.1 | Family naming |
 | [Dfam](https://dfam.org/) | CC0-1.0 (curated partitions) | Family library |
 | [minimap2](https://github.com/lh3/minimap2) | MIT | Splice alignment |
-| [miniprot](https://github.com/lh3/miniprot) | MIT | Homology alignment (currently dormant) |
 | [isPcr](https://genome.ucsc.edu/) | UCSC — free for academic, non-profit and personal use | **Commercial use requires a licence from UCSC.** Relevant if TEagle is ever hosted as a paid service. |
+| [faToTwoBit](https://genome.ucsc.edu/) | UCSC — free for academic, non-profit and personal use | Optional compact-genome-cache conversion. **Commercial use requires a licence from UCSC.** |
 | [ncbi-datasets-cli](https://www.ncbi.nlm.nih.gov/datasets/) | US Government public domain | Assembly download |
 | [ViennaRNA](https://www.tbi.univie.ac.at/RNA/) | Own licence (see *Deliberately NOT bundled*) | Optional second primer-QC engine (`teagle-vrna` env). **Redistribution for a fee is forbidden** — relevant if TEagle is ever hosted as a paid service. |
 | [micromamba](https://github.com/mamba-org/mamba) | BSD-3-Clause | Environment manager |

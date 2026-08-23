@@ -6,12 +6,16 @@ def test_parse_requirements():
     reqs = dict(envcheck.parse_requirements())
     assert "primer3-py" in reqs and "PySide6" in reqs         # native app deps (Qt replaced pywebview)
     assert reqs["primer3-py"]                    # pinned version present
+    assert reqs["psutil"] == "7.2.2"
+    assert reqs["et_xmlfile"] == "2.0.0"
 
 
 def test_every_bundled_direct_dependency_has_a_functional_import_probe():
     requirements = {name for name, _ in envcheck.parse_requirements()}
     assert requirements <= set(envcheck._IMPORT_NAME)
     assert envcheck._IMPORT_NAME["openpyxl"] == "openpyxl"
+    assert envcheck._IMPORT_NAME["psutil"] == "psutil"
+    assert envcheck._IMPORT_NAME["et_xmlfile"] == "et_xmlfile"
     assert envcheck._IMPORT_NAME["certifi"] == "certifi"
     assert envcheck._IMPORT_NAME["pypdf"] == "pypdf"
 
@@ -40,6 +44,15 @@ def test_check_shape_and_python_ok():
     assert isinstance(rep["packages"], list) and rep["packages"]
 
 
+def test_source_runtime_support_is_exactly_python_312():
+    assert envcheck.REQUIRED_PY == (3, 12)
+
+
+def test_backend_probe_has_no_stale_webview_prerequisite(monkeypatch):
+    monkeypatch.setattr(envcheck.shutil, "which", lambda _name: None)
+    assert envcheck.probe_backends() == {"wsl2": "not found"}
+
+
 def test_signature_stable():
     reqs = envcheck.parse_requirements()
     assert envcheck._signature(reqs) == envcheck._signature(reqs)
@@ -58,11 +71,18 @@ def test_manifest_real_versions_and_stable_checksum():
 
 
 def test_manifest_source_provenance():
-    src = {"accession": "M11240.1", "organism": "Drosophila melanogaster", "taxid": 7227,
-           "source": "NCBI nuccore", "endpoint": "https://x", "retrievedUtc": "2026-01-01T00:00:00Z"}
-    m = provenance.build_manifest("analysis", "ACGT", "M11240.1", {}, source=src)
+    raw = {"accession": "M11240.1", "taxid": "7227", "source": "NCBI nuccore",
+           "endpoint": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
+           "retrievedUtc": "2026-01-01T00:00:00Z",
+           "sourceUrl": "https://www.ncbi.nlm.nih.gov/nuccore/M11240.1", "length": 4}
+    src = provenance.normalize_source_context(raw, [("M11240.1", "ACGT")])
+    identity = {"id": "M11240.1", "identitySource": "validated_fetch"}
+    m = provenance.build_manifest("analysis", "ACGT", "M11240.1", {}, source=src,
+                                  input_identity=identity)
     assert m["input"]["accession"] == "M11240.1"
-    assert m["input"]["organism"] == "Drosophila melanogaster"
+    assert m["input"]["source"] == "ncbi_nuccore"
+    assert m["input"]["taxid"] == "7227"
+    assert "organism" not in m["input"]
 
 
 def test_manifest_seal_is_reproducible():

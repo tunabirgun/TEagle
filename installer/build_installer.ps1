@@ -48,6 +48,11 @@ $python = Resolve-BuildPython $PythonExe
 $pythonVersion = (& $python -c "import platform; print(platform.python_version())").Trim()
 Write-Output "Build Python: $python ($pythonVersion)"
 
+$runtimeImportGate = Join-Path $PSScriptRoot "check_runtime_imports.py"
+if (-not (Test-Path -LiteralPath $runtimeImportGate)) { throw "Runtime import parity gate is missing: $runtimeImportGate" }
+& $python $runtimeImportGate --root $root
+if ($LASTEXITCODE -ne 0) { throw "Runtime import parity preflight failed" }
+
 # Canonical runtime gate: envcheck reads app/backend/requirements.txt, requires exact versions, imports
 # every direct dependency, and enforces its minimum Python version. It never installs during a build.
 $envcheck = Join-Path $root "app\backend\envcheck.py"
@@ -67,6 +72,31 @@ if ($pyiInstalled -ne $pyiRequired) {
   throw "PyInstaller version mismatch: required $pyiRequired from requirements-build.txt, found $pyiInstalled"
 }
 Write-Output "PyInstaller: $pyiInstalled (locked)"
+
+$candidates = @(
+  "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
+  "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+  "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+)
+$iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $iscc) { throw "ISCC.exe not found. Install Inno Setup 6 (winget install JRSoftware.InnoSetup)." }
+$innoLines = @(Get-Content -LiteralPath $buildLock | Where-Object { $_ -match '^\s*InnoSetup==([^\s#]+)\s*$' })
+if ($innoLines.Count -ne 1) { throw "requirements-build.txt must contain exactly one InnoSetup==<version> pin" }
+$innoRequired = ([regex]::Match($innoLines[0], '^\s*InnoSetup==([^\s#]+)\s*$')).Groups[1].Value
+$innoInstall = Split-Path -Parent $iscc
+$innoRegistry = @(
+  Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1' -ErrorAction SilentlyContinue
+  Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1' -ErrorAction SilentlyContinue
+  Get-ItemProperty 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1' -ErrorAction SilentlyContinue
+) | Where-Object {
+  $_.DisplayVersion -and $_.InstallLocation -and
+  ([IO.Path]::GetFullPath($_.InstallLocation).TrimEnd('\') -eq [IO.Path]::GetFullPath($innoInstall).TrimEnd('\'))
+} | Select-Object -First 1
+if (-not $innoRegistry) { throw "Cannot verify the installed Inno Setup version for $iscc" }
+if ($innoRegistry.DisplayVersion -ne $innoRequired) {
+  throw "Inno Setup version mismatch: required $innoRequired from requirements-build.txt, found $($innoRegistry.DisplayVersion)"
+}
+Write-Output "ISCC: $iscc (Inno Setup $innoRequired, locked)"
 
 if ($PreflightOnly) {
   Write-Output "Preflight passed; no build requested."
@@ -90,6 +120,10 @@ Push-Location $root
 & $python -m PyInstaller "installer\teagle_native.spec" --noconfirm
 Pop-Location
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed with exit code $LASTEXITCODE" }
+$metadataHelper = Join-Path $PSScriptRoot "sanitize_inno_metadata.py"
+if (-not (Test-Path -LiteralPath $metadataHelper)) { throw "Installer metadata helper is missing: $metadataHelper" }
+& $python $metadataHelper sanitize-rich-header $dist
+if ($LASTEXITCODE -ne 0) { throw "Frozen executable metadata minimisation failed with exit code $LASTEXITCODE" }
 # sanity: the frozen bundle must import the scientific stack + render QtSvg before we ship it
 $env:TEAGLE_SELFTEST = "1"; $env:QT_QPA_PLATFORM = "offscreen"
 # Start-Process -Wait, NOT '& $dist': the exe is GUI-subsystem (console=False), so the call operator returns
@@ -100,17 +134,6 @@ if ($st -ne 0) { throw "frozen-bundle self-test failed (exit $st) - not shipping
 Write-Output "Frozen-bundle self-test passed."
 if (-not (Test-Path $dist)) { throw "dist\TEagle\TEagle.exe not found - PyInstaller step did not produce it" }
 
-$candidates = @(
-  "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
-  "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-  "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
-)
-$iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-if (-not $iscc) { throw "ISCC.exe not found. Install Inno Setup 6 (winget install JRSoftware.InnoSetup)." }
-Write-Output "ISCC: $iscc"
-
-$metadataHelper = Join-Path $PSScriptRoot "sanitize_inno_metadata.py"
-if (-not (Test-Path -LiteralPath $metadataHelper)) { throw "Inno metadata helper is missing: $metadataHelper" }
 $innoSource = Split-Path -Parent $iscc
 $innoTemp = Join-Path ([IO.Path]::GetTempPath()) ("TEagle-Inno-" + [guid]::NewGuid().ToString("N"))
 $setupOutput = Join-Path $root ("dist\TEagle-Setup-$ver.exe")

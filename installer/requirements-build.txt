@@ -1,2 +1,3 @@
 # Windows packaging toolchain. Runtime dependencies are pinned in app/backend/requirements.txt.
 PyInstaller==6.21.0
+InnoSetup==6.7.3

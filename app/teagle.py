@@ -46,7 +46,7 @@ def main() -> int:
         print("  Fix: python -m pip install -r app/backend/requirements.txt")
         return 1
 
-    if a.server:                                     # legacy browser path (kept for headless / remote use)
+    if a.server:                                     # legacy browser path (kept for headless / local-browser use)
         import server
         server.serve(port=a.port)
         return 0

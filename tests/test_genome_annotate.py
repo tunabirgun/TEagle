@@ -868,7 +868,16 @@ def test_genome_manifest_requires_paired_verified_identity_and_changes_with_hash
                                   input_sha256="a" * 64, input_length=200)
     b = provenance.build_manifest("genome_annotate", "", "GCF_000000000.1", {"x": 1},
                                   input_sha256="b" * 64, input_length=200)
-    assert a["input"] == {"id": "GCF_000000000.1", "length": 200, "sha256": "a" * 64}
+    public_digest = hashlib.sha256(b"GCF_000000000.1").hexdigest()
+    assert a["input"] == {
+        "id": f"record_{public_digest[:12]}",
+        "idSha256": public_digest,
+        "identitySource": "local_input",
+        "inputType": "local_input",
+        "length": 200,
+        "sha256": "a" * 64,
+        "sourceContextVersion": "1.0",
+    }
     assert a["input"]["sha256"] != empty_hash
     assert a["manifestSha256"] != b["manifestSha256"]
 

@@ -38,7 +38,7 @@ def test_feature_table_parse_and_gene_model():
         ">Feature gb|X.1|Y",
         "2186\t2227\texon", "\t\t\tnumber\t1",
         "2228\t2406\tintron", "\t\t\tnumber\t1",
-        "2424\t2610\tCDS", "3397\t3542", "\t\t\tproduct\tinsulin",
+        "2424\t2610\tCDS", "3397\t3542", "\t\t\tproduct\tinsulin", "\t\t\tcodon_start\t1",
         "2611\t3396\tintron", "\t\t\tnumber\t2",
         "3397\t>3615\texon", "\t\t\tnumber\t2",
     ]) + "\n")
@@ -50,6 +50,24 @@ def test_feature_table_parse_and_gene_model():
     assert gm["exons"][0] == {"start": 2185, "end": 2227, "strand": "+", "note": "1"}   # 1-based -> 0-based
     assert any(e.get("derived") and (e["start"], e["end"]) == (2406, 2610) for e in gm["exons"])   # middle exon
     assert (gm["cds"][0]["start"], gm["cds"][0]["end"]) == (2423, 2610)                  # spliced CDS interval
+    assert [(c["phase"], c["cds_group"]) for c in gm["cds"]] == [(0, "cds_1"), (2, "cds_1")]
+
+
+def test_cds_phase_is_derived_in_transcription_order_on_minus_strand():
+    ft = (">Feature gb|X.1|Y\n400\t301\tCDS\n200\t101\n"
+          "\t\t\tproduct\tminus protein\n\t\t\tcodon_start\t2\n")
+    gm = fetch.build_gene_model(fetch.parse_feature_table(ft))
+    assert [(c["start"], c["end"], c["strand"], c["phase"]) for c in gm["cds"]] == [
+        (100, 200, "-", 0), (300, 400, "-", 1)]
+    assert {c["cds_group"] for c in gm["cds"]} == {"cds_1"}
+
+
+@pytest.mark.parametrize("codon_start", ["", "0", "4", "x"])
+def test_missing_or_invalid_codon_start_retains_cds_but_marks_phase_unavailable(codon_start):
+    qualifier = f"\n\t\t\tcodon_start\t{codon_start}" if codon_start else ""
+    ft = f">Feature gb|X.1|Y\n1\t9\tCDS{qualifier}\n"
+    gm = fetch.build_gene_model(fetch.parse_feature_table(ft))
+    assert len(gm["cds"]) == 1 and gm["cds"][0]["phase"] is None
 
 
 def test_complete_gene_model_fills_cds_implied_exon():

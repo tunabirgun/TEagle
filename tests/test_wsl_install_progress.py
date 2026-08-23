@@ -199,12 +199,81 @@ def test_dfam_step_never_deletes_a_partial_and_still_checks_it():
     forever — but the delete-on-mismatch gate is reached only on the complete path."""
     s = _step()
     i_state = s.index("transfer_state ")
-    i_del = s.index("rm -f")
+    i_del = s.index("rm -f", s.index('if [ "$verified" -eq 0 ]'))
     assert i_state < i_del                                  # completeness is decided before any delete
     partial_branch = s[i_state:s.index('if [ "$verified" -eq 0 ]')]
     assert "rm -f" not in partial_branch                    # nothing removes the file on the partial path
     assert "md5sum -c -" in partial_branch                  # but it is still verified
     assert "partial file is KEPT" in partial_branch
+
+
+def _assert_dfam_repair_contract(step: str) -> None:
+    assert "dfam_file_valid" in step
+    assert str(wsl._DFAM_UNPACKED_B["dfam_unc_euk"]) in step
+    assert "h5py.File" in step and "read(8)" in step
+    assert 'bytes.fromhex("894844460d0a1a0a")' in step and "\x89" not in step
+    assert "teagle-dfam-verify" in step and 'if [ -s "$marker" ]' in step
+    assert "is corrupt or does not match the pinned Dfam 4.0 partition" in step
+    assert "the existing file was preserved" in step
+    assert "the file was preserved" in step
+    assert step.count('dfam_file_valid "dfam40.uncurated.consensus.1.h5"') >= 2
+    assert 'elif [ "$dfam_state" -eq 1 ]' in step
+    assert 'elif [ "$dfam_state" -ne 0 ]' in step
+    assert step.index('rm -f "dfam40.uncurated.consensus.1.h5"') < step.index("dfam_download")
+
+
+def test_corrupt_existing_dfam_is_repaired_without_manual_deletion_and_guard_is_mutation_sensitive():
+    step = _step()
+    _assert_dfam_repair_contract(step)
+    mutants = [
+        step.replace("h5py.File", "object", 1),
+        step.replace('bytes.fromhex("894844460d0a1a0a")', 'b"not-hdf5"', 1),
+        step.replace('if [ -s "$marker" ]', "if false", 1),
+        step.replace("is corrupt or does not match the pinned Dfam 4.0 partition", "already present", 1),
+        step.replace(str(wsl._DFAM_UNPACKED_B["dfam_unc_euk"]), "0"),
+    ]
+    for mutant in mutants:
+        with pytest.raises(AssertionError):
+            _assert_dfam_repair_contract(mutant)
+
+
+def _dfam_validator_function() -> str:
+    step = _step()
+    return step[step.index("dfam_file_valid() {"):step.index("need_download=1")]
+
+
+def test_dfam_header_fallback_executes_and_distinguishes_valid_from_invalid():
+    script = rf'''
+set -uo pipefail
+{_dfam_validator_function()}
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+MM="$tmp/missing"; ENV="$tmp/env"
+printf '\x89HDF\r\n\x1a\n' > "$tmp/good.h5"
+printf 'NOTHDF!!' > "$tmp/bad.h5"
+dfam_file_valid "$tmp/good.h5" 8; good=$?
+dfam_file_valid "$tmp/bad.h5" 8; bad=$?
+printf '%s %s\n' "$good" "$bad"
+'''
+    rc, out = _bash(script)
+    assert rc == 0
+    assert out == "0 1"
+
+
+def test_dfam_broken_micromamba_is_verifier_unavailable_and_preserves_file():
+    script = rf'''
+set -uo pipefail
+{_dfam_validator_function()}
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+MM="$tmp/micromamba"; ENV="$tmp/env"; mkdir -p "$ENV/conda-meta"
+printf '#!/bin/sh\nexit 1\n' > "$MM"; chmod +x "$MM"
+printf '\x89HDF\r\n\x1a\n' > "$tmp/existing.h5"
+dfam_file_valid "$tmp/existing.h5" 8; state=$?
+[ -f "$tmp/existing.h5" ] && present=yes || present=no
+printf '%s %s\n' "$state" "$present"
+'''
+    rc, out = _bash(script)
+    assert rc == 0
+    assert out == "2 yes"
 
 
 def test_dfam_step_announces_the_silent_multi_minute_stages():
@@ -331,7 +400,7 @@ def test_component_status_reports_optional_fatotwobit_without_breaking_required_
               "ispcr_pin=1\ndatasets_pin=1\n"
               f"fatotwobit={fa_state}\n"
               "viennarna=absent\ndfam_root=1\ndfam_curated=1\ndfam_unc_root=0\ndfam_unc_euk=0\n"
-              "famdb_conf=1\ninstalling=0\ndisk_free_gb=100\n")
+              "famdb_conf=1\nfamdb_loads=1\ninstalling=0\ndisk_free_gb=100\n")
     monkeypatch.setattr(wsl, "available", lambda: {"wsl2": True, "distro": "Ubuntu", "error": None})
     monkeypatch.setattr(wsl, "_wsl_script", lambda *a, **k: (0, status, ""))
     components = {c["key"]: c for c in wsl.components_status()["components"]}
@@ -356,12 +425,162 @@ def test_component_status_reports_viennarna_absent_broken_and_exact(monkeypatch,
               "ispcr_pin=1\ndatasets_pin=1\nfatotwobit=absent\n"
               f"viennarna={vrna_state}\n"
               "dfam_root=1\ndfam_curated=1\ndfam_unc_root=0\ndfam_unc_euk=0\n"
-              "famdb_conf=1\ninstalling=0\ndisk_free_gb=100\n")
+              "famdb_conf=1\nfamdb_loads=1\ninstalling=0\ndisk_free_gb=100\n")
     monkeypatch.setattr(wsl, "available", lambda: {"wsl2": True, "distro": "Ubuntu", "error": None})
     monkeypatch.setattr(wsl, "_wsl_script", lambda *a, **k: (0, status, ""))
     component = next(c for c in wsl.components_status()["components"] if c["key"] == "viennarna")
     assert component["ok"] is expected_ok
     assert expected_detail in component["detail"]
+
+
+def _assert_famdb_readiness_contract(source: str, probe: str) -> None:
+    assert '"famdb_conf"))' in source
+    assert 'kv.get("famdb_loads") == "1"' in source
+    assert "famdb.py info" in probe and "famdb_loads=" in probe
+    assert str(wsl._DFAM_UNPACKED_B["dfam_root"]) in probe
+    assert str(wsl._DFAM_UNPACKED_B["dfam_curated"]) in probe
+
+
+def test_readiness_requires_config_and_successful_famdb_load_with_mutation_guards(monkeypatch):
+    import inspect
+    source = inspect.getsource(wsl.components_status)
+    _assert_famdb_readiness_contract(source, wsl._STATUS_PROBE)
+    for mutant_source, mutant_probe in [
+        (source.replace(', "famdb_conf"', "", 1), wsl._STATUS_PROBE),
+        (source.replace('kv.get("famdb_loads") == "1"', "True", 1), wsl._STATUS_PROBE),
+        (source, wsl._STATUS_PROBE.replace("famdb_loads=", "famdb_seen=", 1)),
+    ]:
+        with pytest.raises(AssertionError):
+            _assert_famdb_readiness_contract(mutant_source, mutant_probe)
+
+    base = ("micromamba=2.8.1\nrepeatmasker=4.2.4\nminimap2=2.31-r1302\ngenomescan=1\n"
+            "ispcr_pin=1\ndatasets_pin=1\nfatotwobit=absent\nviennarna=2.7.2\n"
+            "dfam_root=1\ndfam_curated=1\ndfam_unc_root=0\ndfam_unc_euk=0\n"
+            "famdb_conf=1\ninstalling=0\ndisk_free_gb=100\n")
+    monkeypatch.setattr(wsl, "available", lambda: {"wsl2": True, "distro": "Ubuntu", "error": None})
+    monkeypatch.setattr(wsl, "_wsl_script", lambda *a, **k: (0, base + "famdb_loads=0\n", ""))
+    assert wsl.components_status()["ready"] is False
+    monkeypatch.setattr(wsl, "_wsl_script", lambda *a, **k: (0, base + "famdb_loads=1\n", ""))
+    assert wsl.components_status()["ready"] is True
+
+
+def test_default_install_cost_is_derived_and_exposes_safe_wslconfig_guidance(monkeypatch):
+    required = [k for k in wsl._DFAM_FILES if k in wsl._ALL_STEPS]
+    assert wsl._DEFAULT_DFAM_DOWNLOAD_B == sum(wsl._DFAM_ARCHIVE_B[k] for k in required)
+    assert wsl._DEFAULT_DFAM_INSTALLED_B == sum(wsl._DFAM_UNPACKED_B[k] for k in required)
+    monkeypatch.setattr(wsl, "available", lambda: {"wsl2": False, "distro": None, "error": "absent"})
+    status = wsl.components_status()
+    assert f"{wsl._DEFAULT_DFAM_DOWNLOAD_B / 1048576:.0f} MiB" in status["install_cost"]
+    assert "%UserProfile%\\.wslconfig" in status["resource_guide"]
+    assert "only after installs and analyses have stopped" in status["resource_guide"]
+
+
+def _assert_conservative_free_space(chooser):
+    gib = 1073741824
+    assert chooser(950 * gib, 35 * gib) == 35 * gib
+    assert chooser(20 * gib, 35 * gib) == 20 * gib
+    assert chooser(20 * gib, None) == 20 * gib
+
+
+def test_effective_free_space_uses_the_smaller_wsl_or_windows_backing_volume():
+    _assert_conservative_free_space(wsl._effective_free_bytes)
+    with pytest.raises(AssertionError):
+        _assert_conservative_free_space(lambda wsl_free, host_free: max(wsl_free, host_free or wsl_free))
+
+
+def test_component_status_reports_windows_backing_volume_as_the_binding_disk(monkeypatch):
+    gib = 1073741824
+    status = ("micromamba=2.8.1\nrepeatmasker=4.2.4\nminimap2=2.31-r1302\ngenomescan=1\n"
+              "ispcr_pin=1\ndatasets_pin=1\nfatotwobit=482\nviennarna=2.7.2\n"
+              "dfam_root=1\ndfam_curated=1\ndfam_unc_root=0\ndfam_unc_euk=0\n"
+              "famdb_conf=1\nfamdb_loads=1\ninstalling=0\ndisk_free_bytes=" + str(950 * gib) + "\n")
+    monkeypatch.setattr(wsl, "available", lambda: {"wsl2": True, "distro": "Ubuntu", "error": None})
+    monkeypatch.setattr(wsl, "_wsl_script", lambda *a, **k: (0, status, ""))
+    monkeypatch.setattr(wsl, "_windows_backing_free_bytes", lambda _distro=None: 35 * gib)
+    result = wsl.components_status()
+    assert result["wsl_disk_free_gb"] == 950.0
+    assert result["windows_disk_free_gb"] == 35.0
+    assert result["disk_free_gb"] == 35.0
+    assert result["disk_limited_by"] == "Windows backing volume"
+    assert "950.0 GiB" in result["disk_note"] and "35.0 GiB" in result["disk_note"]
+
+
+def test_every_large_wsl_operation_receives_the_host_backing_volume_limit(monkeypatch):
+    gib = 1073741824
+    monkeypatch.setattr(wsl, "_windows_backing_free_bytes", lambda _distro=None: 35 * gib)
+    built = wsl._build_script(["dfam_unc_euk"])
+    assert "HOST_FREE_B=37580963840" in built
+    assert "effective_free_b" in built
+    for template in (wsl._PREP_SCRIPT, wsl._ANNOT_SCRIPT):
+        assert "HOST_FREE_B=__HOST_FREE_B__" in template
+        assert "effective_free_b" in template
+
+
+def test_annotation_budget_refuses_a_job_that_fits_wsl_but_not_its_windows_volume(monkeypatch):
+    gib = 1073741824
+    monkeypatch.setattr(wsl, "_wsl_script", lambda *a, **k: (
+        0, f"cores=8\nmemkb={16 * 1048576}\navailb={950 * gib}\n", ""))
+    monkeypatch.setattr(wsl, "_windows_backing_free_bytes", lambda _distro=None: 35 * gib)
+    budget = wsl.annotate_budget(40 * gib)
+    assert budget["wsl_avail_gb"] == 950.0
+    assert budget["windows_avail_gb"] == 35.0
+    assert budget["avail_gb"] == 35.0
+    assert budget["disk_limited_by"] == "Windows backing volume"
+    assert budget["disk_needed_gb"] == 42
+    assert budget["disk_ok"] is False
+
+
+def _assert_held_miniprot_contract(steps, server_source: str) -> None:
+    assert "miniprot" not in steps
+    assert '"/api/miniprot"' not in server_source and "'/api/miniprot'" not in server_source
+
+
+def test_held_miniprot_is_neither_provisioned_nor_exposed_and_guard_is_mutation_sensitive():
+    import pathlib
+    server = pathlib.Path(wsl.__file__).parent.parent / "server.py"
+    source = server.read_text(encoding="utf-8")
+    _assert_held_miniprot_contract(wsl._ALL_STEPS, source)
+    for steps, mutant in [
+        (wsl._ALL_STEPS + ["miniprot"], source),
+        (wsl._ALL_STEPS, source + '\nroute = "/api/miniprot"\n'),
+    ]:
+        with pytest.raises(AssertionError):
+            _assert_held_miniprot_contract(steps, mutant)
+
+
+def test_genome_retry_text_truthfully_says_partial_zip_restarts_and_is_mutation_sensitive():
+    import inspect
+    source = inspect.getsource(wsl.genome_prepare)
+
+    def contract(text):
+        assert "NCBI genome ZIP restarts" in text
+        assert "Datasets does not resume partial ZIPs" in text
+        assert "try again to resume" not in text
+
+    contract(source)
+    with pytest.raises(AssertionError):
+        contract(source.replace("NCBI genome ZIP restarts", "try again to resume", 1))
+
+
+def test_backend_resource_and_retry_docs_track_the_derived_build_contract():
+    import pathlib
+    root = pathlib.Path(wsl.__file__).parents[3]
+    plain_cost = f"{wsl._DEFAULT_DFAM_DOWNLOAD_B / 1048576:.0f} MiB"
+    tex_cost = plain_cost.replace(" ", "~")
+    for rel in ("README.md", "app/README.md"):
+        text = (root / rel).read_text(encoding="utf-8")
+        assert plain_cost in text and wsl._gib(wsl._DEFAULT_DFAM_INSTALLED_B) in text
+        assert ".wslconfig" in text and "partial genome ZIP" in text
+        assert "smaller" in text and "Windows" in text and "backing" in text
+    for rel in ("report/teagle_manual.tex", "report/teagle_report.tex"):
+        path = root / rel
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        assert tex_cost in text and wsl._gib(wsl._DEFAULT_DFAM_INSTALLED_B).replace(" ", "~") in text
+        assert r"\texttt{.wslconfig}" in text and "partial genome ZIP" in text
+        assert "smaller limit" in text or "smaller WSL-filesystem" in text
+        assert "Windows" in text and "backing" in text
 
 
 def test_every_conda_install_step_creates_the_environment_through_the_recovery():
@@ -481,6 +700,18 @@ def test_optional_partition_offers_install_before_it_exists():
     assert dlg._rows["dfam_root"]["btn"].text().upper() == "REPAIR"
 
 
+def test_installer_dialog_discloses_the_windows_backing_volume_limit():
+    dlg = _dialog()
+    note = ("Usable backend storage: 35.0 GiB (Windows backing volume). WSL reports 950.0 GiB; "
+            "its Windows backing volume has 35.0 GiB free.")
+    dlg._render_components({"wsl2": True, "installing": False, "ready": False,
+                            "disk_free_gb": 35.0, "disk_limited_by": "Windows backing volume",
+                            "disk_note": note, "components": []})
+    assert note in dlg.costNote.text()
+    assert "35.0 GiB usable" in dlg.statusLine.text()
+    assert "Windows backing volume" in dlg.statusLine.text()
+
+
 def test_dialog_attaches_to_an_install_that_was_already_running():
     """Opening the window while a download runs used to leave the log blank for its whole run: polling
     started only when the user clicked something in that session."""
@@ -517,7 +748,8 @@ def test_dialog_recovers_when_an_install_dies_without_a_terminal_marker():
     dlg._render_components(stopped)
     assert not dlg._poll.isActive() and not dlg._busy
     assert "stopped before it finished" in dlg.statusLine.text()
-    assert "resumes" in dlg.statusLine.text()           # and says the download is not lost
+    assert "Dfam archive downloads resume" in dlg.statusLine.text()
+    assert "NCBI genome ZIP restarts" in dlg.statusLine.text()
 
 
 def test_a_successful_install_is_never_announced_as_dead():

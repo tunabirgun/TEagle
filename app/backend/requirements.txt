@@ -1,8 +1,10 @@
 # TEagle native app — pinned dependencies (reproducibility)
 primer3-py==2.3.0
 pyhmmer==0.12.1
+psutil==7.2.2
 PySide6==6.11.1
 openpyxl==3.1.5
+et_xmlfile==2.0.0
 certifi==2026.7.22
 pypdf==6.15.0
 

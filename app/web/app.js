@@ -11,6 +11,7 @@ const REFLINKS = {
   Dfam:         { url:"https://doi.org/10.1186/s13100-020-00230-y", cite:"Storer J, et al. (2021) The Dfam community resource of transposable element families. Mob DNA 12:2." },
   RepeatMasker: { url:"https://www.repeatmasker.org/", cite:"Smit AFA, Hubley R, Green P. RepeatMasker Open-4.0." },
   NCBI:         { url:"https://www.ncbi.nlm.nih.gov/nuccore/", cite:"NCBI Entrez / E-utilities (Sayers E, NCBI)." },
+  ENA:          { url:"https://www.ebi.ac.uk/ena/browser/home", cite:"European Nucleotide Archive (EMBL-EBI)." },
   Primer3:      { url:"https://doi.org/10.1093/nar/gks596", cite:"Untergasser A, et al. (2012) Primer3 — new capabilities and interfaces. Nucleic Acids Res 40:e115." },
   minimap2:     { url:"https://doi.org/10.1093/bioinformatics/bty191", cite:"Li H (2018) Minimap2: pairwise alignment for nucleotide sequences. Bioinformatics 34:3094-3100." },
 };
@@ -27,7 +28,8 @@ const GLOSSARY = {
   "Span (0-based)":"Location in the sequence, 0-based half-open [start, end).",
   "Coords (0-based)":"Location in the sequence, 0-based half-open [start, end).",
   "Coords":"Location of this amplicon in the searched sequence.",
-  "Len":"Length in base pairs.",
+  "Template span":"Length of the half-open interval copied from the searched template.",
+  "Product len":"Full predicted PCR-product length, including incorporated non-templated 5′ primer tails.",
   "Metric":"Feature-specific measure — terminal-repeat identity %, a motif, or a length.",
   "Method":"How TEagle detected this feature (the algorithm/heuristic used).",
   "aa":"Length of the predicted protein (open reading frame) in amino acids.",
@@ -40,7 +42,7 @@ const GLOSSARY = {
   "Pair":"Which designed primer pair produced this amplicon.",
   "Source":"The sequence that was searched — your specimen or a custom background.",
   "Mism F/R":"Mismatches in the forward / reverse primer binding site (the 3′ end is kept exact).",
-  "Call":"On-target = amplicon at the intended locus; off-target = amplified elsewhere.",
+  "Call":"Intended product and Primer3 target coverage are assessed separately and only on the exact design-bound record.",
 };
 function glossify(root){
   if(!root) return;
@@ -297,7 +299,30 @@ const GELPAL = {
 function svgGel(data, bg){
   // data: { lanes:[{label, amplicons}] } or legacy { amplicons }
   const lanes = data.lanes || [{ label: data.laneLabel || "PCR", amplicons: (data.amplicons||[]) }];
-  const sizes = lanes.flatMap(l => (l.amplicons||[]).map(a=>a.length));
+  const physical = list => {
+    const products = new Map();
+    (list||[]).forEach((a,i) => {
+      const size = a.product_length ?? a.length;
+      const key = a.product_key || `${a.source}:${a.start}:${a.end}:${size}:${i}`;
+      if(!products.has(key)) products.set(key, { ...a, product_length:size });
+    });
+    return [...products.values()];
+  };
+  const laneBands = list => {
+    const groups = new Map();
+    physical(list).forEach(a => {
+      const size = a.product_length, g = groups.get(size) || [];
+      g.push(a); groups.set(size,g);
+    });
+    return [...groups.entries()].map(([size,g]) => {
+      const hasAdditional = g.some(a => a.matches_intended_product === false);
+      const hasIntended = g.some(a => a.matches_intended_product === true);
+      const call = hasAdditional ? "includes additional product" : hasIntended ? "intended product" : "design assessment unavailable";
+      return { size, color:hasAdditional ? null : hasIntended ? "intended" : "unassessed",
+        t:`${g.length} physical product(s) · ${call}` };
+    });
+  };
+  const sizes = lanes.flatMap(l => physical(l.amplicons).map(a=>a.product_length));
   const smallest = sizes.length ? Math.min(...sizes) : 90;
   const minbp = Math.max(25, Math.min(90, smallest - 10)), maxbp = Math.max(1600, ...sizes);   // floor tracks the smallest band so 70-89 bp bands resolve
   const LADDER = [1500,1000,700,500,400,300,200,100,50].filter(m => m >= minbp && m <= maxbp);
@@ -325,11 +350,11 @@ function svgGel(data, bg){
   };
   drawLane(0, "L", LADDER.map(m=>({size:m, color:P.ladder})), true);
   lanes.forEach((l,i) => drawLane(i+1, l.label,
-    (l.amplicons||[]).map(a=>({size:a.length, color:a.on_target?P.on:P.off, t:(a.on_target?"on-target":"off-target")+" · "+esc(a.source)})), false));
+    laneBands(l.amplicons).map(b=>({ ...b, color:b.color === "intended" ? P.on : b.color === "unassessed" ? P.ladder : P.off })), false));
   // self-describing legend, well clear of the gel body
   const ly = H - 12;
-  s += `<circle cx="${x0}" cy="${ly}" r="3" fill="${P.on}"/><text x="${x0+7}" y="${ly+3}" fill="${P.ink}" font-size="8">on-target</text>`
-    +  `<circle cx="${x0+64}" cy="${ly}" r="3" fill="${P.off}"/><text x="${x0+71}" y="${ly+3}" fill="${P.ink}" font-size="8">off-target</text>`
+  s += `<circle cx="${x0}" cy="${ly}" r="3" fill="${P.on}"/><text x="${x0+7}" y="${ly+3}" fill="${P.ink}" font-size="8">intended</text>`
+    +  `<circle cx="${x0+64}" cy="${ly}" r="3" fill="${P.off}"/><text x="${x0+71}" y="${ly+3}" fill="${P.ink}" font-size="8">additional</text>`
     +  `<text x="${x0+140}" y="${ly+3}" fill="${P.ink}" font-size="8">L = MW ladder (bp)</text>`;
   return s + "</svg>";
 }
@@ -398,31 +423,246 @@ function downloadTable(headers, rows, base, fmt){
   const lines = [headers.map(h => csvEscape(h, sep)).join(sep)].concat(rows.map(r => r.map(c => csvEscape(c, sep)).join(sep)));
   downloadBlob(new Blob(["﻿" + lines.join("\r\n")], { type: fmt === "tsv" ? "text/tab-separated-values" : "text/csv" }), base + "." + (fmt === "tsv" ? "tsv" : "csv"));
 }
+/* ---------- deterministic scientific text exports ---------- */
+function sha256Hex(text){
+  const bytes=[...new TextEncoder().encode(String(text))], bitLength=bytes.length*8;
+  bytes.push(0x80); while(bytes.length%64!==56) bytes.push(0);
+  const high=Math.floor(bitLength/0x100000000),low=bitLength>>>0;
+  for(let shift=24;shift>=0;shift-=8) bytes.push((high>>>shift)&255);
+  for(let shift=24;shift>=0;shift-=8) bytes.push((low>>>shift)&255);
+  const k=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  const h=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19],rotr=(x,n)=>(x>>>n)|(x<<(32-n));
+  for(let offset=0;offset<bytes.length;offset+=64){ const w=new Array(64); for(let i=0;i<16;i++){ const j=offset+i*4; w[i]=((bytes[j]<<24)|(bytes[j+1]<<16)|(bytes[j+2]<<8)|bytes[j+3])>>>0; }
+    for(let i=16;i<64;i++){ const a=w[i-15],b=w[i-2],s0=rotr(a,7)^rotr(a,18)^(a>>>3),s1=rotr(b,17)^rotr(b,19)^(b>>>10); w[i]=(w[i-16]+s0+w[i-7]+s1)>>>0; }
+    let [a,b,c,d,e,f,g,hh]=h; for(let i=0;i<64;i++){ const s1=rotr(e,6)^rotr(e,11)^rotr(e,25),ch=(e&f)^(~e&g),t1=(hh+s1+ch+k[i]+w[i])>>>0,s0=rotr(a,2)^rotr(a,13)^rotr(a,22),maj=(a&b)^(a&c)^(b&c),t2=(s0+maj)>>>0; hh=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0; }
+    [a,b,c,d,e,f,g,hh].forEach((v,i)=>{h[i]=(h[i]+v)>>>0;}); }
+  return h.map(v=>v.toString(16).padStart(8,"0")).join("");
+}
+const PUBLIC_ACCESSION_RE=/^(?:[A-Z]\d{5}|[A-Z]{2}\d{6}|[A-Z]{3}\d{5}|[A-Z]{4}\d{8,10}|[A-Z]{6}\d{9,11}|[A-Z]{2}_\d+|NZ_[A-Z]{2,6}\d+|GC[AF]_\d+)(?:\.\d+)?$/;
+const RECORD_DIGEST_RE=/^record_([0-9a-f]{12})$/;
+const FULL_DIGEST_RE=/^[0-9a-f]{64}$/;
+const GENERATED_RECORD_RE=/^(?:record_[0-9a-f]{12,64}|P[1-9]\d*)$/;
+const GENERATED_RECORD_IDS=new Set(["record","input_sequence","multiple_records","batch","splice_locus","locus"]);
+const RECORD_ROLES=[" (input)"," (custom background)"];
+const TRUSTED_SOURCE_CONTEXTS=new WeakSet();
+const TRUSTED_SOURCE_BINDINGS=new WeakMap();
+const TRUSTED_RESULT_IDENTITIES=new WeakMap();
+const TRUSTED_IDENTITIES=new WeakSet();
+const LOCAL_SOURCE_WIRE=Object.freeze({sourceContextVersion:"1.0",inputType:"local_input"});
+function sourceWire(context=state.source){ return TRUSTED_SOURCE_CONTEXTS.has(context)?context:LOCAL_SOURCE_WIRE; }
+function fetchedSourceActive(context=state.source){ return TRUSTED_SOURCE_CONTEXTS.has(context)&&context.inputType!=="local_input"; }
+function splitRecordRole(value){ const raw=String(value==null?"":value); for(const label of RECORD_ROLES) if(raw.endsWith(label)) return {base:raw.slice(0,-label.length),role:label.slice(2,-1),label}; return {base:raw,role:"",label:""}; }
+function strictUtcSeconds(value){
+  if(typeof value!=="string") return false;
+  const match=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:Z|\+00:00)$/.exec(value); if(!match) return false;
+  const parts=match.slice(1).map(Number),date=new Date(Date.UTC(parts[0],parts[1]-1,parts[2],parts[3],parts[4],parts[5]));
+  return date.getUTCFullYear()===parts[0]&&date.getUTCMonth()===parts[1]-1&&date.getUTCDate()===parts[2]&&date.getUTCHours()===parts[3]&&date.getUTCMinutes()===parts[4]&&date.getUTCSeconds()===parts[5];
+}
+function fetchedFastaRecords(fasta){
+  if(typeof fasta!=="string"||!fasta.startsWith(">")) return null;
+  const records=[]; let record=null;
+  for(const line of fasta.replace(/\r\n?/g,"\n").split("\n")){
+    if(line.startsWith(">")){
+      if(record) records.push(record);
+      const id=line.slice(1).trim().split(/\s+/,1)[0]; if(!id) return null;
+      record={id,sequence:""};
+    }else if(record) record.sequence+=line.replace(/\s/g,"");
+  }
+  if(record) records.push(record);
+  try{return records.length?records.map(record=>{ const sequence=boundSequence(record.sequence); return {id:record.id,sequence,length:sequence.length,sha256:sha256Hex(sequence)}; }):null;}
+  catch(_){return null;}
+}
+function exactJsonValue(value,expected){
+  if(Array.isArray(expected)) return Array.isArray(value)&&value.length===expected.length&&expected.every((item,i)=>exactJsonValue(value[i],item));
+  if(expected&&typeof expected==="object"){
+    if(!value||typeof value!=="object"||Array.isArray(value)) return false;
+    const a=Object.keys(value).sort(),b=Object.keys(expected).sort();
+    return a.length===b.length&&a.every((key,i)=>key===b[i])&&b.every(key=>exactJsonValue(value[key],expected[key]));
+  }
+  return value===expected;
+}
+function validatedFetchedSource(payload){
+  if(!payload||typeof payload!=="object"||Array.isArray(payload)) return null;
+  const context=payload.sourceContext, parsed=fetchedFastaRecords(payload.fasta);
+  if(!context||typeof context!=="object"||Array.isArray(context)||!parsed||!strictUtcSeconds(context.retrievedUtc)) return null;
+  const common=["accession","endpoint","inputType","records","retrievedUtc","source","sourceContextVersion","sourceUrl"],
+    keys=Object.keys(context).sort(),taxidPresent=Object.prototype.hasOwnProperty.call(context,"taxid"),
+    allowed=(context.inputType==="fetched_coordinate"?common.concat(["assemblyAccession","coordSystem","regions"]):common).concat(taxidPresent?["taxid"]:[]).sort();
+  if(!exactJsonValue(keys,allowed)||context.sourceContextVersion!=="1.0"||
+     (taxidPresent&&(typeof context.taxid!=="string"||!/^[0-9]+$/.test(context.taxid)||Number(context.taxid)<=0))||
+     !Array.isArray(context.records)||context.records.length!==parsed.length) return null;
+  const bindings=[];
+  if(context.inputType==="fetched_accession"){
+    const pair=`${context.source}:${context.endpoint}`,provider=context.source==="ncbi_nuccore"?"NCBI nuccore":"ENA (EMBL-EBI)",
+      url=canonicalSourceUrl(context.sourceUrl,context.accession,provider),rawTaxid=payload.taxid==null||payload.taxid===""?null:String(payload.taxid),
+      expectedRawEndpoint=context.source==="ncbi_nuccore"?"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi":`https://www.ebi.ac.uk/ena/browser/api/fasta/${context.accession}`;
+    if(!["ncbi_nuccore:ncbi_efetch","ena_fasta:ena_fasta"].includes(pair)||!PUBLIC_ACCESSION_RE.test(context.accession)||
+       parsed.length!==1||parsed[0].id!==context.accession||url!==context.sourceUrl||payload.accession!==context.accession||
+       payload.source!==provider||payload.endpoint!==expectedRawEndpoint||payload.sourceUrl!==context.sourceUrl||
+       payload.retrievedUtc!==context.retrievedUtc||(taxidPresent?context.taxid:null)!==rawTaxid) return null;
+    for(const length of [payload.length,payload.seq_length]) if(length!=null&&(!Number.isInteger(length)||length!==parsed[0].length)) return null;
+    bindings.push({id:context.accession,length:parsed[0].length,sha256:parsed[0].sha256});
+  }else if(context.inputType==="fetched_coordinate"){
+    const raw=payload.source,rawTaxid=raw&&raw.taxid!=null&&raw.taxid!==""?String(raw.taxid):null;
+    if(context.source!=="ncbi_coordinate"||context.endpoint!=="ncbi_efetch_range"||context.coordSystem!=="1-based-inclusive"||
+       !PUBLIC_ACCESSION_RE.test(context.assemblyAccession)||!Array.isArray(context.regions)||context.regions.length!==parsed.length||
+       !raw||typeof raw!=="object"||Array.isArray(raw)||raw.source!=="NCBI E-utilities (efetch seq_start/seq_stop)"||
+       raw.endpoint!=="https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"||raw.retrievalType!=="coordinate"||
+       raw.coordSystem!==context.coordSystem||raw.accession!==context.accession||raw.assemblyAccession!==context.assemblyAccession||
+       raw.retrievedUtc!==context.retrievedUtc||(taxidPresent?context.taxid:null)!==rawTaxid||
+       !Array.isArray(raw.regions)||raw.regions.length!==context.regions.length) return null;
+    for(let i=0;i<context.regions.length;i++){
+      const region=context.regions[i],rawRegion=raw.regions[i];
+      if(!region||typeof region!=="object"||Array.isArray(region)||!exactJsonValue(Object.keys(region).sort(),["chrAccession","end","start","strand"])||
+         !PUBLIC_ACCESSION_RE.test(region.chrAccession)||![region.start,region.end,region.strand].every(Number.isInteger)||
+         region.start<1||region.end<region.start||![1,2].includes(region.strand)||!rawRegion||rawRegion.chrAccession!==region.chrAccession||
+         rawRegion.start!==region.start||rawRegion.stop!==region.end||rawRegion.strand!==region.strand) return null;
+      const id=`${region.chrAccession}:${region.start}-${region.end}`,observedIds=region.strand===2?[id,id+"(-)"]:[id],record=parsed[i];
+      if(!observedIds.includes(record.id)||record.length!==region.end-region.start+1) return null;
+      bindings.push({id,length:record.length,sha256:record.sha256});
+    }
+    if(payload.seq_length!=null&&(!Number.isInteger(payload.seq_length)||payload.seq_length!==parsed.reduce((n,record)=>n+record.length,0))) return null;
+    if(context.accession!==context.regions[0].chrAccession||context.sourceUrl!==`https://www.ncbi.nlm.nih.gov/nuccore/${context.accession}`) return null;
+  }else return null;
+  if(!exactJsonValue(context.records,bindings)) return null;
+  const frozenBindings=Object.freeze(bindings.map(binding=>Object.freeze({...binding}))),frozen={...context,records:frozenBindings};
+  if(context.inputType==="fetched_coordinate") frozen.regions=Object.freeze(context.regions.map(region=>Object.freeze({...region})));
+  Object.freeze(frozen); TRUSTED_SOURCE_CONTEXTS.add(frozen); TRUSTED_SOURCE_BINDINGS.set(frozen,frozenBindings); return frozen;
+}
+function safeExportIdentity(value,suppliedDigest=null,context=null,recordSequence=null){
+  const parsed=splitRecordRole(value),digest=suppliedDigest==null?null:String(suppliedDigest),roleTrusted=digest!==null||TRUSTED_SOURCE_CONTEXTS.has(context);
+  const base=roleTrusted?parsed.base:String(value==null?"":value),role=roleTrusted?parsed.role:"",label=roleTrusted?parsed.label:"";
+  if(digest!==null){
+    const match=RECORD_DIGEST_RE.exec(base);
+    if(!FULL_DIGEST_RE.test(digest)||!match||match[1]!==digest.slice(0,12)) throw new Error("record identity digest does not match its compact public ID");
+    return {id:base,label:base+label,role,idSha256:digest,internalKey:`sha256:${digest}`};
+  }
+  const sourceBindings=TRUSTED_SOURCE_CONTEXTS.has(context)?TRUSTED_SOURCE_BINDINGS.get(context):null,
+    sourceSequence=sourceBindings&&typeof recordSequence==="string"?boundSequence(recordSequence):null,
+    sourceBinding=sourceBindings&&sourceSequence?sourceBindings.find(binding=>base===binding.id&&sourceSequence.length===binding.length&&sha256Hex(sourceSequence)===binding.sha256):null;
+  if(sourceBinding) return {id:base,label:base+label,role,internalKey:`${context.inputType}:${context.source}:${base}:${sourceBinding.sha256}`};
+  const computed=sha256Hex(base); return {id:`record_${computed.slice(0,12)}`,label:`record_${computed.slice(0,12)}${label}`,role,idSha256:computed,internalKey:`sha256:${computed}`};
+}
+function validateAnalysisRecordIdentities(document,submitted,context){
+  if(!document||!Array.isArray(document.records)||!document.records.length) throw new Error("analysis result has no identity-bound records");
+  const generatedBare=!String(submitted||"").includes(">")&&document.records.length===1;
+  for(const record of document.records){
+    if(!record||typeof record!=="object"||typeof record.id!=="string"||typeof record.seq!=="string"||
+       !record.composition||record.composition.length!==boundSequence(record.seq).length) throw new Error("analysis record identity schema is invalid");
+    let identity;
+    if(record.identitySource==="local_input") identity=safeExportIdentity(record.id,record.idSha256);
+    else if(record.identitySource==="validated_fetch"){
+      if(record.idSha256!=null) throw new Error("validated fetched identity must not carry a local-header digest");
+      identity=safeExportIdentity(record.id,null,context,record.seq);
+      if(identity.idSha256) throw new Error("validated fetched identity does not match the bound source record");
+    }else if(record.identitySource==="generated"){
+      if(!generatedBare||record.idSha256!=null||(!GENERATED_RECORD_IDS.has(record.id)&&!GENERATED_RECORD_RE.test(record.id))) throw new Error("generated record identity is not engine-bound");
+      identity={id:record.id,label:record.id,role:"",internalKey:`generated:${record.id}`};
+    }else throw new Error("analysis record identity source is unsupported");
+    Object.freeze(identity); TRUSTED_IDENTITIES.add(identity); TRUSTED_RESULT_IDENTITIES.set(record,identity);
+  }
+}
+function analysisRecordIdentity(record){ const identity=record&&TRUSTED_RESULT_IDENTITIES.get(record); if(!identity) throw new Error("analysis record identity was not validated"); return identity; }
+function resolvedRecordIdentity(value,suppliedDigest,context,recordSequence,boundIdentity){
+  const base=splitRecordRole(value).base;
+  if(boundIdentity!=null){ if(!TRUSTED_IDENTITIES.has(boundIdentity)||boundIdentity.id!==base) throw new Error("record identity binding is not valid for this result"); return boundIdentity; }
+  return safeExportIdentity(value,suppliedDigest,context,recordSequence);
+}
+function identityFileStem(identity){
+  if(!TRUSTED_IDENTITIES.has(identity)) throw new Error("record identity was not validated");
+  if(identity.idSha256) return `record_${identity.idSha256}`;
+  if(/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(identity.id)&&!/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(identity.id)) return identity.id;
+  throw new Error("validated public record ID is not filename-safe");
+}
+function resultBoundIdentity(value,suppliedDigest=null,allowInputRole=false){
+  if(suppliedDigest!=null) return safeExportIdentity(value,suppliedDigest);
+  const parsed=splitRecordRole(value),current=state.recordIdentity;
+  if(current&&TRUSTED_IDENTITIES.has(current)&&parsed.base===current.id&&(!parsed.role||(allowInputRole&&parsed.role==="input")))
+    return {...current,label:current.id+parsed.label,role:parsed.role};
+  return safeExportIdentity(value);
+}
+function safeRecordId(value,suppliedDigest=null,context=null,recordSequence=null){ return safeExportIdentity(value,suppliedDigest,context,recordSequence).label; }
+function safeFileStem(value, fallback="record",suppliedDigest=null,context=null,recordSequence=null){
+  const raw=String(value==null?"":value),identity=safeExportIdentity(raw,suppliedDigest,context,recordSequence),publicId=identity.id,device=/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i;
+  fallback=String(fallback||"record"); if(!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(fallback)||fallback==="."||fallback===".."||device.test(fallback)) fallback="record";
+  if(identity.idSha256) return `record_${identity.idSha256}`;
+  if(/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(publicId)&&!device.test(publicId)) return publicId;
+  return `${fallback}_${sha256Hex(raw).slice(0,12)}`;
+}
+function canonicalSourceUrl(value,accession,source){
+  const acc=String(accession==null?"":accession),src=String(source==null?"":source),url=String(value==null?"":value);
+  if(!PUBLIC_ACCESSION_RE.test(acc)) return "";
+  const expected=src.startsWith("ENA")?`https://www.ebi.ac.uk/ena/browser/view/${acc}`:
+    (src.startsWith("NCBI")?`https://www.ncbi.nlm.nih.gov/nuccore/${acc}`:"");
+  return expected&&url===expected?expected:"";
+}
+state.source=LOCAL_SOURCE_WIRE;
+function gffEsc(value){ return String(value).replace(/%/g,"%25").replace(/;/g,"%3B").replace(/=/g,"%3D").replace(/&/g,"%26").replace(/,/g,"%2C").replace(/\t/g,"%09").replace(/\n/g,"%0A").replace(/\r/g,"%0D"); }
+function boundSequence(sequence){ const s=String(sequence||"").replace(/\s/g,"").toUpperCase().replace(/U/g,"T"); if(!s || !/^[ACGTRYSWKMBDHVN]+$/.test(s)) throw new Error("source sequence is absent or is not IUPAC nucleotide sequence"); return s; }
+function modelRows(model, sequenceLength){
+  if(!model || typeof model!=="object") throw new Error("annotation model is absent");
+  const specs=[["exons","exon","SO:0000147",0],["introns","intron","SO:0000188",1],["cds","CDS","SO:0000316",2]], rows=[];
+  for(const [key,type,ontology,rank] of specs){ const values=model[key]||[]; if(!Array.isArray(values)) throw new Error(`${key} is not a list`);
+    values.forEach((f,index)=>{ const start=f&&f.start,end=f&&f.end,strand=(f&&f.strand)||model.strand||".";
+      if(!Number.isInteger(start)||!Number.isInteger(end)||start<0||end<=start||(sequenceLength!=null&&end>sequenceLength)) throw new Error(`${key}[${index}] has invalid 0-based half-open coordinates`);
+      if(!["+","-","."].includes(strand)) throw new Error(`${key}[${index}] has invalid strand`);
+      rows.push({key,type,ontology,rank,index,start,end,strand,feature:f}); }); }
+  rows.sort((a,b)=>a.start-b.start||a.end-b.end||a.rank-b.rank||a.index-b.index); if(!rows.length) throw new Error("annotation model has no intervals"); return rows;
+}
+function modelGff3(model, sequence, recordId, modelKind,recordIdSha256=null,sourceContext=null,boundIdentity=null){
+  const seq=sequence==null?null:boundSequence(sequence), rows=modelRows(model,seq&&seq.length), original=String(recordId||""), identity=resolvedRecordIdentity(original,recordIdSha256,sourceContext,sequence,boundIdentity),seqid=identity.id,max=seq?seq.length:Math.max(...rows.map(r=>r.end));
+  const count={exon:0,intron:0,CDS:0}, out=["##gff-version 3",`##sequence-region ${seqid} 1 ${max}`,"#!coordinate-system input=0-based-half-open; gff3=1-based-inclusive"];
+  rows.forEach(r=>{ const n=++count[r.type],f=r.feature,attrs=[`ID=annotation.${r.type.toLowerCase()}.${n}`,`Name=${r.type}_${n}`,`Ontology_term=${r.ontology}`,`model_kind=${gffEsc(modelKind)}`];
+    if(identity.idSha256) attrs.push(`original_record_sha256=${identity.idSha256}`); if(f.derived) attrs.push("derived=true"); if(f.note) attrs.push(`note=${gffEsc(f.note)}`); if(f.donor) attrs.push(`donor=${gffEsc(f.donor)}`); if(f.acceptor) attrs.push(`acceptor=${gffEsc(f.acceptor)}`); if(Object.hasOwn(f,"canonical")) attrs.push(`canonical=${f.canonical?"true":"false"}`); if(f.cds_group) attrs.push(`cds_group=${gffEsc(f.cds_group)}`);
+    let phase="."; if(r.type==="CDS"){ phase=f.phase; if(!Number.isInteger(phase)||phase<0||phase>2) throw new Error("CDS phase is unavailable; BED and FASTA remain available"); }
+    out.push([seqid,"TEagle",r.type,r.start+1,r.end,".",r.strand,phase,attrs.join(";")].join("\t")); });
+  if(seq){ out.push("##FASTA",`>${seqid}`); for(let i=0;i<seq.length;i+=60) out.push(seq.slice(i,i+60)); } return out.join("\n")+"\n";
+}
+function modelBed(model, sequenceLength, recordId,recordIdSha256=null,sourceContext=null,recordSequence=null,boundIdentity=null){
+  const original=String(recordId||""),identity=resolvedRecordIdentity(original,recordIdSha256,sourceContext,recordSequence,boundIdentity),seqid=identity.id,count={exon:0,intron:0,CDS:0};
+  return modelRows(model,sequenceLength).map(r=>{ let name=`${r.type}_${++count[r.type]}`; if(identity.idSha256) name+=`|record_sha256=${identity.idSha256}`; return [seqid,r.start,r.end,name,0,r.strand].join("\t"); }).join("\n")+"\n";
+}
+function modelFasta(model, sequence, recordId, featureTypes,recordIdSha256=null,sourceContext=null,boundIdentity=null){
+  const seq=boundSequence(sequence), wanted=new Set(featureTypes),original=String(recordId||""),identity=resolvedRecordIdentity(original,recordIdSha256,sourceContext,sequence,boundIdentity),seqid=identity.id,count={exon:0,intron:0,CDS:0},comp={A:"T",C:"G",G:"C",T:"A",R:"Y",Y:"R",S:"S",W:"W",K:"M",M:"K",B:"V",D:"H",H:"D",V:"B",N:"N"},out=[];
+  modelRows(model,seq.length).filter(r=>wanted.has(r.type)).forEach(r=>{ let s=seq.slice(r.start,r.end); if(r.strand==="-") s=s.split("").reverse().map(x=>comp[x]).join(""); const n=++count[r.type],binding=identity.idSha256?` record_sha256=${identity.idSha256}`:""; out.push(`>${seqid}.${r.type.toLowerCase()}${n}${binding} coordinates=${r.start}-${r.end} coordinate_system=0-based-half-open strand=${r.strand}`); for(let i=0;i<s.length;i+=60) out.push(s.slice(i,i+60)); });
+  if(!out.length) throw new Error("annotation model has no requested intervals"); return out.join("\n")+"\n";
+}
+function downloadText(text,name,type="text/plain;charset=utf-8"){ downloadBlob(new Blob([text],{type}),name); }
+window.exportAnalysisJson=()=>err("Complete-result JSON export is disabled in the legacy browser because this client cannot independently verify the backend seal. Use the native application export.");
+window.exportProvenanceJson=()=>err("Provenance JSON export is disabled in the legacy browser because this client cannot independently verify the manifest seal. Use the native application export.");
+window.exportSelectedRecordFasta=()=>{ const r=state.lastRec;if(!r||!r.seq) return err("The selected record has no bound source sequence."); try{ const identity=analysisRecordIdentity(r),stem=identityFileStem(identity),binding=identity.idSha256?` original_record_sha256=${identity.idSha256}`:""; downloadText(`>${identity.id}${binding}\n${String(r.seq).match(/.{1,60}/g).join("\n")}\n`,`${stem}.fasta`,"text/x-fasta"); }catch(e){ err("Export unavailable — "+e.message); } };
+function exportModel(kind,format,featureType){
+  try { const splice=kind==="splice", holder=splice?state.splice:null, model=splice&&holder?holder.gm:state.features, rec=state.lastRec, sequence=rec&&rec.seq, id=rec&&rec.id||"record", digest=rec&&rec.idSha256,identity=analysisRecordIdentity(rec),stem=identityFileStem(identity)+(splice?"_splice":"_gene_model"), modelKind=splice?"splice_alignment":"fetched_gene_model";
+    if(!model||!sequence) throw new Error("No coordinate-bound model and source sequence are available."); let text,type="text/plain;charset=utf-8",ext=format;
+    if(format==="gff3"){ text=modelGff3(model,sequence,id,modelKind,digest,state.source,identity); type="text/gff3;charset=utf-8"; } else if(format==="bed") text=modelBed(model,boundSequence(sequence).length,id,digest,state.source,sequence,identity); else { text=modelFasta(model,sequence,id,[featureType],digest,state.source,identity); ext="fasta"; type="text/x-fasta"; }
+    downloadText(text,`${stem}.${ext}`,type);
+  } catch(e){ err("Export unavailable — "+e.message); }
+}
+window.exportGeneModel=(format,featureType)=>exportModel("gene",format,featureType);
+window.exportSpliceModel=(format,featureType)=>exportModel("splice",format,featureType);
 window.exportTable = (kind, fmt) => {
   let headers, rows, base = "TEagle";
   if(kind === "struct"){ const s = (state.lastRec && state.lastRec.structural) || [];
-    headers = ["type","start","end","span_length","repeat_or_feature_length","identity_or_metric","method"];
+    const scope=((state.lastRec&&state.lastRec.classification&&state.lastRec.classification.explanation)||"Structural features are computational calls under the displayed method and thresholds.");
+    headers = ["type","start","end","span_length","repeat_or_feature_length","identity_or_metric","method","evidence_note","confident","scope_note"];
     rows = s.map(e => { const sp = e.element_span || e.five_prime || e.pos || e.upstream || [null,null];
       const arm = e.ltr_len || e.tir_len || e.length || "";
       const span = (sp[0]!=null && sp[1]!=null) ? sp[1]-sp[0] : "";
-      return [e.type, sp[0], sp[1], span, arm, e.identity!=null?e.identity+"%":(e.motif||""), e.method||""]; }); base = "TEagle_structural"; }
-  else if(kind === "orf"){ const o = state.orfs || []; headers = ["strand","frame","start","end","length_aa"];
-    rows = o.map(x => [x.strand, x.frame, x.start, x.end, x.length_aa]); base = "TEagle_orfs"; }
-  else if(kind === "domain"){ const d = state.domains || []; headers = ["domain","label","pfam","aa_start","aa_end","nt_start","nt_end","score","evalue"];
-    rows = d.map(x => [x.domain, x.label, x.pfam||"", x.aa[0], x.aa[1], x.nt[0], x.nt[1], x.score, x.evalue]); base = "TEagle_domains"; }
-  else if(kind === "family"){ const f = state.family || []; headers = ["class_family","family","q_start","q_end","strand","divergence_pct","score"];
-    rows = f.map(x => [x.class_family, x.family, x.q_start, x.q_end, x.strand, x.divergence, x.score]); base = "TEagle_dfam_families"; }
-  else if(kind === "primers"){ const c = state.candidates || []; headers = ["id","fwd_5to3","rev_5to3","product_size_bp","left_tm","right_tm","left_gc_pct","right_gc_pct","penalty"];
-    rows = c.map(x => [x.id, x.left_seq, x.right_seq, x.product_size, x.left_tm, x.right_tm, x.left_gc, x.right_gc, x.penalty]); base = "TEagle_primers"; }
-  else if(kind === "pcr"){ const a = (state.lastPcr && state.lastPcr.amplicons) || []; headers = ["pair","source","start","end","length_bp","fwd_mismatches","rev_mismatches","call"];
-    rows = a.map(x => [x.pair||"", x.source, x.start, x.end, x.length, x.fwd_mm, x.rev_mm, x.on_target?"on-target":"off-target"]); base = "TEagle_pcr_amplicons"; }
-  else if(kind === "gene"){ const g = state.features; if(!g) return; const seg = [];
-    (g.exons||[]).forEach(e => seg.push(["exon", e.start, e.end, e.end-e.start, e.strand]));
-    (g.introns||[]).forEach(x => seg.push(["intron", x.start, x.end, x.end-x.start, x.strand]));
-    (g.cds||[]).forEach(c => seg.push(["CDS", c.start, c.end, c.end-c.start, c.strand]));
-    seg.sort((a,b) => a[1]-b[1]); headers = ["segment","start","end","length","strand"]; rows = seg; base = "TEagle_gene_structure"; }
-  else if(kind === "splice"){ const sp = state.splice; if(!sp) return; headers = ["intron","start","end","length","donor","acceptor","canonical"];
-    rows = (sp.gm.introns||[]).map((i,k) => [k+1, i.start, i.end, i.end-i.start, i.donor, i.acceptor, i.canonical]); base = "TEagle_splice_introns"; }
+      return [e.type, sp[0], sp[1], span, arm, e.identity!=null?e.identity+"%":(e.motif||""), e.method||"",e.note||"",Object.hasOwn(e,"confident")?e.confident:"",scope]; }); base = "TEagle_structural"; }
+  else if(kind === "orf"){ const o = state.orfs || [],scope="Open reading frames are sequence predictions at the displayed minimum amino-acid length; they are not evidence of expression."; headers = ["strand","frame","start","end","length_aa","scope_note"];
+    rows = o.map(x => [x.strand, x.frame, x.start, x.end, x.length_aa,scope]); base = "TEagle_orfs"; }
+  else if(kind === "domain"){ const d = state.domains || [],scope=((state.lastRec&&state.lastRec.classification&&state.lastRec.classification.completeness&&state.lastRec.classification.completeness.scope)||"Domain calls are limited to the profiles tested."); headers = ["domain","label","pfam","aa_start","aa_end","nt_start","nt_end","score","evalue","scope_note"];
+    rows = d.map(x => [x.domain, x.label, x.pfam||"", x.aa[0], x.aa[1], x.nt[0], x.nt[1], x.score, x.evalue,scope]); base = "TEagle_domains"; }
+  else if(kind === "family"){ const f = state.family || [],scope=state.familyScopeNote||"Rows are RepeatMasker alignments; unclassified/other does not mean non-TE."; headers = ["class_family","classification_category","family","q_start","q_end","strand","divergence_pct","score","scope_note"];
+    rows = f.map(x => [x.class_family,familyCategory(x.class_family),x.family,x.q_start,x.q_end,x.strand,x.divergence,x.score,scope]); base = "TEagle_dfam_families"; }
+  else if(kind === "primers"){ const c = state.candidates || [],scope="Primer3 designs are computational candidates; specificity requires the separately reported search and wet-lab validation."; headers = ["id","fwd_5to3","rev_5to3","product_size_bp","left_tm","right_tm","left_gc_pct","right_gc_pct","penalty","scope_note"];
+    rows = c.map(x => [x.id,x.left_seq,x.right_seq,x.product_size,x.left_tm,x.right_tm,x.left_gc,x.right_gc,x.penalty,scope]); base = "TEagle_primers"; }
+  else if(kind === "pcr"){ const a = (state.lastPcr && state.lastPcr.amplicons) || [],scope="Computational products under the displayed mismatch/orientation/length criteria; this does not establish wet-lab specificity."; headers = ["pair","mechanism_key","product_key","source","source_sha256_if_rewritten","start","end","template_span_bp","product_length_bp","fwd_mismatches","rev_mismatches","matches_intended_product","covers_primer3_target","call","scope_note"];
+    rows = a.map(x => { const identity=resultBoundIdentity(x.source||"record",x.sourceIdSha256,true); return [x.pair||"",x.mechanism_key||"",x.product_key||"",identity.label,identity.idSha256||"",x.start,x.end,x.length,x.product_length??x.length,x.fwd_mm,x.rev_mm,x.matches_intended_product??"unavailable",x.covers_primer3_target??"unavailable",ampCall(x).replace(/<[^>]+>/g,""),scope]; }); base = "TEagle_pcr_amplicons"; }
+  else if(kind === "gene"){ const g = state.features; if(!g) return; headers = ["segment","start","end","length","strand","note"];
+    rows = geneSegments(g).map(x=>[x.t,x.s,x.e,x.e-x.s,x.str,x.note]); base = "TEagle_gene_structure"; }
+  else if(kind === "splice"){ const sp = state.splice; if(!sp) return; const scope="Introns are alignment gaps from the displayed transcript-to-genome splice alignment; a canonical motif is not independent evidence of expression."; headers = ["intron","start","end","length","donor","acceptor","canonical","scope_note"];
+    rows = (sp.gm.introns||[]).map((i,k) => [k+1,i.start,i.end,i.end-i.start,i.donor,i.acceptor,i.canonical,scope]); base = "TEagle_splice_introns"; }
   else return;
   if(!rows.length) return;
   downloadTable(headers, rows, base, fmt);
@@ -504,12 +744,12 @@ window.copyAllFasta = (kind) => {
   let recs = [];
   if(kind === "orf") recs = (state.orfs||[]).map(o => `>ORF_${o.strand}${o.frame}_${o.start}-${o.end}_${o.length_aa}aa\n${o.strand==="-"?revcomp(slice(o.start,o.end)):slice(o.start,o.end)}`);
   else if(kind === "struct") recs = (state.structural||[]).map(e => { const sp=e.element_span||e.five_prime||e.pos||[0,0]; return `>${e.type.split(" ")[0]}_${sp[0]}-${sp[1]}\n${slice(sp[0],sp[1])}`; });
-  else if(kind === "family") recs = (state.family||[]).map(h => `>${h.family}_${h.class_family.replace("/","-")}_${h.q_start}-${h.q_end}\n${h.strand==="-"?revcomp(slice(h.q_start,h.q_end)):slice(h.q_start,h.q_end)}`);
+  else if(kind === "family"){ const source=state.familySequence||""; recs = (state.family||[]).map(h => { const dna=source.slice(h.q_start,h.q_end); return `>${h.family}_${h.class_family.replace("/","-")}_${h.q_start}-${h.q_end}\n${h.strand==="-"?revcomp(dna):dna}`; }); }
   copyText(recs.join("\n"), event && event.currentTarget);
 };
 window.copyAmplicons = () => {
   const a = (state.lastPcr && state.lastPcr.amplicons) || [];
-  copyText(a.map(x => `>amplicon_${String(x.source).replace(/\W+/g,"_")}_${x.start}-${x.end}_${x.length}bp_${x.on_target?"on":"off"}target\n${x.seq||""}`).join("\n"), event && event.currentTarget);
+  try{ copyText(a.map(x => { const identity=resultBoundIdentity(x.source||"record",x.sourceIdSha256,true),binding=identity.idSha256?` source_sha256=${identity.idSha256}`:"",role=identity.role?` source_role=${identity.role.replace(/ /g,"_")}`:""; return `>amplicon_${identity.id}_${x.start}-${x.end}_${x.product_length??x.length}bp${role}${binding} call=${ampCall(x).replace(/<[^>]+>/g,"").replace(/\W+/g,"_")}\n${x.seq||""}`; }).join("\n"), event && event.currentTarget); }catch(e){ err("Export unavailable — "+e.message); }
 };
 
 /* ---------- health ---------- */
@@ -613,66 +853,70 @@ if($("#wslFile")) $("#wslFile").onchange = async (e) => {
     if(!text.trim()) throw new Error("file is empty");
     state.wslSeq = text; state.wslSeqName = f.name;
     const nrec = (text.match(/^>/gm)||[]).length, bp = text.replace(/^>.*$/gm,"").replace(/\s/g,"").length;
-    meta.innerHTML = `<b>${f.name}</b> · ${bp.toLocaleString()} bp${nrec>1?` · ${nrec} records (first record annotated)`:""} — ready to annotate`;
+    meta.innerHTML = `<b>${f.name}</b> · ${bp.toLocaleString()} bp${nrec>1?` · ${nrec} records — family annotation requires one record at a time`:""} — ready to annotate`;
   } catch(er){ meta.textContent = "✕ upload failed — " + er.message; state.wslSeq = ""; $("#wslSource").value = "specimen"; }
   finally { e.target.value = ""; }
 };
 if($("#annotate")) $("#annotate").onclick = async () => {
   clearErr();
+  state.family=[]; state.familySequence="";
   const sp = $("#wslSpecies").value.trim();
   const r = wslResolveSeq();
   if(!r.seq.trim()){ err(`No sequence for family annotation — the ${r.label} is empty. Choose a source above.`); return; }
   const nrec = (r.seq.match(/^>/gm)||[]).length;
   const bp = r.seq.replace(/^>.*$/gm,"").replace(/\s/g,"").length;
+  if(nrec>1){ err("Family annotation accepts exactly one FASTA record per run; choose or split a record so no record is silently omitted."); return; }
+  state.familySequence = r.seq.replace(/^>.*$/gm,"").replace(/\s/g,"").toUpperCase().replace(/U/g,"T");
   const btn = $("#annotate"), o = btn.textContent; btn.disabled = true; btn.classList.add("pending"); btn.textContent = "◴ running…";
   const eta = await etaText("annotate", bp);
-  $("#wslBody").innerHTML = `<div class="mini">running RepeatMasker against Dfam on the ${r.label}${nrec>1?` (first of ${nrec} records)`:""}${sp?` (species: ${sp})`:""}…<br>${eta?eta+" · ":""}<span class="etaclock">0s elapsed</span></div>`;
+  $("#wslBody").innerHTML = `<div class="mini">running RepeatMasker against Dfam on the ${r.label}${sp?` (species: ${sp})`:""}…<br>${eta?eta+" · ":""}<span class="etaclock">0s elapsed</span></div>`;
   const stop = liveTimer($("#wslBody"));
   try {
-    const d = await api("/api/annotate", { sequence: r.seq, species: sp, source: r.useSource ? state.source : null, timeout: 600 });
-    if(!d.ok){ $("#wslBody").innerHTML = `<div class="err-banner">${d.error}</div>`; return; }
+    const d = await api("/api/annotate", { sequence: r.seq, species: sp, source: r.useSource ? sourceWire() : LOCAL_SOURCE_WIRE, timeout: 600 });
+    if(!d.ok){ state.family=[]; state.familySequence=""; $("#wslBody").innerHTML = `<div class="err-banner">${esc(d.error)}</div>`; return; }
     renderFamily(d);
     if(d.elapsed_s) $("#wslMeta").textContent += ` · ${d.elapsed_s}s`;
     if(d.provenance) renderProvenance(d.provenance);
-  } catch(e){ err("Family annotation failed — " + e.message); }
+  } catch(e){ state.family=[]; state.familySequence=""; $("#wslBody").innerHTML='<div class="empty">Family annotation failed — no family result or export is current.</div>'; err("Family annotation failed — " + e.message); }
   finally { stop(); btn.disabled = false; btn.classList.remove("pending"); btn.textContent = o; }
 };
 const _LC = new Set(["Low_complexity", "Simple_repeat", "Satellite", "Unknown", "Unspecified"]);
+function familyCategory(classFamily){ return _LC.has(classFamily) ? "other_or_unclassified" : "TE_classified"; }
 function famTag(cf){
   const c = (cf.split("/")[0] || "");
   const cls = c === "LTR" ? "t-ltr" : c === "DNA" ? "t-tir" : c === "LINE" ? "t-orf"
             : c === "SINE" ? "t-good" : "t-plain";
-  return `<span class="tag ${cls}"><span class="d" style="background:currentColor"></span>${cf}</span>`;
+  return `<span class="tag ${cls}"><span class="d" style="background:currentColor"></span>${esc(cf)}</span>`;
 }
 function renderFamily(d){
   expandCard($("#wslBody").closest(".card"));
-  const te = d.hits.filter(h => !_LC.has(h.class_family));   // TE families only, not low-complexity
-  const lc = d.hits.length - te.length;
-  const noSpecies = !d.species || d.species.startsWith("(all");
-  if(!te.length){
-    const hint = noSpecies
-      ? " Set the organism/species above — RepeatMasker needs a lineage, and without one only low-complexity is reported."
-      : " The family for this organism may need an additional Dfam taxon partition (curated covers well-studied lineages).";
-    $("#wslBody").innerHTML = `<div class="empty">No TE family named under the current criteria`+
-      `${lc?` (${lc} low-complexity / simple-repeat region${lc>1?"s":""} found)`:""}.${hint}</div>`;
-    $("#wslMeta").textContent = `0 TE families${lc?` · ${lc} low-cplx`:""}`;
+  const hits = Array.isArray(d.hits) ? d.hits : [];
+  const te = hits.filter(h => familyCategory(h.class_family)==="TE_classified");
+  const other = hits.filter(h => familyCategory(h.class_family)==="other_or_unclassified");
+  state.family = hits;                         // displayed rows and CSV/TSV/FASTA share this exact array
+  if(!hits.length){
+    const scope = d.coverage_warning || d.warning || "No repeat alignment was reported by the searched library and parameters; this does not establish that the sequence contains no transposable element.";
+    $("#wslBody").innerHTML = `<div class="empty">No repeat rows reported. ${esc(scope)}</div>`;
+    $("#wslMeta").textContent = "0 reported rows";
     return;
   }
-  state.family = te;
-  const fams = [...new Set(te.map(h=>h.family))];
-  const rows = te.map((h,i)=>`<tr class="clickable" tabindex="0" role="button" onclick="featMenu(event, ${h.q_start}, ${h.q_end}, '${h.strand}', '${h.family}')">
-    <td class="mono">${i+1}</td><td>${famTag(h.class_family)}</td><td class="mono">${h.family}</td>
+  const fams = [...new Set(hits.map(h=>h.family))];
+  const rows = hits.map((h,i)=>`<tr class="clickable" tabindex="0" role="button" onclick="featMenu(event, ${h.q_start}, ${h.q_end}, '${h.strand}', decodeURIComponent('${encodeURIComponent(String(h.family))}'))">
+    <td class="mono">${i+1}</td><td>${famTag(h.class_family)}</td><td>${familyCategory(h.class_family)==="TE_classified"?"TE-classified":"other/unclassified"}</td><td class="mono">${esc(h.family)}</td>
     <td class="coord">${h.q_start.toLocaleString()}–${h.q_end.toLocaleString()}</td>
     <td class="mono">${h.strand}</td><td class="coord">${h.divergence}%</td><td class="coord">${h.score}</td></tr>`).join("");
+  const library = d.library_kind || ((d.dfam_library&&d.dfam_library.version) ? `Dfam ${d.dfam_library.version}` : "searched repeat library (identity recorded in provenance)");
+  const warning = d.coverage_warning || d.warning;
+  state.familyScopeNote = warning || "Every returned RepeatMasker row is retained; other/unclassified rows are not evidence that an interval is non-TE.";
   $("#wslBody").innerHTML = `
-    <div class="classbn"><span class="big">Dfam · ${te[0].class_family}</span>
+    <div class="classbn"><span class="big">${te.length} TE-classified · ${other.length} other/unclassified</span>
       <span class="cf cf-High">Detected</span>
-      <span class="kls">${fams.join(" · ")} · Dfam 4.0 curated ${srcChip("Dfam")} · RepeatMasker ${d.repeatmasker_version} ${srcChip("RepeatMasker")}</span>
-      <span class="exp">Family-level annotation from RepeatMasker (RMBLAST) against the Dfam curated library in WSL — species: ${d.species}. Layer-A homology (Detected), complementing the domain-based superfamily above.${lc?` (${lc} low-complexity region${lc>1?"s":""} omitted.)`:""}</span></div>
-    <table><thead><tr><th>#</th><th>Class/family</th><th>Dfam family</th><th>Coords (0-based)</th><th>Str</th><th>Div</th><th>Score</th></tr></thead><tbody>${rows}</tbody></table>
+      <span class="kls">${fams.map(esc).join(" · ")} · ${esc(library)} ${srcChip("Dfam")} · RepeatMasker ${esc(d.repeatmasker_version||"version unresolved")} ${srcChip("RepeatMasker")}</span>
+      <span class="exp">Every returned RepeatMasker row is retained. TE-classified rows and low-complexity, simple-repeat, satellite, unknown or unspecified rows remain distinguishable; an unclassified row is not evidence that the interval is non-TE.${warning?` ${esc(warning)}`:""}</span></div>
+    <table><thead><tr><th>#</th><th>Class/family</th><th>Category</th><th>Dfam family</th><th>Coords (0-based)</th><th>Str</th><th>Div</th><th>Score</th></tr></thead><tbody>${rows}</tbody></table>
     <div class="flexbtns" style="margin-top:8px"><button class="btn sm" onclick="copyAllFasta('family')">⧉ all family regions → FASTA</button>${csvBtns('family')}<span class="lbl">click any family row for its sequence</span></div>`;
   glossify($("#wslBody"));
-  $("#wslMeta").textContent = `${te.length} family hits · RepeatMasker ${d.repeatmasker_version}`;
+  $("#wslMeta").textContent = `${hits.length} rows · ${te.length} TE-classified · ${other.length} other/unclassified`;
 }
 initWsl();
 
@@ -688,6 +932,7 @@ async function initSplice(){
 }
 if($("#runSplice")) $("#runSplice").onclick = async () => {
   clearErr();
+  state.splice=null;
   const genomic = state.seq || seqEl.value, tx = $("#spliceTx").value.trim();
   if(!genomic.trim()){ err("Load a genomic sequence first (fetch, upload, or paste, then Run analysis)."); return; }
   if(!tx){ err("Paste a transcript / cDNA / mRNA to align."); return; }
@@ -697,11 +942,11 @@ if($("#runSplice")) $("#runSplice").onclick = async () => {
   $("#spliceBody").innerHTML = `<div class="mini">minimap2 -x splice aligning the transcript to the loaded sequence…<br>${eta?eta+" · ":""}<span class="etaclock">0s elapsed</span></div>`;
   const stop = liveTimer($("#spliceBody"));
   try {
-    const d = await api("/api/splice", { sequence: genomic, transcript: tx, source: state.source, timeout: 300 });
-    if(!d.ok){ $("#spliceBody").innerHTML = `<div class="err-banner">${d.error}</div>`; return; }
+    const d = await api("/api/splice", { sequence: genomic, transcript: tx, source: sourceWire(), timeout: 300 });
+    if(!d.ok){ state.splice=null; $("#spliceBody").innerHTML = `<div class="err-banner">${esc(d.error)}</div>`; return; }
     renderSplice(d);
     if(d.provenance) renderProvenance(d.provenance);
-  } catch(e){ err("Splice alignment failed — " + e.message); }
+  } catch(e){ state.splice=null; $("#spliceBody").innerHTML='<div class="empty">Splice alignment failed — no splice result or export is current.</div>'; err("Splice alignment failed — " + e.message); }
   finally { stop(); btn.disabled = false; btn.classList.remove("pending"); btn.textContent = o; }
 };
 function renderSplice(d){
@@ -720,7 +965,7 @@ function renderSplice(d){
       <span class="exp">Evidence-based exon–intron structure: the transcript was spliced-aligned to the loaded sequence; introns are alignment gaps, splice sites compared to canonical GT–AG / GC–AG / AT–AC motifs.</span></div>
     <div id="figSplice"></div>
     <table><thead><tr><th>#</th><th>Intron span (0-based)</th><th>Len</th><th>Splice site</th><th>Call</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="flexbtns" style="margin-top:8px"><button class="btn sm" onclick="copySpliceFasta()">⧉ exons → FASTA</button>${csvBtns('splice')}
+    <div class="flexbtns" style="margin-top:8px"><button class="btn sm" onclick="copySpliceFasta()">⧉ exons → FASTA</button><button class="btn sm" onclick="exportSpliceModel('fasta','exon')">⭳ exon FASTA</button><button class="btn sm" onclick="exportSpliceModel('gff3')">⭳ GFF3</button><button class="btn sm" onclick="exportSpliceModel('bed')">⭳ BED</button>${csvBtns('splice')}
       <span class="lbl">exons/introns resolved by spliced alignment of your transcript</span></div>`;
   state.splice = { gm, len, strand: d.strand };
   glossify($("#spliceBody"));
@@ -750,18 +995,34 @@ $("#theme").onclick = () => {
 
 /* ---------- specimen ---------- */
 const seqEl = $("#seq");
+function clearDisplayedResults(reason){
+  state.structural=[]; state.elemSpan=null; state.orfs=[]; state.domains=[]; state.family=[];
+  state.familySequence=""; state.familyScopeNote=""; state.lastRec=null; state.recordIdentity=null; state.candidates=[]; state.pair=null; state.pcrPairs=[];
+  state.lastPcr=null; state.splice=null; state.primerDesignSequence=null;
+  const message=esc(reason||"No current result.");
+  for(const id of ["structBody","wslBody","spliceBody","primBody","pcrBody","provBody"]){ const el=$("#"+id); if(el) el.innerHTML=`<div class="empty">${message}</div>`; }
+  for(const id of ["figStruct","figGene","figSplice","figGel"]){ delete _gvState[id]; delete _figState[id]; }
+  if($("#structMeta")) $("#structMeta").textContent="—"; if($("#wslMeta")) $("#wslMeta").textContent="—";
+  for(const id of ["rRecords","rStruct","rOrf","mLen","mGC","mN","mValid"]){ const el=$("#"+id); if(el) el.textContent="—"; }
+  if($("#design")) $("#design").disabled=true; if($("#runpcr")) $("#runpcr").disabled=true;
+  renderPcrQueue();
+}
+function invalidateAllResults(reason){
+  clearDisplayedResults(reason); state.lastAnalysis=null; state.lastProvenance=null;
+  state.lastProvenanceSet=[]; state.recordIndex=null; state.analyzedSeq=null; state.seq="";
+}
 function countNt(){
   const raw = seqEl.value.replace(/^>.*$/gm,"").replace(/\s/g,"");
   $("#charCount").textContent = raw.length.toLocaleString() + " nt";
 }
-seqEl.addEventListener("input", () => { countNt(); state.source = null; state.features = null; $("#accMeta").className = "accmeta"; $("#accMeta").innerHTML = "";
+seqEl.addEventListener("input", () => { countNt(); state.source = LOCAL_SOURCE_WIRE; state.features = null; invalidateAllResults("Sequence changed — run analysis to create current results."); $("#accMeta").className = "accmeta"; $("#accMeta").innerHTML = "";
   if(state.analyzedSeq != null && seqEl.value !== state.analyzedSeq){          // edited after analysis -> downstream results are stale
     $("#design").disabled = true; $("#designHint").textContent = "sequence changed — re-run analysis";
     if($("#runpcr")) $("#runpcr").disabled = true;
   } });
 function _staleBlock(){ if(state.analyzedSeq != null && seqEl.value !== state.analyzedSeq){
     err("The sequence changed since the last analysis. Click “Run analysis” again before designing primers or running PCR."); return true; } return false; }
-$("#loadSample").onclick = () => { seqEl.value = mkSample(); countNt(); state.source = null; state.features = null; $("#accMeta").className="accmeta"; $("#accMeta").innerHTML=""; };
+$("#loadSample").onclick = () => { invalidateAllResults("Sample loaded — run analysis to create current results."); seqEl.value = mkSample(); countNt(); state.source = LOCAL_SOURCE_WIRE; state.features = null; $("#accMeta").className="accmeta"; $("#accMeta").innerHTML=""; };
 seqEl.value = mkSample(); countNt();
 
 /* ---------- live accession fetch (real NCBI) ---------- */
@@ -769,20 +1030,23 @@ async function doFetch(){
   const acc = $("#acc").value.trim();
   const meta = $("#accMeta");
   if(!acc){ meta.className="accmeta bad"; meta.textContent="enter an accession"; return; }
+  invalidateAllResults("Fetch started — prior results and exports are no longer current.");
+  state.source=LOCAL_SOURCE_WIRE; state.features=null;
   meta.className = "accmeta loading"; meta.textContent = `fetching ${acc} from NCBI…`;
   $("#fetch").disabled = true;
   try{
-    const d = await api("/api/fetch", { accession: acc });
-    if(!d.ok){ meta.className="accmeta bad"; meta.textContent = "✕ " + d.error; return; }
-    seqEl.value = d.fasta; countNt();
-    state.source = { accession:d.accession, organism:d.organism, taxid:d.taxid,
-                     source:d.source, endpoint:d.endpoint, retrievedUtc:d.retrievedUtc, fromCache:!!d.fromCache };
-    state.features = d.features || null;
-    if(d.organism){ const sp=$("#wslSpecies"); if(sp) sp.value = d.organism; }
+    const rawFetch = await api("/api/fetch", { accession: acc });
+    if(!rawFetch.ok){ meta.className="accmeta bad"; meta.textContent = "✕ " + rawFetch.error; return; }
+    seqEl.value = rawFetch.fasta; countNt();
+    const sourceContext=validatedFetchedSource(rawFetch);
+    if(!sourceContext) throw new Error("fetch response did not satisfy the accession/source binding contract");
+    state.source=sourceContext;
+    state.features = rawFetch.features || null;
+    if(rawFetch.organism){ const sp=$("#wslSpecies"); if(sp) sp.value = rawFetch.organism; }
     meta.className = "accmeta ok";
-    const src = d.fromCache ? `<span title="reused from local cache — not re-downloaded">cached (local)</span>` : d.source||"NCBI";
-    meta.innerHTML = `<b>${d.accession}</b> · ${d.organism||"?"} · taxid ${d.taxid||"?"} · ${src}<br>`+
-      `${(d.title||"").slice(0,64)}<br><b>${(d.seq_length||d.length||0).toLocaleString()} bp</b> · ${d.moltype||"DNA"} · verify, then Run analysis`;
+    const src = rawFetch.fromCache ? `<span title="reused from local cache — not re-downloaded">cached (local)</span>` : rawFetch.source||"NCBI";
+    meta.innerHTML = `<b>${rawFetch.accession}</b> · ${rawFetch.organism||"?"} · taxid ${rawFetch.taxid||"?"} · ${src}<br>`+
+      `${(rawFetch.title||"").slice(0,64)}<br><b>${(rawFetch.seq_length||rawFetch.length||0).toLocaleString()} bp</b> · ${rawFetch.moltype||"DNA"} · verify, then Run analysis`;
   }catch(e){ meta.className="accmeta bad"; meta.textContent = "✕ fetch failed — " + e.message; }
   finally{ $("#fetch").disabled = false; }
 }
@@ -793,6 +1057,7 @@ $("#acc").addEventListener("keydown", e => { if(e.key==="Enter") doFetch(); });
 if($("#uploadBtn")) $("#uploadBtn").onclick = () => $("#fileInput").click();
 if($("#fileInput")) $("#fileInput").onchange = async (e) => {
   const f = e.target.files && e.target.files[0]; if(!f) return;
+  invalidateAllResults("Upload started — prior results and exports are no longer current.");
   const meta = $("#accMeta"); meta.className = "accmeta loading"; meta.textContent = `reading ${f.name}…`;
   try {
     let text;
@@ -801,47 +1066,56 @@ if($("#fileInput")) $("#fileInput").onchange = async (e) => {
       text = await new Response(f.stream().pipeThrough(new DecompressionStream("gzip"))).text();
     } else { text = await f.text(); }
     if(!text.trim()) throw new Error("file is empty");
-    seqEl.value = text; countNt(); state.source = null; state.features = null;
+    seqEl.value = text; countNt(); state.source = LOCAL_SOURCE_WIRE; state.features = null;
     const nrec = (text.match(/^>/gm) || []).length;
     meta.className = "accmeta ok"; meta.innerHTML = `<b>${f.name}</b> loaded · ${(text.replace(/^>.*$/gm,"").replace(/\s/g,"").length).toLocaleString()} bp`+
-      `${nrec>1?` · ${nrec} records (first is used downstream)`:""} · verify, then Run analysis`;
+      `${nrec>1?` · ${nrec} records (all analyzed; choose a record for detail and downstream actions)`:""} · verify, then Run analysis`;
   } catch(er){ meta.className = "accmeta bad"; meta.textContent = "✕ upload failed — " + er.message; }
   finally { e.target.value = ""; }   // allow re-picking the same file
 };
 
 /* ---------- run analysis ---------- */
+function analysisRecordSummary(d, selected){
+  if(d.records.length===1) return `<div class="flexbtns" style="margin-bottom:10px"><button class="btn sm" onclick="exportSelectedRecordFasta()">⭳ record FASTA</button><button class="btn sm" disabled title="Legacy browser cannot independently verify the backend result seal; use the native export">complete result JSON unavailable</button><button class="btn sm" disabled title="Legacy browser cannot independently verify the manifest seal; use the native export">provenance JSON unavailable</button></div>`;
+  const rows=d.records.map((r,i)=>{ const cl=r.classification&&r.classification.te_class||"withheld", status=r.valid?(r.processing&&r.processing.classification&&r.processing.classification.status||"processed"):"invalid",identity=analysisRecordIdentity(r);
+    return `<tr${i===selected?' class="selected"':""}><td class="mono">${i+1}</td><td class="mono">${esc(identity.label)}</td><td class="coord">${r.composition.length.toLocaleString()}</td><td>${esc(cl)}</td><td>${esc(status)}</td><td><button class="btn sm" onclick="selectAnalysisRecord(${i})"${i===selected?" disabled":""}>${i===selected?"shown":"show"}</button></td></tr>`; }).join("");
+  return `<div class="classbn"><span class="big">${d.records.length} records analyzed</span><span class="exp">All records are listed; detailed tracks and downstream primer actions use only the explicitly selected record.</span></div><table><thead><tr><th>#</th><th>Record</th><th>bp</th><th>Classification</th><th>Status</th><th>Detail</th></tr></thead><tbody>${rows}</tbody></table><div class="flexbtns" style="margin:8px 0 12px"><button class="btn sm" onclick="exportSelectedRecordFasta()">⭳ selected-record FASTA</button><button class="btn sm" disabled title="Legacy browser cannot independently verify the backend result seal; use the native export">complete result JSON unavailable</button><button class="btn sm" disabled title="Legacy browser cannot independently verify the manifest seal; use the native export">provenance JSON unavailable</button></div>`;
+}
+function clearRecordBoundOutputs(reason){
+  clearDisplayedResults(reason);
+}
+function showAnalysisRecord(index){
+  const d=state.lastAnalysis;if(!d||!Number.isInteger(index)||index<0||index>=d.records.length) return;
+  if(state.recordIndex!=null&&state.recordIndex!==index) clearRecordBoundOutputs("Record selection changed — design primers or run splice alignment again for this record.");
+  const rec=d.records[index],c=rec.composition,identity=analysisRecordIdentity(rec); state.recordIndex=index; state.lastRec=rec; state.recordIdentity=identity; state.seq=`>${identity.id}\n${rec.seq||""}`;
+  $("#mLen").innerHTML = c.length.toLocaleString() + " <small>bp</small>"; $("#mGC").innerHTML = c.gc + " <small>%</small>"; $("#mN").innerHTML = c.n + " <small>%</small>";
+  const vc=$("#mValidCell");vc.classList.toggle("ok",rec.valid);vc.classList.toggle("err",!rec.valid);$("#mValid").textContent=rec.valid?"valid":rec.invalid.length+" bad";
+  $("#rStruct").innerHTML=`${rec.structural.length} ${rec.structural.length?srcChip("Wicker2007"):""}`;$("#rOrf").textContent=rec.orfs.length;
+  state.structural=rec.structural;const element=rec.structural.find(e=>e.element_span);state.elemSpan=element?element.element_span:null;
+  renderStructure(rec); $("#structBody").insertAdjacentHTML("afterbegin",analysisRecordSummary(d,index)); glossify($("#structBody"));
+  if(rec.notes&&rec.notes.length) $("#errbox").innerHTML+=`<div class="pcrwarn">⚠ ${rec.notes.map(esc).join("; ")}</div>`;
+  $("#design").disabled=!rec.valid;$("#designHint").textContent=rec.valid?"ready":"selected record is invalid";
+  if(d.provenance) renderProvenance(d.provenance);
+}
+window.selectAnalysisRecord=index=>{ clearErr();showAnalysisRecord(Number(index)); };
 $("#run").onclick = async () => {
   clearErr();
   const btn = $("#run"); const orig = btn.textContent;
   btn.disabled = true; btn.classList.add("pending"); btn.textContent = "◴ analyzing…";
   try {
-    state.seq = seqEl.value;
-    const d = await api("/api/analyze", { sequence: state.seq, source: state.source });
+    const submitted=seqEl.value;
+    invalidateAllResults("A new analysis is running — prior results and exports are no longer current.");
+    const d = await api("/api/analyze", { sequence: submitted, source: sourceWire() });
     if(!d.records || !d.records.length){ err(d.warning || "Enter, upload, or fetch a sequence first."); return; }
+    validateAnalysisRecordIdentities(d,submitted,state.source);
     if(d.warning) $("#errbox").innerHTML = `<div class="pcrwarn">⚠ ${d.warning}</div>`;
-    const rec = d.records[0];
-    if(rec.notes && rec.notes.length) $("#errbox").innerHTML += `<div class="pcrwarn">⚠ ${rec.notes.join("; ")}</div>`;
-    const c = rec.composition;
-    $("#mLen").innerHTML = c.length.toLocaleString() + " <small>bp</small>";
-    $("#mGC").innerHTML = c.gc + " <small>%</small>";
-    $("#mN").innerHTML = c.n + " <small>%</small>";
-    const vc = $("#mValidCell");
-    vc.classList.toggle("ok", rec.valid); vc.classList.toggle("err", !rec.valid);
-    $("#mValid").textContent = rec.valid ? "valid" : rec.invalid.length+" bad";
-    const ncbi = state.source && state.source.accession
-      ? srcChip("NCBI", "https://www.ncbi.nlm.nih.gov/nuccore/" + encodeURIComponent(state.source.accession))
-      : (state.source ? "" : `<span class="srcnote" title="Sequence provided by you (upload or paste) — no external source">user-provided</span>`);
+    const ncbi = state.source && state.source.sourceUrl
+      ? srcChip(state.source.source==="ena_fasta"?"ENA":"NCBI", state.source.sourceUrl)
+      : (!fetchedSourceActive() ? `<span class="srcnote" title="Sequence provided by you (upload or paste) — no external source">user-provided</span>` : "");
     $("#rRecords").innerHTML = `${d.records.length} ${ncbi}`;
-    $("#rStruct").innerHTML = `${rec.structural.length} ${rec.structural.length ? srcChip("Wicker2007") : ""}`;
-    $("#rOrf").textContent = rec.orfs.length;
-    state.structural = rec.structural;
-    const ltr = rec.structural.find(e => e.element_span);
-    state.elemSpan = ltr ? ltr.element_span : null;
-    renderStructure(rec);
-    renderProvenance(d.provenance);
-    $("#design").disabled = false; $("#designHint").textContent = "ready";
-    state.analyzedSeq = state.seq;                     // snapshot for staleness detection
-  } catch(e){ err("Analysis failed — " + e.message); }
+    state.lastAnalysis=d; state.lastProvenance=d.provenance; state.analyzedSeq=submitted;
+    showAnalysisRecord(0);
+  } catch(e){ invalidateAllResults("Analysis failed — no result or export is current."); err("Analysis failed — " + e.message); }
   finally { btn.disabled = false; btn.classList.remove("pending"); btn.textContent = orig; }
 };
 
@@ -860,7 +1134,7 @@ function renderStructure(rec){
   const cl = rec.classification, doms = rec.domains || [];
   $("#structMeta").textContent = (cl && cl.te_class !== "none" ? cl.te_class + " · " : "") +
     `${s.length} struct · ${doms.length} dom · ${rec.orfs.length} ORF`;
-  const gm = (state.features && state.source) ? state.features : null;
+  const gm = (state.features && fetchedSourceActive()) ? state.features : null;
   if(!(s.length || rec.orfs.length || doms.length || gm)){
     $("#structBody").innerHTML = `<div class="empty">No terminal repeats, domains, ORFs or tails detected in this sequence.</div>`;
     return;
@@ -926,21 +1200,24 @@ function geneModelHtml(gm, len){
     <div id="figGene"></div>
     <table><thead><tr><th>Segment</th><th>Span (0-based)</th><th>Len</th><th>Str</th><th>Note</th></tr></thead><tbody>${geneRows(gm)}</tbody></table>
     <div class="flexbtns" style="margin-top:8px"><button class="btn sm" onclick="copyGeneFasta('exon')">⧉ exons → FASTA</button>
-      <button class="btn sm" onclick="copyGeneFasta('cds')">⧉ CDS → FASTA</button>${csvBtns('gene')}
+      <button class="btn sm" onclick="copyGeneFasta('cds')">⧉ CDS → FASTA</button><button class="btn sm" onclick="exportGeneModel('fasta','exon')">⭳ exon FASTA</button><button class="btn sm" onclick="exportGeneModel('fasta','CDS')">⭳ CDS FASTA</button><button class="btn sm" onclick="exportGeneModel('gff3')">⭳ GFF3</button><button class="btn sm" onclick="exportGeneModel('bed')">⭳ BED</button>${csvBtns('gene')}
       <span class="lbl">exon–intron structure ingested from the record — not re-derived</span></div>
   </div>`;
 }
 function _geneTag(t){ const c = t==="exon"?GENECOL.exon:t==="CDS"?GENECOL.cds:GENECOL.intron;
   return `<span class="tag" style="border-color:${c}"><span class="d" style="background:${c}"></span>${t}</span>`; }
 function geneRows(gm){
+  return geneSegments(gm).map(x=>`<tr class="clickable" tabindex="0" role="button" onclick="featMenu(event, ${x.s}, ${x.e}, '${x.str}', '${x.t}_${x.s}-${x.e}')">
+    <td>${_geneTag(x.t)}</td><td class="coord">${x.s}–${x.e}</td><td class="coord">${x.e-x.s}</td><td class="mono">${x.str}</td><td class="mono" style="color:var(--faint)">${esc(x.note)}</td></tr>`).join("")
+    || `<tr><td colspan="5" class="mono" style="color:var(--faint);padding:10px">no exon/CDS segments in this record</td></tr>`;
+}
+function geneSegments(gm){
   const seg = [];
   (gm.exons||[]).forEach((e,i)=>seg.push({t:"exon", s:e.start, e:e.end, str:e.strand, note:e.note?("#"+e.note):("exon "+(i+1))}));
   (gm.introns||[]).forEach((x,i)=>seg.push({t:"intron", s:x.start, e:x.end, str:x.strand, note:"intron "+(i+1)}));
   (gm.cds||[]).forEach((c)=>seg.push({t:"CDS", s:c.start, e:c.end, str:c.strand, note:c.note||"coding"}));
   seg.sort((a,b)=>a.s-b.s || (a.t>b.t?1:-1));
-  return seg.map(x=>`<tr class="clickable" tabindex="0" role="button" onclick="featMenu(event, ${x.s}, ${x.e}, '${x.str}', '${x.t}_${x.s}-${x.e}')">
-    <td>${_geneTag(x.t)}</td><td class="coord">${x.s}–${x.e}</td><td class="coord">${x.e-x.s}</td><td class="mono">${x.str}</td><td class="mono" style="color:var(--faint)">${x.note}</td></tr>`).join("")
-    || `<tr><td colspan="5" class="mono" style="color:var(--faint);padding:10px">no exon/CDS segments in this record</td></tr>`;
+  return seg;
 }
 window.copyGeneFasta = (kind) => {
   const gm = state.features; if(!gm) return;
@@ -1004,25 +1281,49 @@ const PRIMER_PRESETS = {
   standard:   { pMin:150, pMax:500,  pTm:60, pMinS:18, pMaxS:27, pNum:5,  pOptS:20, pTmMin:57, pTmMax:63, pGcMin:40, pGcMax:60, pPolyX:4, pGcClamp:0 },
   qpcr:       { pMin:70,  pMax:150,  pTm:60, pMinS:18, pMaxS:24, pNum:5,  pOptS:20, pTmMin:58, pTmMax:62, pGcMin:40, pGcMax:60, pPolyX:4, pGcClamp:1 },
   highspec:   { pMin:150, pMax:500,  pTm:62, pMinS:20, pMaxS:26, pNum:8,  pOptS:22, pTmMin:60, pTmMax:64, pGcMin:45, pGcMax:60, pPolyX:3, pGcClamp:2 },
-  permissive: { pMin:100, pMax:1000, pTm:58, pMinS:17, pMaxS:30, pNum:10, pOptS:20, pTmMin:52, pTmMax:65, pGcMin:30, pGcMax:70, pPolyX:5, pGcClamp:0 },
+  permissive: { pMin:100, pMax:1000, pTm:58, pMinS:18, pMaxS:30, pNum:10, pOptS:20, pTmMin:52, pTmMax:65, pGcMin:30, pGcMax:70, pPolyX:5, pGcClamp:0 },
 };
 function applyPreset(name){
   const p = PRIMER_PRESETS[name]; if(!p) return;
   for(const k in p){ const el = $("#"+k); if(el) el.value = p[k]; }
 }
+function requiredNumber(id, label, { integer=false, min=null, max=null }={}){
+  const el = $("#"+id), raw = el ? el.value.trim() : "";
+  if(raw === "") throw new Error(`${label} is required`);
+  const value = Number(raw);
+  if(!Number.isFinite(value)) throw new Error(`${label} must be numeric and finite`);
+  if(integer && !Number.isInteger(value)) throw new Error(`${label} must be an integer`);
+  if(min !== null && value < min) throw new Error(`${label} must be at least ${min}`);
+  if(max !== null && value > max) throw new Error(`${label} must be at most ${max}`);
+  return value;
+}
 function readPrimerParams(){
-  const v = (id, d) => { const el = $("#"+id); return el && el.value !== "" ? +el.value : d; };
-  const p = { prod_min:v("pMin",150), prod_max:v("pMax",500), opt_tm:v("pTm",60),
-    min_size:v("pMinS",18), max_size:v("pMaxS",27), num_return:v("pNum",5),
-    opt_size:v("pOptS",20), min_tm:v("pTmMin",57), max_tm:v("pTmMax",63),
-    min_gc:v("pGcMin",40), max_gc:v("pGcMax",60), max_poly_x:v("pPolyX",4) };
-  const clamp = v("pGcClamp",0); if(clamp > 0) p.gc_clamp = clamp;
+  const p = {
+    prod_min:requiredNumber("pMin","Minimum product size",{integer:true,min:1}),
+    prod_max:requiredNumber("pMax","Maximum product size",{integer:true,min:1}),
+    opt_tm:requiredNumber("pTm","Optimal Tm"),
+    min_size:requiredNumber("pMinS","Minimum primer size",{integer:true,min:18}),
+    max_size:requiredNumber("pMaxS","Maximum primer size",{integer:true,min:18}),
+    num_return:requiredNumber("pNum","Number of pairs",{integer:true,min:1}),
+    opt_size:requiredNumber("pOptS","Optimal primer size",{integer:true,min:18}),
+    min_tm:requiredNumber("pTmMin","Minimum Tm"),
+    max_tm:requiredNumber("pTmMax","Maximum Tm"),
+    min_gc:requiredNumber("pGcMin","Minimum GC",{min:0,max:100}),
+    max_gc:requiredNumber("pGcMax","Maximum GC",{min:0,max:100}),
+    max_poly_x:requiredNumber("pPolyX","Maximum homopolymer",{integer:true,min:1}),
+    gc_clamp:requiredNumber("pGcClamp","GC clamp",{integer:true,min:0})
+  };
+  if(p.prod_min > p.prod_max) throw new Error("Minimum product size cannot exceed maximum product size");
+  if(!(p.min_size <= p.opt_size && p.opt_size <= p.max_size)) throw new Error("Primer sizes must satisfy minimum ≤ optimal ≤ maximum");
+  if(!(p.min_tm <= p.opt_tm && p.opt_tm <= p.max_tm)) throw new Error("Tm values must satisfy minimum ≤ optimal ≤ maximum");
+  if(p.min_gc > p.max_gc) throw new Error("Minimum GC cannot exceed maximum GC");
   return p;
 }
 if($("#pPreset")) $("#pPreset").onchange = e => applyPreset(e.target.value);
 if($("#pReset")) $("#pReset").onclick = () => { const s=$("#pPreset"); if(s) s.value="standard"; applyPreset("standard"); };
 function resetPrimers(){                              // a failed (re)design must not leave stale, stageable pairs behind
   state.candidates = [];
+  state.primerDesignSequence = null;
   if($("#pcrStageAll")) $("#pcrStageAll").disabled = true;
   if($("#primBody")) $("#primBody").innerHTML = "";
   if($("#primMeta")) $("#primMeta").textContent = "";
@@ -1030,12 +1331,16 @@ function resetPrimers(){                              // a failed (re)design mus
 $("#design").onclick = async () => {
   clearErr();
   if(_staleBlock()) return;
-  const params = readPrimerParams();
+  resetPrimers();
+  let params;
+  try { params = readPrimerParams(); }
+  catch(e){ err(e.message); return; }
+  const designSequence = state.seq;
   const btn = $("#design"); const orig = btn.textContent;
   btn.disabled = true; btn.classList.add("pending"); btn.textContent = "◴ designing…";
   try {
-    const d = await api("/api/primers", { sequence: state.seq, params });
-    renderPrimers(d);
+    const d = await api("/api/primers", { sequence: designSequence, source: sourceWire(), params });
+    renderPrimers(d, null, designSequence);
     renderProvenance(d.provenance);
   } catch(e){ resetPrimers(); err("Primer design failed — " + e.message); }
   finally { btn.disabled = false; btn.classList.remove("pending"); btn.textContent = orig; }
@@ -1043,12 +1348,21 @@ $("#design").onclick = async () => {
 window.designForDomain = async (start, end, label) => {
   clearErr();
   if(_staleBlock()) return;                          // same staleness guard as #design / #runpcr
-  const params = readPrimerParams();
+  resetPrimers();
+  let params;
+  try { params = readPrimerParams(); }
+  catch(e){ err(e.message); return; }
+  const templateLength = cleanSeq().length;
+  if(!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start || end > templateLength){
+    err("Domain coordinates must be a positive 0-based half-open span within the template"); return;
+  }
   scrollToCard($("#design").closest(".card"));
+  const designSequence = state.seq;
   $("#primMeta").textContent = `domain ${label} · designing…`;
   try {
-    const d = await api("/api/primers", { sequence: state.seq, params, included: [start, Math.max(60, end - start)] });
-    renderPrimers(d, `Domain-specific PCR — primers placed within the ${label} domain (nt ${start}–${end}). A conserved-domain primer may amplify multiple TE families or copies; confirm with in-silico PCR before use.`);
+    const d = await api("/api/primers", { sequence: designSequence, source: sourceWire(), params,
+      primer3_target: [start, end - start], included_region: [0, templateLength] });
+    renderPrimers(d, `Domain-targeted PCR — the intended product must flank and cover the ${label} target (0-based half-open ${start}–${end}); Primer3 may place primers anywhere in the full-template included region. Search additional templates before interpreting specificity.`, designSequence);
     renderProvenance(d.provenance);
     $("#primMeta").textContent = `${d.candidates.length} pairs · domain ${label}`;
   } catch(e){ resetPrimers(); err("Domain primer design failed — " + e.message); }
@@ -1059,9 +1373,10 @@ function hl3(seq){ // underline the true 3' terminal 5 bases (both primers are w
   const tip = "3′ terminus — these bases must match the template exactly for the primer to extend; they govern PCR specificity";
   return seq.slice(0, -n) + `<span class="p3" title="${tip}">${seq.slice(-n)}</span>`;
 }
-function renderPrimers(d, warn){
+function renderPrimers(d, warn, designSequence=state.seq){
   expandCard($("#primBody").closest(".card"));
   state.candidates = d.candidates || [];
+  state.primerDesignSequence = designSequence;
   if($("#pcrStageAll")) $("#pcrStageAll").disabled = !state.candidates.length;
   const warnHtml = warn ? `<div class="pcrwarn">⚠ ${warn}</div>` : "";
   if(!d.candidates.length){ $("#primBody").innerHTML = warnHtml + `<div class="empty">Primer3 returned no pairs — ${d.explain_pair||"loosen constraints"}.</div>`; return; }
@@ -1082,7 +1397,10 @@ function renderPrimers(d, warn){
   $("#primMeta").textContent = `${d.candidates.length} pairs · Primer3`;
 }
 /* ---------- in-silico PCR engine: staged primer-pair manager (see / remove / reorder) ---------- */
-function pcrKey(c){ return c.left_seq + "|" + c.right_seq; }
+function pcrKey(c){
+  const seal = c.design_provenance && c.design_provenance.manifestSha256 || "unsealed";
+  return [c.left_seq, c.right_seq, seal, JSON.stringify(c.intended_product_span || null)].join("|");
+}
 function renderPcrQueue(){
   const host = $("#pcrQueue"); if(!host) return;
   const n = state.pcrPairs.length;
@@ -1114,8 +1432,9 @@ window.pcrDrop = (e,i) => { e.preventDefault(); const from = _pcrDrag; _pcrDrag 
   if(from == null || from === i) return renderPcrQueue();
   const a = state.pcrPairs; const [m] = a.splice(from,1); a.splice(i,0,m); renderPcrQueue(); };
 window.addPcrPair = (c) => {
-  const k = pcrKey(c);
-  if(!state.pcrPairs.some(p => pcrKey(p) === k)) state.pcrPairs.push(c);
+  const staged = { ...c, _design_sequence: c._design_sequence || state.primerDesignSequence };
+  const k = pcrKey(staged);
+  if(!state.pcrPairs.some(p => pcrKey(p) === k)) state.pcrPairs.push(staged);
   renderPcrQueue();
   $("#pcrHint").textContent = `${state.pcrPairs.length} pair(s) loaded · run to search`;
   expandCard($("#runpcr").closest(".card"));
@@ -1125,7 +1444,10 @@ window.movePcrPair = (i,d) => { const j=i+d, a=state.pcrPairs; if(j<0||j>=a.leng
 window.selectPair = (c) => addPcrPair(c);                     // "→ send to in-silico PCR" stages the pair
 if($("#pcrClear")) $("#pcrClear").onclick = () => { state.pcrPairs = []; renderPcrQueue(); };
 if($("#pcrStageAll")) $("#pcrStageAll").onclick = () => {
-  (state.candidates||[]).forEach(c => { const k=pcrKey(c); if(!state.pcrPairs.some(p=>pcrKey(p)===k)) state.pcrPairs.push(c); });
+  (state.candidates||[]).forEach(c => {
+    const staged = { ...c, _design_sequence: state.primerDesignSequence };
+    const k=pcrKey(staged); if(!state.pcrPairs.some(p=>pcrKey(p)===k)) state.pcrPairs.push(staged);
+  });
   renderPcrQueue(); expandCard($("#runpcr").closest(".card"));
 };
 
@@ -1135,78 +1457,114 @@ $("#runpcr").onclick = async () => {
   if(_staleBlock()) return;
   const pairs = state.pcrPairs || [];
   if(!pairs.length){ err("Load at least one primer pair into the engine first (design primers, then “→ send to in-silico PCR”)."); return; }
+  let p;
+  try {
+    p = { max_mm:requiredNumber("pcrMM","Maximum mismatches",{integer:true,min:0}),
+      tp:requiredNumber("pcrTP","3′ exact bases",{integer:true,min:0}),
+      prod_min:requiredNumber("pcrPmin","Minimum PCR product size",{integer:true,min:1}),
+      prod_max:requiredNumber("pcrPmax","Maximum PCR product size",{integer:true,min:1}) };
+    if(p.prod_min > p.prod_max) throw new Error("Minimum PCR product size cannot exceed maximum PCR product size");
+    if(pairs.some(c => String(c.left_seq||"").length < 18 || String(c.right_seq||"").length < 18))
+      throw new Error("Each primer must contain at least 18 bases");
+    const shortestPrimer = Math.min(...pairs.flatMap(c => [String(c.left_seq).length, String(c.right_seq).length]));
+    if(p.tp > shortestPrimer || p.max_mm > shortestPrimer)
+      throw new Error("3′ exact bases and maximum mismatches cannot exceed the shortest primer length");
+  } catch(e){ err(e.message); return; }
+  state.lastPcr=null;
+  $("#pcrBody").innerHTML='<div class="mini">Starting in-silico PCR — prior PCR result and export are no longer current.</div>';
   const btn = $("#runpcr"), o = btn.textContent; btn.disabled = true; btn.classList.add("pending"); btn.textContent = "◴ running…";
   expandCard($("#runpcr").closest(".card"));
-  const pv = (id, d) => { const el = $("#"+id); const v = (el && el.value !== "") ? +el.value : NaN; return Number.isFinite(v) ? v : d; };  // a blank field falls back to the default (not 0)
-  const bg = $("#bg").value, p = { max_mm: pv("pcrMM",2), tp: pv("pcrTP",5), prod_min: pv("pcrPmin",70), prod_max: pv("pcrPmax",1000) };
-  const runOne = c => api("/api/pcr", { sequence: state.seq, background: bg, fwd: c.left_seq, rev: c.right_seq,
-    target_span: [c.left_pos[0], c.right_pos[1]], params: p });
+  const bg = $("#bg").value;
+  const runOne = c => {
+    const body = { sequence: state.seq, source: sourceWire(), background: bg,
+      fwd: c.left_seq, rev: c.right_seq, params: p };
+    if(c.design_provenance){
+      Object.assign(body, { design_provenance:c.design_provenance,
+        design_sequence:c._design_sequence,
+        primer3_target:c.primer3_target ?? null,
+        included_region:c.included_region ?? null,
+        intended_product_span:c.intended_product_span,
+        intended_endpoint_tolerance_bp:c.intended_endpoint_tolerance_bp });
+    }
+    return api("/api/pcr", body);
+  };
   try {
     if(pairs.length === 1){                                   // single pair → detailed single-lane view
       const d = await runOne(pairs[0]);
       renderPCR(d); renderProvenance(d.provenance);
     } else {                                                  // multiple → multi-lane gel, one lane per staged pair
       $("#pcrBody").innerHTML = `<div class="mini">running in-silico PCR for ${pairs.length} loaded primer pairs…</div>`;
-      const lanes = [], amps = [], provs = [];
+      const lanes = [], amps = [], manifests = [];
       pairs.forEach((c, i) => { c.__lane = `P${i + 1}`; });     // unique lane names in staged order (avoid duplicate ids)
       for(let i = 0; i < pairs.length; i++){
         const c = pairs[i], lane = `P${i + 1}`;
         try {
           const d = await runOne(c);
-          lanes.push({ label: lane, amplicons: d.amplicons });
+          lanes.push({ label: lane, amplicons: d.amplicons, status: d.status });
           d.amplicons.forEach(a => amps.push({ ...a, pair: lane }));
-          if(d.provenance) provs.push(d.provenance);           // every pair is its own sealed manifest — keep them all
-        } catch(e){ lanes.push({ label: lane + " ✕", amplicons: [], error: true }); }
+          manifests.push({ pair:lane, manifest:d.provenance||null });
+        } catch(e){ lanes.push({ label: lane + " ✕", amplicons: [], error: true }); manifests.push({pair:lane,manifest:null}); }
       }
-      state.lastPcr = { lanes, amplicons: amps, provenances: provs };
+      state.lastPcr = { lanes, amplicons: amps, manifests };
       renderPCRMulti(lanes, amps);
-      if(provs.length){
-        renderProvenance(provs[0]);
-        if(provs.length > 1){                                  // disclose that each pair was sealed independently (panel shows P1)
-          const note = document.createElement("div");
-          note.className = "mini"; note.style.marginBottom = "8px";
-          note.textContent = `${provs.length} primer pairs were run — each sealed as its own manifest (showing P1; all ${provs.length} recorded this session).`;
-          $("#provBody").prepend(note);
-        }
-      }
+      renderProvenanceSet(manifests);
     }
-  } catch(e){ err("In-silico PCR failed — " + e.message); }
+  } catch(e){ state.lastPcr=null; $("#pcrBody").innerHTML='<div class="empty">In-silico PCR failed — no PCR result or export is current.</div>'; err("In-silico PCR failed — " + e.message); }
   finally { btn.disabled = false; btn.classList.remove("pending"); btn.textContent = o; }
 };
 function renderPCRMulti(lanes, amps){
   expandCard($("#pcrBody").closest(".card"));
-  const onN = amps.filter(a=>a.on_target).length;
+  const intendedN = amps.filter(a=>a.matches_intended_product === true).length;
+  const productN = new Set(amps.map(a => a.product_key || `${a.source}:${a.start}:${a.end}:${a.product_length ?? a.length}`)).size;
+  const incomplete = lanes.some(l => l.error || l.status === "partial_capped" || l.status === "failed");
   const rows = amps.map(a => `<tr class="clickable" tabindex="0" role="button" onclick="featMenu(event, ${a.start}, ${a.end}, '+', 'amplicon_${a.pair}')">
-    <td class="mono">${a.pair}</td><td class="mono" style="font-size:11px">${esc(a.source)}</td>
-    <td class="coord">${a.start.toLocaleString()}–${a.end.toLocaleString()}</td><td class="coord">${a.length}</td><td class="coord">${a.fwd_mm}/${a.rev_mm}</td>
-    <td>${a.on_target?'<span class="tag t-good"><span class="d" style="background:var(--good)"></span>on-target</span>':'<span class="tag t-bad"><span class="d" style="background:var(--bad)"></span>off-target</span>'}</td></tr>`).join("");
+    <td class="mono">${a.pair}</td><td class="mono" style="font-size:11px">${esc(resultBoundIdentity(a.source,a.sourceIdSha256,true).label)}</td>
+    <td class="coord">${a.start.toLocaleString()}–${a.end.toLocaleString()}</td><td class="coord">${a.length}</td><td class="coord">${a.product_length ?? a.length}</td><td class="coord">${a.fwd_mm}/${a.rev_mm}</td>
+    <td>${ampCall(a)}</td></tr>`).join("");
   $("#pcrBody").innerHTML = `
     <div id="figGel"></div>
-    ${amps.length?`<table><thead><tr><th>Pair</th><th>Source</th><th>Coords</th><th>Len</th><th>Mism F/R</th><th>Call</th></tr></thead><tbody>${rows}</tbody></table>
+    ${amps.length?`<table><thead><tr><th>Pair</th><th>Source</th><th>Coords</th><th>Template span</th><th>Product len</th><th>Mism F/R</th><th>Call</th></tr></thead><tbody>${rows}</tbody></table>
       <div class="flexbtns" style="margin-top:8px"><button class="btn sm" onclick="copyAmplicons()">⧉ amplicons → FASTA</button>${csvBtns('pcr')}</div>`
-      :`<div class="empty">No amplicon predicted for any pair under the criteria.</div>`}
-    <div class="mini" style="margin-top:10px">${lanes.length} lanes · one per primer pair · ${onN} on-target band(s) · ladder lane “L”. Not a claim of experimental specificity.</div>`;
+      :`<div class="empty">${incomplete ? "No product was recorded in the available partial results; at least one search was capped or failed." : "All pair searches completed and recorded zero products under the stated computational criteria."}</div>`}
+    <div class="mini" style="margin-top:10px">${lanes.length} lanes · ${amps.length} priming mechanism(s) · ${productN} unique physical product(s) · ${intendedN} intended product call(s) · ${incomplete ? "partial result; product counts are lower bounds because at least one search was capped or failed" : "all pair searches completed under the stated computational criteria"}. Ladder lane “L”; equal-size products co-migrate.</div>`;
   glossify($("#pcrBody"));
   mountFigure($("#figGel"), b => svgGel({ lanes }, b), "TEagle_gel_multilane", { cls:"gel", modes:["dark","white","uv","mono"], viewH:470 });
 }
+function ampCall(a){
+  const intended = a.matches_intended_product, covered = a.covers_primer3_target;
+  if(intended === true && covered === true) return '<span class="tag t-good"><span class="d" style="background:var(--good)"></span>intended product; target covered</span>';
+  if(intended === true && covered === false) return '<span class="tag t-bad"><span class="d" style="background:var(--bad)"></span>intended product; target not covered</span>';
+  if(intended === true) return '<span class="tag">intended product; target coverage unavailable</span>';
+  if(intended === false && covered === true) return '<span class="tag">additional product; target covered</span>';
+  if(intended === false) return '<span class="tag">additional product</span>';
+  return '<span class="tag">product; intended/target assessment unavailable</span>';
+}
 function renderPCR(d){
-  const on = d.amplicons.filter(a=>a.on_target).length, off = d.amplicons.length-on;
+  const intended = d.amplicons.filter(a=>a.matches_intended_product === true).length;
+  const additional = d.amplicons.filter(a=>a.matches_intended_product === false).length;
   const rows = d.amplicons.map((a,i)=>`
-    <tr><td class="coord">${i+1}</td><td class="mono" style="font-size:11px">${esc(a.source)}</td>
+    <tr><td class="coord">${i+1}</td><td class="mono" style="font-size:11px">${esc(resultBoundIdentity(a.source,a.sourceIdSha256,true).label)}</td>
       <td class="coord">${a.start.toLocaleString()}–${a.end.toLocaleString()}</td>
-      <td class="coord">${a.length}</td><td class="coord">${a.fwd_mm}/${a.rev_mm}</td>
-      <td>${a.on_target?'<span class="tag t-good"><span class="d" style="background:var(--good)"></span>on-target</span>':'<span class="tag t-bad"><span class="d" style="background:var(--bad)"></span>off-target</span>'}</td></tr>`).join("");
-  const bgs = d.backgroundsSearched.map(b=>`<span class="tag t-good"><span class="d" style="background:var(--good)"></span>${b}</span>`).join(" ");
+      <td class="coord">${a.length}</td><td class="coord">${a.product_length ?? a.length}</td><td class="coord">${a.fwd_mm}/${a.rev_mm}</td>
+      <td>${ampCall(a)}</td></tr>`).join("");
+  const bindingDigests=[d.bindings&&d.bindings.assay&&d.bindings.assay.idSha256,...((d.bindings&&d.bindings.backgrounds)||[]).map(b=>b.idSha256)];
+  const bgs = d.backgroundsSearched.map((b,i)=>`<span class="tag t-good"><span class="d" style="background:var(--good)"></span>${esc(resultBoundIdentity(b,bindingDigests[i],i===0).label)}</span>`).join(" ");
   const nots = d.notSearched.map(b=>`<div class="notrun"><span class="x">✕</span>${b} — not run</div>`).join("");
-  const verdict = off===0
-    ? `No additional amplicon was predicted in the searched sequences under the specified mismatch, orientation and product-length criteria. This is not a claim of experimental specificity.`
-    : `${off} additional (off-target) amplicon(s) predicted in the searched sequences under the current criteria.`;
+  const empty = d.status === "partial_capped"
+    ? "No product was recorded before the capped search stopped; unsearched candidates remain."
+    : (d.status === "complete_zero_products" ? "The completed search recorded zero products under the stated computational criteria."
+      : "No product result is available; completeness and specificity were not assessed.");
+  const verdict = d.status === "partial_capped"
+    ? `The capped search is incomplete. ${d.amplicons.length} priming mechanism(s) are a lower bound; absence of further products was not assessed.`
+    : (d.status === "complete" || d.status === "complete_zero_products")
+      ? `Search complete under the stated computational criteria: ${d.mechanismCount ?? d.amplicons.length} priming mechanism(s), ${d.uniqueProductCount ?? d.amplicons.length} unique physical product(s), ${intended} intended-product call(s), and ${additional} additional-product call(s). This does not establish wet-lab specificity.`
+      : `The search failed or was withheld; product completeness and specificity were not assessed.`;
   $("#pcrBody").innerHTML = `
     <div id="figGel"></div>
     <div style="margin:6px 0 12px">${bgs}</div>
-    ${d.amplicons.length?`<table><thead><tr><th>#</th><th>Source</th><th>Coords</th><th>Len</th><th>Mism F/R</th><th>Call</th></tr></thead><tbody>${rows}</tbody></table>
+    ${d.amplicons.length?`<table><thead><tr><th>#</th><th>Source</th><th>Coords</th><th>Template span</th><th>Product len</th><th>Mism F/R</th><th>Call</th></tr></thead><tbody>${rows}</tbody></table>
       <div class="flexbtns" style="margin-top:8px"><button class="btn sm" onclick="copyAmplicons()">⧉ amplicons → FASTA</button>${csvBtns('pcr')}</div>`
-      :`<div class="empty">No amplicon predicted under the criteria.</div>`}
+      :`<div class="empty">${empty}</div>`}
     <div class="explain" style="margin-top:13px">${verdict}</div>
     <div style="margin-top:11px">${nots}</div>
     <div class="mini">criteria · ≤${d.criteria.max_mismatch} mismatches · strict 3′ (last ${d.criteria.three_prime_strict}) · product ${d.criteria.product_size[0]}–${d.criteria.product_size[1]} bp</div>`;
@@ -1219,17 +1577,19 @@ function renderPCR(d){
 /* ---------- provenance ---------- */
 function renderProvenance(m){
   expandCard($("#provBody").closest(".card"));
+  state.lastProvenance=m;
+  const inputIdentity=resultBoundIdentity(m.input.id||"record",m.input.idSha256);
   const sw = m.software.map(s=>`<div class="li">${esc(s.name)}<span>${esc(s.version)}</span></div>`).join("");
   const pr = Object.entries(m.parameters||{}).map(([k,v])=>`<div class="li">${esc(k)}<span class="${String(v).length>18?'hash':''}">${esc(v==null?"—":String(v))}</span></div>`).join("") || `<div class="li">defaults<span>—</span></div>`;  // the manifest is the reproducibility record — show EVERY sealed parameter
   const db = (m.databases||[]).map(d=>`<div class="li">${esc(d.name)}<span class="hash">${esc(d.version || (d.sha256?d.sha256.slice(0,12)+"…":(d.file||"—")))}</span></div>`).join("");
   const dbBlock = db ? `<div class="mblock"><div class="t">Databases</div>${db}</div>` : "";
-  const nr = m.notRun.map(n=>`<div class="notrun"><span class="x">✕</span>${esc(n)}</div>`).join("");
+  const nr = (m.notRun||[]).map(n=>`<div class="notrun"><span class="x">✕</span>${esc(n)}</div>`).join("");
   const rf = (m.references||[]).map(r=>`<div class="refitem"><b>${r.name}</b> — ${r.citation} ${r.doi?`<a href="https://doi.org/${r.doi}" target="_blank" rel="noopener">doi:${r.doi}</a>`:""}${r.license?` · ${r.license}`:""}</div>`).join("");
   const refBlock = rf ? `<div class="refblock"><div class="lbl" style="margin-bottom:8px">Database &amp; tool references (source-verified)</div>${rf}</div>` : "";
   $("#provBody").innerHTML = `
     <div class="manifest">
       <div class="mblock"><div class="t">Input</div>
-        <div class="li">id<span>${esc(m.input.id)}</span></div>
+        <div class="li">id<span>${esc(inputIdentity.label)}</span></div>
         <div class="li">length<span>${m.input.length.toLocaleString()} bp</span></div>
         <div class="li">sha256<span class="hash">${m.input.sha256.slice(0,16)}…</span></div>
         <div class="li">run type<span>${esc(m.runType)}</span></div></div>
@@ -1242,6 +1602,15 @@ function renderProvenance(m){
         <div class="li">created<span style="font-size:9.5px">${(m.createdUtc||"").replace("T"," ").replace("+00:00","Z")}</span></div>
         <div class="li">manifest<span class="hash">${m.manifestSha256.slice(0,14)}…</span></div></div>
     </div>
-    <div style="margin-top:12px">${nr}</div>${refBlock}`;
+    <div style="margin-top:12px">${nr}</div>${refBlock}<div class="flexbtns" style="margin-top:10px"><button class="btn sm" disabled title="Legacy browser cannot independently verify the manifest seal; use the native export">provenance JSON unavailable</button></div>`;
+}
+function renderProvenanceSet(entries){
+  const complete=entries.length>0&&entries.every(entry=>entry.manifest&&entry.manifest.manifestSha256);
+  state.lastProvenance=null; state.lastProvenanceSet=complete?entries.map(entry=>entry.manifest):[];
+  const first=entries.find(entry=>entry.manifest);
+  if(first) renderProvenance(first.manifest); else { expandCard($("#provBody").closest(".card")); $("#provBody").innerHTML='<div class="empty">No pair manifest was returned; provenance export is unavailable.</div>'; }
+  state.lastProvenance=null; state.lastProvenanceSet=complete?entries.map(entry=>entry.manifest):[];
+  const rows=entries.map(entry=>`<tr><td class="mono">${esc(entry.pair)}</td><td>${entry.manifest?"sealed":"missing"}</td><td class="hash">${entry.manifest?esc(entry.manifest.manifestSha256):"—"}</td></tr>`).join("");
+  $("#provBody").insertAdjacentHTML("afterbegin",`<div class="classbn"><span class="big">${entries.length} pair manifests</span><span class="exp">${complete?"Every staged pair returned its own manifest; all seals are listed below.":"At least one staged pair has no manifest. The manifest set is incomplete and export is refused."}</span></div><table><thead><tr><th>Pair</th><th>Status</th><th>Manifest SHA-256</th></tr></thead><tbody>${rows}</tbody></table>`);
 }
 /* SVG figures are responsive (width:100%); no manual resize redraw needed */

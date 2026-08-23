@@ -60,6 +60,8 @@ class InstallDialog(QDialog):
                        "works without any of this. Each component installs and repairs independently — a "
                        "failure in one never blocks the others.")
         intro.setObjectName("orient"); intro.setWordWrap(True); root.addWidget(intro)
+        self.costNote = QLabel("Checking default-stack download and resource guidance…")
+        self.costNote.setObjectName("cardmeta"); self.costNote.setWordWrap(True); root.addWidget(self.costNote)
 
         # component grid inside a scroll area
         holder = QWidget(); self.grid = QGridLayout(holder)
@@ -160,6 +162,9 @@ class InstallDialog(QDialog):
         self.engine.submit("wsl_components", key="components")
 
     def _render_components(self, res):
+        notes = [res.get("install_cost"), res.get("resource_guide"), res.get("disk_note")]
+        if any(notes):
+            self.costNote.setText("  ".join(n for n in notes if n))
         if res.get("error"):
             # A probe that could not answer says so in plain words and NOTHING else changes: the status
             # probe runs several tools inside WSL and can time out while a download saturates the disk,
@@ -240,7 +245,7 @@ class InstallDialog(QDialog):
             self._gone_ticks = 0                        # the run is alive again; start the count over
         if abandoned:
             self.statusLine.setText("the install stopped before it finished — start it again; "
-                                    "a part-finished download resumes where it stopped")
+                                    "Dfam archive downloads resume, but an interrupted NCBI genome ZIP restarts")
         elif self._wsl2_installing:
             pass                                        # keep the install-in-progress status line
         elif self._wsl2_reboot_pending:
@@ -265,7 +270,8 @@ class InstallDialog(QDialog):
                 feats.append("whole-genome scan")
             self.statusLine.setText("● ready — " + " & ".join(feats) + " available")
         else:
-            self.statusLine.setText(f"not ready · {res.get('disk_free_gb','?')} GB free")
+            self.statusLine.setText(f"not ready · {res.get('disk_free_gb','?')} GiB usable "
+                                    f"({res.get('disk_limited_by', 'storage limit')})")
         uppercase_buttons(self)                         # rows are created here and their labels re-set per state
         if not self._fitted:
             QTimer.singleShot(0, self._fit_to_content)  # after the new rows have been laid out

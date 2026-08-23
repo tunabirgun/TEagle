@@ -10,6 +10,7 @@ import math
 # every colour used here is defined once, in theme.py (single source of truth); re-exported so
 # `figures.OK` / `figures.GELPAL` stay valid for existing callers and tests.
 from theme import OKABE_ITO, OK, GENECOL, ARCHCOL, CISCOL, GV_THEME, GELPAL   # noqa: F401
+from teagle_core.gff3 import bound_public_record_label
 
 FIGFONT = "Cascadia Mono, Consolas, monospace"   # bundled UI font; mono digits align on the gel ladder / ruler
 
@@ -318,6 +319,33 @@ def _call_counts(g):
     return n_on, len(g) - n_on - n_single, n_single
 
 
+def _physical_product_length(amplicon):
+    return amplicon.get("product_length", amplicon["length"])
+
+
+def _public_amplicon_source(amplicon):
+    return bound_public_record_label(amplicon.get("source"), amplicon.get("sourceIdSha256"))
+
+
+def _unique_physical_products(amplicons):
+    """Collapse repeated mechanisms for one physical product without merging distinct genomic intervals."""
+    products = {}
+    for index, a in enumerate(amplicons or []):
+        size = _physical_product_length(a)
+        if a.get("product_key"):
+            key = a["product_key"]
+        elif a.get("start") is not None and a.get("end") is not None:
+            key = (a.get("source"), a["start"], a["end"], size)
+        else:
+            key = ("unbound-row", index)
+        if (key not in products or
+                (a.get("matches_intended_product") is True and
+                 products[key].get("matches_intended_product") is not True) or
+                (products[key].get("single_primer") and not a.get("single_primer"))):
+            products[key] = a
+    return list(products.values())
+
+
 def _lane_bands(amplicons, P, has_locus=True):
     """Collapse a lane's amplicons into one band per product size (a real gel cannot resolve equal lengths).
     Band intensity follows the strongest (fewest-mismatch) product at that size.
@@ -328,8 +356,8 @@ def _lane_bands(amplicons, P, has_locus=True):
     there is no on/off target, so every product is a NEUTRAL 'genomic priming site' and must not read as the
     off-target warning colour. Every product is still enumerated in the table below the gel."""
     groups = {}
-    for a in (amplicons or []):
-        groups.setdefault(a["length"], []).append(a)
+    for a in _unique_physical_products(amplicons):
+        groups.setdefault(_physical_product_length(a), []).append(a)
     bands = []
     for size in sorted(groups):
         g = groups[size]
@@ -353,7 +381,8 @@ def _lane_bands(amplicons, P, has_locus=True):
                      + ([f"{n_single} single-primer"] if n_single else []))
             on = bool(n_on)
         min_mm = min((a.get("fwd_mm", 0) + a.get("rev_mm", 0)) for a in g)
-        src = esc(g[0].get("source", ""))
+        raw_source = g[0].get("source", "")
+        src = esc(_public_amplicon_source(g[0])) if raw_source else ""
         color = P[call]                                   # colour derives from the call, so the shape cue can never disagree
         bands.append({"size": size, "color": color, "call": call, "opacity": _band_opacity(min_mm),
                       "on": on, "single": bool(n_single), "count": len(g),
@@ -368,7 +397,8 @@ def _gel_geometry(data: dict):
     """Shared layout math for svg_gel and gel_regions (must stay identical so hit-boxes line up).
     Sample lanes wrap into stacked rows of <=LANES_PER_ROW; each row carries its own ladder + bp scale."""
     lanes = data.get("lanes") or [{"label": data.get("laneLabel", "PCR"), "amplicons": data.get("amplicons", [])}]
-    sizes = [a["length"] for l in lanes for a in (l.get("amplicons") or [])]
+    sizes = [_physical_product_length(a) for l in lanes
+             for a in _unique_physical_products(l.get("amplicons") or [])]
     smallest = min(sizes) if sizes else 90
     minbp = max(25, min(90, smallest - 10))
     maxbp = max([1600] + sizes)
@@ -410,8 +440,8 @@ def gel_regions(data: dict):
             l = lanes[li]
             lx = laneX(j + 1)
             groups = {}
-            for a in (l.get("amplicons") or []):
-                groups.setdefault(a["length"], []).append(a)
+            for a in _unique_physical_products(l.get("amplicons") or []):
+                groups.setdefault(_physical_product_length(a), []).append(a)
             for size in sorted(groups):
                 g = groups[size]
                 yy = y(size, r)
@@ -425,7 +455,9 @@ def gel_regions(data: dict):
                     n_site = len(g) - n_single
                     call = ", ".join(([f"{n_site} priming site" + ("s" if n_site != 1 else "")] if n_site else [])
                                      + ([f"{n_single} single-primer"] if n_single else []))
-                tip = f'{size} bp · {call}' + (f' · {rep.get("source","")}' if rep.get("source") else "")
+                raw_source = rep.get("source", "")
+                public_source = _public_amplicon_source(rep) if raw_source else ""
+                tip = f'{size} bp · {call}' + (f' · {public_source}' if public_source else "")
                 regions.append({"x0": lx + 3, "y0": yy - 4, "x1": lx + laneW - 3, "y1": yy + 4,
                                 "tip": tip, "amplicon": rep, "pair": l.get("label", ""),
                                 "has_locus": l.get("has_locus", True)})

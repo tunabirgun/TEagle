@@ -11,6 +11,68 @@ score   div. del. ins.  sequence  begin end   (left)   repeat    class/family be
 """
 
 
+def test_resolve_distro_rejects_no_distribution_diagnostic(monkeypatch):
+    diagnostic = ("Windows Subsystem for Linux has no installed distributions.\r\n\r\n"
+                  "You can resolve this by installing a distribution with the instructions below.\r\n")
+
+    class Result:
+        returncode = -1
+        stdout = diagnostic.encode("utf-16-le")
+
+    monkeypatch.setattr(wsl.subprocess, "run", lambda *args, **kwargs: Result())
+    monkeypatch.setattr(wsl, "_distro_cache", None)
+    assert wsl.resolve_distro() is None
+
+
+def test_resolve_distro_accepts_only_version_table_rows(monkeypatch):
+    table = ("  NAME                   STATE           VERSION\r\n"
+             "* Ubuntu 24.04 LTS       Running         2\r\n"
+             "  Archive                Stopped         2\r\n")
+
+    class Result:
+        returncode = 0
+        stdout = table.encode("utf-16-le")
+
+    monkeypatch.setattr(wsl.subprocess, "run", lambda *args, **kwargs: Result())
+    monkeypatch.setattr(wsl, "_distro_cache", None)
+    assert wsl.resolve_distro() == "Ubuntu 24.04 LTS"
+
+
+def test_windows_backing_free_space_uses_the_selected_distros_registry_base_path(monkeypatch):
+    import sys
+    import types
+
+    class Key:
+        def __init__(self, name): self.name = name
+        def __enter__(self): return self
+        def __exit__(self, *_args): pass
+
+    entries = {
+        "{A}": {"DistributionName": "Archive", "BasePath": r"D:\WSL\Archive"},
+        "{B}": {"DistributionName": "Ubuntu 24.04 LTS", "BasePath": r"E:\WSL\Ubuntu"},
+    }
+
+    def open_key(root, name):
+        return Key("root") if root == 1 else Key(name)
+
+    def enum_key(root, index):
+        if index >= len(entries): raise OSError
+        return list(entries)[index]
+
+    def query_value(key, field):
+        return entries[key.name][field], 1
+
+    fake = types.SimpleNamespace(HKEY_CURRENT_USER=1, OpenKey=open_key, EnumKey=enum_key,
+                                 QueryValueEx=query_value)
+    seen = []
+    monkeypatch.setitem(sys.modules, "winreg", fake)
+    monkeypatch.setattr(wsl.os, "name", "nt")
+    monkeypatch.setattr(wsl.shutil, "disk_usage",
+                        lambda path: (seen.append(path) or types.SimpleNamespace(free=35 * 1073741824)))
+    assert wsl._windows_backing_free_bytes("Ubuntu 24.04 LTS") == 35 * 1073741824
+    assert seen == [r"E:\WSL\Ubuntu"]
+
+
 def test_parse_out_basic():
     hits = wsl.parse_out(SAMPLE_OUT)
     assert len(hits) == 3
@@ -80,7 +142,8 @@ def test_env_status_requires_both_dfam_partitions(monkeypatch):
     monkeypatch.setattr(wsl, "_wsl_script", lambda s, timeout=60: (0, root_only, ""))
     st = wsl.env_status()
     assert st["dfam"] is False and st["ready"] is False
-    both = "RepeatMasker version 4.2.4\ndfam_root=1\ndfam_curated=1\n2.28-r1209\n"
+    both = ("RepeatMasker version 4.2.4\ndfam_root=1\ndfam_curated=1\n"
+            f"{wsl._FAMDB_B}\nDatabase : Dfam\nVersion : 4.0\n{wsl._FAMDB_E}\n2.28-r1209\n")
     monkeypatch.setattr(wsl, "_wsl_script", lambda s, timeout=60: (0, both, ""))
     st2 = wsl.env_status()
     assert st2["dfam"] is True and st2["ready"] is True
@@ -170,6 +233,27 @@ def test_start_install_executes_script_not_reaped_nohup(monkeypatch):
         wsl._install_thread.join(timeout=2)
     assert any('bash "$HOME/teagle_wsl_install.sh"' in c for c in calls), calls
     assert not any("nohup" in c for c in calls), "installer must not use a reaped nohup launch"
+
+
+def test_start_install_stages_exact_script_via_stdin_base64(monkeypatch):
+    """Install text never rides in a Windows `bash -lc` argument, where quoting and newlines are lossy."""
+    import base64
+    import re
+    calls = []
+
+    def fake_script(script, timeout=90):
+        calls.append(script)
+        return 0, "FREE", ""
+
+    monkeypatch.setattr(wsl, "_wsl_script", fake_script)
+    monkeypatch.setattr(wsl, "_wsl", lambda *a, **k: pytest.fail("inline _wsl must not stage or run installs"))
+    monkeypatch.setattr(wsl, "_install_thread", type("Alive", (), {"is_alive": lambda self: False})())
+    monkeypatch.setattr(wsl.threading, "Thread", lambda **k: type("T", (), {"start": lambda self: None})())
+    original = "printf '%s\\n' \"$HOME/İpek\"\n"
+    assert wsl._start_thread(original)["started"] is True
+    stage = next(c for c in calls if "base64 -d" in c)
+    payload = re.search(r"printf '%s' '([A-Za-z0-9+/=]+)'", stage).group(1)
+    assert base64.b64decode(payload).decode("utf-8") == original
 
 
 def test_parse_sam_splice_cigar():

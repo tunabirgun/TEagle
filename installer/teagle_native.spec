@@ -21,9 +21,7 @@ open(_verinfo, "w", encoding="utf-8").write(f"""VSVersionInfo(
       StringStruct('CompanyName', 'Tuna Birgun'),
       StringStruct('FileDescription', 'TEagle - Transposable Elements Assay Terminal'),
       StringStruct('FileVersion', '{VERSION}'),
-      StringStruct('InternalName', 'TEagle'),
       StringStruct('LegalCopyright', 'Copyright (C) 2026 Tuna Birgun. Licensed under AGPL-3.0-or-later.'),
-      StringStruct('OriginalFilename', 'TEagle.exe'),
       StringStruct('ProductName', 'TEagle'),
       StringStruct('ProductVersion', '{VERSION}')])]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])])
@@ -46,7 +44,7 @@ datas += [(os.path.join(_exdir, f), "teagle_core/data/examples") for f in os.lis
 _fontdir = os.path.join(ROOT, "app", "native", "assets", "fonts")
 datas += [(os.path.join(_fontdir, fn), "native/assets/fonts") for fn in os.listdir(_fontdir)]
 # metadata so envcheck's importlib.metadata.version(...) resolves for the bundled deps (env panel stays green)
-for dist in ("PySide6", "shiboken6", "primer3-py", "pyhmmer"):
+for dist in ("PySide6", "shiboken6", "primer3-py", "pyhmmer", "psutil", "openpyxl", "et_xmlfile", "certifi", "pypdf"):
     try:
         datas += copy_metadata(dist)
     except Exception:
@@ -101,8 +99,44 @@ def _collect_runtime_package(package):
     return package_datas, package_binaries, package_imports
 
 
+def _is_forbidden_bundle_path(path):
+    parts = str(path).replace("\\", "/").lower().split("/")
+    name = parts[-1]
+    return (
+        "qml" in parts
+        or any("virtualkeyboard" in part for part in parts)
+        or name == "qpdf.dll"
+        or name.startswith("qt6pdf")
+        or name.startswith("qt6quick")
+        or name.startswith("qt6qml")
+        or name.startswith("qtquick")
+        or name.startswith("qtqml")
+    )
+
+
+def _without_forbidden_bundle_entries(entries):
+    return [entry for entry in entries if not _is_forbidden_bundle_path(entry[0])]
+
+
+def _assert_bundle_inventory_clean(paths, label):
+    forbidden = sorted({str(path) for path in paths if _is_forbidden_bundle_path(path)})
+    if forbidden:
+        raise SystemExit(
+            f"teagle_native.spec BUNDLE GUARD: forbidden unused Qt payload entered {label}:\n  "
+            + "\n  ".join(forbidden)
+        )
+
+
+def _bundle_inventory(root):
+    return [
+        os.path.relpath(os.path.join(directory, filename), root)
+        for directory, _, filenames in os.walk(root)
+        for filename in filenames
+    ]
+
+
 # C-extension packages + openpyxl (XLSX table export): pull binaries, runtime data and dynamic submodules
-for pkg in ("primer3", "pyhmmer", "openpyxl", "certifi", "pypdf"):
+for pkg in ("primer3", "pyhmmer", "psutil", "openpyxl", "et_xmlfile", "certifi", "pypdf"):
     d, b, h = _collect_runtime_package(pkg)
     datas += d; binaries += b; hiddenimports += h
 hiddenimports = [m for m in hiddenimports if m != _SHIM]
@@ -114,6 +148,9 @@ excludes = [
     # openpyxl's three try/except optional accelerators. TEagle's XLSX export writes str/int/float cells and a
     # bold header only: no ws.add_image (PIL), no numpy scalars, and the stdlib ElementTree writer is equivalent.
     "numpy", "PIL", "lxml",
+    # pypdf carries version-guarded fallback imports for Python <3.11. The controlled build is exactly
+    # Python 3.12 and executes the stdlib typing branches, so do not bundle an undeclared backport.
+    "typing_extensions",
     # pypdf can optionally inspect and rewrite embedded font programs through fontTools. TEagle only
     # clones PDF objects and removes document metadata; the optional font-rewrite path is never used.
     "fontTools",
@@ -147,11 +184,17 @@ a = Analysis(
     noarchive=False,
 )
 
+# Qt's generic image/input hooks can add native payload even when the corresponding Python modules
+# are excluded. Filter the resolved collection tables so unused PDF, Quick/QML and virtual-keyboard
+# dependency chains cannot reach COLLECT.
+a.binaries = _without_forbidden_bundle_entries(a.binaries)
+a.datas = _without_forbidden_bundle_entries(a.datas)
+
 # build guard: only the pinned deps (requirements.txt) + their real transitive deps + TEagle's own modules
 # may enter the module graph. One stray import edge once dragged in ~528 MB; fail the build, don't ship it.
 _ALLOWED_TOP = {
     "PySide6", "shiboken6",                                  # PySide6==6.11.1 (+ its shiboken6 runtime)
-    "primer3", "pyhmmer", "psutil", "typing_extensions",     # primer3-py, pyhmmer (+psutil, typing_extensions)
+    "primer3", "pyhmmer", "psutil",                          # primer3-py, pyhmmer (+ pinned psutil)
     "openpyxl", "et_xmlfile",                                # openpyxl (+ its only dependency)
     "certifi", "pypdf",
     "teagle_core", "teagle_native", "main", "engine", "engine_worker", "envcheck", "server",
@@ -179,3 +222,5 @@ exe = EXE(
     version=_verinfo,
 )
 coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name="TEagle")
+_assert_bundle_inventory_clean((entry[0] for entry in coll.toc), "the COLLECT table")
+_assert_bundle_inventory_clean(_bundle_inventory(coll.name), "the assembled bundle")

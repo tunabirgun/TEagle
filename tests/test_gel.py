@@ -156,7 +156,7 @@ def test_self_priming_product_in_target_window_is_not_counted_on_target():
     F, R = "GGATCCAAGCTTGAATTCCG", "TGACTGACTTGCATGCATGC"
     tmpl = ("T" * 60) + F + ("A" * 160) + reverse_complement(F) + ("C" * 100) + reverse_complement(R) + ("G" * 60)
     amps = in_silico_pcr(F, R, tmpl, "t", max_mm=0, tp=5, prod_min=70, prod_max=1000,
-                         target_span=[60, len(tmpl) - 60])
+                         primer3_target=[100, 20], intended_product_span=[60, 380])
     sp = [a for a in amps if a["single_primer"]]
     assert sp and all(a["on_target"] is False for a in sp)   # artefact, never the intended amplicon
     n_on = sum(1 for a in amps if a["on_target"])
@@ -165,6 +165,53 @@ def test_self_priming_product_in_target_window_is_not_counted_on_target():
     assert n_on >= 0 and n_off >= 0 and n_single >= 0
     assert n_on + n_off + n_single == len(amps)              # buckets are disjoint and exhaustive
     assert n_on == 1 and n_single == 1 and n_off == 0        # the F+R product is the only on-target
+
+
+def test_mechanism_and_physical_product_keys_are_distinct():
+    # Logical F+R and R+F mechanisms can describe one physical product when both oligos have the same
+    # sequence. Mechanism identity remains auditable while the physical-product key deduplicates the gel.
+    P = "GACTGACTGTCAGTCAGGCT"
+    tmpl = "C" * 60 + P + "A" * 120 + reverse_complement(P) + "C" * 60
+    amps = in_silico_pcr(P, P, tmpl, "t", max_mm=0, tp=5, prod_min=70, prod_max=500,
+                         primer3_target=[100, 10], intended_product_span=[60, 220])
+    same_product = [a for a in amps if a["start"] == 60 and a["end"] == 220]
+    assert len({a["mechanism_key"] for a in same_product}) > 1
+    assert len({a["product_key"] for a in same_product}) == 1
+    assert sum(a["matches_intended_product"] is True for a in same_product) == 1
+
+
+def test_gel_uses_full_tailed_product_length(figures):
+    P = figures.GELPAL["dark"]
+    amplicon = {"length": 180, "product_length": 200, "product_key": "s:10:190:200",
+                "start": 10, "end": 190, "source": "s", "on_target": None,
+                "single_primer": False, "fwd_mm": 0, "rev_mm": 0}
+    bands = figures._lane_bands([amplicon], P, has_locus=False)
+    assert bands[0]["size"] == 200
+    region = figures.gel_regions({"lanes": [{"label": "P1", "has_locus": False,
+                                              "amplicons": [amplicon]}]})[0]
+    assert region["tip"].startswith("200 bp")
+
+
+def test_gel_counts_unique_products_not_repeated_mechanisms(figures):
+    P = figures.GELPAL["dark"]
+    base = {"length": 200, "product_length": 200, "product_key": "s:10:210:200",
+            "start": 10, "end": 210, "source": "s", "on_target": None,
+            "single_primer": False, "fwd_mm": 0, "rev_mm": 0}
+    repeated = [{**base, "mechanism_key": "s:F+R:10:210:200"},
+                {**base, "mechanism_key": "s:R+F:10:210:200"}]
+    bands = figures._lane_bands(repeated, P, has_locus=False)
+    assert len(bands) == 1 and bands[0]["count"] == 1
+
+
+def test_equal_size_distinct_intervals_comigrate_with_multiplicity(figures):
+    P = figures.GELPAL["dark"]
+    common = {"length": 200, "product_length": 200, "source": "s", "on_target": None,
+              "single_primer": False, "fwd_mm": 0, "rev_mm": 0}
+    products = [{**common, "start": 10, "end": 210, "product_key": "s:10:210:200"},
+                {**common, "start": 500, "end": 700, "product_key": "s:500:700:200"}]
+    bands = figures._lane_bands(products, P, has_locus=False)
+    assert len(bands) == 1 and bands[0]["count"] == 2
+    assert "2 priming sites" in bands[0]["t"]
 
 
 def test_band_counts_are_non_negative_and_sum_to_products(figures):

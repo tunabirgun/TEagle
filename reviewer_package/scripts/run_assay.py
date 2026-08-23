@@ -19,6 +19,7 @@ expected size is the band the authors chose to name rather than the only product
 not an error; those cases are reported apart from the headline.
 
     python benchmarks/run_assay.py
+    python benchmarks/run_assay.py --refresh-details  # update the public aggregate from retained raw output
 
 Output: benchmarks/raw/assay/<name>.json per case, plus benchmarks/raw/assay_scores.json
 """
@@ -35,6 +36,14 @@ from teagle_core import __version__ as TEAGLE_VERSION      # noqa: E402
 CORPUS = os.path.join(ROOT, "benchmarks", "assay_corpus.json")
 OUTDIR = os.path.join(ROOT, "benchmarks", "raw", "assay")
 SCORES = os.path.join(ROOT, "benchmarks", "raw", "assay_scores.json")
+SCORED_PRODUCT_DETAIL_FIELDS = (
+    "fwd_mm", "rev_mm", "fwd_tail5", "rev_tail5", "fwd_anneal_len", "rev_anneal_len",
+)
+
+
+def scored_product_binding(amplicon):
+    """Sequence-free binding details needed by the manuscript audit."""
+    return {field: amplicon.get(field) for field in SCORED_PRODUCT_DETAIL_FIELDS}
 
 # Tolerance for calling a prediction concordant. A published size is often read off a gel against a ladder,
 # so it carries its own error; and a paper may round. 10% or 20 bp, whichever is larger, is the band within
@@ -198,6 +207,7 @@ def main():
                 "primer_degenerate": (fwd != c["forward_primer"].upper() or rev != c["reverse_primer"].upper()),
                 "scored_product_tail_bp": tails,
                 "scored_product_anneal_bp": [ba.get("fwd_anneal_len"), ba.get("rev_anneal_len")],
+                "scored_product_binding": scored_product_binding(ba),
                 "ground_truth": ground_truth(c),
                 "preworked_in_corpus": preworked(c),
                 "source_confidence": c.get("confidence"),
@@ -285,5 +295,46 @@ def main():
     return 0
 
 
+def refresh_existing_details():
+    """Add sequence-free binding fields to the aggregate without rerunning an assay."""
+    if not os.path.isfile(SCORES) or not os.path.isdir(OUTDIR):
+        raise RuntimeError("existing assay scores and retained per-case output are required")
+    with open(SCORES, encoding="utf-8") as handle:
+        summary = json.load(handle)
+    raw_by_name = {}
+    for path in sorted(glob.glob(os.path.join(OUTDIR, "[0-9]*.json"))):
+        with open(path, encoding="utf-8") as handle:
+            record = json.load(handle)
+        name = (record.get("case") or {}).get("name")
+        if not name or name in raw_by_name:
+            raise RuntimeError(f"duplicate or unnamed retained assay record: {path}")
+        raw_by_name[name] = record
+    rows = summary.get("rows") or []
+    if len(raw_by_name) != len(rows):
+        raise RuntimeError(f"retained assay records ({len(raw_by_name)}) != aggregate rows ({len(rows)})")
+    for row in rows:
+        record = raw_by_name.get(row.get("name"))
+        if record is None:
+            raise RuntimeError(f"no retained assay record for {row.get('name')!r}")
+        amplicons = ((record.get("result") or {}).get("amplicons") or [])
+        closest = row.get("closest_bp")
+        matches = [amplicon for amplicon in amplicons
+                   if int(amplicon.get("product_length") or amplicon.get("length")
+                          or amplicon.get("size") or 0) == closest]
+        if closest is not None and len(matches) != 1:
+            raise RuntimeError(f"expected one scored amplicon for {row['name']!r}, found {len(matches)}")
+        row["scored_product_binding"] = scored_product_binding(matches[0] if matches else {})
+    temporary = SCORES + ".part"
+    with open(temporary, "w", encoding="utf-8") as handle:
+        json.dump(summary, handle, indent=1, ensure_ascii=False, sort_keys=True)
+    os.replace(temporary, SCORES)
+    print(f"refreshed sequence-free scored-product details for {len(rows)} assays -> {SCORES}")
+    return 0
+
+
 if __name__ == "__main__":
+    if sys.argv[1:] == ["--refresh-details"]:
+        sys.exit(refresh_existing_details())
+    if sys.argv[1:]:
+        raise SystemExit("usage: python benchmarks/run_assay.py [--refresh-details]")
     sys.exit(main())

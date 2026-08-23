@@ -13,6 +13,10 @@ from collections import defaultdict
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt                                  # noqa: E402
+try:                                                              # noqa: E402
+    from .figures import write_clean_figure
+except ImportError:                                               # direct script execution
+    from figures import write_clean_figure
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "benchmarks", "raw", "scores.json")
@@ -28,7 +32,7 @@ SINGLE = 89 * MM
 TIER_ORDER = ["High", "Moderate", "Candidate"]
 
 plt.rcParams.update({
-    "font.family": "sans-serif", "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
+    "font.family": "serif", "font.serif": ["Times New Roman"],
     "font.size": 8, "axes.labelsize": 8, "xtick.labelsize": 7.5, "ytick.labelsize": 7,
     "axes.linewidth": 0.6, "xtick.major.width": 0.6, "ytick.major.width": 0.6,
     "axes.spines.top": False, "axes.spines.right": False,
@@ -101,8 +105,9 @@ def main():
 
     os.makedirs(OUT, exist_ok=True)
     for ext in ("pdf", "svg", "png"):
-        fig.savefig(os.path.join(OUT, f"fig_confidence_calibration.{ext}"),
-                    dpi=600 if ext == "png" else None)
+        write_clean_figure(
+            fig, os.path.join(OUT, f"fig_confidence_calibration.{ext}"),
+            dpi=600 if ext == "png" else None)
     plt.close(fig)
 
     summary = {t: {"n": tally[t][1], "correct": tally[t][0],

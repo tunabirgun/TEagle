@@ -1,7 +1,7 @@
 """Brand banner: eagle mark + two-tone TEagle wordmark, transparent, like the in-app header.
 Fully self-contained vector SVG (text flattened to paths, no font dependency) + high-res PNG.
 Dark variant for dark READMEs/backgrounds, light variant for white. Run: python render_banner.py"""
-import io, os
+import io, os, sys
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import QByteArray, QRectF, Qt
 from PySide6.QtGui import (QImage, QPainter, QColor, QFont, QFontDatabase,
@@ -13,6 +13,8 @@ _APP = QGuiApplication.instance() or QGuiApplication([])  # required for font/QP
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
+sys.path.insert(0, os.path.join(ROOT, "app", "backend"))
+from teagle_core.artifact_metadata import clean_png_metadata, clean_svg_metadata
 OUT = os.path.join(ROOT, "docs", "img")
 MARK = open(os.path.join(HERE, "teagle-mark.svg"), encoding="utf-8").read()
 
@@ -95,13 +97,13 @@ def render(variant, scale=4):
     # PNG (high-res, transparent)
     img = QImage(int(W * scale), int(Hh * scale), QImage.Format_ARGB32); img.fill(0)
     p = QPainter(img); p.scale(scale, scale); _paint(p, colors); p.end()
-    png = os.path.join(OUT, f"teagle-banner-{variant}.png"); img.save(png)
+    png = os.path.join(OUT, f"teagle-banner-{variant}.png"); img.save(png); clean_png_metadata(png)
     # SVG (vector, self-contained)
     svg = os.path.join(OUT, f"teagle-banner-{variant}.svg")
     gen = QSvgGenerator(); gen.setFileName(svg)
     gen.setSize(img.size()); gen.setViewBox(QRectF(0, 0, W, Hh))
     gen.setTitle("TEagle"); gen.setDescription("TEagle brand banner")
-    p = QPainter(gen); _paint(p, colors); p.end()
+    p = QPainter(gen); _paint(p, colors); p.end(); clean_svg_metadata(svg)
     print("wrote", png, "and", svg, f"({int(W)}x{int(Hh)})")
 
 def write_wordmark_asset():
@@ -117,6 +119,7 @@ def write_wordmark_asset():
            f'<path d="{te_d}" fill="{{TE}}"/><path d="{ag_d}" fill="{{AGLE}}"/></svg>\n')
     dest = os.path.join(HERE, "teagle-wordmark.svg")
     open(dest, "w", encoding="utf-8").write(svg)
+    clean_svg_metadata(dest)
     print("wrote", dest, f"({br.width():.0f}x{br.height():.0f})")
 
 def render_social(w=1280, h=640, bg="#0B0F14"):
@@ -129,7 +132,7 @@ def render_social(w=1280, h=640, bg="#0B0F14"):
     p.translate((w - W * scale) / 2, (h - Hh * scale) / 2); p.scale(scale, scale)
     _paint(p, VARIANTS["dark"]); p.end()
     os.makedirs(OUT, exist_ok=True)
-    dest = os.path.join(OUT, "teagle-social-preview.png"); img.save(dest)
+    dest = os.path.join(OUT, "teagle-social-preview.png"); img.save(dest); clean_png_metadata(dest)
     print("wrote", dest, f"({w}x{h})")
 
 if __name__ == "__main__":

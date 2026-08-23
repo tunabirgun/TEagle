@@ -71,32 +71,32 @@
   },
   "Moderate": {
    "class": {
-    "abstention_rate": 0.0667,
+    "abstention_rate": 0.0714,
     "accuracy": 1.0,
     "ci95_high": 1.0,
-    "ci95_low": 0.7847,
-    "n_answered": 14,
-    "n_correct": 14,
-    "n_gradable": 15
+    "ci95_low": 0.7719,
+    "n_answered": 13,
+    "n_correct": 13,
+    "n_gradable": 14
    },
-   "n": 15,
+   "n": 14,
    "order": {
-    "abstention_rate": 0.0667,
+    "abstention_rate": 0.0714,
     "accuracy": 1.0,
     "ci95_high": 1.0,
-    "ci95_low": 0.7847,
-    "n_answered": 14,
-    "n_correct": 14,
-    "n_gradable": 15
+    "ci95_low": 0.7719,
+    "n_answered": 13,
+    "n_correct": 13,
+    "n_gradable": 14
    },
    "superfamily": {
-    "abstention_rate": 0.4615,
+    "abstention_rate": 0.5,
     "accuracy": 1.0,
     "ci95_high": 1.0,
-    "ci95_low": 0.6457,
-    "n_answered": 7,
-    "n_correct": 7,
-    "n_gradable": 13,
+    "ci95_low": 0.6097,
+    "n_answered": 6,
+    "n_correct": 6,
+    "n_gradable": 12,
     "n_not_gradable": 2,
     "not_gradable_by_reason": {
      "Wicker Retrovirus/ERV superfamily: not in the classifier's answer space": 1,
@@ -277,33 +277,33 @@
   },
   "tir": {
    "class": {
-    "abstention_rate": 0.125,
+    "abstention_rate": 0.1429,
     "accuracy": 1.0,
     "ci95_high": 1.0,
-    "ci95_low": 0.6457,
-    "n_answered": 7,
-    "n_correct": 7,
-    "n_gradable": 8
+    "ci95_low": 0.6097,
+    "n_answered": 6,
+    "n_correct": 6,
+    "n_gradable": 7
    },
-   "n": 8,
+   "n": 7,
    "n_stratified": 0,
    "order": {
-    "abstention_rate": 0.125,
+    "abstention_rate": 0.1429,
     "accuracy": 1.0,
     "ci95_high": 1.0,
-    "ci95_low": 0.6457,
-    "n_answered": 7,
-    "n_correct": 7,
-    "n_gradable": 8
+    "ci95_low": 0.6097,
+    "n_answered": 6,
+    "n_correct": 6,
+    "n_gradable": 7
    },
    "superfamily": {
-    "abstention_rate": 0.125,
+    "abstention_rate": 0.1429,
     "accuracy": 1.0,
     "ci95_high": 1.0,
-    "ci95_low": 0.6457,
-    "n_answered": 7,
-    "n_correct": 7,
-    "n_gradable": 8,
+    "ci95_low": 0.6097,
+    "n_answered": 6,
+    "n_correct": 6,
+    "n_gradable": 7,
     "n_not_gradable": 0,
     "not_gradable_by_reason": {}
    }
@@ -995,37 +995,6 @@
   {
    "abstained_at_order": false,
    "abstained_at_superfamily": false,
-   "accession": "X01005.1",
-   "citation": "Rosenzweig B, Liao LW, Hirsh D (1983) Sequence of the C. elegans transposable element Tc1. Nucleic Acids Res 11(12):4201-4209 (PMID 6306578) - deposit and original element description. Plasterk RHA, Izsvak Z, Ivics Z (1999) Resident aliens: the Tc1/mariner superfamily of transposable elements. Trends Genet 15(8):326-332 (PMID 10431195) - Tc1 named as the eponymous founding member of the superfamily.",
-   "completeness": "intact / autonomous-consistent",
-   "confidence": "Moderate",
-   "coords_applied": null,
-   "corpus_confidence": "high",
-   "deposit_title": "Caenorhabditis elegans transposable element Tc1",
-   "expected_class": "CLASS_II",
-   "expected_order": "TIR",
-   "expected_superfamily": "Tc1/Mariner",
-   "expected_superfamily_token": "TCMAR",
-   "input_length": 1610,
-   "input_sha256": "229a006a1ffdd5902f2360ab99c11fb775c31299259b2fa9b31e063e43213242",
-   "n_domains": 1,
-   "observed_class": "CLASS_II",
-   "observed_order": "TIR",
-   "observed_superfamily": "Tc1/Mariner",
-   "observed_superfamily_token": "TCMAR",
-   "observed_te_class": "DNA/Tc1-Mariner",
-   "orfs_unscanned": 0,
-   "organism": "Caenorhabditis elegans",
-   "panel": "tir",
-   "record_scope": "element",
-   "single_element_input": true,
-   "span_applied": false,
-   "superfamily_gradable": true,
-   "superfamily_not_gradable_reason": null
-  },
-  {
-   "abstained_at_order": false,
-   "abstained_at_superfamily": false,
    "accession": "D84375.2",
    "citation": "Koga A, Suzuki M, Inagaki H, Bessho Y, Hori H (1996) Transposable element in fish. Nature 383(6595):30 (PMID 8779712) - discovery and deposit. Kawakami K, Shima A, Kawakami N (2000) Identification of a functional transposase of the Tol2 element, an Ac-like element from the Japanese medaka fish, and its transposition in the zebrafish germ lineage. Proc Natl Acad Sci USA 97(21):11403-11408 (PMID 11027340) - the hAT ('Ac-like') assignment and the functional/autonomous transposase, both stated in the title.",
    "completeness": "intact / autonomous-consistent",
@@ -1676,17 +1645,28 @@
   }
  ],
  "cases_excluded_not_single_element": 0,
- "cases_scored": 44,
+ "cases_scored": 43,
  "confusion_order": {
   "LINE->LINE": 6,
   "LTR->LTR": 22,
   "NOT_TE->ABSTAIN": 1,
   "NOT_TE->NO_CALL": 7,
   "TIR->NO_CALL": 1,
-  "TIR->TIR": 7
+  "TIR->TIR": 6
  },
- "distinct_inputs_scored": 44,
+ "distinct_inputs_scored": 43,
  "excluded_cases": [],
+ "independence": {
+  "element_only_order_withholding": {
+   "n_answered": 34,
+   "n_gradable": 35,
+   "n_withheld": 1,
+   "withholding_rate": 0.0286
+  },
+  "primary_unit": "distinct analysed input_sha256",
+  "row_level_summary": "overall retains one row per curated case for compatibility",
+  "unique_input_summary": "overall_unique_inputs collapses only duplicate rows with identical ground truth and rank-specific outcome; conflicts are errors"
+ },
  "negative_controls": {
   "correctly_not_called": 8,
   "false_positives": [],
@@ -1694,31 +1674,31 @@
  },
  "overall": {
   "class": {
-   "abstention_rate": 0.2045,
+   "abstention_rate": 0.2093,
    "accuracy": 1.0,
    "ci95_high": 1.0,
-   "ci95_low": 0.9011,
-   "n_answered": 35,
-   "n_correct": 35,
-   "n_gradable": 44
+   "ci95_low": 0.8985,
+   "n_answered": 34,
+   "n_correct": 34,
+   "n_gradable": 43
   },
   "order": {
-   "abstention_rate": 0.2045,
+   "abstention_rate": 0.2093,
    "accuracy": 1.0,
    "ci95_high": 1.0,
-   "ci95_low": 0.9011,
-   "n_answered": 35,
-   "n_correct": 35,
-   "n_gradable": 44
+   "ci95_low": 0.8985,
+   "n_answered": 34,
+   "n_correct": 34,
+   "n_gradable": 43
   },
   "superfamily": {
-   "abstention_rate": 0.3333,
+   "abstention_rate": 0.3448,
    "accuracy": 1.0,
    "ci95_high": 1.0,
-   "ci95_low": 0.8389,
-   "n_answered": 20,
-   "n_correct": 20,
-   "n_gradable": 30,
+   "ci95_low": 0.8318,
+   "n_answered": 19,
+   "n_correct": 19,
+   "n_gradable": 29,
    "n_not_gradable": 14,
    "not_gradable_by_reason": {
     "Wicker Retrovirus/ERV superfamily: not in the classifier's answer space": 6,
@@ -1726,6 +1706,41 @@
    }
   }
  },
+ "overall_unique_inputs": {
+  "class": {
+   "abstention_rate": 0.2093,
+   "accuracy": 1.0,
+   "ci95_high": 1.0,
+   "ci95_low": 0.8985,
+   "n_answered": 34,
+   "n_correct": 34,
+   "n_gradable": 43
+  },
+  "order": {
+   "abstention_rate": 0.2093,
+   "accuracy": 1.0,
+   "ci95_high": 1.0,
+   "ci95_low": 0.8985,
+   "n_answered": 34,
+   "n_correct": 34,
+   "n_gradable": 43
+  },
+  "superfamily": {
+   "abstention_rate": 0.3448,
+   "accuracy": 1.0,
+   "ci95_high": 1.0,
+   "ci95_low": 0.8318,
+   "n_answered": 19,
+   "n_correct": 19,
+   "n_gradable": 29,
+   "n_not_gradable": 14,
+   "not_gradable_by_reason": {
+    "Wicker Retrovirus/ERV superfamily: not in the classifier's answer space": 6,
+    "no superfamily label in the corpus": 8
+   }
+  }
+ },
+ "stratified_cases": [],
  "stratum_containing_record": {
   "class": {
    "abstention_rate": null,
@@ -1864,26 +1879,26 @@
  ],
  "superfamily_sensitivity": {
   "erv_graded_incorrect": {
-   "abstention_rate": 0.3333,
-   "accuracy": 0.8333,
-   "ci95_high": 0.9332,
-   "ci95_low": 0.6415,
-   "n_answered": 24,
-   "n_correct": 20,
-   "n_gradable": 36,
+   "abstention_rate": 0.3429,
+   "accuracy": 0.8261,
+   "ci95_high": 0.9302,
+   "ci95_low": 0.6286,
+   "n_answered": 23,
+   "n_correct": 19,
+   "n_gradable": 35,
    "n_not_gradable": 8,
    "not_gradable_by_reason": {
     "no superfamily label in the corpus": 8
    }
   },
   "representable_expected_only": {
-   "abstention_rate": 0.1304,
+   "abstention_rate": 0.1364,
    "accuracy": 1.0,
    "ci95_high": 1.0,
-   "ci95_low": 0.8389,
-   "n_answered": 20,
-   "n_correct": 20,
-   "n_gradable": 23,
+   "ci95_low": 0.8318,
+   "n_answered": 19,
+   "n_correct": 19,
+   "n_gradable": 22,
    "n_not_gradable": 14,
    "not_gradable_by_reason": {
     "Wicker Retrovirus/ERV superfamily: not in the classifier's answer space": 6,

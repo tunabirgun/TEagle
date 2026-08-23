@@ -52,7 +52,9 @@ def main():
     d = json.load(open(SRC, encoding="utf-8"))
     numbers = reference_numbers()
 
-    header = ["Assay", "Target", "Organism", "Template", "Published (bp)", "Predicted (bp)",
+    # "Reference size" covers both integer values printed in a source and the one approximate gel-band
+    # estimate. The adjacent provenance column states which kind each row supplies.
+    header = ["Assay", "Target", "Organism", "Template", "Reference size (bp)", "Predicted (bp)",
               "Difference (bp)", "Products", "Loci", "Size stated in source", "Source"]
     rows = []
     for r in sorted(d["rows"], key=lambda x: (x["panel"] or "", x["name"])):
@@ -72,10 +74,10 @@ def main():
 
     st = d["by_ground_truth"].get("stated_in_source", {})
     caption = (
-        "Table 3. Predicted against published amplicon size for assays whose product size was determined "
+        "Table 3. Predicted against reported amplicon reference size for assays whose product size was determined "
         "at the bench. Each pair was run on the template its source names, through the same in-silico PCR "
         "the application exposes, with one size window applied to every case "
-        f"({d['search_window_bp'][0]}–{d['search_window_bp'][1]} bp: half the smallest published "
+        f"({d['search_window_bp'][0]}–{d['search_window_bp'][1]} bp: half the smallest reference "
         "amplicon to three times the largest) rather than a window centred on the expected value, which "
         "would let the search decide the answer. Predicted size is the full product, templated span plus "
         "any incorporated non-templated 5′ tail, because that is the band a gel reports. The "
@@ -85,7 +87,7 @@ def main():
         "is not a specificity result. Concordance is scored within a tolerance of 10% or 20 bp, whichever "
         "is larger, since a size read off a gel against a ladder carries its own error. "
         f"Of the {d['single_locus_cases']} single-locus assays, {d['single_locus_concordant']} fall within "
-        f"tolerance and {d['exact_matches']} reproduce the published size exactly; median absolute "
+        f"tolerance and {d['exact_matches']} reproduce the reference size exactly; median absolute "
         f"difference {d['median_abs_difference_bp']} bp, maximum "
         f"{st.get('max_abs_difference_bp', '—')} bp.")
 

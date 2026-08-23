@@ -1,6 +1,52 @@
 """Golden classification tests: real fixtures pinned to their published TE class/superfamily.
 Exercises the domain (pyhmmer) + classify pipeline end-to-end."""
+import pytest
+
 from teagle_core import structural, domains, classify
+
+
+def test_structural_failure_never_becomes_structural_absence():
+    rt = {"domain": "RT", "nt": [100, 300], "strand": "+", "score": 50}
+    rh = {"domain": "RNaseH", "nt": [320, 450], "strand": "+", "score": 40}
+    result = classify.classify([], [rt, rh], structural_ok=False)
+    assert result["structural_unavailable"] is True
+    assert result["te_class"] != "LINE"
+    assert "structural scan did not run" in " ".join(result["evidence"])
+
+
+def test_structural_failure_marks_transposase_termini_unassessed():
+    tp = {"domain": "TPase", "class": "dna:hAT", "nt": [100, 500], "strand": "+", "score": 80}
+    result = classify.classify([], [tp], structural_ok=False)
+    evidence = " ".join(result["evidence"]).lower()
+    assert "no terminal" not in evidence and "not recovered" not in evidence
+    assert result["completeness"]["missing"] == []
+    assert result["completeness"]["unassessed"] == ["TIR (5′)", "TIR (3′)"]
+
+
+def test_structural_failure_with_no_domains_withholds_classification():
+    result = classify.classify([], [], structural_ok=False)
+    assert result["superfamily"] == "classification withheld (structural scan unavailable)"
+    assert result["completeness"] is None
+    assert result["outcome"] == "withheld"
+
+
+@pytest.mark.parametrize("domains_in,expected_outcome", [
+    ([], "withheld"),
+    ([{"domain": "RT", "nt": [100, 300], "strand": "+", "score": 50}], "withheld"),
+    ([{"domain": "RT", "nt": [100, 300], "strand": "+", "score": 50},
+      {"domain": "RNaseH", "nt": [320, 450], "strand": "+", "score": 40}], "complete"),
+    ([{"domain": "RT", "nt": [100, 300], "strand": "+", "score": 50},
+      {"domain": "INT", "nt": [500, 650], "strand": "+", "score": 60}], "complete"),
+    ([{"domain": "TPase", "class": "dna:hAT", "nt": [100, 500], "strand": "+", "score": 80}], "complete"),
+    ([{"domain": "HEL", "nt": [100, 500], "strand": "+", "score": 80}], "complete"),
+])
+def test_structural_failure_uses_dependency_tagged_evidence(domains_in, expected_outcome):
+    result = classify.classify([], domains_in, structural_ok=False)
+    assert result["outcome"] == expected_outcome
+    assert result["evidenceLedger"]
+    assert {item["dependency"] for item in result["evidenceLedger"]} <= {"domains", "structural"}
+    joined = " ".join(result["evidence"]).lower()
+    assert "no terminal" not in joined and "not recovered" not in joined
 from helpers import fixture_seq
 
 

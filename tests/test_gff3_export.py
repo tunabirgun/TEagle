@@ -90,7 +90,8 @@ def test_every_term_used_has_a_verified_so_accession():
 def test_gff3_has_the_required_directives():
     text = gff3.to_gff3(_rec("M11240"), seqid="M11240")
     assert text.splitlines()[0] == "##gff-version 3"
-    assert any(l.startswith("##sequence-region M11240 1 ") for l in text.splitlines())
+    safe = gff3.public_record_id("M11240")
+    assert any(l.startswith(f"##sequence-region {safe} 1 ") for l in text.splitlines())
 
 
 def test_every_feature_row_has_nine_columns_and_sane_coordinates():
@@ -124,14 +125,13 @@ def test_reserved_characters_are_percent_encoded():
     attrs = _rows(gff3.to_gff3(_rec("M11240"), seqid="M11240"))[0][8]
     # the scope sentence contains commas, which are the GFF3 attribute list separator
     assert "%2C" in attrs
-    body = attrs.split("domains_tested_scope=")[-1]
-    assert ";" not in body or body.count(";") == 0
+    assert all("=" in item for item in attrs.split(";"))
 
 
 def test_embedded_fasta_is_emitted_when_a_sequence_is_supplied():
     text = gff3.to_gff3(_rec("X01005"), seqid="X01005", sequence="ACGT" * 30)
     assert "##FASTA" in text
-    assert ">X01005" in text
+    assert f">{gff3.public_record_id('X01005')}" in text
     assert text.rstrip().endswith("ACGT") or "ACGT" in text.split("##FASTA")[1]
 
 
@@ -267,4 +267,190 @@ def test_tsd_and_pbs_sub_features_are_not_dropped():
     assert terms.count("target_site_duplication") == 2, "a TSD is two flanking repeats; both must be emitted"
     assert "primer_binding_site" in terms
     bed_names = [l.split("\t")[3] for l in gff3.to_bed(rec, "locus").splitlines() if l]
-    assert bed_names.count("TSD") == 2 and "PBS" in bed_names
+    assert sum(name.startswith("TSD|") for name in bed_names) == 2
+    assert any(name.startswith("PBS|") for name in bed_names)
+
+
+# ---------------- fetched gene-model and splice coordinate exports ----------------
+def _gene_model():
+    return {"exons": [{"start": 12, "end": 20, "strand": "+", "note": "2"},
+                       {"start": 0, "end": 6, "strand": "+", "note": "1"}],
+            "introns": [{"start": 6, "end": 12, "strand": "+", "donor": "GT",
+                         "acceptor": "AG", "canonical": True}],
+            "cds": [{"start": 2, "end": 6, "strand": "+", "phase": 0, "cds_group": "cds_1"},
+                    {"start": 12, "end": 18, "strand": "+", "phase": 2, "cds_group": "cds_1"}]}
+
+
+def test_gene_model_gff3_and_bed_convert_0_based_half_open_exactly_and_sort():
+    model = _gene_model()
+    g_rows = [row for row in _rows(gff3.gene_model_to_gff3(
+        model, "chr1", sequence="ACGT" * 5)) if len(row) == 9]
+    b_rows = [line.split("\t") for line in gff3.gene_model_to_bed(
+        model, "chr1", sequence_length=20).splitlines()]
+    assert [(int(r[3]), int(r[4])) for r in g_rows] == [(1, 6), (3, 6), (7, 12), (13, 18), (13, 20)]
+    assert [(int(r[1]), int(r[2])) for r in b_rows] == [(0, 6), (2, 6), (6, 12), (12, 18), (12, 20)]
+    assert all(int(b[1]) == int(g[3]) - 1 and int(b[2]) == int(g[4])
+               for g, b in zip(g_rows, b_rows))
+    assert "donor=GT" in g_rows[2][8] and "acceptor=AG" in g_rows[2][8]
+    cds = [row for row in g_rows if row[2] == "CDS"]
+    assert [row[7] for row in cds] == ["0", "2"]
+    assert all("cds_group=cds_1" in row[8] for row in cds)
+
+
+@pytest.mark.parametrize("phase", [None, -1, 3, True, "0"])
+def test_gene_model_gff3_fails_closed_when_cds_phase_is_unavailable_or_invalid(phase):
+    model = _gene_model()
+    model["cds"][0]["phase"] = phase
+    with pytest.raises(ValueError, match="phase"):
+        gff3.gene_model_to_gff3(model, "chr1", sequence="ACGT" * 5)
+    assert "\tCDS_" in gff3.gene_model_to_bed(model, "chr1", sequence_length=20)
+    assert ">chr1.cds" in gff3.gene_model_to_fasta(
+        model, "ACGT" * 5, "chr1", feature_types=("CDS",), identity_trust="validated_fetch")
+
+
+@pytest.mark.parametrize("mutation", [
+    lambda m: m["exons"][0].update(start=-1),
+    lambda m: m["exons"][0].update(end=12),
+    lambda m: m["exons"][0].update(start=20, end=20),
+    lambda m: m["exons"][0].update(strand="?"),
+    lambda m: m["exons"][0].update(start=True),
+])
+def test_gene_model_coordinate_and_strand_mutations_fail(mutation):
+    import copy
+    model = copy.deepcopy(_gene_model())
+    mutation(model)
+    with pytest.raises(ValueError):
+        gff3.gene_model_to_gff3(model, "chr1", sequence="ACGT" * 5)
+    with pytest.raises(ValueError):
+        gff3.gene_model_to_bed(model, "chr1", sequence_length=20)
+
+
+def test_gene_model_rows_are_deterministic_under_input_reordering():
+    import copy
+    a = _gene_model()
+    b = copy.deepcopy(a)
+    b["exons"].reverse()
+    b["cds"].reverse()
+    assert gff3.gene_model_to_gff3(a, "chr1", sequence="ACGT" * 5) == \
+        gff3.gene_model_to_gff3(b, "chr1", sequence="ACGT" * 5)
+    assert gff3.gene_model_to_bed(a, "chr1", sequence_length=20) == \
+        gff3.gene_model_to_bed(b, "chr1", sequence_length=20)
+
+
+def test_path_like_record_id_is_rewritten_without_losing_identity():
+    record_id = "../../sample A;unit=1\\x"
+    safe = gff3.sanitize_seqid(record_id)
+    stem = gff3.safe_filename_stem(record_id)
+    assert safe.startswith("record_") and "/" not in safe and "\\" not in safe
+    assert "/" not in stem and "\\" not in stem and stem not in {".", ".."}
+    text = gff3.gene_model_to_gff3(_gene_model(), record_id, sequence="ACGT" * 5)
+    assert f"##sequence-region {safe} 1 20" in text
+    digest = gff3._identity_sha256(record_id)
+    assert f"original_record_sha256={digest}" in text
+    assert record_id not in text
+    bed = gff3.gene_model_to_bed(_gene_model(), record_id, sequence_length=20)
+    assert f"record_sha256={digest}" in bed and record_id not in bed
+    assert gff3.safe_filename_stem("CON") != "CON"
+
+
+def test_te_annotation_writers_also_sanitize_path_like_record_ids():
+    record_id = "../unsafe sample"
+    safe = gff3.sanitize_seqid(record_id)
+    rec = _rec("M11240")
+    text = gff3.to_gff3(rec, record_id, sequence=rec["seq"])
+    rows = [row for row in _rows(text) if len(row) == 9]
+    assert all(row[0] == safe for row in rows)
+    digest = gff3._identity_sha256(record_id)
+    assert f"original_record_sha256={digest}" in rows[0][8]
+    assert record_id not in text
+    assert f">{safe}" in text and f">{record_id}" not in text
+    bed = gff3.to_bed(rec, record_id)
+    assert all(line.split("\t")[0] == safe for line in bed.splitlines())
+    assert f"record_sha256={digest}" in bed and record_id not in bed
+
+
+@pytest.mark.parametrize("record_id", [
+    r"C:\Users\person\private\sample.fa",
+    "C:private_sample.fa",
+    "/home/person/private/sample.fa",
+    "../../private/sample.fa",
+])
+def test_filesystem_like_ids_never_reappear_in_any_public_coordinate_export(record_id):
+    digest = gff3._identity_sha256(record_id)
+    assert gff3.safe_filename_stem(record_id) == f"record_{digest[:12]}"
+    assert gff3.safe_filename_stem(record_id, default="../unsafe") == f"record_{digest[:12]}"
+    outputs = [
+        gff3.gene_model_to_gff3(_gene_model(), record_id, sequence="ACGT" * 5),
+        gff3.gene_model_to_bed(_gene_model(), record_id, sequence_length=20),
+        gff3.gene_model_to_fasta(_gene_model(), "ACGT" * 5, record_id, feature_types=("exon",)),
+    ]
+    for output in outputs:
+        assert record_id not in output
+        assert digest in output
+
+
+def test_gene_model_fasta_uses_exact_bound_sequence_and_strand():
+    model = {"exons": [{"start": 0, "end": 4, "strand": "+"},
+                       {"start": 4, "end": 8, "strand": "-"}],
+             "cds": [{"start": 2, "end": 6, "strand": "+", "phase": 0}]}
+    text = gff3.gene_model_to_fasta(model, "AAAACCGT", "record A", feature_types=("exon",))
+    records = [block for block in text.split(">") if block]
+    assert len(records) == 2
+    assert records[0].splitlines()[1] == "AAAA"
+    assert records[1].splitlines()[1] == "ACGG"  # reverse complement of CCGT
+    assert f"record_sha256={gff3._identity_sha256('record A')}" in text
+    assert "record A" not in text and "coordinate_system=0-based-half-open" in text
+    mutated = {"exons": [{"start": 4, "end": 9, "strand": "+"}]}
+    with pytest.raises(ValueError, match="exceeds"):
+        gff3.gene_model_to_fasta(mutated, "AAAACCGT", "record")
+    with pytest.raises(ValueError, match="IUPAC"):
+        gff3.gene_model_to_fasta(model, "AAAAXCGT", "record", feature_types=("exon",))
+    with pytest.raises(ValueError, match="not FASTA"):
+        gff3.gene_model_to_fasta(model, ">record\nAAAACCGT", "record", feature_types=("exon",))
+
+
+def test_gene_model_export_has_no_nan_or_machine_path_leakage():
+    text = gff3.gene_model_to_gff3(_gene_model(), "chr1", sequence="ACGT" * 5,
+                                    source="NCBI annotation", model_kind="fetched_gene_model")
+    assert "NaN" not in text and "C:\\" not in text and "/Users/" not in text
+    assert "model_kind=fetched_gene_model" in text
+
+
+@pytest.mark.parametrize("record_id", [
+    r"C:\Users\person\private\sample.fa",
+    "/home/person/private/sample.fa",
+    "../../private/sample.fa",
+    r"\\server\share\sample.fa",
+])
+def test_public_record_identity_rewrites_filesystem_values_with_full_digest(record_id):
+    identity = gff3.public_record_identity(record_id)
+    digest = gff3._identity_sha256(record_id)
+    assert identity == {"id": f"record_{digest[:12]}", "idSha256": digest}
+    assert gff3.public_record_id(record_id) == identity["id"]
+
+
+@pytest.mark.parametrize("record_id", [
+    "M11240", "M11240.1", "AM040263", "NC_000013.11", "GCF_009914755.1",
+    "chr1", "chr1:100-200",
+])
+def test_public_record_identity_preserves_recognized_ids_only_in_validated_fetch_context(record_id):
+    assert gff3.public_record_identity(record_id, trust="validated_fetch") == {"id": record_id}
+    assert "idSha256" in gff3.public_record_identity(record_id)
+
+
+@pytest.mark.parametrize("record_id", ["input_sequence", "record_deadbeefdead", "P1"])
+def test_public_record_identity_preserves_generated_ids_only_in_generated_context(record_id):
+    assert gff3.public_record_identity(record_id, trust="generated") == {"id": record_id}
+    assert "idSha256" in gff3.public_record_identity(record_id)
+
+
+@pytest.mark.parametrize("record_id", [
+    "patient_042", "donor-A1", "sample_tuna_birgun", "descriptive specimen header",
+    " specimen ", "specimen\tprivate", r"C:\private\sample.fa", "../../sample.fa",
+])
+def test_public_record_identity_rewrites_sample_like_and_free_text_headers(record_id):
+    digest = gff3._identity_sha256(record_id)
+    expected = {"id": f"record_{digest[:12]}", "idSha256": digest}
+    assert gff3.public_record_identity(record_id) == expected
+    assert gff3.sanitize_seqid(record_id) == expected["id"]
+    assert gff3.safe_filename_stem(record_id) == expected["id"]

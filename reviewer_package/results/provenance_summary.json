@@ -1,0 +1,119 @@
+{
+  "case_count": 172,
+  "corpus_counts": {
+    "broader": 129,
+    "holdout": 43
+  },
+  "derived_structural_values": {
+    "ltr_lower_bound_count": 47,
+    "terminal_repeat_counts": {
+      "LTR": 62,
+      "LTR_advisory_subthreshold": 7,
+      "TIR": 43
+    },
+    "terminal_repeat_length_ranges": {
+      "LTR": {
+        "max": 1543,
+        "min": 109
+      },
+      "LTR_advisory_subthreshold": {
+        "max": 1846,
+        "min": 285
+      },
+      "TIR": {
+        "max": 268,
+        "min": 10
+      }
+    },
+    "tsd_count": 14,
+    "tsd_length_range": {
+      "max": 8,
+      "min": 2
+    },
+    "tsd_matched_expected_count": 0
+  },
+  "historical_orphan_file_count": {
+    "note": "The compact extract indexes the current 129 broader and 43 holdout per-case manifests; it cannot establish a historical orphan-file count.",
+    "status": "historical_non_reconstructable_from_current_manifests"
+  },
+  "internal_manifest_sha256_coverage": {
+    "present": 172,
+    "total": 172
+  },
+  "internal_manifest_sha256_verification": {
+    "total": 172,
+    "verified": 172
+  },
+  "parameter_coverage": {
+    "complete_case_count": 172,
+    "parameter_names": [
+      "domain_evalue_max",
+      "domain_orfs_scanned_max",
+      "ltr_min_anchors",
+      "ltr_min_identity_pct",
+      "ltr_min_len",
+      "ltr_seed_k",
+      "ltr_seed_window",
+      "orf_min_aa",
+      "pbs_min_identity",
+      "pbs_search_window",
+      "polya_min_run",
+      "ppt_max_defects",
+      "ppt_min_len",
+      "ppt_min_purine",
+      "ppt_window",
+      "tir_max_len",
+      "tir_min_anchors",
+      "tir_min_identity_pct",
+      "tir_min_len",
+      "tir_min_standalone",
+      "tir_seed_k",
+      "tsd_max_len",
+      "tsd_min_len"
+    ],
+    "unique_sealed_parameter_sets": 1
+  },
+  "schema_version": "1.1",
+  "source_manifest_sha256_coverage": {
+    "present": 172,
+    "total": 172
+  },
+  "unique_accession_count": 159,
+  "unique_input_sha256_count": 159,
+  "unique_sealed_input_sha256_count": 159,
+  "version_coverage": {
+    "databases": [
+      {
+        "case_count": 172,
+        "name": "Pfam TE-domain profiles (bundled, CC0)",
+        "sha256": "57f2b7881f35e2aeb2885430c80d7d514005d32b9f1f782e362189b3207858ac"
+      }
+    ],
+    "provenance_schema_versions": {
+      "0.1": 172
+    },
+    "run_types": {
+      "analysis": 172
+    },
+    "software": [
+      {
+        "case_count": 172,
+        "name": "HMMER (pyhmmer)",
+        "version": "0.12.1"
+      },
+      {
+        "case_count": 172,
+        "name": "TEagle core",
+        "version": "3.8.0"
+      },
+      {
+        "case_count": 172,
+        "name": "python",
+        "version": "3.12.10"
+      }
+    ],
+    "teagle_versions": {
+      "3.8.0": 172
+    }
+  }
+}

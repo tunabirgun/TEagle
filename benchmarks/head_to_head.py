@@ -1,6 +1,6 @@
 """Paired comparison of TEagle against TEsorter on byte-identical input.
 
-The pre-registered analysis. TEsorter is reported on BOTH passes: its own default rexdb, which is the
+The documented analysis. TEsorter is reported on BOTH passes: its own default rexdb, which is the
 like-for-like comparison since TEagle is also run untuned, and the lineage-matched database its authors
 recommend, which is the comparator at its best. Quoting only the pass that flatters TEagle would not be an
 evaluation.
@@ -47,6 +47,8 @@ SCORES = os.path.join(ROOT, "benchmarks", "raw", "scores.json")
 TES = os.path.join(ROOT, "benchmarks", "raw", "tesorter")
 TES_WORK = os.path.join(TES, "_work")
 TEAGLE_RAW = os.path.join(ROOT, "benchmarks", "raw", "teagle")
+TEAGLE_RUN = os.path.join(TEAGLE_RAW, "_run.json")
+TES_RUN = os.path.join(TES, "_run.json")
 OUT = os.path.join(ROOT, "benchmarks", "raw", "head_to_head.json")
 
 # The four orders both tools are scored on. A call outside this set is not an order call and is never
@@ -136,7 +138,8 @@ def check_input_identity(accession, tes_rec):
     residues, fetch, n_recs = teagle_input_hashes(accession)
     fa = os.path.join(TES_WORK, f"{accession.replace('/', '_')}.fa")
     rec = {"accession": accession, "teagle_records": n_recs,
-           "teagle_distinct_input_residue_sha256": len(residues)}
+           "teagle_distinct_input_residue_sha256": len(residues),
+           "teagle_input_residue_sha256": next(iter(residues)) if len(residues) == 1 else None}
 
     if not residues:
         rec["verdict"] = "unverifiable"
@@ -176,38 +179,115 @@ def order_call_error(call, expected):
     return call != expected
 
 
+PAIRING_FIELDS = ("input_sha256", "expected_class", "expected_order", "observed_order",
+                  "abstained_at_order", "observed_te_class", "confidence", "single_element_input")
+
+
+def collapse_accession_rows(rows, *, source):
+    """Return one unambiguous scoring row per accession.
+
+    Several curation rows can describe one analysed accession.  Accession-level pairing is valid only when
+    every field it uses is identical.  Never choose an arbitrary first row: that changes a paired test's
+    denominator while concealing an incompatible ground truth or observed call.
+    """
+    grouped = {}
+    for row in rows:
+        accession = (row.get("accession") or "").strip()
+        if not accession:
+            raise ValueError(f"{source}: row without an accession")
+        grouped.setdefault(accession, []).append(row)
+    collapsed = {}
+    for accession, members in sorted(grouped.items()):
+        for row in members:
+            if not (row.get("input_sha256") or "").strip():
+                raise ValueError(f"{source}: {accession} has no input_sha256; accession-level pairing "
+                                 "requires a distinct analysed input")
+        signatures = {tuple(row.get(field) for field in PAIRING_FIELDS) for row in members}
+        if len(signatures) != 1:
+            differing = {field: sorted({repr(row.get(field)) for row in members})
+                         for field in PAIRING_FIELDS
+                         if len({row.get(field) for row in members}) > 1}
+            raise ValueError(f"{source}: accession {accession} has ambiguous rows for paired scoring: "
+                             f"{differing}")
+        collapsed[accession] = members[0]
+    return collapsed
+
+
+def successful_accessions(scores):
+    """Derive the current successful universe from retained and stratified score records."""
+    retained = list(scores.get("cases") or [])
+    stratified = scores.get("stratified_cases")
+    if stratified is None:
+        raise ValueError("scores.json lacks stratified_cases with input hashes; regenerate it with score.py "
+                         "before reconciling the comparator")
+    return collapse_accession_rows(retained + list(stratified), source="scores.json")
+
+
+def comparator_by_mode():
+    """Load comparator outputs without silently overwriting duplicate mode/accession records."""
+    grouped = {}
+    for f in glob.glob(os.path.join(TES, "*.json")):
+        if os.path.basename(f).startswith("_"):
+            continue
+        rec = json.load(open(f, encoding="utf-8"))
+        mode, accession = rec.get("mode"), rec.get("accession")
+        if not mode or not accession:
+            raise ValueError(f"{f}: comparator record lacks mode or accession")
+        grouped.setdefault(mode, {}).setdefault(accession, []).append(rec)
+    out = {}
+    for mode, per_accession in grouped.items():
+        out[mode] = {}
+        for accession, records in per_accession.items():
+            if len(records) != 1:
+                raise ValueError(f"TEsorter {mode}: accession {accession} has {len(records)} output records; "
+                                 "cannot select one for a paired comparison")
+            out[mode][accession] = records[0]
+    return out
+
+
 def main():
     if not os.path.exists(SCORES):
         print("run benchmarks/score.py first")
         return 1
     sc = json.load(open(SCORES, encoding="utf-8"))
-    by_acc = {}
-    for c in sc["cases"]:
-        by_acc.setdefault(c["accession"], c)
+    by_acc = successful_accessions(sc)
     # score.py already records why each case it stratified out was stratified out; reuse its wording rather
     # than inventing a second, weaker explanation here.
     stratified = {e["accession"]: e.get("reason") for e in sc.get("excluded_cases", [])}
-
-    tes = {}
-    for f in glob.glob(os.path.join(TES, "*.json")):
-        if os.path.basename(f).startswith("_"):
-            continue
-        r = json.load(open(f, encoding="utf-8"))
-        tes.setdefault(r["mode"], {})[r["accession"]] = r
-
-    result = {"modes": {}}
+    tes = comparator_by_mode()
+    historical_run = json.load(open(TES_RUN, encoding="utf-8")) if os.path.exists(TES_RUN) else None
+    current_run = json.load(open(TEAGLE_RUN, encoding="utf-8")) if os.path.exists(TEAGLE_RUN) else None
+    historical_rows = historical_run.get("corpus_rows") if historical_run else None
+    current_rows = current_run.get("corpus_rows") if current_run else None
+    result = {
+        "historical_tesorter_run": historical_run,
+        "historical_vs_current": {
+            "historical_tesorter_corpus_rows": historical_rows,
+            "current_teagle_corpus_rows": current_rows,
+            "corpus_row_count_mismatch": (historical_rows != current_rows
+                                          if historical_rows is not None and current_rows is not None else None),
+        },
+        "modes": {},
+    }
     for mode in sorted(tes):
-        pairs, excluded, identity = [], [], []
-        for acc in sorted(tes[mode]):
-            t = tes[mode][acc]
-            a = by_acc.get(acc)
+        pairs, excluded, missing, identity = [], [], [], []
+        comparator_accessions = set(tes[mode])
+        successful = set(by_acc)
+        extras = sorted(comparator_accessions - successful)
+        for acc in sorted(successful):
+            t = tes[mode].get(acc)
+            a = by_acc[acc]
+            if t is None:
+                missing.append({"accession": acc,
+                                "reason": "no TEsorter output for current successful accession"})
+                continue
             ts = tesorter_order(t)
             idc = check_input_identity(acc, t)
             idc["mode"] = mode
             identity.append(idc)
 
             # ---- decide whether this case is pairable, and if not, say why -------------------------
-            if a is None:
+            if not a["single_element_input"]:
                 reason = "not_scored_as_single_element"
             elif a["expected_order"] == "NOT_TE":
                 reason = "negative_control"
@@ -219,18 +299,20 @@ def main():
                 reason = None
 
             if reason is not None:
-                exp = a["expected_order"] if a else None
-                te_call = a["observed_order"] if a else None
+                exp = a["expected_order"]
+                te_call = a["observed_order"]
                 excluded.append({
                     "accession": acc, "reason": reason,
-                    "stratification_note": stratified.get(acc) if a is None else None,
+                    "stratification_note": stratified.get(acc) if not a["single_element_input"] else None,
                     "expected_order": exp,
-                    "teagle": te_call, "teagle_te_class": a["observed_te_class"] if a else None,
-                    "teagle_confidence": a["confidence"] if a else None,
-                    "teagle_abstained": a["abstained_at_order"] if a else None,
+                    "teagle": te_call, "teagle_te_class": a["observed_te_class"],
+                    "teagle_confidence": a["confidence"],
+                    "teagle_abstained": a["abstained_at_order"],
+                    "single_element_input": a["single_element_input"],
+                    "input_sha256": a["input_sha256"],
                     "tesorter": ts, "database": t.get("database"),
-                    "teagle_order_call_incorrect": order_call_error(te_call, exp) if a else None,
-                    "tesorter_order_call_incorrect": order_call_error(ts, exp) if a else None,
+                    "teagle_order_call_incorrect": order_call_error(te_call, exp),
+                    "tesorter_order_call_incorrect": order_call_error(ts, exp),
                 })
                 continue
 
@@ -239,7 +321,10 @@ def main():
             te_abst = a["abstained_at_order"]
             ts_ok = ts not in ("NO_CALL", "OTHER") and ts == exp
             pairs.append({"accession": acc, "expected": exp, "teagle": a["observed_order"],
+                          "input_sha256": a["input_sha256"],
                           "teagle_correct": te_ok, "teagle_abstained": te_abst,
+                          "teagle_confidence": a["confidence"],
+                          "single_element_input": a["single_element_input"],
                           "tesorter": ts, "tesorter_correct": ts_ok,
                           "database": t.get("database"),
                           "teagle_order_call_incorrect": order_call_error(a["observed_order"], exp),
@@ -273,11 +358,27 @@ def main():
 
         ver = Counter(i["verdict"] for i in identity)
         fetch_agree = Counter(i["recorded_fetch_sha256"] for i in identity)
+        pair_hashes = [p["input_sha256"] for p in pairs]
+        if any(not h for h in pair_hashes) or len(set(pair_hashes)) != len(pair_hashes):
+            raise ValueError(f"{mode}: paired accessions must each represent one distinct nonempty "
+                             "accession-level input_sha256")
 
         result["modes"][mode] = {
+            # `n_considered` remains the comparator-output count for compatibility.  The accounting
+            # block distinguishes it from the current successful-accession universe explicitly.
             "n_considered": len(tes[mode]),
+            "n_successful_accessions": len(successful),
             "n_paired": len(pairs),
             "n_excluded": len(excluded),
+            "accounting": {
+                "current_successful_unique_accessions": len(successful),
+                "comparator_outputs": len(comparator_accessions),
+                "paired": len(pairs),
+                "excluded_with_output": len(excluded),
+                "missing_comparator_output": {"n": len(missing), "cases": missing},
+                "extra_comparator_outputs": {"n": len(extras), "accessions": extras},
+                "invariant": "paired + excluded_with_output + missing_comparator_output = current_successful_unique_accessions",
+            },
             # ---- byte identity, measured -----------------------------------------------------
             "input_identity": {
                 "method": "SHA-256 over the residues of the FASTA run_tesorter.py handed to TEsorter "
@@ -359,13 +460,21 @@ def main():
         m = result["modes"][mode]
         assert m["n_considered"] == m["n_paired"] + sum(m["excluded"]["by_reason"].values()), \
             f"{mode}: exclusion ledger does not account for every considered case"
+        assert not extras, f"{mode}: comparator outputs outside current successful universe: {extras}"
+        assert (m["n_paired"] + m["accounting"]["excluded_with_output"]
+                + m["accounting"]["missing_comparator_output"]["n"]
+                == m["accounting"]["current_successful_unique_accessions"]), \
+            f"{mode}: successful-accession accounting does not reconcile"
 
     json.dump(result, open(OUT, "w", encoding="utf-8"), indent=1)
 
     for mode, m in result["modes"].items():
         e, oe, ii = m["excluded"], m["order_errors"], m["input_identity"]
-        print(f"\n=== TEsorter pass: {mode} ===  considered {m['n_considered']} = "
-              f"paired {m['n_paired']} + excluded {m['n_excluded']}")
+        ac = m["accounting"]
+        print(f"\n=== TEsorter pass: {mode} === successful {ac['current_successful_unique_accessions']} = "
+              f"paired {ac['paired']} + excluded with output {ac['excluded_with_output']} + "
+              f"missing comparator output {ac['missing_comparator_output']['n']}; comparator outputs "
+              f"{ac['comparator_outputs']}, extras {ac['extra_comparator_outputs']['n']}")
         print(f"  both correct {m['both_correct']:3d}   TEagle only {m['teagle_only']:3d}   "
               f"TEsorter only {m['tesorter_only']:3d}   neither {m['neither']:3d}")
         print(f"  accuracy over paired cases: TEagle {m['teagle_accuracy']}   "
@@ -391,6 +500,10 @@ def main():
               f"{ii['n_checked']}, mismatched {ii['n_input_residues_mismatched']}, "
               f"unverifiable {ii['n_unverifiable']}; recorded fetch SHA-256 agrees "
               f"{ii['recorded_fetch_sha256_agrees']}, differs {ii['recorded_fetch_sha256_differs']}")
+    hist = result["historical_vs_current"]
+    print(f"\nHistorical TEsorter _run corpus rows {hist['historical_tesorter_corpus_rows']}; current "
+          f"TEagle _run corpus rows {hist['current_teagle_corpus_rows']}; mismatch "
+          f"{hist['corpus_row_count_mismatch']}")
     print(f"\n-> {OUT}")
     return 0
 

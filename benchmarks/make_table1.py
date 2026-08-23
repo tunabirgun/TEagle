@@ -1,4 +1,4 @@
-"""Table 1 - classification accuracy on the independent validation corpus, from
+"""Table 1 - classification accuracy on the retrospective literature-derived corpus, from
 benchmarks/raw/scores_holdout.json.
 
 The manuscript cited a table of these numbers that was never produced, while a second table carried the
@@ -95,7 +95,8 @@ def main():
     ng = sf["not_gradable_by_reason"]
     sens = d["superfamily_sensitivity"]["erv_graded_incorrect"]
     caption = (
-        "Table 1. Classification accuracy on the independent validation corpus. Each case carries a "
+        "Table 1. Classification accuracy on the development-example-excluded retrospective literature-derived "
+        "corpus. Each case carries a "
         "class and superfamily label taken from the publication that described the element, and each "
         "record is the element itself rather than a clone or contig containing it, so no coordinate "
         "arithmetic intervenes between the deposit and the analysis. A class call distinguishes Class I "

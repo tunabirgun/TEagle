@@ -24,7 +24,7 @@ They are reported separately, as their own stratum, rather than dropped.
 Output: benchmarks/raw/scores.json
 """
 from __future__ import annotations
-import argparse, csv, glob, json, math, os, re, sys
+import argparse, csv, glob, hashlib, json, math, os, re, sys
 from collections import Counter, defaultdict
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -83,6 +83,105 @@ def load_record_scope(corpus_path: str):
         if r["panel"] not in panels:
             panels.append(r["panel"])
     return scope, panels
+
+
+def _text_sha256(path):
+    """Match run_teagle.py's UTF-8, universal-newline corpus hashing exactly."""
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read()
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def validate_raw_case_universe(corpus_path, rawdir, files):
+    """Reconcile raw case keys, the current corpus, and the run ledger before scoring.
+
+    The run header records failures only by accession, so every failed accession must identify exactly one
+    current corpus row.  All other corpus keys must occur exactly once in raw output.  This deliberately
+    rejects partial smoke-test directories and copied raw files instead of publishing a plausible summary
+    over an unaudited subset.
+    """
+    run_path = os.path.join(rawdir, "_run.json")
+    if not os.path.exists(run_path):
+        raise ValueError(f"{rawdir}: missing _run.json; raw-case completeness cannot be audited")
+    with open(run_path, encoding="utf-8") as fh:
+        run = json.load(fh)
+    with open(corpus_path, encoding="utf-8", newline="") as fh:
+        corpus_rows = list(csv.DictReader(fh, delimiter="\t"))
+    if not corpus_rows:
+        raise ValueError(f"{corpus_path}: no corpus rows")
+
+    corpus_keys = [case_key(row) for row in corpus_rows]
+    duplicate_corpus = [key for key, n in Counter(corpus_keys).items() if n > 1]
+    if duplicate_corpus:
+        raise ValueError(f"{corpus_path}: duplicate corpus case key(s): {duplicate_corpus}")
+
+    expected_path = os.path.relpath(os.path.abspath(corpus_path), ROOT).replace("\\", "/")
+    recorded_path = str(run.get("corpus_path") or "").replace("\\", "/")
+    if recorded_path != expected_path:
+        raise ValueError(f"{run_path}: corpus_path {recorded_path!r} does not identify current corpus "
+                         f"{expected_path!r}")
+    current_sha = _text_sha256(corpus_path)
+    if run.get("corpus_sha256") != current_sha:
+        raise ValueError(f"{run_path}: corpus_sha256 does not match current corpus text")
+    if run.get("corpus_rows") != len(corpus_rows):
+        raise ValueError(f"{run_path}: corpus_rows={run.get('corpus_rows')!r}, current={len(corpus_rows)}")
+
+    counts = run.get("counts") or {}
+    for name in ("analysed", "failed", "skipped_existing"):
+        if not isinstance(counts.get(name), int) or isinstance(counts.get(name), bool):
+            raise ValueError(f"{run_path}: counts.{name} must be an integer")
+    if counts["skipped_existing"] != 0:
+        raise ValueError(f"{run_path}: skipped_existing must be 0 for an auditable definitive summary")
+    failures = run.get("failures")
+    if not isinstance(failures, list):
+        raise ValueError(f"{run_path}: failures must be a list")
+    if counts["failed"] != len(failures):
+        raise ValueError(f"{run_path}: counts.failed does not equal the explicit failure ledger")
+
+    rows_by_accession = defaultdict(list)
+    for row in corpus_rows:
+        rows_by_accession[(row.get("accession") or "").strip()].append(row)
+    failure_keys = []
+    for failure in failures:
+        accession = (failure.get("accession") or "").strip()
+        matches = rows_by_accession.get(accession, [])
+        if len(matches) != 1:
+            raise ValueError(f"{run_path}: failed accession {accession!r} resolves to {len(matches)} current "
+                             "corpus rows; the failure ledger is ambiguous")
+        failure_keys.append(case_key(matches[0]))
+    duplicate_failures = [key for key, n in Counter(failure_keys).items() if n > 1]
+    if duplicate_failures:
+        raise ValueError(f"{run_path}: duplicate explicit failure(s): {duplicate_failures}")
+
+    raw_records, raw_keys = {}, []
+    for path in files:
+        with open(path, encoding="utf-8") as fh:
+            record = json.load(fh)
+        row = record.get("corpus_row")
+        if not isinstance(row, dict):
+            raise ValueError(f"{path}: missing corpus_row")
+        if (record.get("accession") or "").strip() != (row.get("accession") or "").strip():
+            raise ValueError(f"{path}: record accession disagrees with corpus_row accession")
+        key = case_key(row)
+        raw_keys.append(key)
+        raw_records[path] = record
+    duplicate_raw = [key for key, n in Counter(raw_keys).items() if n > 1]
+    if duplicate_raw:
+        raise ValueError(f"{rawdir}: duplicate raw case key(s): {duplicate_raw}")
+
+    corpus_set, raw_set, failed_set = set(corpus_keys), set(raw_keys), set(failure_keys)
+    extra = sorted(raw_set - corpus_set)
+    overlap = sorted(raw_set & failed_set)
+    missing = sorted(corpus_set - failed_set - raw_set)
+    if extra or overlap or missing:
+        raise ValueError(f"{rawdir}: raw-case ledger mismatch: missing={missing}, extra={extra}, "
+                         f"raw_and_failed={overlap}")
+    if counts["analysed"] != len(raw_set):
+        raise ValueError(f"{run_path}: counts.analysed={counts['analysed']} but {len(raw_set)} unique raw "
+                         "case keys exist")
+    if counts["analysed"] + counts["failed"] != len(corpus_rows):
+        raise ValueError(f"{run_path}: analysed + failed does not equal corpus_rows")
+    return raw_records
 
 
 def wilson(k, n, z=1.959963985):
@@ -484,6 +583,41 @@ def acc_superfamily_representable_only(sub):
                             or c["expected_superfamily_token"] in REPRESENTABLE])
 
 
+def collapse_unique_inputs(sub, level):
+    """Collapse case rows to independent analysed inputs for a scoring rank.
+
+    A duplicated analysed input is a sensitivity unit only if it carries one ground truth and one
+    rank-specific outcome.  Picking the first row would hide precisely the contradiction that duplicate
+    rows are capable of introducing, so missing hashes and disagreements stop scoring with a diagnostic.
+    """
+    fields = {
+        "class": ("expected_class", "observed_class"),
+        "order": ("expected_order", "observed_order", "abstained_at_order"),
+        "superfamily": ("expected_superfamily_token", "observed_superfamily_token",
+                        "superfamily_gradable", "superfamily_not_gradable_reason",
+                        "abstained_at_superfamily"),
+    }
+    if level not in fields:
+        raise ValueError(f"unsupported score level {level!r}")
+    by_hash = defaultdict(list)
+    for c in sub:
+        sha = (c.get("input_sha256") or "").strip()
+        if not sha:
+            raise ValueError(f"{c.get('accession', '<unknown>')}: missing input_sha256; cannot derive "
+                             f"independent {level}-level input summary")
+        by_hash[sha].append(c)
+
+    representatives = []
+    for sha, rows in sorted(by_hash.items()):
+        signatures = {tuple(row.get(f) for f in fields[level]) for row in rows}
+        if len(signatures) != 1:
+            accessions = ", ".join(sorted({str(row.get("accession")) for row in rows}))
+            raise ValueError(f"input_sha256 {sha} has conflicting {level}-level ground truth or outcome "
+                             f"across duplicate rows ({accessions}): {sorted(signatures)!r}")
+        representatives.append(rows[0])
+    return representatives
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--corpus", default=CORPUS, help="corpus TSV carrying the record_scope column")
@@ -497,10 +631,15 @@ def main():
         print(f"no raw output in {args.rawdir} - run benchmarks/run_teagle.py first")
         return 1
     record_scope, panels = load_record_scope(args.corpus)
+    try:
+        raw_records = validate_raw_case_universe(args.corpus, args.rawdir, files)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"raw-case ledger invalid: {exc}", file=sys.stderr)
+        return 2
 
     cases, stratified = [], []
     for f in files:
-        d = json.load(open(f, encoding="utf-8"))
+        d = raw_records[f]
         row = d["corpus_row"]
         recs = d["result"].get("records") or [{}]
         cl = recs[0].get("classification") or {}
@@ -591,11 +730,38 @@ def main():
                 "accuracy": p, "ci95_low": lo, "ci95_high": hi,
                 "abstention_rate": round(1 - len(answered) / len(gradable), 4) if gradable else None}
 
+    # The row-level summaries below remain the compatibility surface.  The parallel summaries make the
+    # statistical unit explicit: one analysed byte-identical input, after refusing to collapse an input
+    # whose duplicated annotations disagree.
+    unique_cases = {level: collapse_unique_inputs(cases, level)
+                    for level in ("class", "order", "superfamily")}
+    element_unique = collapse_unique_inputs(
+        [c for c in cases if c["expected_class"] != "NOT_TE" and c["expected_order"] not in (None, "", "OTHER")],
+        "order")
+    element_withheld = [c for c in element_unique
+                         if c["abstained_at_order"] or c["observed_order"] == "NO_CALL"]
+
     result = {
         "cases_scored": len(cases),
         "cases_excluded_not_single_element": len(stratified),
         "overall": {"class": acc(cases, "class"), "order": acc(cases, "order"),
                     "superfamily": acc(cases, "superfamily")},
+        "overall_unique_inputs": {"class": acc(unique_cases["class"], "class"),
+                                  "order": acc(unique_cases["order"], "order"),
+                                  "superfamily": acc(unique_cases["superfamily"], "superfamily")},
+        "independence": {
+            "primary_unit": "distinct analysed input_sha256",
+            "row_level_summary": "overall retains one row per curated case for compatibility",
+            "unique_input_summary": "overall_unique_inputs collapses only duplicate rows with identical "
+                                    "ground truth and rank-specific outcome; conflicts are errors",
+            "element_only_order_withholding": {
+                "n_gradable": len(element_unique),
+                "n_withheld": len(element_withheld),
+                "n_answered": len(element_unique) - len(element_withheld),
+                "withholding_rate": round(len(element_withheld) / len(element_unique), 4)
+                                    if element_unique else None,
+            },
+        },
         # Both sensitivity views of the superfamily denominator, so neither exclusion argument has to be
         # taken on trust. Neither is a table column; they exist to be quoted against the headline.
         "superfamily_sensitivity": {
@@ -668,6 +834,8 @@ def main():
         "distinct_inputs_scored": len({c["input_sha256"] for c in cases}),
         "excluded_cases": [{"accession": c["accession"], "panel": c["panel"],
                             "reason": c.get("excluded_because")} for c in stratified],
+        # Full entries make the successful-accession universe reconstructable without reading raw outputs.
+        "stratified_cases": stratified,
         "cases": cases,
     }
     os.makedirs(os.path.dirname(args.out), exist_ok=True)

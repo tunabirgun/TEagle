@@ -3,7 +3,7 @@ an interactive genome viewer (windowed semantic zoom), and a data table with CSV
 and a copy context menu. All figure rendering goes through QSvgRenderer so on-screen output
 matches the exported SVG/PNG (the gel's Gaussian-blur glow is the one SVG-Tiny casualty on screen)."""
 from __future__ import annotations
-import contextlib, math, os, re
+import contextlib, functools, math, os, re
 
 from PySide6.QtCore import Qt, QByteArray, QPointF, QRectF, QSize, Signal
 from PySide6.QtGui import QImage, QPainter, QColor, QPixmap, QIcon
@@ -280,7 +280,7 @@ class FigurePanel(QWidget):
             self._mode_btns[m] = b
         bar.addStretch(1)
         for txt, fn in (("−", self._zoom_out), ("FIT", self._fit), ("+", self._zoom_in),
-                        ("SVG", self._export_svg), ("PNG", self._export_png)):
+                        ("SVG", self._export_svg), ("PNG", self._export_png), ("PDF", self._export_pdf)):
             b = QPushButton(txt)
             b.setProperty("sm", True)
             b.clicked.connect(fn)
@@ -337,6 +337,11 @@ class FigurePanel(QWidget):
         if path:
             render_png(self.build_fn(self.bg), path)               # export what you see (selected bg mode)
 
+    def _export_pdf(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Export PDF", self.base_name + ".pdf", "PDF (*.pdf)")
+        if path:
+            render_pdf(self.build_fn(self.bg), path)               # same semantic SVG as SVG/PNG
+
 
 class GenomePanel(QWidget):
     """Interactive genome viewer: wheel/buttons zoom the *bp window* (semantic zoom), drag pans it,
@@ -364,7 +369,7 @@ class GenomePanel(QWidget):
         bar.addWidget(self.pos)
         bar.addStretch(1)
         for txt, fn in (("−", lambda: self._zoom(1.6)), ("FIT", self._fit), ("+", lambda: self._zoom(0.625)),
-                        ("SVG", self._export_svg), ("PNG", self._export_png)):
+                        ("SVG", self._export_svg), ("PNG", self._export_png), ("PDF", self._export_pdf)):
             b = QPushButton(txt); b.setProperty("sm", True); b.clicked.connect(fn); bar.addWidget(b)
         lay.addLayout(bar)
         self.canvas = _GenomeCanvas(self)
@@ -461,6 +466,11 @@ class GenomePanel(QWidget):
         path, _ = QFileDialog.getSaveFileName(self, "Export PNG", self.base_name + ".png", "PNG (*.png)")
         if path:
             render_png(self._cur_svg(920, **self._export_target()), path)
+
+    def _export_pdf(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Export PDF", self.base_name + ".pdf", "PDF (*.pdf)")
+        if path:
+            render_pdf(self._cur_svg(920, **self._export_target()), path)
 
 
 class _GenomeCanvas(QWidget):
@@ -908,6 +918,10 @@ class DataTable(QTableWidget):
         self.doubleClicked.connect(lambda idx: self.row_activated.emit(self._orig(idx.row())))
         self._row_menu = None            # callable(orig_row_index)->list[(label, fn)]
         self.export_base = "TEagle_table"   # proposed export filename; the visible Export button sets the specific one
+        self._complete_rows = None
+        self._complete_limit = None
+        self._complete_refresh = False
+        self.horizontalHeader().sortIndicatorChanged.connect(self._complete_sort_changed)
 
     def sizeHint(self):
         """Height the CURRENT rows need — QAbstractScrollArea's stock 192px hint reserved 80–135px of empty
@@ -929,11 +943,15 @@ class DataTable(QTableWidget):
         d = it.data(Qt.UserRole) if it else None
         return d if d is not None else visual_row
 
-    def set_rows(self, rows, styles=None, tips=None, exports=None):
+    def set_rows(self, rows, styles=None, tips=None, exports=None, _from_complete=False,
+                 _orig_indices=None):
         """rows: list of row value-lists. Optional styles[i][j] = foreground colour (hex/QColor or None)
         and tips[i][j] = tooltip override — both additive and sort-safe (the item carries its own colour
         and tooltip when a sort moves it). exports[i][j] overrides what export/copy writes for a cell whose
         DISPLAYED text carries a UI-only mark (the ΔG severity ! / ‡), so the exported column stays numeric."""
+        if not _from_complete:
+            self._complete_rows = None
+            self._complete_limit = None
         self.setSortingEnabled(False)                # never sort mid-insert (it scrambles rows)
         self.setRowCount(0)
         # Numeric columns right-align so their digits form a column; everything else stays centred. The
@@ -966,7 +984,7 @@ class DataTable(QTableWidget):
                 if xv is not None:
                     item.setData(EXPORT_ROLE, str(xv))
                 if j == 0:
-                    item.setData(Qt.UserRole, i)         # remember the original row index for menus
+                    item.setData(Qt.UserRole, (_orig_indices[i] if _orig_indices is not None else i))
                 self.setItem(i, j, item)
         self.horizontalHeader().setSortIndicator(-1, Qt.AscendingOrder)  # keep engine order until a header is clicked
         self.setSortingEnabled(True)
@@ -983,6 +1001,47 @@ class DataTable(QTableWidget):
             self.setMaximumWidth(max(w, 1))
         else:
             self.setMaximumWidth(16777215)                # QWIDGETSIZE_MAX: no cap for a text last column
+
+    def set_complete_rows(self, rows, visible_limit):
+        """Bind a capped view to its complete row set; sorting reselects the visible prefix globally."""
+        self._complete_rows = [list(row) for row in rows]
+        self._complete_limit = max(0, int(visible_limit))
+        self.set_rows(self._complete_rows[:self._complete_limit], _from_complete=True,
+                      _orig_indices=list(range(min(self._complete_limit, len(self._complete_rows)))))
+
+    @staticmethod
+    def _compare_rows(left, right, column):
+        a = "" if column >= len(left) or left[column] is None else str(left[column])
+        b = "" if column >= len(right) or right[column] is None else str(right[column])
+        an, bn = _sortkey(a), _sortkey(b)
+        av, bv = ((an, bn) if an is not None and bn is not None else (a.casefold(), b.casefold()))
+        return (av > bv) - (av < bv)
+
+    def _sorted_complete_pairs(self):
+        pairs = [(i, list(row)) for i, row in enumerate(self._complete_rows or [])]
+        section = self.horizontalHeader().sortIndicatorSection()
+        if section < 0:
+            return pairs
+        order = self.horizontalHeader().sortIndicatorOrder()
+        return sorted(pairs, key=functools.cmp_to_key(
+            lambda a, b: self._compare_rows(a[1], b[1], section)), reverse=order == Qt.DescendingOrder)
+
+    def _sorted_complete_rows(self):
+        return [row for _, row in self._sorted_complete_pairs()]
+
+    def _complete_sort_changed(self, section, order):
+        if self._complete_rows is None or self._complete_refresh or section < 0:
+            return
+        pairs = self._sorted_complete_pairs()
+        shown = pairs[:self._complete_limit]
+        self._complete_refresh = True
+        try:
+            self.set_rows([row for _, row in shown], _from_complete=True,
+                          _orig_indices=[i for i, _ in shown])
+            self.sortItems(section, order)
+            self.horizontalHeader().setSortIndicator(section, order)
+        finally:
+            self._complete_refresh = False
 
     def set_row_menu(self, builder):
         self._row_menu = builder
@@ -1045,6 +1104,8 @@ class DataTable(QTableWidget):
         silently held the first N of M would be an export defect: what reaches the file
         must not be quietly less than what was computed. Both export entry points — the visible button and
         the right-click menu — read through here, so neither can drift from the other."""
+        if self._complete_rows is not None:
+            return self._sorted_complete_rows()
         full = getattr(self, "full_rows", None)
         if callable(full):
             return full()
