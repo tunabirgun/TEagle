@@ -131,6 +131,10 @@ def build_features(rec, seqid="locus", *, identity_trust="local_input", record_i
     comp = cl.get("completeness") or {}
     length = (rec.get("composition") or {}).get("length") or len(rec.get("seq_preview") or "") or 1
     term = so_term_for(cl)
+    outcome = cl.get("outcome") or "complete"
+    order = cl.get("order") or ("withheld" if outcome == "withheld" else "unassigned")
+    domain_status = ("unavailable_failed" if cl.get("domains_unavailable") else
+                     ("tested_empty" if not cl.get("n_domains") else "tested_with_hits"))
     rows = []
     gene_id = "TE_1"
     # parent: the element itself. Wicker code and the tier ride in lowercase custom attributes.
@@ -141,6 +145,10 @@ def build_features(rec, seqid="locus", *, identity_trust="local_input", record_i
         ("wicker_code", cl.get("te_class")),
         ("te_class", cl.get("te_class")),
         ("classification_confidence", cl.get("confidence")),
+        ("classification_outcome", outcome),
+        ("classification_order", order),
+        ("domain_evidence_status", domain_status),
+        ("classification_explanation", cl.get("explanation")),
         ("completeness_tier", comp.get("tier")),
         ("domains_tested_scope", comp.get("scope")),
         ("original_record_sha256", identity.get("idSha256")),
@@ -257,6 +265,11 @@ def to_bed(rec, seqid="locus", offset: int = 0, *, identity_trust="local_input",
     original_seqid = str(seqid or "")
     identity = _writer_identity(original_seqid, identity_trust, record_id_sha256)
     seqid = _safe_seqid(identity["id"])
+    cl = rec.get("classification") or {}
+    outcome = cl.get("outcome") or "complete"
+    order = cl.get("order") or ("withheld" if outcome == "withheld" else "unassigned")
+    domain_status = ("unavailable_failed" if cl.get("domains_unavailable") else
+                     ("tested_empty" if not cl.get("n_domains") else "tested_with_hits"))
     for r in build_features(rec, original_seqid, identity_trust=identity_trust,
                             record_id_sha256=record_id_sha256):
         if offset:
@@ -267,6 +280,8 @@ def to_bed(rec, seqid="locus", offset: int = 0, *, identity_trust="local_input",
             if part.startswith("Name="):
                 name = part[5:]
                 break
+        if "ID=TE_1" in attrs and "Parent=" not in attrs:
+            name += f"|outcome={outcome}|order={order}|domains={domain_status}"
         if identity.get("idSha256"):
             name += f"|record_sha256={identity['idSha256']}"
         lines.append("\t".join([str(chrom), str(int(start) - 1), str(int(end)), name,

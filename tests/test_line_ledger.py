@@ -4,45 +4,48 @@ Before this: the non-LTR branch of _completeness hardcoded expected = present = 
 so the ledger could not be contradicted by its own evidence and a full-length L1 returned a verdict
 byte-identical to a dead 5'-truncated fragment. The call itself also read "RT without integrase and
 without LTRs -> LINE" as though the absence were positive evidence, while DIRS-group (tyrosine
-recombinase) and Penelope-like (GIY-YIG) elements share exactly that absence and neither enzyme is
-in the bundled Pfam panel.
+recombinase) and Penelope-like (GIY-YIG) elements share exactly that absence.
 """
+import pytest
+
 from teagle_core import classify
 
 
 def _rt_domain():
-    return {"domain": "RT", "hmm": "RVT_1", "nt": [100, 1200], "strand": "+", "score": 210.0, "class": ""}
+    return {"domain": "RT", "hmm": "RVT_1", "nt": [100, 1200], "strand": "+", "orf": 0,
+            "score": 210.0, "class": ""}
 
 
 _POLYA = [{"type": "poly-A tail", "start": 5900, "end": 5990}]
-
-
-def test_line_ledger_distinguishes_full_length_from_fragment():
-    full = classify.classify(_POLYA, [_rt_domain()])
-    frag = classify.classify([], [_rt_domain()])
-    assert full["completeness"] != frag["completeness"]
-
-
-def test_line_ledger_records_a_missing_tail():
-    frag = classify.classify([], [_rt_domain()])["completeness"]
-    assert frag["missing"], "a LINE with no 3' tail must record something missing"
-    assert any("tail" in m for m in frag["missing"])
-    assert "RT" in frag["present"]
 
 
 def _orf1():
     return {"domain": "ORF1", "hmm": "Transposase_22", "nt": [10, 90], "strand": "+", "score": 200.0, "class": ""}
 
 
-def _en(nt=(95, 140)):
-    return {"domain": "EN", "hmm": "Exo_endo_phos", "nt": list(nt), "strand": "+", "score": 70.0, "class": ""}
+def test_line_ledger_distinguishes_full_length_from_fragment():
+    full = classify.classify(_POLYA, [_rt_domain(), _orf1()])
+    frag = classify.classify([], [_rt_domain(), _orf1()])
+    assert full["completeness"] != frag["completeness"]
+
+
+def test_line_ledger_records_a_missing_tail():
+    frag = classify.classify([], [_rt_domain(), _orf1()])["completeness"]
+    assert frag["missing"], "a LINE with no 3' tail must record something missing"
+    assert any("tail" in m for m in frag["missing"])
+    assert "RT" in frag["present"]
+
+
+def _en(nt=(95, 140), orf=0):
+    return {"domain": "EN", "hmm": "Exo_endo_phos", "nt": list(nt), "strand": "+", "orf": orf,
+            "score": 70.0, "class": ""}
 
 
 def test_line_ledger_credits_a_recovered_tail():
-    led = classify.classify(_POLYA, [_rt_domain()])["completeness"]
+    led = classify.classify(_POLYA, [_rt_domain(), _orf1()])["completeness"]
     assert any("tail" in p for p in led["present"])
-    # RT + tail alone is NOT complete: ORF1 and the ORF2 endonuclease are modelled and were not found
-    assert set(led["missing"]) == {"ORF1", "EN"}
+    # RT + ORF1 + tail is not complete: the accepted ORF2 endonuclease arrangement was not found.
+    assert set(led["missing"]) == {"EN"}
 
 
 def test_full_line_architecture_reaches_intact():
@@ -64,6 +67,7 @@ def test_only_an_accepted_endonuclease_rt_arrangement_licenses_a_line():
     invalid_endonucleases = (
         _en(nt=(2000, 2100)),
         {**_en(), "strand": "-"},
+        _en(orf=1),
     )
     for en in invalid_endonucleases:
         cl = classify.classify([], [_rt_domain(), en])
@@ -76,8 +80,34 @@ def test_only_an_accepted_endonuclease_rt_arrangement_licenses_a_line():
     assert any("orf2p" in item.lower() for item in accepted["evidence"])
 
 
-def test_line_tier_never_claims_intact():
-    """ORF1 and the endonuclease are not in the bundled panel, so a LINE cannot be shown autonomous."""
+def test_line_gate_finds_a_coherent_en_rt_pair_instead_of_pairing_independent_top_hits():
+    invalid_top_en = {**_en(orf=1), "score": 500.0}
+    invalid_top_rt = {**_rt_domain(), "orf": 2, "score": 500.0}
+    valid_en = _en(orf=0)
+    valid_rt = {**_rt_domain(), "orf": 0, "score": 100.0}
+    cl = classify.classify([], [invalid_top_en, invalid_top_rt, valid_en, valid_rt])
+    assert cl["te_class"] == "LINE"
+
+
+@pytest.mark.parametrize("module,hmm", [
+    ("GAG", "Gag_p24"),
+    ("PR", "RVP"),
+    ("RNaseH", "RNase_H"),
+    ("ENV", "TLV_coat"),
+])
+def test_retroviral_modules_with_rt_do_not_license_a_line(module, hmm):
+    corroborator = {"domain": module, "hmm": hmm, "nt": [1300, 1600], "strand": "+",
+                    "score": 100.0, "class": "retro"}
+    cl = classify.classify([], [_rt_domain(), corroborator])
+    assert cl["te_class"] == "retro/unassigned"
+    assert cl["order"] is None
+    assert "LINE" not in (cl["superfamily"] or "")
+    assert "LINE" not in cl["completeness"]["kind"]
+    assert not ({"ORF1", "EN"} & set(cl["completeness"]["missing"]))
+    assert any("does not establish the non-LTR order" in item for item in cl["evidence"])
+
+
+def test_unlicensed_rt_never_claims_intact_or_autonomous():
     for structural_ev in ([], _POLYA):
         tier = classify.classify(structural_ev, [_rt_domain()])["completeness"]["tier"]
         assert "intact" not in tier.lower()
@@ -98,9 +128,14 @@ def test_a_lone_reverse_transcriptase_is_not_a_line_even_with_a_polya_tail():
     for structural_ev, what in (([], "no tail"), (_POLYA, "with a poly-A tail")):
         cl = classify.classify(structural_ev, [_rt_domain()])
         assert cl["te_class"] != "LINE", f"lone RT {what} was called a LINE"
+        assert cl["te_class"] == "unclassified"
         assert "line" not in (cl["superfamily"] or "").lower(), f"lone RT {what} named a LINE superfamily"
         assert cl["order"] is None, f"lone RT {what} was given an order"
         assert "class i" not in (cl["class"] or "").lower(), f"lone RT {what} asserted Class I"
+        assert cl["outcome"] == "withheld"
+        assert "class unassigned" in cl["completeness"]["kind"]
+        assert not cl["completeness"]["missing"]
+        assert cl["explanation"].startswith("Classification withheld")
 
 
 def test_the_uncredited_polya_tail_is_reported_rather_than_silently_dropped():

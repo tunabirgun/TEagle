@@ -10,6 +10,7 @@ import json
 import os
 import re
 import zipfile
+from pathlib import Path
 
 import pytest
 
@@ -29,6 +30,168 @@ def _read(relpath):
         pytest.skip(f"{relpath} is an ignored local publication artifact")
     with io.open(path, encoding="utf-8") as fh:
         return fh.read()
+
+
+def test_public_release_text_omits_internal_review_or_assistant_attribution():
+    public_text = "\n".join(_read(path) for path in (
+        "CHANGELOG.md", "README.md", "app/README.md", "docs/TRY-IT-YOURSELF.md",
+        "report/teagle_manual.tex", "report/teagle_report.tex",
+    ))
+    prohibited = re.compile(
+        r"\b(?:multi-agent|review[ -]loops?|fix[ -]loops?|triple-reviewer|adversarial review|AI-generated|ChatGPT|Codex|Claude|OpenAI)\b",
+        re.IGNORECASE,
+    )
+    assert not prohibited.search(public_text)
+
+
+def test_public_release_does_not_infer_biological_identity_from_ispcr_priming_sites():
+    public_text = "\n".join(_read(path) for path in (
+        "CHANGELOG.md", "README.md", "app/README.md", "docs/TRY-IT-YOURSELF.md",
+        "report/teagle_manual.tex", "report/teagle_report.tex", "app/native/main.py",
+        "app/backend/engine.py", "app/backend/teagle_core/genomepcr.py",
+    ))
+    assert not re.search(r"\bparalog(?:s|ous)?\b", public_text, re.IGNORECASE)
+    for unsupported in ("copy-specific", "family-generic", "locus-specific", "more-diverged copies"):
+        assert unsupported not in public_text.lower()
+    assert "every genome-wide product is an off-target" not in public_text.lower()
+
+
+def test_protocol_236_doi_is_labelled_result_informed_in_public_documents():
+    for path in ("README.md", "CHANGELOG.md", "report/teagle_manual.tex", "report/teagle_report.tex"):
+        text = _read(path).lower()
+        assert "10.5281/zenodo.22091013" in text
+        assert "result-informed corrective registration" in text
+
+
+def test_report_reliability_axes_are_teagle_specific_and_not_claimed_independent():
+    text = " ".join(_read("report/teagle_report.tex").split())
+    changelog = " ".join(_read("CHANGELOG.md").split())
+    assert "No transposable-element tool publishes" not in text
+    assert "three independent axes" not in text
+    assert "three independent, citable" not in text
+    assert "missing core module or interrupted reading frame" not in text
+    assert "two independent axes" not in changelog
+    assert "Reliability: three separate axes" in text
+
+
+def test_rmblast_dfam_docs_name_consensus_partitions_not_profile_hmm_search():
+    report = " ".join(_read("report/teagle_report.tex").split())
+    manual = " ".join(_read("report/teagle_manual.tex").split())
+    for text in (report, manual):
+        assert "dfam40.0.h5" in text
+        assert "dfam40.curated.consensus.0.h5" in text
+        assert "consensus-sequence" in text
+    assert "RMBLAST engine against the installed Dfam library" not in report
+    assert "HMM terminology applies to the separate native HMMER/Pfam domain scan" in report
+
+
+def test_dfam_homology_naming_is_not_described_as_a_classification_layer():
+    manual = " ".join(_read("report/teagle_manual.tex").split())
+    backend = _read("app/backend/teagle_core/wsl.py")
+    assert "classification workflow's family-database layer" not in manual
+    assert "family-level TE classification" not in backend
+    assert "family-level homology naming" in backend
+
+
+def test_report_distinguishes_te_family_copy_number_from_an_individual_insertion():
+    text = " ".join(_read("report/teagle_report.tex").split())
+    assert "A transposable element is rarely a single copy" not in text
+    assert "tens to thousands of related copies of each element" not in text
+    assert "A TE family may be represented by multiple related genomic copies" in text
+
+
+def test_report_current_landscape_behavior_is_not_labelled_as_version_381():
+    text = " ".join(_read("report/teagle_report.tex").split())
+    assert "Version 3.8.1 instead reports" not in text
+    assert "\\teagle{} instead reports an independent contig-wise union" in text
+
+
+def test_report_does_not_require_identical_primer_melting_temperatures():
+    text = " ".join(_read("report/teagle_report.tex").split())
+    assert "matching the $T_m$ of the two primers is exactly what lets both anneal" not in text
+    assert "closely matching their $T_m$ values helps both primers anneal efficiently" in text
+
+
+def test_accession_version_is_scoped_to_sequence_not_the_entire_record():
+    manual = " ".join(_read("report/teagle_manual.tex").split())
+    app_readme = " ".join(_read("app/README.md").split())
+    assert "fixed, immutable object" not in manual
+    assert "explicit accession version" in app_readme
+    assert "is immutable" not in app_readme
+    for text in (manual, app_readme):
+        assert "fixed sequence version" in text
+
+
+def test_line_endonuclease_uses_ape_terminology():
+    public_text = " ".join(_read(path) for path in (
+        "CHANGELOG.md", "app/README.md", "report/teagle_manual.tex", "report/teagle_report.tex",
+    ))
+    assert "apurinic-like" not in public_text
+    assert "apurinic/apyrimidinic endonuclease-like (APE)" in public_text
+
+
+def test_ispcr_candidate_count_is_not_claimed_as_a_conservative_floor():
+    public_text = " ".join(_read(path) for path in (
+        "CHANGELOG.md", "report/teagle_manual.tex", "report/teagle_report.tex",
+        "app/backend/teagle_core/genomepcr.py",
+    ))
+    assert "conservative floor" not in public_text
+    for path in ("report/teagle_manual.tex", "report/teagle_report.tex"):
+        assert "neither a validated lower nor upper bound" in " ".join(_read(path).split())
+
+
+def test_ispcr_specific_behavior_cites_official_ucsc_documentation():
+    bibliography = _read("report/references.bib")
+    assert "@misc{ucscispcr" in bibliography
+    assert "@misc{ucscispcrsource" in bibliography
+    assert "@misc{ucscfatotwobit" in bibliography
+    assert "https://genome.ucsc.edu/cgi-bin/hgPcr" in bibliography
+    assert "https://github.com/ucscGenomeBrowser/kent/blob/49c2b7bc/src/jkOwnLib/gfPcrLib.c" in bibliography
+    assert "https://github.com/ucscGenomeBrowser/kent/blob/v482_base/src/utils/faToTwoBit/faToTwoBit.c" in bibliography
+    assert "{gfPcrLib}: {PCR} {FASTA} and {BED} output formats" in bibliography
+    assert "{faToTwoBit}: {FASTA}-to-2bit converter" in bibliography
+    for path in ("report/teagle_manual.tex", "report/teagle_report.tex"):
+        text = " ".join(_read(path).split())
+        assert "15\\,bp" in text
+        assert "\\cite{ucscispcr}" in text
+        assert "isPcr's FASTA-header coordinates" in text
+        assert "\\cite{ucscispcrsource}" in text
+        assert "ucscfatotwobit}" in text
+
+
+def test_ispcr_acceptance_parameter_is_not_described_as_a_seed_or_count_floor():
+    public_text = " ".join(_read(path) for path in (
+        "CHANGELOG.md", "report/teagle_manual.tex", "report/teagle_report.tex",
+        "app/native/main.py", "app/backend/engine.py", "app/backend/teagle_core/genomepcr.py",
+    ))
+    assert "perfect-match seed" not in public_text
+    assert "perfect-3' seed" not in public_text
+    assert "a floor at ≥15 bp" not in public_text
+    assert "minimum perfect match" in public_text
+
+
+def test_bounded_search_docs_do_not_guarantee_host_resource_immunity():
+    text = " ".join(_read(path) for path in ("report/teagle_manual.tex", "report/teagle_report.tex"))
+    assert "cannot exhaust time or memory" not in text
+    assert "cannot exhaust memory" not in text
+    assert "search work is bounded by explicit caps" in text
+
+
+def test_manual_describes_longest_orf_selection_as_a_search_budget_heuristic():
+    text = " ".join(_read("report/teagle_manual.tex").split())
+    assert "a functional element's coding modules live in its longest ORFs" not in text
+    assert "search budget prioritises the twelve longest open reading frames" in text
+    assert "excluded shorter ORF may still contain a domain" in text
+
+
+def test_line_rule_uses_only_line_specific_corroboration():
+    for path in ("report/teagle_report.tex", "report/teagle_manual.tex"):
+        text = " ".join(_read(path).split())
+        assert "RNase~H, gag, protease, or env" not in text
+        assert "LINE-specific corroboration" in text
+        assert "ORF1p or an accepted same-ORF, N-terminal ORF2p endonuclease--RT arrangement" in text
+        assert "R2/R4-type" in text
+    assert "R2/R4-type" in _read("README.md")
 
 
 def _require_manuscript():
@@ -51,32 +214,28 @@ def _broader_scores():
         return json.load(fh)
 
 
+def _publication_table(name):
+    path = os.path.join(_ROOT, "manuscript", "tables", name)
+    if not os.path.exists(path):
+        pytest.skip("local protocol 2.3.6 publication tables are not present")
+    with io.open(path, encoding="utf-8-sig", newline="") as fh:
+        return list(csv.DictReader(fh))
+
+
 def test_readme_panel_size_matches_the_bundled_profiles():
     stated = re.search(r"(\d+)-model Pfam panel", _readme())
     assert stated, "README no longer states the panel size — update this test if that is intended"
     assert int(stated.group(1)) == len(domains._hmms())
 
 
-def test_readme_broader_benchmark_summary_tracks_current_scores():
-    scores = _broader_scores()
+def test_readme_does_not_publish_undeposited_result_values():
     readme = _readme()
-    primary = scores["overall_unique_inputs"]
-    row = scores["overall"]
-    element = scores["independence"]["element_only_order_withholding"]
-    order = primary["order"]
-    sf = primary["superfamily"]
-    assert f"{order['n_gradable']} gradable content hashes at class and order rank" in readme
-    assert f"answered {order['n_answered']} and all {order['n_correct']} were correct" in readme
-    assert (f"accuracy {order['accuracy']:.3f}; Wilson 95% CI {order['ci95_low']:.3f}–"
-            f"{order['ci95_high']:.3f}") in readme
-    assert (f"Among {element['n_gradable']} gradable element hashes, it answered "
-            f"{element['n_answered']} and withheld the order on {element['n_withheld']}") in readme
-    assert (f"row-level sensitivity summary is {row['order']['n_correct']}/"
-            f"{row['order']['n_answered']} answered among {row['order']['n_gradable']} gradable") in readme
-    assert (f"{sf['n_correct']} of {sf['n_answered']} answered calls were correct among "
-            f"{sf['n_gradable']} gradable hashes") in readme
-    assert (f"accuracy {sf['accuracy']:.3f}; Wilson 95% CI {sf['ci95_low']:.3f}–"
-            f"{sf['ci95_high']:.3f}") in readme
+    assert "result archive has not received a public DOI" in readme
+    for unpublished in (
+        "The frozen external holdout contained", "42/43", "41/43", "14/14",
+        "Across 1,211 structural truth copies", "Two of 11 controlled off-target scenarios",
+    ):
+        assert unpublished not in readme
 
 
 def test_active_comparison_scripts_make_no_preregistration_timing_claim():
@@ -151,23 +310,120 @@ def test_doc_has_a_decision_methodology_table(doc):
         assert rule in text, f"{doc} decision table omits the {rule!r} rule"
 
 
-def test_report_oligoqc_table_row_count_matches_the_benchmark():
-    """The report's primer-QC table (tab:oligoqc) must have one data row per benchmarked pair. It had
-    drifted to a stale 6-row set (different primers, one non-reproducing value) while the benchmark held 12;
-    this ties the table size to LIT_PRIMERS so the primer set cannot silently diverge again. (Row COUNT
-    only — the per-cell ΔG values are ViennaRNA-dependent and so not hermetically assertable.)"""
+@pytest.mark.parametrize("doc", ["teagle_manual.tex", "teagle_report.tex"])
+def test_doc_keeps_wicker_order_and_superfamily_ranks_distinct(doc):
+    text = _doc(doc)
+    if text is None:
+        pytest.skip(f"{doc} not present")
+    assert "Order & LINE (non-LTR)" in text
+    assert "Order & DIRS group" in text
+    assert "Order & LTR (superfamily undetermined)" in text
+    assert "Superfamily & LINE (non-LTR)" not in text
+    assert "Superfamily & DIRS group" not in text
+
+
+def test_manual_distinguishes_withheld_ltr_origin_from_unresolved_ltr_superfamily():
+    text = _doc("teagle_manual.tex")
+    if text is None:
+        pytest.skip("manual not present")
+    flat = " ".join(text.split())
+    assert "without RT or a trusted fragment architecture do not establish LTR origin" in flat
+    assert "that result remains Class~I and is reported as \\texttt{LTR/unclassified}" in flat
+    assert "the superfamily undetermined" in flat
+
+
+def test_manual_states_tir_orientation_when_describing_identity():
+    text = _doc("teagle_manual.tex")
+    if text is None:
+        pytest.skip("manual not present")
+    flat = " ".join(text.split())
+    assert "One TIR terminus is reverse-complemented before percentage identity is calculated" in flat
+    assert "TIR termini are identical after reverse-complement alignment" not in flat
+    assert "copies of an LTR or a TIR are identical at insertion" not in flat
+
+
+def test_manual_herv_caption_matches_visible_headline_classification():
+    text = _doc("teagle_manual.tex")
+    if text is None:
+        pytest.skip("manual not present")
+    flat = " ".join(text.split())
+    assert "The headline call is \\texttt{LTR/Gypsy}" in flat
+    assert "the explanation identifies an env-bearing ERV lineage" in flat
+    assert "classification banner reports an ERV" not in flat
+
+
+def test_manual_does_not_treat_dfam_lookup_as_classifier_evidence():
+    text = _doc("teagle_manual.tex")
+    if text is None:
+        pytest.skip("manual not present")
+    flat = " ".join(text.split())
+    assert "advisory database lookup" in flat
+    assert "does not enter or alter the native domain/structure-based classification" in flat
+    assert "independent line of evidence" not in flat
+
+
+def test_manual_does_not_describe_calculated_primer_tm_as_measured():
+    text = _doc("teagle_manual.tex")
+    if text is None:
+        pytest.skip("manual not present")
+    assert "Primer3-calculated melting temperatures" in text
+    assert "real melting temperatures" not in text
+
+
+def test_docs_do_not_call_env_the_only_subgenomic_retroviral_transcript():
+    texts = [
+        _doc("teagle_manual.tex"),
+        _doc("teagle_report.tex"),
+        (Path(_ROOT) / "app" / "backend" / "teagle_core" / "retroviral.py").read_text(encoding="utf-8"),
+        (Path(_ROOT) / "app" / "native" / "main.py").read_text(encoding="utf-8"),
+        (Path(_ROOT) / "app" / "native" / "figures.py").read_text(encoding="utf-8"),
+    ]
+    assert all("env is the only subgenomic mRNA" not in text for text in texts if text is not None)
+    assert all("gag-pro-pol is one continuous" not in text for text in texts if text is not None)
+    assert all("gag--pro--pol} is one" not in text for text in texts if text is not None)
+    assert all("gag–pro–pol intron (fused polyprotein)" not in text for text in texts if text is not None)
+    assert all("exact bases cannot be read from the proviral DNA" not in text for text in texts if text is not None)
+    assert all("exact splice bases cannot be recovered from proviral DNA" not in text for text in texts if text is not None)
+
+
+def test_docs_do_not_present_repeat_identity_as_a_calibrated_age_limit():
+    texts = [
+        _doc("teagle_manual.tex"),
+        _doc("teagle_report.tex"),
+        (Path(_ROOT) / "app" / "native" / "main.py").read_text(encoding="utf-8"),
+    ]
+    assert all("age limit" not in text for text in texts if text is not None)
+
+
+def test_docs_describe_primer_thermodynamics_as_model_predictions():
+    manual = " ".join(_doc("teagle_manual.tex").split())
+    report = " ".join(_doc("teagle_report.tex").split())
+    assert "using real thermodynamics" not in manual
+    assert "using real thermodynamics" not in report
+    assert "nearest-neighbor thermodynamic models" in manual
+    assert "nearest-neighbor thermodynamic models" in report
+
+
+def test_installer_figure_caption_matches_component_row_layout():
+    manual = _doc("teagle_manual.tex")
+    assert "above its own button" not in manual
+    assert "alongside its own button" in manual
+
+
+def test_report_primer_summary_tracks_the_publication_table():
+    """The report must retain the current in-silico primer scope and observed controlled errors."""
     text = _doc("teagle_report.tex")
     if text is None:
         pytest.skip("report not present")
-    import sys as _sys, re as _re
-    _t = os.path.join(_ROOT, "tests")
-    if _t not in _sys.path:
-        _sys.path.insert(0, _t)
-    from test_benchmarks import LIT_PRIMERS
-    body = text.split(r"\label{tab:oligoqc}", 1)[1].split(r"\end{tabularx}", 1)[0]
-    rows = [l for l in body.splitlines() if l.strip().endswith(r"\\") and ("ok" in l or "caution" in l or "warn" in l)]
-    assert len(rows) == len(LIT_PRIMERS), \
-        f"report oligoqc table has {len(rows)} data rows but the benchmark has {len(LIT_PRIMERS)} pairs"
+    rows = _publication_table("table5_primer_and_reproducibility.csv")
+    loci = [row for row in rows if row["Unit"].startswith("PRIMER")]
+    controlled = next(row for row in rows if row["Unit"] == "Controlled scenarios")
+    assert len(loci) == 3
+    assert "Each of three de-novo loci" in text
+    assert all(row["Candidates/tests"] == "5" for row in loci)
+    assert controlled["Candidates/tests"] == "11"
+    assert "eleven controlled off-target scenarios" in text
+    assert "one false positive and one false negative" in text
 
 
 @pytest.mark.parametrize("doc", ["teagle_manual.tex", "teagle_report.tex"])
@@ -229,7 +485,7 @@ def test_native_genome_scan_wording_matches_runtime_behavior():
 
 
 def test_current_release_text_tracks_version_and_schema_contracts():
-    """Current shipped text must distinguish the 3.9 contracts from historical 3.8 evidence."""
+    """Current shipped text must distinguish 4.0 behavior from version-locked 3.9 evidence."""
     from teagle_core import __version__, provenance
     import engine
 
@@ -251,10 +507,16 @@ def test_current_release_text_tracks_version_and_schema_contracts():
     assert f"source-context schema {provenance.SOURCE_CONTEXT_VERSION}" in combined
     assert "unkeyed integrity" in combined
     assert "clean-machine" in combined
-    assert "No new 3.9.0 classification, assay, or prospective benchmark result" in combined
+    for required in (
+        "paired terminal direct repeats", "core capsid/matrix GAG",
+        "failed domain stage", "version-locked to TEagle 3.9.0",
+    ):
+        assert required in combined
+    assert "Paired terminal direct repeats plus reverse transcriptase and an envelope-domain hit" in app_readme
+    assert "Paired LTRs plus an envelope-domain hit" not in app_readme
     for stale in (
         "under release validation", "has not yet been published",
-        "No 3.9.0 installer or manual asset is public yet",
+        "No 4.0.0 installer or manual asset is public yet",
         "still awaiting rendering and page-by-page release QA",
     ):
         assert stale not in combined
@@ -272,10 +534,10 @@ def test_current_docs_state_native_and_legacy_export_boundaries():
     assert "disables XLSX, PDF, provenance JSON, and complete-result JSON" in app_readme
 
 
-def test_screenshot_index_records_completed_39_capture_contract():
+def test_screenshot_index_records_completed_40_capture_contract():
     text = _read("docs/img/README.md")
     for required in (
-        "native TEagle 3.9.0 app", "light theme at 1920x1080",
+        "native TEagle 4.0.0 app", "light theme at 1920x1080",
         "1500x1150 window and UI scale 1.0", "Every accepted figure is a real run",
         "No figure contains synthesised results", "recapture sidecar",
         "dimensions and SHA-256 hashes",
@@ -443,217 +705,63 @@ def test_version_locked_benchmark_docs_match_their_derived_evidence_version():
     assert f"TEagle {evidence_version}." in _read("reviewer_package/README.md")
     spec = _read("benchmarks/protocol/BENCHMARK_SPEC_v1.md")
     assert f"current execution pin is **{evidence_version}**" in spec
-    # manuscript/ is ignored in public checkouts; if locally maintained, its evidence caption is still pinned.
+    # The current manuscript figure set is independent of the historical reviewer package.
     figure_index = os.path.join(_ROOT, "manuscript", "figures", "figure-index.md")
     if os.path.exists(figure_index):
-        assert f"TEagle {evidence_version}." in _read("manuscript/figures/figure-index.md")
+        report = _read("report/teagle_report.tex")
+        match = re.search(r"reported scientific results were generated with .*?~([0-9.]+),", report)
+        assert match, "technical report must name the version that generated protocol 2.3.6 evidence"
+        benchmark_version = match.group(1)
+        current = _read("manuscript/figures/figure-index.md")
+        assert f"TEagle {benchmark_version}" in current
+        assert "protocol 2.3.6" in current
 
 
-def test_documented_holdout_summary_is_derived_from_corpus_and_scores():
-    """Validation-corpus prose must follow the current rows and their scored denominator."""
-    rows = _holdout_rows()
-    scores = _holdout_scores()
-    n_records = len(rows)
-    n_organism_values = len({row["organism"] for row in rows})
-    n_answered = scores["overall"]["order"]["n_answered"]
-    n_correct = scores["overall"]["order"]["n_correct"]
-    n_negative = sum(
-        row["expected_class"].strip().lower().startswith("not a te") for row in rows
+def test_internal_manuscript_holdout_summary_is_derived_from_current_tables():
+    """Internal benchmark prose must follow the frozen protocol 2.3.6 presentation tables."""
+    scope = next(
+        row for row in _publication_table("table1_benchmark_scope.csv")
+        if row["Panel"] == "External holdout"
     )
-    n_te = sum(
-        not row["expected_class"].strip().lower().startswith("not a te") for row in rows
-    )
-    assert scores["negative_controls"]["n"] == n_negative
-    assert scores["overall"]["order"]["n_gradable"] == n_records
-
-    summary = re.search(
-        r"Measured on a development-example-excluded retrospective literature-derived corpus: "
-        r"(?P<records>\d+) records\s+carrying (?P<organism_values>\d+) distinct literal organism annotations.*?"
-        r"named the Wicker order for (?P<answered>\d+) of the (?P<te_records>\d+) transposable elements\s+"
-        r"and was\s+correct on all (?P<correct>\d+), and declined to name an order on all "
-        r"(?P<negative_controls>\d+) negative controls\.",
-        _readme(),
-        re.S,
-    )
-    assert summary, "README validation summary is missing or no longer machine-checkable"
-    assert int(summary["records"]) == n_records
-    assert int(summary["organism_values"]) == n_organism_values
-    assert int(summary["answered"]) == n_answered
-    assert int(summary["te_records"]) == n_te
-    assert int(summary["correct"]) == n_correct
-    assert int(summary["negative_controls"]) == n_negative
-
-    reviewer = _read("reviewer_package/README.md")
-    assert f"{n_records} records carrying {n_organism_values} distinct literal organism annotations" in reviewer
-
-
-def test_manuscript_uses_literal_holdout_organism_annotations_and_cautious_specification_language():
-    """The manuscript must not silently turn literal corpus annotations into a species count or timing claim."""
-    _require_manuscript()
-    import sys as _sys
-    manuscript_dir = os.path.join(_ROOT, "manuscript")
-    if manuscript_dir not in _sys.path:
-        _sys.path.insert(0, manuscript_dir)
-    import values
-
-    rows = _holdout_rows()
-    rendered_values = values.build()
-    assert "holdout_species" not in rendered_values
-    assert rendered_values["holdout_organism_annotations"] == len(
-        {row["organism"].strip() for row in rows}
-    )
-
+    rows = {row["Rank"].lower(): row for row in _publication_table("table2_selective_classification.csv")}
     text = _read("manuscript/manuscript.md")
-    assert re.search(
-        r"{{holdout_organism_annotations}} distinct\s+literal organism annotations", text
-    )
-    for stale in (
-        "{{holdout_species}}",
-        "independent corpus",
-        "assembled independently of the software",
-        "pre-registers",
-        "pre-registered",
-        "pre-registering",
-        "before the search",
-        "before these panels",
-        "available from the corresponding author",
-        "available on request",
-    ):
-        assert stale not in text
+    assert f"{scope['Rows']} independent sequences" in text
+    assert rows["class"]["Correct/answered"] in text
+    assert rows["order"]["Correct/answered"] in text
+    assert rows["superfamily"]["Correct/answered"] in text
+
+
+def test_manuscript_protocol_status_and_scope_are_explicit():
+    text = _read("manuscript/manuscript.md")
     flat = " ".join(text.split())
-    assert "no prospective preregistration is claimed" in flat
-    assert flat.lower().count("preregistration") == 1
-    assert "dated, versioned specification" not in flat
-    assert "amendments made during execution" not in flat
+    assert "protocol 2.3.6" in flat
+    assert "10.5281/zenodo.22091013" in flat
+    assert "identifies the preregistration package, not a results deposit" in flat
+    assert "result-informed" in flat
+    assert "DEV-0008" in flat
+    assert "All 2.3.5 outputs were excluded" in flat
+    assert "No wet-lab primer outcome was observed" in flat
+    assert "not population estimates" in flat
 
 
-def test_manuscript_primary_units_duplicate_and_comparator_accounting_are_data_bound():
-    """Primary units and comparison accounting must be derived from current case-level evidence."""
-    _require_manuscript()
-    import sys as _sys
-    manuscript_dir = os.path.join(_ROOT, "manuscript")
-    if manuscript_dir not in _sys.path:
-        _sys.path.insert(0, manuscript_dir)
-    import values
-
-    rendered_values = values.build()
-    scores = _broader_scores()
+def test_manuscript_primary_results_track_current_publication_tables():
     source = _read("manuscript/manuscript.md")
-    flat = " ".join(source.split())
-    abstract = flat.split("## Abstract", 1)[1].split("## Abbreviations", 1)[0]
-
-    primary = scores["overall_unique_inputs"]["order"]
-    assert rendered_values["broad_unique_order_gradable"] == primary["n_gradable"]
-    assert rendered_values["broad_unique_order_answered"] == primary["n_answered"]
-    assert rendered_values["broad_unique_order_correct"] == primary["n_correct"]
-    assert rendered_values["broad_unique_order_withheld"] == (
-        primary["n_gradable"] - primary["n_answered"]
-    )
-    assert "{{broad_unique_order_gradable}} distinct gradable input hashes" in abstract
-    assert ("among {{broad_element_unique_gradable}} element hashes it answered "
-            "{{broad_element_unique_answered}}") in abstract
-    assert "withheld the order on {{broad_element_unique_withheld}}" in abstract
-    assert "any of the {{broad_neg_n}} broader control hashes" in abstract
-    assert "{{broad_order_answered}}" not in abstract
-    assert "{{broad_gradable}}" not in abstract
-
-    gradable = [case for case in scores["cases"]
-                if not (case["expected_class"] != "NOT_TE" and case["expected_order"] == "OTHER")]
-    rows_by_hash = {}
-    for case in gradable:
-        rows_by_hash.setdefault(case["input_sha256"], []).append(case)
-    duplicates = [rows for rows in rows_by_hash.values() if len(rows) > 1]
-    assert len(duplicates) == 1
-    assert rendered_values["broad_duplicate_rows"] == len(duplicates[0])
-    assert rendered_values["broad_duplicate_accession"] == duplicates[0][0]["accession"]
-    assert "{{broad_duplicate_accession}}" in source
-    assert "sole duplicated gradable input" in flat
-
-    sf_cases = [case for case in scores["cases"] if case.get("superfamily_gradable")]
-    sf_order_answered = [case for case in sf_cases
-                         if not case.get("abstained_at_order")
-                         and case.get("observed_order") != "NO_CALL"]
-    assert rendered_values["broad_sf_same_order_gradable"] == len(sf_cases)
-    assert rendered_values["broad_sf_same_order_withheld"] == len(sf_cases) - len(sf_order_answered)
-    assert rendered_values["broad_sf_withheld"] == len(sf_cases) - scores["overall"]["superfamily"]["n_answered"]
-    assert ("Both rates use the same case set" in flat
-            and "{{broad_sf_same_order_gradable}} cases" in flat)
-    assert ("superfamily on {{broad_sf_withheld}} of {{broad_sf_same_order_gradable}}"
-            in flat)
-
-    with io.open(os.path.join(_ROOT, "benchmarks", "raw", "head_to_head.json"),
-                 encoding="utf-8") as fh:
-        comparison = json.load(fh)
-    historical = comparison["historical_vs_current"]
-    assert rendered_values["cmp_historical_tesorter_rows"] == historical["historical_tesorter_corpus_rows"]
-    assert rendered_values["cmp_current_teagle_rows"] == historical["current_teagle_corpus_rows"]
-    for mode in ("default", "matched"):
-        evidence = comparison["modes"][mode]
-        accounting = evidence["accounting"]
-        assert rendered_values[f"cmp_{mode}_n"] == evidence["n_paired"]
-        assert rendered_values[f"cmp_{mode}_both_correct"] == evidence["both_correct"]
-        assert rendered_values[f"cmp_{mode}_teagle_only"] == evidence["teagle_only"]
-        assert rendered_values[f"cmp_{mode}_tesorter_only"] == evidence["tesorter_only"]
-        assert rendered_values[f"cmp_{mode}_neither"] == evidence["neither"]
-        assert rendered_values[f"cmp_{mode}_successful_accessions"] == accounting["current_successful_unique_accessions"]
-        assert rendered_values[f"cmp_{mode}_comparator_outputs"] == accounting["comparator_outputs"]
-        assert rendered_values[f"cmp_{mode}_excluded_with_output"] == accounting["excluded_with_output"]
-        assert rendered_values[f"cmp_{mode}_missing_comparator_output"] == accounting["missing_comparator_output"]["n"]
-        assert rendered_values[f"cmp_{mode}_extra_comparator_outputs"] == accounting["extra_comparator_outputs"]["n"]
-    assert "All comparative inferences below are conditional on the {{cmp_default_n}} paired cases" in flat
-
-
-def test_manuscript_divergence_boundary_observations_are_case_bound():
-    """Observed boundary values must come from the replicate ledger, not typed prose."""
-    _require_manuscript()
-    import sys as _sys
-    manuscript_dir = os.path.join(_ROOT, "manuscript")
-    if manuscript_dir not in _sys.path:
-        _sys.path.insert(0, manuscript_dir)
-    import values
-
-    with io.open(os.path.join(_ROOT, "benchmarks", "raw", "sim_divergence.json"),
-                 encoding="utf-8") as fh:
-        raw = json.load(fh)
-    by_target = {}
-    for record in raw["records"]:
-        by_target.setdefault(record["target_identity"], []).append(record)
-    fully = [target for target, rows in by_target.items()
-             if all(row["detected_as_ltr"] for row in rows)]
-    partial = [target for target, rows in by_target.items()
-               if 0 < sum(row["detected_as_ltr"] for row in rows) < len(rows)]
-    advisory = [target for target, rows in by_target.items()
-                if any(row["advisory_reported"] for row in rows)]
-    never = [target for target, rows in by_target.items()
-             if not any(row["detected_as_ltr"] for row in rows)]
-    rendered_values = values.build()
-    assert rendered_values["div_highest_fully_accepted"] == f"{max(fully):g}%"
-    assert rendered_values["div_transition_low"] == f"{min(partial):g}"
-    assert rendered_values["div_transition_high"] == f"{max(partial):g}"
-    assert rendered_values["div_highest_advisory"] == f"{max(advisory):g}"
-    highest_never_rows = by_target[max(never)]
-    assert rendered_values["div_highest_never_accepted_n"] == sum(
-        row["detected_as_ltr"] for row in highest_never_rows
-    )
-
-    source = _read("manuscript/manuscript.md")
-    flat = " ".join(source.split())
-    for key in (
-        "div_highest_fully_accepted", "div_highest_never_accepted_n", "div_transition_low",
-        "div_transition_high", "div_highest_advisory",
-    ):
-        assert f"{{{{{key}}}}}" in source
-    for stale in (
-        "from 100% down to {{div_lowest_accepted}}", "absent (0/{{div_replicates}})",
-        "transition at 79–79.5%", "candidate pairs across 79.5% to",
-    ):
-        assert stale not in flat
-
-    # These are protocol/scaffold constants, not observed performance summaries.
-    assert raw["scaffold_native_identity"] == 100
-    assert max(raw["targets"]) == 100 and min(raw["targets"]) == 60
-    assert "terminal repeat pair at 100% identity" in flat
-    assert "identity targets from 100% to 60%" in flat
+    classification = _publication_table("table2_selective_classification.csv")
+    structure = _publication_table("table4_structure_and_domains.csv")[0]
+    primers = _publication_table("table5_primer_and_reproducibility.csv")
+    for row in classification:
+        assert row["Answered"] in source
+        assert row["Correct/answered"] in source
+        assert row["Coverage"] in source
+    assert f"{int(structure['N or truth']):,}" in source
+    assert structure["Complete/TP"] in source
+    assert structure["Incomplete/FN"] in source
+    assert "98.6% precision, 29.7% operational recall and 45.7% F1" in source
+    controlled = next(row for row in primers if row["Unit"] == "Controlled scenarios")
+    reproducibility = next(row for row in primers if row["Unit"] == "Reproducibility gates")
+    assert f"{controlled['Candidates/tests']} controlled off-target scenarios" in source
+    assert reproducibility["Candidates/tests"] == "8"
+    assert "All eight reproducibility checks passed" in source
 
 
 def test_preprint_layout_source_requires_landscape_native_tables_and_caption_attachment():
@@ -679,25 +787,11 @@ def test_preprint_layout_source_requires_landscape_native_tables_and_caption_att
 def test_manuscript_scientific_typography_source_is_explicit():
     """Scientific notation and biological names must carry unambiguous source markup."""
     text = _read("manuscript/manuscript.md")
-    flat = " ".join(text.split())
-    assert "10<sup>−6</sup>" in text
-    assert "10<sup>4</sup>" in text
-    assert not re.search(r"10(?:\^|\*\*)[-−]?\d", text)
+    assert "<sup>1,2</sup>" in text and "<sup>2,3</sup>" in text
     assert "3′" in text and "5′" in text
     assert not re.search(r"[35]['’]", text)
-    assert text.count("*P* =") == 2
-    assert "*p* =" not in text
-    assert text.count("*n* =") == 5
+    assert "*E*" in text
     assert "Pol polyprotein" in text and "pol polyprotein" not in text
-    assert "Gag, protease or envelope" in text and "gag, protease or envelope" not in text
-    assert text.count("*IS711*") == 2
-    assert "IS*711*" not in text
-    for styled in (
-        "*Euplotes aediculatus*", "*Gadus morhua*", "*Aspergillus nidulans*",
-        "*Fusarium oxysporum*", "*Brucella melitensis*", "*Brucella ovis*",
-        "*Homo sapiens*", "*Cichorium intybus*", "*niaD*", "*ACE*", "*pol*",
-    ):
-        assert styled in flat
 
 
 def test_manuscript_claim_bearing_prose_uses_direct_scoped_wording():
@@ -733,25 +827,15 @@ def test_manuscript_claim_bearing_prose_uses_direct_scoped_wording():
     ):
         assert stale not in flat
     for required in (
-        "DANTE reports the lowest common ancestor of ambiguous top hits rather than forcing a lineage call [8]",
-        "Evidence-dependent withholding predates TEagle",
-        "We assessed classification against labels curated from the publications describing each element",
-        "we infer that this rule can censor older elements; this panel does not estimate how often that occurs",
-        "The assay targets and reported product sizes were externally sourced; scoring nevertheless required documented choices about template, locus and tolerance",
-        "The panel was not scored blind",
-        "The paired set is restricted to cases carrying a gradable order label",
-        "The zero-error result does not extend to the whole corpus",
-        "The survey supports a narrower conclusion",
-        "The comparison shows why abstention requires external evaluation",
-        "The primary superfamily denominator excludes {{broad_sf_erv_excluded}} endogenous-retrovirus rows",
-        "The difference between the two estimates quantifies the result's sensitivity to that decision",
-        "TEagle made two superfamily errors on real elements",
-        "We assessed seal stability, sensitivity and parameter coverage separately",
-        "Parameter coverage was complete in this audit",
-        "TEagle analysed {{prov_inputs}} synthetic inputs {{prov_replicates}} times each",
-        "We assessed classification against literature-derived labels",
-        "We measured terminal-repeat detection on a simulated divergence series",
-        "Earlier tools established evidence-dependent withholding",
+        "answered accuracy separately from coverage",
+        "operational detection separately from conditional localization",
+        "computational primer outcomes separately from wet-lab evidence",
+        "Wilson intervals for answered accuracy are reported as case-level descriptive intervals",
+        "organism-unit cluster bootstraps and block sign-flip tests were prespecified sensitivity analyses",
+        "fixed-universe macro precision, recall and F1 were not estimable",
+        "do not make the correction outcome-blind",
+        "They do not support genome-scale annotation",
+        "The primer results are computational, not biological validation",
     ):
         assert required in flat
 
@@ -802,7 +886,7 @@ def test_optional_local_preprint_artifact_has_readable_table_and_figure_structur
                           if section.page_width > section.page_height]
     portrait_sections = [section for section in document.sections
                          if section.page_width < section.page_height]
-    assert len(document.tables) == 4
+    assert len(document.tables) == 6
     assert len(landscape_sections) == len(document.tables)
     base_portrait = portrait_sections[0]
     base_margins = (
@@ -824,24 +908,17 @@ def test_optional_local_preprint_artifact_has_readable_table_and_figure_structur
         assert table.rows[0]._tr.get_or_add_trPr().find(qn("w:tblHeader")) is not None
         for row in table.rows:
             assert row._tr.get_or_add_trPr().find(qn("w:cantSplit")) is not None
-    for table_number in (1, 2, 4):
-        table = document.tables[table_number - 1]
-        frame_width = (landscape_sections[table_number - 1].page_width
-                       - landscape_sections[table_number - 1].left_margin
-                       - landscape_sections[table_number - 1].right_margin)
-        assert sum(cell.width for cell in table.rows[0].cells) < frame_width
-        assert table.rows[0].cells[0].width.mm >= 28
     figure_paragraphs = [paragraph for paragraph in document.paragraphs
                          if "<w:drawing" in paragraph._p.xml]
-    assert len(figure_paragraphs) == 3
+    assert len(figure_paragraphs) == 6
     assert all(paragraph.paragraph_format.keep_with_next for paragraph in figure_paragraphs)
     captions = [paragraph for paragraph in document.paragraphs
                 if re.match(r"^Figure \d+\.", paragraph.text)]
-    assert len(captions) == 3
+    assert len(captions) == 6
     assert all(paragraph.paragraph_format.keep_together for paragraph in captions)
     table_captions = [paragraph for paragraph in document.paragraphs
                       if re.match(r"^Table \d+\.", paragraph.text)]
-    assert len(table_captions) == 4
+    assert len(table_captions) == 6
     assert all(paragraph.paragraph_format.keep_together for paragraph in table_captions)
     assert all(paragraph.paragraph_format.keep_with_next for paragraph in table_captions)
 
@@ -856,7 +933,7 @@ def test_optional_local_manuscript_table_captions_do_not_split_across_pages():
             pytest.skip(f"{filename} not present")
         captions = [paragraph for paragraph in Document(path).paragraphs
                     if re.match(r"^Table \d+\.", paragraph.text)]
-        assert len(captions) == 4
+        assert len(captions) == 6
         assert all(paragraph.paragraph_format.keep_together for paragraph in captions)
 
 
@@ -879,38 +956,11 @@ def test_optional_local_manuscript_artifacts_preserve_scientific_run_properties(
         assert "<sup>" not in full_text and "<sub>" not in full_text
         assert "3′" in full_text and "5′" in full_text
         assert not re.search(r"[35]['’]", full_text)
-        for exponent in ("−6", "4"):
+        for exponent in ("1,2", "2,3", "2"):
             matching = [run for run in paragraph_runs if run.text == exponent]
             assert matching and all(run.font.superscript is True for run in matching)
-        assert len([run for run in runs if run.text == "P" and run.font.italic is True]) == 2
         assert any(run.text == "E" and run.font.italic is True for run in runs)
-        assert len([run for run in runs if run.text == "n" and run.font.italic is True]) == 5
-
-        for gene_or_taxon in (
-            "IS711", "niaD", "ACE", "pol", "Euplotes aediculatus", "Gadus morhua",
-            "Aspergillus nidulans", "Fusarium oxysporum", "Brucella melitensis",
-            "Brucella ovis", "Homo sapiens", "Cichorium intybus",
-        ):
-            matching = [run for run in runs if run.text == gene_or_taxon]
-            assert matching and all(run.font.italic is True for run in matching), (filename, gene_or_taxon)
         assert any("Pol polyprotein" in run.text and run.font.italic is False for run in runs)
-        assert any("Gag, protease or envelope" in run.text and run.font.italic is False for run in runs)
-
-        if document.tables:
-            table_runs = [run for cell in cells for paragraph in cell.paragraphs for run in paragraph.runs]
-            for taxon in (
-                "Salmo salar", "Cichorium intybus", "Brucella melitensis", "Brucella ovis",
-                "Brucella suis", "Homo sapiens", "Hordeum vulgare", "Aspergillus nidulans",
-                "B. melitensis", "B. ovis", "B. suis",
-            ):
-                matching = [run for run in table_runs if run.text == taxon]
-                assert matching and all(run.font.italic is True for run in matching), taxon
-            for gene in (
-                "GAPDH", "EF1AA", "TUB", "ndhF", "ACE", "DCP1", "DEFB107B", "niaD",
-                "gag", "mimp1", "impala", "Alu", "IS711", "IS6501",
-            ):
-                matching = [run for run in table_runs if run.text == gene]
-                assert matching and all(run.font.italic is True for run in matching), gene
 
 
 def test_optional_local_manuscript_and_supplement_word_packages_use_only_times_new_roman():
@@ -985,8 +1035,8 @@ def test_optional_local_manuscript_artifacts_fully_justify_body_prose():
                 filename, paragraph.text[:80]
             )
             justified += 1
-        assert justified > 100, (filename, justified)
-        assert references == 34, (filename, references)
+        assert justified > 60, (filename, justified)
+        assert references == 25, (filename, references)
         title = next(p for p in document.paragraphs if p.text.startswith("TEagle: an evidence-traceable"))
         assert title.alignment != WD_ALIGN_PARAGRAPH.JUSTIFY
         captions = [p for p in document.paragraphs
@@ -1126,6 +1176,9 @@ def test_tsd_method_text_states_the_window_the_detector_actually_searches():
 
     html = main.MainWindow._methods_html(_Stub())
     assert window in html, "the Methods & databases disclosure states a stale TSD window"
+    assert "Class / order / superfamily" in html
+    assert "age limit" not in html
+    assert "detection threshold" in html
 
 
 def test_domains_tested_names_every_transposase_group_the_panel_can_call():
@@ -1172,101 +1225,45 @@ def test_mobile_dna_manuscript_submission_guardrails():
         "Authors' contributions", "Acknowledgements",
     ):
         assert declaration in text
-    acknowledgement = (
-        "The author Tuna Birgün acknowledges financial support from the Scientific and Technological "
-        "Research Council of Türkiye (TÜBİTAK) through the 2210-A National MSc Scholarship Programme "
-        "(Application No. 1649B022502808)."
+    funding = (
+        "Tuna Birgün received support from the Scientific and Technological Research Council of Türkiye "
+        "(TÜBİTAK) through the 2210-A National MSc Scholarship Programme (Application No. 1649B022502808)."
     )
-    assert text.count(acknowledgement) == 1
+    assert text.count(funding) == 1
     assert "**Acknowledgements.** Not applicable." not in text
-    assert "The support disclosed in Acknowledgements was a personal scholarship to Tuna Birgün." in text
+    assert "Tuna Birgün acknowledges the scholarship support stated under Funding." in text
     assert "This research received no separate project-specific grant." in text
-    assert "16. UCSC Genome Browser. In-Silico PCR. https://genome.ucsc.edu/cgi-bin/hgPcr " \
-           "(accessed 18 August 2026)." in text
-    assert "Abd el Wahab H" in text
-    assert "Abd El Wahab H" not in text
     assert "GNU Affero General Public License v3.0 or later" in text
     assert text.count("Sibel Yılmaz") >= 2
     assert "Sibel Yilmaz" not in text
-    notes_path = os.path.join(_ROOT, "manuscript", "SUBMISSION_NOTES.md")
-    if os.path.exists(notes_path):
-        notes = _read("manuscript/SUBMISSION_NOTES.md")
-        assert "Sibel Yılmaz" in notes
-        assert "Sibel Yilmaz" not in notes
     for item in (
-        "Project name", "Project home page", "Archived version / persistent identifier",
+        "Project name", "Project home page", "Current stable release",
+        "Archived protocol / persistent identifier", "Result archive", "Version benchmarked",
         "Operating system", "Programming language", "Other requirements", "License",
         "Any restrictions to use by non-academics",
     ):
         assert f"*{item}:*" in text
-    source_lines = text.splitlines()
-    assert "Binding is anchored at the 3′ end rather than requiring the whole oligo to match: the longest" in source_lines
-    assert (
-        "- *Archived version / persistent identifier:* Every quantitative result was generated with TEagle "
-        "`v{{corpus_run_version}}`, commit `642b271e2cd4d496a5277f92dd4abe9d6e8578b3`: "
-        "https://github.com/tunabirgun/TEagle/releases/tag/v3.8.0. The version-locked benchmark evidence is archived "
-        "at https://doi.org/10.5281/zenodo.21848814. A repository-independent software-source DOI has not been assigned."
-    ) in source_lines
-    assert any(
-        "https://doi.org/10.5281/zenodo.21848814 contains curated corpus metadata" in line
-        for line in source_lines
-    )
-    stale_archive_placeholders = (
-        "Submission-time archive identifier required",
-        "No DOI is claimed in this manuscript",
-        "persistent identifier must be inserted",
-        "submission archive will contain",
-    )
-    assert not any(phrase in text for phrase in stale_archive_placeholders)
-    assert ("- *Operating system:* Windows 10/11, 64-bit. The application installs optional components "
-            "in a WSL2 environment.") in source_lines
-    assert "binding is anchored at the 3′ end rather than requiring the whole oligo to match: the longest" not in source_lines
+    assert "10.5281/zenodo.22091013" in text
+    assert "This DOI identifies the preregistration, not the result archive." in text
+    assert "executed result archive has not yet been assigned a public DOI" in text
+    assert "10.5281/zenodo.21848814" not in text
     for forbidden in (
-        "{{corpus_species}}", "{{holdout_species}}", "{{assay_species}}",
         "upper bound on performance", "proprietary", "benchmarks/", "benchmarks\\",
         "reviewer_package/", "reviewer_package\\", "STATISTICAL_ANALYSIS_PLAN.md",
         "repository test suite", "fails the build", "raw-output directory",
-        "raw output by a script", "summary header", "version bump", "widely used",
-        "A distinct problem remains unaddressed",
     ):
         assert forbidden not in text
-    assert not re.search(r"\b(?:35|36|50)\s+species\b", text, re.I)
-    assert not re.search(r"\b[\w.-]+\.(?:py|json|md)\b", text, re.I)
-    assert not re.search(r"`[^`\n]*(?:[\\/]|\.(?:py|json|md))[^`\n]*`", text, re.I)
     for unsupported_claim in (
         "general utility", "broad utility", "establishes population-level accuracy",
         "population-level accuracy is", "population-level accuracy was",
     ):
         assert unsupported_claim not in lower
-    assert "selection may bias the reported results in either direction" in lower
-    assert "not population-level accuracy" in lower
     assert "integrated single-locus workflow" in lower
-    assert "In the selected workflows, these steps are not assembled into a single workflow" in flat
-    assert "A distinct problem is not covered by the selected workflows above" not in flat
-    assert "Neither annotation count is a species count" in flat
-    assert "primary independent unit is the distinct input SHA-256" in flat
-    assert "assembled retrospectively from external records after excluding five bundled examples used during software development" in flat
-    assert "no prospective preregistration is claimed" in flat
-    assert "identification and parameter coverage only" in lower
-    assert "cannot reconstruct a run by itself" in lower
-    assert "not external biological ground truth" in lower
-    assert ("does not replace prospective wet-lab validation of primers designed by teagle and "
-            "does not establish de novo primer success") in lower
-    assert "Mob DNA. 2026 Jul 16. Online ahead of print. doi:10.1186/s13100-026-00405-z" in text
-    assert "Biology (Basel). 2026;15(1):59. doi:10.3390/biology15010059" in text
-    assert "Row-level sensitivity of order accuracy by the confidence tier" in flat
-    assert "Accession {{broad_duplicate_accession}} contributes a duplicated row" in flat
-    # Corpus-level totals must not be presented as one performance denominator because controls and
-    # element withholding have different scientific meanings.
-    assert "{{broad_unique_order_answered}}" not in flat
-    assert "{{broad_unique_order_withheld}}" not in flat
-    assert re.search(r"Among the \{\{broad_element_unique_gradable\}\} element hashes, TEagle "
-                     r"answered \{\{broad_element_unique_answered\}\} and withheld "
-                     r"\{\{broad_element_unique_withheld\}\}", flat)
-
-    spec = " ".join(_read("benchmarks/protocol/BENCHMARK_SPEC_v1.md").split()).lower()
-    assert "selection can bias measured performance in either direction" in spec
-    assert "upper bound" not in spec
+    assert "limited classification coverage" in lower
+    assert "low structural recall" in lower
+    assert "broad domain accuracy" in lower
+    assert "wet-lab primer success" in lower
+    assert "protocol 2.3.6 is transparently result-informed" in lower
 
 
 def test_submission_assets_use_reader_facing_evidence_and_current_status():

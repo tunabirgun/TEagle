@@ -69,6 +69,7 @@ def test_tier_thresholds():
 
 
 def test_engine_agreement_labels(monkeypatch):
+    monkeypatch.setattr(oligoqc, "_REMOTE_CACHE", {})
     assert oligoqc._agree(-8.0, -7.0) == "agree"         # within band
     assert oligoqc._agree(-28.0, -9.0) == "disagree"     # far apart (the palindrome case)
     assert oligoqc._agree(None, None) == "none"

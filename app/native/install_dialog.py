@@ -115,6 +115,7 @@ class InstallDialog(QDialog):
         need = self.grid.heightForWidth(vp.width()) if self.grid.hasHeightForWidth() else self.grid.sizeHint().height()
         extra = need - vp.height()
         if extra <= 0:
+            QTimer.singleShot(0, self._snap_component_rows)
             return
         try:
             g = self.screen().availableGeometry()
@@ -128,6 +129,27 @@ class InstallDialog(QDialog):
         fg = self.frameGeometry()                       # keep the grown window on the screen it grew on
         if fg.bottom() > g.bottom():
             self.move(fg.x(), max(g.top(), fg.y() - (fg.bottom() - g.bottom())))
+        QTimer.singleShot(0, self._snap_component_rows)
+
+    @staticmethod
+    def _partial_row_delta(viewport_height, scroll_value, button_spans):
+        """Pixels to remove when the viewport edge cuts through an action button."""
+        lower = int(scroll_value) + int(viewport_height)
+        for top, bottom in sorted(button_spans):
+            if int(top) < lower < int(bottom):
+                return lower - int(top)
+        return 0
+
+    def _snap_component_rows(self):
+        """Keep the initial screen-capped viewport from showing a misleading partial action button."""
+        if not self.isVisible():
+            return
+        vp = self.scroll.viewport()
+        spans = [(row["btn"].geometry().top(), row["btn"].geometry().bottom() + 1)
+                 for row in self._rows.values() if row["btn"].isVisible()]
+        delta = self._partial_row_delta(vp.height(), self.scroll.verticalScrollBar().value(), spans)
+        if delta:
+            self.resize(self.width(), max(self.minimumSizeHint().height(), self.height() - delta))
 
     # ---------- rows ----------
     def _ensure_row(self, key, name, desc):

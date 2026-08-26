@@ -59,7 +59,7 @@ def test_summarize_splits_pair_and_single_primer_counts():
 
 
 def test_summarize_groups_per_source_pair_only_busiest_first():
-    # single-primer products must NOT inflate the per-chromosome pair-product counts
+    # single-primer products must NOT inflate the per-assembly-sequence pair-product counts
     s = genomepcr.summarize(_amps(
         ">NC_1:100+300 pair 201bp AAA CCC",
         ">NC_1:900+1100 pair 201bp AAA CCC",
@@ -68,14 +68,17 @@ def test_summarize_groups_per_source_pair_only_busiest_first():
     assert s["per_source"] == [("NC_1", 2), ("NC_2", 1)] and s["n_sources"] == 2
 
 
-def test_summarize_verdict_locus_specific_for_single_pair_product():
+def test_summarize_verdict_single_site_without_inferring_specificity():
     s = genomepcr.summarize(_amps(">NC_1:100+300 pair 201bp AAA CCC"))
-    assert s["tier"] == "locus-specific" and s["n_pair"] == 1
+    assert s["tier"] == "single-site" and s["n_pair"] == 1
+    assert "single-site pattern" in s["verdict"] and "specific" not in s["verdict"]
 
 
-def test_summarize_verdict_family_generic_for_many_copies():
+def test_summarize_verdict_many_sites_without_inferring_family_or_copies():
     s = genomepcr.summarize(_amps(*[f">NC_{i}:100+300 pair 201bp AAA CCC" for i in range(1, 9)]))
-    assert s["tier"] == "family-generic" and s["n_pair"] == 8 and s["n_sources"] == 8
+    assert s["tier"] == "many-site" and s["n_pair"] == 8 and s["n_sources"] == 8
+    assert "many-site pattern" in s["verdict"]
+    assert not any(word in s["verdict"].lower() for word in ("family", "copy", "specific"))
 
 
 def test_summarize_size_cluster_over_pair_products():
@@ -94,16 +97,29 @@ def test_summarize_empty_scan_is_clean_not_error():
     assert s["tier"] == "none" and s["size_mode"] is None
 
 
-def test_summarize_has_locus_splits_on_and_off_target():
-    # with a design locus, the product marked on_target is the on-target; the rest are off-target paralogs
+def test_summarize_has_locus_splits_on_and_off_target_without_inferring_paralogy():
+    # isPcr establishes priming loci, not homology or paralogy.
     amps = _amps(">NC_1:100+300 pair 201bp AAA CCC", ">NC_2:10+210 pair 201bp AAA CCC")
     amps[0]["on_target"] = True
     s = genomepcr.summarize(amps, has_locus=True)
     assert s["has_locus"] and s["n_on"] == 1 and s["n_off"] == 1
+    assert s["tier"] == "limited-off-target"
     assert "on-target" in s["verdict"] and "off-target" in s["verdict"]
+    assert not any(word in s["verdict"].lower() for word in ("paralog", "family", "copy-specific"))
+
+
+def test_summarize_intended_site_only_does_not_infer_copy_specificity():
+    amps = _amps(">NC_1:100+300 pair 201bp AAA CCC")
+    amps[0]["on_target"] = True
+    s = genomepcr.summarize(amps, has_locus=True)
+    assert s["tier"] == "intended-only"
+    assert "no additional priming site detected" in s["verdict"]
+    assert "copy" not in s["verdict"].lower() and "specific" not in s["verdict"].lower()
 
 
 def test_summarize_no_locus_is_neutral_priming_sites():
     # no design locus -> no single intended target, so products are neutral genomic priming sites (no on/off)
     s = genomepcr.summarize(_amps(">NC_1:100+300 pair 201bp AAA CCC"), has_locus=False)
     assert s["has_locus"] is False and s["n_on"] == 0 and "priming site" in s["verdict"]
+    assert s["tier"] == "single-site"
+    assert not any(word in s["verdict"].lower() for word in ("paralog", "family", "copy", "specific"))

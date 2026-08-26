@@ -127,7 +127,7 @@ def gv_tracks_from_rec(rec: dict) -> dict:
         feat = [{"start": arch["leader_exon"][0], "end": arch["leader_exon"][1], "color": ARCHCOL["exon"],
                  "label": "leader", "tip": f"5′ leader exon {arch['leader_exon'][0]}–{arch['leader_exon'][1]}"},
                 {"start": arch["intron"][0], "end": arch["intron"][1], "color": ARCHCOL["intron"], "intron": True,
-                 "label": "gag–pol", "tip": f"gag–pro–pol intron (fused polyprotein, removed) {arch['intron'][0]}–{arch['intron'][1]}"},
+                 "label": "gag–pol", "tip": f"gag–pro–pol coding interval removed from env RNA {arch['intron'][0]}–{arch['intron'][1]}"},
                 {"start": arch["env_exon"][0], "end": arch["env_exon"][1], "color": ARCHCOL["exon"],
                  "label": "env", "tip": f"env exon {arch['env_exon'][0]}–{arch['env_exon'][1]}"}]
         tracks.append({"name": "env mRNA (predicted)", "height": 20, "features": feat})

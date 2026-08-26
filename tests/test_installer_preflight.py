@@ -42,10 +42,10 @@ PYINSTALLER_PIN = _locked_pyinstaller_version()
 
 def _locked_inno_version(path: Path = BUILD_LOCK) -> str:
     matches = re.findall(
-        r"(?m)^\s*InnoSetup==([^\s#]+)\s*$",
+        r"(?m)^\s*#\s*Native build tool:\s*InnoSetup==([^\s#]+)\s*$",
         path.read_text(encoding="utf-8"),
     )
-    assert len(matches) == 1, "requirements-build.txt must contain exactly one InnoSetup==<version> pin"
+    assert len(matches) == 1, "requirements-build.txt must contain exactly one commented native InnoSetup pin"
     return matches[0]
 
 
@@ -95,7 +95,7 @@ def _stage_preflight(
     shutil.copy2(SOURCE, installer / SOURCE.name)
     shutil.copy2(IMPORT_GATE, installer / IMPORT_GATE.name)
     (installer / "requirements-build.txt").write_text(
-        f"PyInstaller=={pyi_pin}\nInnoSetup=={inno_pin}\n", encoding="utf-8"
+        f"PyInstaller=={pyi_pin}\n# Native build tool: InnoSetup=={inno_pin}\n", encoding="utf-8"
     )
     (core / "__init__.py").write_text('__version__ = "3.8.0"\n', encoding="utf-8")
     (backend / "requirements.txt").write_text(
@@ -217,6 +217,21 @@ def test_build_lock_parser_rejects_missing_loose_or_duplicate_pins(tmp_path, con
     lock.write_text(contents, encoding="utf-8")
     with pytest.raises(AssertionError, match="exactly one PyInstaller"):
         _locked_pyinstaller_version(lock)
+
+
+@pytest.mark.parametrize(
+    "contents",
+    [
+        "PyInstaller==6.21.0\n",
+        "PyInstaller==6.21.0\n# Native build tool: InnoSetup>=6.7.3\n",
+        "PyInstaller==6.21.0\n# Native build tool: InnoSetup==6.7.3\n# Native build tool: InnoSetup==6.7.4\n",
+    ],
+)
+def test_build_lock_parser_rejects_missing_loose_or_duplicate_native_pins(tmp_path, contents):
+    lock = tmp_path / "requirements-build.txt"
+    lock.write_text(contents, encoding="utf-8")
+    with pytest.raises(AssertionError, match="exactly one commented native InnoSetup pin"):
+        _locked_inno_version(lock)
 
 
 def test_full_release_path_cannot_skip_freeze_and_orders_gates_before_mutation():
@@ -410,8 +425,9 @@ def test_frozen_executable_version_info_omits_optional_identity_strings():
 
 def test_inno_setup_compiler_version_is_exactly_locked_and_gated_preflight():
     lock = BUILD_LOCK.read_text(encoding="utf-8")
-    matches = re.findall(r"(?m)^InnoSetup==([^\s#]+)\s*$", lock)
+    matches = re.findall(r"(?m)^# Native build tool: InnoSetup==([^\s#]+)\s*$", lock)
     assert matches == [INNO_PIN] == ["6.7.3"]
+    assert [line for line in lock.splitlines() if line and not line.startswith("#")] == ["PyInstaller==6.21.0"]
     source = SOURCE.read_text(encoding="utf-8")
     assert "Inno Setup version mismatch" in source
     assert source.index("Inno Setup version mismatch") < source.index("if ($PreflightOnly)")

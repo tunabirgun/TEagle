@@ -1,7 +1,7 @@
 {
  "_capture": {
-  "appVersion": "3.9.0",
-  "completedNs": 1787375729357565100,
+  "appVersion": "4.0.0",
+  "completedNs": 1787693747730278400,
   "failures": [],
   "outputs": {
    "docs/img/coord_fetch.png": {
@@ -11,17 +11,17 @@
    },
    "docs/img/genome_scan.png": {
     "height": 1227,
-    "sha256": "31577e32ef6622a0eed25b6199bc0cbf5165099d778b5ea5acbc2f45ee375562",
+    "sha256": "c06d1d1deb5c4a20cb1524c9d227c0be5cea6e66e396ef125411c7ccd4999ba9",
     "width": 1109
    },
    "docs/img/installer.png": {
-    "height": 1048,
-    "sha256": "c6edb10c2942361c509b1cc7e5fcedfb19e7e4bd4e34962d339c51b1df0ca2b9",
+    "height": 1043,
+    "sha256": "ce57e652069b8df868255709d475cc132a6daf6e2ffc7eb6e74b6587a4cabe4d",
     "width": 900
    },
    "docs/img/overview.png": {
     "height": 1150,
-    "sha256": "0580d00d7b96e3683662069677cdcce67d025213bd0ace393146c888ded5057a",
+    "sha256": "1970b7831c3ece3fe78ef5605d9cc971bd7aa051ae99f00bd60ec9ae78e5c225",
     "width": 1500
    },
    "docs/img/pcr_gel.png": {
@@ -36,17 +36,17 @@
    },
    "docs/img/screenshots/genome_scan_no_locus.png": {
     "height": 1213,
-    "sha256": "80a088a635ca2a73d060554ec1982dd267c5a6d66c3f2e9e2b17838f4f520ae6",
+    "sha256": "c06c29e8a85c12025b78e964257dee657c9d7d432793f3ecb59ebbb09406c725",
     "width": 1109
    },
    "docs/img/screenshots/herv_h_partial.png": {
     "height": 1950,
-    "sha256": "745b39acbef869ec8fd783bf3d72171fb8319b3072b73386d359a72f95743dc1",
+    "sha256": "0c48c464855687407ff7324b09b1bafe3627a1336a96a174b362330492139d3a",
     "width": 1109
    },
    "docs/img/screenshots/herv_k_domains.png": {
     "height": 1997,
-    "sha256": "5695df4a548c9a4d18835fac68ed5b9ccf3ffb5134e2abc77c051ca5e74c441e",
+    "sha256": "e0d1655280cc8171c3ca59c16ddf92464f1a0920f0f452bdb0c9a4dff5209a4b",
     "width": 1109
    },
    "docs/img/screenshots/manage_genomes_panel.png": {
@@ -55,13 +55,13 @@
     "width": 1180
    },
    "docs/img/screenshots/methods_databases.png": {
-    "height": 1908,
-    "sha256": "411fc566490b044f73e17647ea7ba592194ff38fee0a4b93d8b48e97e06b6007",
+    "height": 1936,
+    "sha256": "65a2bc259ae4005e29746a76c633f2bec35973734edf8274dbfedb4fd3f95fe3",
     "width": 1109
    },
    "docs/img/screenshots/primer_structure_detail.png": {
     "height": 460,
-    "sha256": "ca1ead49680fa7d0bd10d367d96bfa87b432caddb6e95a91ecd2693d2610d6f1",
+    "sha256": "db3a9c104f59d914cc786dfcd3868cb60c08e5d090bc94d3e1a4c8bbb368457c",
     "width": 640
    },
    "docs/img/screenshots/splice_multi_exon.png": {
@@ -75,8 +75,8 @@
     "width": 478
    },
    "report/manual_figures/card02_methods_foot.png": {
-    "height": 625,
-    "sha256": "53f42c8e1263bc0fa53ec4de01f8e74dedda5a58caabf8af4b800d9da879ddea",
+    "height": 351,
+    "sha256": "f8d90c37f2583017d8599f6a0181ae72a224de9eb903a3e654c1a7f4e866d691",
     "width": 1109
    },
    "report/manual_figures/card_coord.png": {
@@ -89,19 +89,39 @@
     "sha256": "2f001827ea954f12b4080cefd6d4b9748918b8bd3a9a607a3659c0e0e70149bb",
     "width": 340
    },
-   "report/manual_figures/card_genome.png": {
-    "height": 1227,
-    "sha256": "31577e32ef6622a0eed25b6199bc0cbf5165099d778b5ea5acbc2f45ee375562",
+   "report/manual_figures/card_genome_results.png": {
+    "height": 535,
+    "sha256": "05ff268b4b05623e38c9d66a25a536135786e9d1fe6cccaab46b871714ca8436",
+    "width": 1109
+   },
+   "report/manual_figures/card_genome_scope.png": {
+    "height": 93,
+    "sha256": "69732b7750e0d65a6e997261ee179b07239b84a044dd31b282c5e3adb9262d9a",
+    "width": 1109
+   },
+   "report/manual_figures/card_genome_table.png": {
+    "height": 458,
+    "sha256": "3d0f4e00c7111192b9f230303c44126a192cda6cadf0436f45bfd1229ef04e84",
     "width": 1109
    },
    "report/manual_figures/card_herv.png": {
     "height": 1997,
-    "sha256": "5695df4a548c9a4d18835fac68ed5b9ccf3ffb5134e2abc77c051ca5e74c441e",
+    "sha256": "e0d1655280cc8171c3ca59c16ddf92464f1a0920f0f452bdb0c9a4dff5209a4b",
+    "width": 1109
+   },
+   "report/manual_figures/card_herv_domains_notes.png": {
+    "height": 513,
+    "sha256": "42b1bb7978911071e63f37291bb9d1b0dc2ec2f9c3b981b2dd8f9941e380a11f",
+    "width": 1109
+   },
+   "report/manual_figures/card_herv_structural_orfs.png": {
+    "height": 434,
+    "sha256": "c95706872247475427db4f13af36de6693cd2bb958874f01a2e431afc6b5e80e",
     "width": 1109
    },
    "report/manual_figures/card_installer.png": {
-    "height": 1048,
-    "sha256": "c6edb10c2942361c509b1cc7e5fcedfb19e7e4bd4e34962d339c51b1df0ca2b9",
+    "height": 1043,
+    "sha256": "ce57e652069b8df868255709d475cc132a6daf6e2ffc7eb6e74b6587a4cabe4d",
     "width": 900
    },
    "report/manual_figures/card_pcr.png": {
@@ -109,15 +129,30 @@
     "sha256": "45bf09217fa6070d6ebe6d9516907aa71c248f5220e188ee9a901398156ffaca",
     "width": 1109
    },
+   "report/manual_figures/card_pcr_controls.png": {
+    "height": 360,
+    "sha256": "14d24310c1f37257bf31f6b1ff31eaee0af99792bffbf1d92b686dbc652224cf",
+    "width": 1109
+   },
+   "report/manual_figures/card_pcr_results.png": {
+    "height": 625,
+    "sha256": "702f44a53137a02c1336f1f4e93f1e3a5425767e6dc94927df61bf768b9c97a8",
+    "width": 1109
+   },
    "report/manual_figures/card_primer.png": {
     "height": 752,
     "sha256": "14143177234aec6c36f9039d52eb8bc959696cec3ec90236c45a615533767ef7",
     "width": 1109
    },
+   "report/manual_figures/card_primer_pairs.png": {
+    "height": 338,
+    "sha256": "22699c74fc77caaf9a03ade65001947b6fec56798e33416adba0d4458a1c0886",
+    "width": 1109
+   },
    "report/manual_figures/card_prov.png": {
     "height": 644,
-    "sha256": "1b918ec5c58e4197e1828f43d0ffdf72a2da91404e7e84ba42b58ed65dc98bf0",
-    "width": 1109
+    "sha256": "878d454456122d6606349cc1a35beeaa715f01c346c94ce5e3a5d94e580fcf84",
+    "width": 760
    },
    "report/manual_figures/card_splice.png": {
     "height": 728,
@@ -126,7 +161,7 @@
    },
    "report/manual_figures/card_struct.png": {
     "height": 1643,
-    "sha256": "3f58c5e9adb73b3c5d849717c3cd902f9cb6e7b37948730424cfa65aece02ddd",
+    "sha256": "92398b5e55c1ad38aabed8e356f7cd16d172677d57a721346f11239b33533161",
     "width": 1109
    },
    "report/manual_figures/card_wsl.png": {
@@ -135,18 +170,18 @@
     "width": 1109
    },
    "report/manual_figures/methods_databases.png": {
-    "height": 1908,
-    "sha256": "411fc566490b044f73e17647ea7ba592194ff38fee0a4b93d8b48e97e06b6007",
+    "height": 1936,
+    "sha256": "65a2bc259ae4005e29746a76c633f2bec35973734edf8274dbfedb4fd3f95fe3",
     "width": 1109
    },
    "report/manual_figures/overview.png": {
     "height": 1150,
-    "sha256": "0580d00d7b96e3683662069677cdcce67d025213bd0ace393146c888ded5057a",
+    "sha256": "1970b7831c3ece3fe78ef5605d9cc971bd7aa051ae99f00bd60ec9ae78e5c225",
     "width": 1500
    },
    "report/manual_figures/primer_structure_detail.png": {
     "height": 460,
-    "sha256": "ca1ead49680fa7d0bd10d367d96bfa87b432caddb6e95a91ecd2693d2610d6f1",
+    "sha256": "db3a9c104f59d914cc786dfcd3868cb60c08e5d090bc94d3e1a4c8bbb368457c",
     "width": 640
    },
    "report/manual_figures/subregion_picker.png": {
@@ -156,32 +191,39 @@
    }
   },
   "schemaVersion": "1.0",
-  "startedNs": 1787375705189665700,
+  "startedNs": 1787693712634054400,
   "status": "ok"
  },
  "img": {
   "coord_fetch.png": "panel 01 rail after a real NCBI coordinate fetch — chr13:33,016,423-33,066,143 · GRCh38.p14 · 49,721 bp · 340x1070",
   "genome_scan.png": "REAL on+off-target (1 on / 48 off) · 1109x1227",
-  "installer.png": "backend installer — per-component status, per-component Install (absent) or Repair (present), Install all, Check integrity, live log · 900x1048",
-  "overview.png": "header v3.9.0 · 1500x1150",
+  "installer.png": "backend installer — per-component status, per-component Install (absent) or Repair (present), Install all, Check integrity, live log · 900x1043",
+  "overview.png": "header v4.0.0 · 1500x1150",
   "pcr_gel.png": "panel 05 — staged pair, to-scale gel, 1 amplicon(s) on M11240 · 1109x977",
   "primers.png": "panel 04 — 5 ranked pairs on M11240, per-pair structure QC · 1109x752"
  },
  "man": {
-  "card02_methods_foot.png": "card 02 foot — protein-domain table + methods & databases panel · 1109x625",
+  "card02_methods_foot.png": "card 02 foot — enlarged methods & databases panel · 1109x351",
   "card_coord.png": "panel 01 rail after a real NCBI coordinate fetch — chr13:33,016,423-33,066,143 · GRCh38.p14 · 49,721 bp · 340x1070",
   "card_coord_fetch.png": "panel 01 coordinate fetch — chr13:33,016,423-33,066,143 · GRCh38.p14 · 340x404",
-  "card_genome.png": "REAL on+off-target (1 on / 48 off) · 1109x1227",
+  "card_genome_results.png": "whole-genome verdict, summaries, full result table, and caveat · 1109x535",
+  "card_genome_scope.png": "whole-genome computational scope note · 1109x93",
+  "card_genome_table.png": "whole-genome verdict, summaries, and full result table · 1109x458",
   "card_herv.png": "HERV-K113 GAG-POL-ENV + per-domain confidence + completeness tier · 1109x1997",
-  "card_installer.png": "backend installer — per-component status, per-component Install (absent) or Repair (present), Install all, Check integrity, live log · 900x1048",
+  "card_herv_domains_notes.png": "HERV-K113 protein-domain table and scope notes · 1109x513",
+  "card_herv_structural_orfs.png": "HERV-K113 structural-evidence and ORF tables · 1109x434",
+  "card_installer.png": "backend installer — per-component status, per-component Install (absent) or Repair (present), Install all, Check integrity, live log · 900x1043",
   "card_pcr.png": "panel 05 — staged pair, to-scale gel, 1 amplicon(s) on M11240 · 1109x977",
+  "card_pcr_controls.png": "Card 05 — enlarged loaded-pair queue, search settings, and run control · 1109x360",
+  "card_pcr_results.png": "Card 05 — enlarged gel, product table, exports, and scope note · 1109x625",
   "card_primer.png": "panel 04 — 5 ranked pairs on M11240, per-pair structure QC · 1109x752",
-  "card_prov.png": "core v3.9.0 · 1109x644",
+  "card_primer_pairs.png": "Card 04 — enlarged ranked primer-pair table and visible structure key · 1109x338",
+  "card_prov.png": "core v4.0.0 · 760x644",
   "card_splice.png": "J00265 x NM_000207 -> 3 exons / 2 introns · 1109x728",
   "card_struct.png": "captured by recapture_shots.py · 1109x1643",
   "card_wsl.png": "M80343 — all 1 returned row(s): 1 TE-classified, 0 non-TE repeat, 0 unclassified · 1109x421",
-  "methods_databases.png": "methods & databases disclosure expanded · 1109x1908",
-  "overview.png": "header v3.9.0 · 1500x1150",
+  "methods_databases.png": "methods & databases disclosure expanded · 1109x1936",
+  "overview.png": "header v4.0.0 · 1500x1150",
   "primer_structure_detail.png": "primer3 vs ViennaRNA ΔG, side by side · 640x460",
   "subregion_picker.png": "pick an interval inside a feature · 478x200"
  },

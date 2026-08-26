@@ -1300,8 +1300,8 @@ def run_genome_pcr(body):
     """Whole-genome off-target scan of one primer pair against a LOCAL, downloaded RefSeq assembly (isPcr).
     No remote query; a local safety timeout applies (body.timeout, default 600s — a very large genome may need
     it raised). The assembly is a fixed checksummed file, so the result IS reproducible and sealed (accession +
-    source-FASTA sha256 + isPcr version + params). Every genome-wide product is an off-target candidate — a
-    specificity screen, not validated bands."""
+    source-FASTA sha256 + isPcr version + params). Products are candidate priming sites, not validated bands;
+    on/off-target labels are applied only when the request supplies a matching intended locus."""
     fwd, rev = body.get("fwd"), body.get("rev")
     if not isinstance(fwd, str) or not isinstance(rev, str):
         raise BadRequest("a forward and reverse primer are required for the genome scan")
@@ -1319,6 +1319,11 @@ def run_genome_pcr(body):
     if not r.get("ok"):
         return r                                     # {ok:False, error, [need_prepare]} — surfaced to the UI
     amps = genomepcr.parse_ispcr(r["raw"])
+    for amp in amps:
+        # These identifiers come from the verified, checksummed assembly downloaded through the managed
+        # reference-genome path. Recognized accessions remain readable; malformed labels are still
+        # neutralized by the validated-fetch identity rules at the display/export boundary.
+        amp["sourceIdentitySource"] = "validated_fetch"
     if min_size > 0:                                 # isPcr has no -minSize; apply the lower product bound here
         amps = [a for a in amps if a["length"] >= min_size]
     seal_params = {"fwd": fwd, "rev": rev, "engine": "isPcr", "isPcr_version": r.get("isPcr_version"),
@@ -1333,7 +1338,7 @@ def run_genome_pcr(body):
         references=refs.for_run("genome-scan"),
         not_run=["Wet-lab validation of predicted products", "Off-target scan of unlisted organisms"])
     # on-target from the DESIGN LOCUS: if the specimen sits at a known position in this assembly, the product
-    # overlapping it is the on-target and the rest are off-target paralogs; with no locus there is no single
+    # overlapping it is the on-target and the rest are off-target candidate priming sites; with no locus there is no single
     # intended target, so the products are neutral 'genomic priming sites'. This labeling is DERIVED, not sealed
     # (like the summary): the isPcr product set — the sealed content — is identical with or without a design locus.
     raw_loci = body.get("design_locus")
@@ -1354,15 +1359,15 @@ def run_genome_pcr(body):
         overlapping = [(a, _overlap(a)) for a in amps if not a.get("single_primer")]
         overlapping = [(a, ov) for a, ov in overlapping if ov > 0]
         if overlapping:                                  # exactly ONE on-target = the best-overlapping product (never
-            best = max(overlapping, key=lambda t: (t[1], -t[0]["start"]))[0]   # every overlapper, or a clustered paralog
-            best["on_target"] = True                     # inside the window would falsely read 'copy-specific')
+            best = max(overlapping, key=lambda t: (t[1], -t[0]["start"]))[0]   # every overlapper, or a nearby second site
+            best["on_target"] = True                     # inside the window would falsely imply intended-locus-only)
             n_on = 1
-    # interpretation (on/off split, per-chromosome spread, verdict). DERIVED, NOT sealed — never passed to
+    # interpretation (on/off split, per-assembly-sequence spread, verdict). DERIVED, NOT sealed — never passed to
     # build_manifest, so the same primers+genome seal identically regardless of the design locus or the products.
     summary = genomepcr.summarize(amps, has_locus=has_locus)
     return {"ok": True, "organism": org, "taxid": taxid, "scope": "whole-genome", "assemblyAccession": acc,
             "assemblyName": name, "amplicons": amps, "n_amplicons": len(amps), "n_seqs": r.get("n_seqs"),
             "summary": summary, "has_locus": has_locus, "n_on_target": n_on,
-            "advisory_note": ("candidate priming sites (isPcr, ≥15 bp 3'-perfect match) — not wet-lab-validated "
+            "advisory_note": ("candidate priming sites (isPcr default: ≥15 bp minimum perfect 3'-end match) — not wet-lab-validated "
                               "amplicons; products priming off a shorter 3' match are not flagged"),
             "references": refs.for_run("genome-scan"), "provenance": manifest}

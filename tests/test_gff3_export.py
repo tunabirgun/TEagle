@@ -66,15 +66,59 @@ def test_dna_transposon_without_recovered_tirs_degrades_to_the_generic_term():
 
 
 def test_ltr_fragment_without_rt_degrades_to_repeat_region():
-    """A relic that kept a coding domain (env/capsid) but lost pol has no reverse-transcriptase evidence,
-    so column 3 cannot assert LTR_retrotransposon. Regression for the second export-overclaim CRITICAL."""
+    """An isolated ENV hit plus terminal direct repeats does not establish LTR origin, so neither the
+    classification nor GFF3 column 3 may assert an LTR retrotransposon."""
     from teagle_core import classify
     d = classify.classify(
         structural=[{"type": "LTR (terminal direct repeat)", "five_prime": [0, 200], "three_prime": [1000, 1200]}],
         domains=[{"domain": "ENV", "class": "", "score": 100, "nt": [300, 600], "strand": "+"}])
-    assert d["te_class"] == "LTR/partial"
+    assert d["te_class"] == "repeat/structural-only"
+    assert d["outcome"] == "withheld"
     assert "RT" not in d["completeness"]["present"]
     assert gff3.so_term_for(d) == "repeat_region"
+    attrs = _rows(gff3.to_gff3({"classification": d, "completeness": d["completeness"],
+                                "structural": [{"type": "LTR (terminal direct repeat)",
+                                                "five_prime": [0, 200], "three_prime": [1000, 1200]}],
+                                "domains": [], "composition": {"length": 1200}}))[0][8]
+    assert "classification_outcome=withheld" in attrs
+    assert "classification_order=withheld" in attrs
+
+
+def test_trusted_ltr_fragment_gff3_preserves_hedge_while_using_neutral_so_term():
+    from teagle_core import classify
+    structural = [{"type": "LTR (terminal direct repeat)", "five_prime": [0, 200],
+                   "three_prime": [1000, 1200]}]
+    domains = [{"domain": "GAG", "hmm": "Gag_p24", "class": "", "score": 100,
+                "nt": [300, 600], "strand": "+"},
+               {"domain": "PR", "hmm": "RVP", "class": "", "score": 90,
+                "nt": [650, 800], "strand": "+"}]
+    cl = classify.classify(structural, domains)
+    parent = _rows(gff3.to_gff3({"classification": cl, "completeness": cl["completeness"],
+                                 "structural": structural, "domains": domains,
+                                 "composition": {"length": 1200}}))[0]
+    assert parent[2] == "repeat_region"
+    assert "wicker_code=LTR/partial" in parent[8]
+    assert "classification_outcome=complete" in parent[8]
+    assert "classification_order=unassigned" in parent[8]
+    assert "domain_evidence_status=tested_with_hits" in parent[8]
+    assert "classification_explanation=" in parent[8]
+    assert "RT/pol not detected" in parent[8]
+
+
+def test_failed_domain_gff3_and_bed_preserve_withheld_unavailable_state():
+    from teagle_core import classify
+    structural = [{"type": "LTR (terminal direct repeat)", "five_prime": [0, 100],
+                   "three_prime": [300, 400]}]
+    cl = classify.classify(structural, [], domains_ok=False)
+    rec = {"classification": cl, "completeness": cl["completeness"],
+           "structural": structural, "domains": [], "composition": {"length": 400}}
+    parent = _rows(gff3.to_gff3(rec))[0]
+    assert parent[2] == "repeat_region"
+    assert "classification_outcome=withheld" in parent[8]
+    assert "classification_order=withheld" in parent[8]
+    assert "domain_evidence_status=unavailable_failed" in parent[8]
+    bed_parent = gff3.to_bed(rec).splitlines()[0].split("\t")
+    assert "|outcome=withheld|order=withheld|domains=unavailable_failed" in bed_parent[3]
 
 
 def test_every_term_used_has_a_verified_so_accession():

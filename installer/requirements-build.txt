@@ -1,3 +1,3 @@
-# Windows packaging toolchain. Runtime dependencies are pinned in app/backend/requirements.txt.
+# Python packaging dependency. The native Inno Setup pin is recorded below as a comment so this file remains directly pip-installable.
 PyInstaller==6.21.0
-InnoSetup==6.7.3
+# Native build tool: InnoSetup==6.7.3

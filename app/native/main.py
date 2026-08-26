@@ -78,7 +78,10 @@ def _record_export_stem(record, default="record"):
 
 
 def _amplicon_public_source(amplicon):
-    from teagle_core.gff3 import bound_public_record_label
+    from teagle_core.gff3 import bound_public_record_label, public_record_label
+    trust = amplicon.get("sourceIdentitySource")
+    if trust in {"validated_fetch", "generated"}:
+        return public_record_label(amplicon.get("source"), trust=trust)
     return bound_public_record_label(amplicon.get("source"), amplicon.get("sourceIdSha256"))
 
 
@@ -159,6 +162,8 @@ EXPORT_HEADERS = {"Start": "Start (0-based)", "End": "End (0-based, exclusive)",
 DOMAIN_COLS = ["Domain", "Label", "Pfam", "aa", "nt", "Score", "E-value", "Conf"]
 # plain-language glossary for every table header (hover to learn the abbreviation) — mirrors web GLOSSARY
 GLOSS = {
+    "Classification": "Compact element classification label; this may name an order or superfamily, or state that assignment was withheld.",
+    "Domain architecture": "Detected protein-domain codes in their inferred biological order; this is not a taxonomic rank.",
     "Feature": "Structural hallmark found in the sequence — e.g. LTR, TIR, target-site duplication, poly-A tail.",
     "Coords (0-based)": "Location in the sequence, 0-based half-open [start, end).",
     "Coords": "Location of this amplicon in the searched sequence, 0-based half-open [start, end).",
@@ -208,7 +213,7 @@ GLOSS = {
     "Call": "For a design-bound local PCR, on-target requires the intended F+R endpoints and coverage of the "
             "Primer3 target. Without a Primer3 target, target status is unassessed; other products are additional "
             "products, not experimentally established off-targets. A genome-wide priming site has no bound locus.",
-    "Class/family": "TE class and superfamily (Wicker 2007 scheme), e.g. LTR/Copia.",
+    "Class/family": "TE order/superfamily code (Wicker 2007 scheme), e.g. LTR/Copia.",
     "Dfam family": "The specific named family in the Dfam library, e.g. Copia_I or L1HS.",
     "Str": "Strand of the match — + forward, − reverse complement.",
     "Div": "Divergence — % difference between your sequence and the Dfam family consensus (lower = closer).",
@@ -1185,7 +1190,7 @@ class MainWindow(QMainWindow):
     def _build_genome_card(self):
         # dedicated whole-genome off-target scan — LOCAL isPcr against a downloaded RefSeq assembly. The organism
         # dropdown lists ONLY downloaded+verified genomes (from genome_list). On-target = the product at the
-        # specimen's own genome locus when it sits in the scanned assembly; the rest are off-target paralogs.
+        # specimen's own genome locus when it sits in the scanned assembly; the rest are off-target candidate sites.
         card = CollapsibleCard("06", "Whole-genome off-target scan", "a designed pair vs a downloaded RefSeq genome (isPcr)")
         self.card_genome = card
         card.bodylay.addWidget(_sl("Organism — local isPcr against a downloaded genome"))
@@ -1899,6 +1904,8 @@ class MainWindow(QMainWindow):
             comp = r.get("completeness") or cl.get("completeness") or {}
             doms = sorted({d["domain"] for d in (r.get("domains") or [])})
             struct = sorted({e["type"].split(" (")[0] for e in (r.get("structural") or [])})
+            domain_status = ("unavailable_failed" if cl.get("domains_unavailable") else
+                             ("tested_empty" if not cl.get("n_domains") else "tested_with_hits"))
             processing = "; ".join(f"{stage}={state.get('status', '—')}"
                                    for stage, state in (r.get("processing") or {}).items()) or "—"
             composition = r.get("composition") or {}
@@ -1907,13 +1914,16 @@ class MainWindow(QMainWindow):
                          f"{composition.get('gc', 0)}%", f"{composition.get('n', 0)}%",
                          f"{composition.get('ambiguous', 0)}%",
                          "valid" if r.get("valid") else "INVALID",
-                         cl.get("te_class") or "—", cl.get("confidence") or "—",
+                         cl.get("te_class") or "—", cl.get("outcome") or "—",
+                         cl.get("order") or ("withheld" if cl.get("outcome") == "withheld" else "unassigned"),
+                         cl.get("confidence") or "—", domain_status, cl.get("explanation") or "—",
                          "·".join(doms) or "—", ", ".join(struct) or "—",
                          comp.get("tier") or "—", processing])
         return rows
 
-    _RECORD_HEADERS = ["#", "Record", "Length", "GC", "N", "Ambiguous", "Input", "Class",
-                       "Confidence", "Domains", "Structural", "Completeness", "Processing"]
+    _RECORD_HEADERS = ["#", "Record", "Length", "GC", "N", "Ambiguous", "Input", "Classification",
+                       "Outcome", "Domain architecture", "Confidence", "Domain evidence", "Rationale", "Domains",
+                       "Structural", "Completeness", "Processing"]
 
     def _accent_link(self, href, text):
         return f"<a href='{href}' style='color:{theme_mod.ACCENT[self.theme]};text-decoration:none'>{text}</a>"
@@ -2197,10 +2207,17 @@ class MainWindow(QMainWindow):
         bl.setContentsMargins(theme_mod.sp(16), theme_mod.sp(14), theme_mod.sp(16), theme_mod.sp(14)); bl.setSpacing(theme_mod.sp(9))
         # TIER 1 — CALL: te_class + confidence chip + superfamily
         top = QHBoxLayout(); top.setSpacing(theme_mod.sp(10))
-        big = QLabel(cl.get("te_class", "—")); big.setObjectName("classbig")
+        order_withheld = cl.get("outcome") == "withheld"
+        headline = ("Terminal direct-repeat candidate"
+                    if order_withheld and cl.get("te_class") == "repeat/structural-only"
+                    else cl.get("te_class", "—"))
+        big = QLabel(headline); big.setObjectName("classbig")
         top.addWidget(big)
+        if order_withheld:
+            held = QLabel("ORDER WITHHELD"); held.setObjectName("cf"); held.setProperty("level", "Candidate")
+            top.addWidget(held)
         conf = cl.get("confidence", "")
-        if conf:
+        if conf and not order_withheld:
             cfl = QLabel(conf.upper()); cfl.setObjectName("cf"); cfl.setProperty("level", conf)
             top.addWidget(cfl)
         top.addStretch(1)
@@ -2303,7 +2320,7 @@ class MainWindow(QMainWindow):
                                                  ("PAS", "polyA-signal", "PAS · polyA signal (motif)"))
                     if any(e["type"].startswith(pre) for e in rec.get("structural", []))]
             leg = (f"<span style='color:{theme_mod.ARCHCOL['exon']}'>■</span> env exon &nbsp; "
-                   f"<span style='color:{theme_mod.ARCHCOL['intron']}'>■</span> gag–pro–pol intron (fused polyprotein)"
+                   f"<span style='color:{theme_mod.ARCHCOL['intron']}'>■</span> gag–pro–pol interval (env intron)"
                    + "".join(f" &nbsp; <span style='color:{theme_mod.CISCOL[k]}'>■</span> {lbl}" for k, lbl in _cis))
             legw = QLabel(leg); legw.setObjectName("orient"); legw.setTextFormat(Qt.RichText); legw.setWordWrap(True)
             card.bodylay.addWidget(legw)
@@ -2327,9 +2344,10 @@ class MainWindow(QMainWindow):
                 "The polyA-signal row is a sequence motif with its downstream element — advisory context only. "
                 "It does not locate the U3-R-U5 boundaries, the cleavage site, or the transcript end, which "
                 "need RNA evidence TEagle does not use.",
-                f"An LTR pair is accepted at >= {structural_mod.MIN_LTR_IDENTITY:g}% identity. That floor is an "
-                "age limit: LTR copies diverge after insertion, so an older element falls below it and is "
-                "reported as an advisory candidate rather than an LTR.",
+                f"An LTR pair is accepted at >= {structural_mod.MIN_LTR_IDENTITY:g}% identity. This is a "
+                "detection threshold, not a calibrated age boundary: divergence can make older copies more "
+                "likely to fall below it, but identity also depends on lineage, gene conversion, selection, "
+                "sequence quality and detector sensitivity. Sub-threshold pairs are reported as advisory candidates.",
             ]
             t.set_rows([self._struct_row(e) for e in struct], tips=[self._struct_tips(e) for e in struct])
             t.set_row_menu(lambda r: self._struct_menu(struct[r]))
@@ -2524,9 +2542,10 @@ class MainWindow(QMainWindow):
             f"seed + diagonal cluster (k={_SIG(structural_mod.find_ltr, 'k')}, "
             f"≥ {_SIG(structural_mod.find_ltr, 'min_ltr')} bp, "
             f"≥ {structural_mod.MIN_LTR_IDENTITY:g}% identity, "
-            f"≥ {_SIG(structural_mod.find_ltr, 'min_anchors')} anchors — <b>and that identity floor is an age "
-            "limit</b>: the two copies of an LTR are identical at insertion and diverge with time, so an older "
-            "element falls below it and is NOT reported as an LTR. A pair that fails only that floor is now "
+            f"≥ {_SIG(structural_mod.find_ltr, 'min_anchors')} anchors — <b>this is a detection threshold, not "
+            "a calibrated age boundary</b>. Paired LTRs generally diverge after insertion, so older or more "
+            "diverged copies may be missed preferentially; identity also depends on lineage-specific rates, "
+            "gene conversion, selection, sequence quality and detector sensitivity. A pair that fails only that floor is "
             "listed separately as an advisory candidate with its measured identity, so 'below threshold' is "
             "distinguishable from 'nothing found'. Further down, the k-mer seeding itself stops finding the "
             "pair at all, and no threshold change recovers that: where this happens depends on how long the "
@@ -2543,13 +2562,17 @@ class MainWindow(QMainWindow):
             "undetermined and marked <i>tentative</i>, because an endogenised PBS is diverged and a 55% match on random "
             "sequence is not rare; and <b>PPT</b>, a purine-dense run abutting the 3′ LTR (≥ 9 bp, ≥ 82% purine, ≤ 2 "
             "pyrimidine defects, 30 nt window). Coordinates are 0-based half-open, and each row lists its own detection method.<br>"
-            "<b>Superfamily / class</b> — the Wicker&nbsp;2007" + w + " scheme, derived from the domain architecture and "
+            "<b>Class / order / superfamily</b> — the Wicker&nbsp;2007" + w + " scheme, derived from the domain architecture and "
             "structural context; Copia vs Gypsy is called from the strand-aware integrase-vs-RT translation order, not "
-            "ORF length; an env domain with paired LTRs flags an endogenous retrovirus (ERV).<br>"
+            "ORF length. An ERV call requires paired terminal direct repeats together with RT and ENV. Without RT, only "
+            "core capsid/matrix GAG plus PR, INT, or ENV preserves a hedged LTR fragment; paired direct repeats with an "
+            "isolated domain remain a terminal direct-repeat candidate with <b>ORDER WITHHELD</b>.<br>"
             "<b>Reliability</b> — reported on two independent, citable axes rather than one fabricated number: (1) a "
             "per-domain call confidence from the HMMER i-Evalue (Eddy 2011); (2) a categorical domain-completeness "
-            "tier — intact / near-complete / partial / structural-only — mapped to the autonomous/intact criteria of "
-            "Wicker 2007, TEsorter and LTR_retriever, and always scoped to the domain models actually tested.<br>"
+            "tier — intact / near-complete / partial / structural candidate — mapped to the autonomous/intact criteria "
+            "of Wicker 2007, TEsorter and LTR_retriever, and always scoped to the domain models actually tested. A "
+            "completed search with no accepted hit says <i>none detected in the tested panel</i>; a failed search is "
+            "<i>unavailable</i> and unassessed, never an absence, and a dependent repeat-only call is withheld.<br>"
             "<b>Family naming</b> (optional, WSL backend) — RepeatMasker (RMBLAST) against the curated Dfam&nbsp;4.0" + dfam +
             " library; this is the only step that makes a database family call, and it is absent from the offline path.")
 
@@ -2988,15 +3011,16 @@ class MainWindow(QMainWindow):
             items.append((f"Copy coords ({start}–{end})", lambda: self._copy(f"{start}-{end}")))
         return items
 
-    def _src_link(self, key, url=None):
-        """A small clickable 'source' citation label that opens the verified DOI in a browser."""
+    def _src_link(self, key, url=None, label="source"):
+        """A small clickable citation label that opens the verified DOI in a browser."""
         r = REFLINKS.get(key)
         lab = QLabel()
         if not r:
             return lab
         accent = theme_mod.ACCENT[self.theme]
         lab.setTextFormat(Qt.RichText)
-        lab.setText(f'<a href="{url or r["url"]}" style="color:{accent};text-decoration:underline">source</a>')
+        lab.setText(f'<a href="{url or r["url"]}" style="color:{accent};text-decoration:underline">'
+                    f'{html.escape(label)}</a>')
         lab.setOpenExternalLinks(True)
         _kb_links(lab)
         lab.setObjectName("srclink")
@@ -3286,8 +3310,10 @@ class MainWindow(QMainWindow):
             meta = QLabel(meta_text)
             meta.setObjectName("orient"); meta.setWordWrap(True); lay.addWidget(meta)
             srow = QHBoxLayout(); srow.addWidget(QLabel("Methods:"))
-            for k in ("SantaLucia1998", "Owczarzy2008", "ViennaRNA"):
-                srow.addWidget(self._src_link(k))
+            for key, label in (("SantaLucia1998", "SantaLucia 1998"),
+                               ("Owczarzy2008", "OligoAnalyzer convention"),
+                               ("ViennaRNA", "ViennaRNA")):
+                srow.addWidget(self._src_link(key, label=label))
             srow.addStretch(1)
             pair_id = _safe_export_stem(c.get("id"), "pair", trust="generated")
             srow.addWidget(_export_table_btn(t, f"TEagle_{pair_id}_secondary_structure", self))
@@ -3448,7 +3474,8 @@ class MainWindow(QMainWindow):
         """Whole-genome scan of one primer pair via LOCAL isPcr against a downloaded RefSeq assembly. Runtime
         depends on genome size, the installed isPcr build and cached RefSeq assembly, local hardware, and the
         fixed candidate-product-size cap. If the genome is not cached, the backend replies need_prepare and we
-        offer a one-time download. Every genome-wide amplicon is an off-target candidate (not a validated band).
+        offer a one-time download. Products are candidate priming sites, not validated bands; on/off-target
+        labels are applied only when the specimen supplies a matching intended locus.
         `org` is captured at scan start so a later dropdown change can't retarget an in-flight scan/download."""
         self._clear_banner()
         if self._genome_inflight or self._genome_prep_inflight:
@@ -4543,8 +4570,8 @@ class MainWindow(QMainWindow):
                 + (f" · sha256 {db.get('sha256','')[:12]}…" if db.get("sha256") else "")
                 + (f" · seal {seal[:12]}…" if seal else ""))
         self._banner(f"Whole-genome scan · {d.get('organism','')} ({d.get('assemblyName','')}): "
-                     f"{summary.get('verdict', 'scan complete')} — a floor at ≥15 bp 3′-perfect match "
-                     f"(more-diverged copies are not counted){prov}.", level="info")
+                     f"{summary.get('verdict', 'scan complete')} — under isPcr's ≥15 bp minimum perfect "
+                     f"3′-end match requirement (sites outside that rule are not reported){prov}.", level="info")
         if m:
             self._render_provenance(m)
 
@@ -4693,8 +4720,8 @@ class MainWindow(QMainWindow):
 
     def _render_genome_scan(self, lanes, amps, summary):
         """Render a whole-genome off-target scan into its own panel: gel + interpretation (verdict,
-        per-chromosome spread, size cluster) + a FULL match table, ON-TARGET FIRST. On-target = the product
-        at the specimen's own genome locus (when it sits in the scanned assembly); the rest are off-targets,
+        per-assembly-sequence spread, size cluster) + a FULL match table, ON-TARGET FIRST. On-target = the product
+        at the specimen's own genome locus (when it sits in the scanned assembly); the rest are off-target candidate priming sites,
         or — with no design locus — neutral genomic priming sites."""
         _clear_layout(self.genomeBody)
         gel = FigurePanel(lambda bg, L=lanes: figures.svg_gel({"lanes": L}, bg),
@@ -4757,14 +4784,14 @@ class MainWindow(QMainWindow):
                  "co-migration cannot be resolved on a gel — with the full split kept in the table above." if has_locus else "")
         listing = "listed above (on-target first)" if has_locus else "listed above"
         export_listing = "listed on-target first" if has_locus else "listed"
-        note = QLabel(f"{head}{sp}, {listing}.{comig} Every product is a candidate under isPcr's ≥15 bp "
-                      "3′-perfect rule — a specificity screen, not wet-lab-validated bands. The verdict is a heuristic "
+        note = QLabel(f"{head}{sp}, {listing}.{comig} Every product is a candidate under isPcr's default ≥15 bp "
+                      "minimum perfect 3′-end match requirement — a specificity screen, not wet-lab-validated bands. The verdict is a heuristic "
                       "read of the count/spread; the numbers carry the claim.")
         note.setObjectName("orient"); note.setWordWrap(True); self.genomeBody.addWidget(note)
         if scan_table is not None:
             scan_table.export_notes = [
                 f"{head}{sp}, {export_listing}.{comig} Every product is a candidate under isPcr's "
-                ">=15 bp 3-prime-perfect rule: this is a computational specificity screen, not wet-lab-validated "
+                "default >=15 bp minimum perfect 3-prime-end match requirement: this is a computational specificity screen, not wet-lab-validated "
                 "bands. The verdict is a heuristic interpretation of the displayed counts and spread."
             ]
         self._uppercase_buttons(self.genomeBody.parentWidget())   # this path has no post-render theme refresh

@@ -1132,7 +1132,10 @@ function renderStructure(rec){
   const s = rec.structural;
   state.orfs = rec.orfs; state.orfPage = 0; state.domains = rec.domains || [];
   const cl = rec.classification, doms = rec.domains || [];
-  $("#structMeta").textContent = (cl && cl.te_class !== "none" ? cl.te_class + " · " : "") +
+  const orderWithheld = cl && cl.outcome === "withheld";
+  const classHeadline = orderWithheld && cl.te_class === "repeat/structural-only"
+    ? "Terminal direct-repeat candidate" : cl && cl.te_class;
+  $("#structMeta").textContent = (cl && cl.te_class !== "none" ? classHeadline + " · " : "") +
     `${s.length} struct · ${doms.length} dom · ${rec.orfs.length} ORF`;
   const gm = (state.features && fetchedSourceActive()) ? state.features : null;
   if(!(s.length || rec.orfs.length || doms.length || gm)){
@@ -1140,8 +1143,8 @@ function renderStructure(rec){
     return;
   }
   const classBanner = (cl && cl.te_class !== "none") ? `<div class="classbn">
-      <span class="big">${cl.te_class}</span>
-      <span class="cf cf-${cl.confidence}">${cl.confidence} confidence</span>
+      <span class="big">${classHeadline}</span>
+      <span class="cf cf-${cl.confidence}">${orderWithheld ? "ORDER WITHHELD" : cl.confidence + " confidence"}</span>
       <span class="kls">${cl.class}${cl.order ? " · " + cl.order : ""}</span>
       <span class="exp">${cl.explanation}</span></div>` : "";
   const domPanel = doms.length ? `<div class="domarch">
@@ -1152,7 +1155,9 @@ function renderStructure(rec){
         <span class="dm">${d.pfam||""} · aa ${d.aa[0]}–${d.aa[1]} · nt ${d.nt[0]}–${d.nt[1]} · <span title="HMMER bit score — how strongly this region matches the domain profile; higher is stronger">score ${d.score}</span> · <span title="E-value: the number of matches this good expected by chance; lower is more significant (e.g. 1e-30 is highly significant)">E ${Number(d.evalue).toExponential(0)}</span> ${srcChip("Pfam")}</span>
         <span class="db"><button class="btn sm" onclick="event.stopPropagation();designForDomain(${d.nt[0]},${d.nt[1]},'${d.domain}')">⌖ domain PCR</button><span class="caret" id="dcar${i}">▸</span></span>
       </div><div class="domdetail" id="domdet${i}" style="display:none"></div>`).join("")}</div>` :
-      `<div class="mini" style="margin-bottom:12px">No protein domains detected (no RT / integrase / transposase HMM hit above threshold — structural evidence only).</div>`;
+      (cl && cl.domains_unavailable
+        ? `<div class="mini" style="margin-bottom:12px">Protein-domain search unavailable — no domain was tested, so absence is unassessed.</div>`
+        : `<div class="mini" style="margin-bottom:12px">No protein domains detected in the tested Pfam panel (no RT / integrase / transposase HMM hit above threshold — structural evidence only).</div>`);
   const rows = s.map(e => {
     const span = e.element_span || e.five_prime || e.pos || e.upstream || [null,null];
     const arm = e.ltr_len || e.tir_len;                                  // terminal-repeat arm length (LTR/TIR)

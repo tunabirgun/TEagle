@@ -100,6 +100,8 @@ def test_run_genome_pcr_local_scan_seals_assembly(monkeypatch):
     assert r["ok"] and seen["acc"] == "GCF_000001405.40"
     assert r["assemblyAccession"] == "GCF_000001405.40" and r["scope"] == "whole-genome"
     assert r["n_amplicons"] == 1 and r["amplicons"][0]["on_target"] is False
+    assert r["amplicons"][0]["source"] == "NC_000012.12"
+    assert r["amplicons"][0]["sourceIdentitySource"] == "validated_fetch"
     # a local scan IS sealed + reproducible: the assembly (accession + source-FASTA sha256) and isPcr
     # version are in the content-addressed manifest
     m = r["provenance"]
@@ -136,7 +138,8 @@ def test_run_genome_pcr_returns_offtarget_summary(monkeypatch):
     s = r["summary"]
     assert s["n_pair"] == 3 and s["n_single"] == 1 and s["n_sources"] == 2
     assert s["n_pair"] + s["n_single"] == r["n_amplicons"]
-    assert dict(s["per_source"])["NC_1"] == 2 and s["tier"] == "low-copy"
+    assert dict(s["per_source"])["NC_1"] == 2 and s["tier"] == "limited-site"
+    assert "paralog" not in s["verdict"].lower()
 
 
 def test_run_genome_pcr_summary_not_in_seal(monkeypatch):
@@ -579,6 +582,29 @@ def test_analysis_stage_failure_is_structured_and_withholds_structural_absence(m
         assert rec["classification"]["structural_unavailable"] is True
         assert "structural scan did not run" in " ".join(rec["classification"]["evidence"])
     assert engine.validate_analysis_result_document(engine.analysis_result_document(r))
+
+
+def test_domain_stage_failure_does_not_become_absence_or_complete_repeat_classification(monkeypatch):
+    terminal_pair = {"type": "LTR (terminal direct repeat)", "five_prime": [0, 100],
+                     "three_prime": [300, 400], "element_span": [0, 400],
+                     "ltr_len": 100, "identity": 90.0}
+    monkeypatch.setattr(engine.structural, "detect_all", lambda seq: [terminal_pair])
+    monkeypatch.setattr(engine.sequtil, "find_orfs", lambda seq, min_aa=40: [])
+    monkeypatch.setattr(engine.domains, "scan_domains",
+                        lambda seq, evalue=1e-3, max_orfs=engine.domains.MAX_ORFS_SCANNED:
+                        (_ for _ in ()).throw(RuntimeError("domain search failed")))
+    result = engine.run_analyze({"sequence": ">x\n" + "ACGT" * 100})
+    rec = result["records"][0]
+    wording = " ".join([rec["classification"]["explanation"],
+                        *rec["classification"]["evidence"]]).lower()
+    assert result["status"] == "complete_with_stage_failures"
+    assert rec["processing"]["domains"] == {"status": "failed", "errorType": "RuntimeError"}
+    assert rec["processing"]["classification"]["status"] == "withheld"
+    assert rec["processing"]["retroviral"]["status"] == "not_run"
+    assert "domains: none" not in wording and "no coding domain" not in wording
+    assert any(item["dependency"] == "domains" and item["status"] == "unavailable"
+               for item in rec["classification"]["evidenceLedger"])
+    assert engine.validate_analysis_result_document(engine.analysis_result_document(result))
 
 
 def test_classification_failure_leaves_retroviral_stage_not_run_and_validates(monkeypatch):

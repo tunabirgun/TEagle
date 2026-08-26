@@ -29,7 +29,7 @@ ENA = "https://www.ebi.ac.uk/ena/browser/api/fasta/"
 TOOL = "TEagle"
 ACC_RE = re.compile(r"^[A-Za-z]{1,6}_?\d+(\.\d+)?$")   # GenBank/RefSeq nucleotide accession
 
-# On-disk cache: an accession version is immutable, so a fetched sequence is reused instead of
+# On-disk cache: an accession.version identifies a fixed sequence version, so a fetched sequence is reused instead of
 # re-downloaded on every run (the cached FASTA + original retrieval time travel with results).
 from . import appdirs
 CACHE_DIR = os.path.join(appdirs.user_data_dir(), "cache", "fetch")

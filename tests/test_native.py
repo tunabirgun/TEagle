@@ -104,6 +104,81 @@ def _accept_analysis(win, result, sequence=None):
     win._on_analyze(result, generation)
 
 
+def test_struct_card_names_repeat_candidate_and_shows_order_withheld(win):
+    from PySide6.QtWidgets import QLabel
+    from teagle_core import classify
+
+    structural = [{"type": "LTR (terminal direct repeat)", "five_prime": [0, 100],
+                   "three_prime": [300, 400], "element_span": [0, 400],
+                   "ltr_len": 100, "identity": 90.0}]
+    cl = classify.classify(structural, [])
+    rec = {"id": "candidate", "seq": "ACGT" * 100, "valid": True,
+           "composition": {"length": 400, "gc": 50.0, "n": 0.0},
+           "classification": cl, "completeness": cl["completeness"],
+           "structural": structural, "domains": [], "orfs": [], "processing": {}}
+    win.state["records"] = [rec]
+    win._render_struct_card(rec, {})
+    text = " ".join(label.text() for label in win.card_struct.findChildren(QLabel))
+    assert "Terminal direct-repeat candidate" in text
+    assert "ORDER WITHHELD" in text
+
+
+def test_record_summary_preserves_withheld_order_for_table_exports(win):
+    from teagle_core import classify
+
+    structural = [{"type": "LTR (terminal direct repeat)", "five_prime": [0, 100],
+                   "three_prime": [300, 400]}]
+    cl = classify.classify(structural, [], domains_ok=False)
+    rec = {"id": "candidate", "valid": True, "classification": cl,
+           "completeness": cl["completeness"], "structural": structural, "domains": [],
+           "composition": {"length": 400, "gc": 50.0, "n": 0.0, "ambiguous": 0.0},
+           "processing": {"domains": {"status": "failed"},
+                          "classification": {"status": "withheld"}}}
+    row = dict(zip(win._RECORD_HEADERS, win._record_summary_rows([rec])[0]))
+    assert row["Classification"] == "repeat/structural-only"
+    assert row["Outcome"] == "withheld"
+    assert row["Domain architecture"] == "withheld"
+    assert row["Domain evidence"] == "unavailable_failed"
+    assert "unavailable (scan failed)" in row["Rationale"]
+    assert "domains=failed" in row["Processing"]
+
+
+def test_record_summary_hedges_round_trip_through_csv_tsv_and_xlsx(win, tmp_path):
+    import csv
+    import widgets
+    from openpyxl import load_workbook
+    from teagle_core import classify
+
+    structural = [{"type": "LTR (terminal direct repeat)", "five_prime": [0, 100],
+                   "three_prime": [300, 400]}]
+    cl = classify.classify(structural, [], domains_ok=False)
+    rec = {"id": "candidate", "valid": True, "classification": cl,
+           "completeness": cl["completeness"], "structural": structural, "domains": [],
+           "composition": {"length": 400, "gc": 50.0, "n": 0.0, "ambiguous": 0.0},
+           "processing": {"domains": {"status": "failed"},
+                          "classification": {"status": "withheld"}}}
+    expected = dict(zip(win._RECORD_HEADERS, win._record_summary_rows([rec])[0]))
+    for suffix, delimiter in ((".csv", ","), (".tsv", "\t")):
+        path = tmp_path / f"summary{suffix}"
+        widgets.write_table(win._RECORD_HEADERS, [list(expected.values())], str(path))
+        with path.open(encoding="utf-8-sig", newline="") as fh:
+            rows = list(csv.reader(fh, delimiter=delimiter))
+        assert dict(zip(rows[0], rows[1])) == {key: str(value) for key, value in expected.items()}
+    path = tmp_path / "summary.xlsx"
+    widgets.write_table(win._RECORD_HEADERS, [list(expected.values())], str(path))
+    rows = list(load_workbook(path, read_only=True, data_only=True).active.iter_rows(values_only=True))
+    xlsx = dict(zip(rows[0], rows[1]))
+    for key in ("Classification", "Outcome", "Domain architecture", "Domain evidence", "Rationale", "Processing"):
+        assert xlsx[key] == expected[key]
+
+
+def test_record_summary_does_not_mislabel_classification_or_domain_architecture(win):
+    assert "Classification" in win._RECORD_HEADERS
+    assert "Domain architecture" in win._RECORD_HEADERS
+    assert "Class" not in win._RECORD_HEADERS
+    assert "Order" not in win._RECORD_HEADERS
+
+
 def test_rail_toggle_collapses_and_restores(win):
     # the specimen panel collapses to free width and reopens, restoring the split (state tracked explicitly,
     # since isVisible() is unreliable before the window is shown)
@@ -143,6 +218,10 @@ def test_methods_html_states_databases_and_params(win):
     assert "k=13" in html and "80%" in html                                                   # structural heuristic params
     assert "Wicker" in html                                                                   # classification scheme
     assert "Dfam" in html and "RepeatMasker" in html                                          # family naming (WSL)
+    assert "an env domain with paired LTRs flags" not in html
+    assert "core capsid/matrix GAG" in html and "ORDER WITHHELD" in html
+    assert "none detected in the tested panel" in html
+    assert "unavailable" in html and "unassessed" in html
 
 
 def test_ui_scale_button_present(win):
@@ -712,6 +791,14 @@ def test_native_pcr_and_genome_scan_tables_use_public_sources(win):
     assert scan_table.rows_data()[0][1] == public_id
     assert raw not in repr(pcr_table.rows_data()) + repr(scan_table.rows_data())
 
+    trusted = {**amp, "source": "NC_000012.12", "sourceIdentitySource": "validated_fetch"}
+    win._render_genome_scan([{"label": "genome", "amplicons": [trusted], "has_locus": True}], [trusted],
+                            {"verdict": "fixture", "has_locus": True, "n_on": 1, "n_off": 0,
+                             "n_single": 0, "n_pair": 1, "per_source": []})
+    trusted_table = next(table for table in win.genomeBody.parentWidget().findChildren(DataTable)
+                         if table.export_base == "TEagle_offtarget_scan")
+    assert trusted_table.rows_data()[0][1] == "NC_000012.12"
+
 
 def test_no_te_repeat_exports_use_the_two_exact_displayed_tables(win, monkeypatch):
     import main
@@ -868,7 +955,7 @@ def test_fetched_gene_model_has_visible_shared_export_hook(win):
 
 
 def test_secondary_structure_detail_has_visible_table_export(win, monkeypatch):
-    from PySide6.QtWidgets import QApplication, QDialog, QPushButton
+    from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPushButton
     from widgets import DataTable
 
     metric = {"p3": -2.5, "vrna": -2.0, "flag": "caution", "agree": "agree"}
@@ -888,6 +975,11 @@ def test_secondary_structure_detail_has_visible_table_export(win, monkeypatch):
     assert table.export_base == "TEagle_P1_secondary_structure"
     assert table.rowCount() == 6 and table.export_notes
     assert any(button.text().upper() == "EXPORT TABLE" for button in dialog.findChildren(QPushButton))
+    links = [label.text() for label in dialog.findChildren(QLabel) if label.objectName() == "srclink"]
+    assert any(">SantaLucia 1998<" in link for link in links)
+    assert any(">OligoAnalyzer convention<" in link for link in links)
+    assert any(">ViennaRNA<" in link for link in links)
+    assert not any(">source<" in link for link in links)
     dialog.close()
 
 
@@ -936,7 +1028,7 @@ def test_genome_scan_renders_in_its_own_panel(win):
         "amplicons": [{"source": "NC_1", "start": 10, "end": 210, "length": 201, "strand": "+",
                        "single_primer": False, "on_target": True}],
         "summary": {"n_on": 1, "n_off": 0, "n_pair": 1, "n_single": 0, "has_locus": True,
-                    "verdict": "copy-specific — 1 on-target", "per_source": [("NC_1", 1)],
+                    "verdict": "1 on-target product; no additional priming site detected", "per_source": [("NC_1", 1)],
                     "size_mode": 201, "size_mode_n": 1, "size_min": 201, "size_max": 201},
         "provenance": {}})
     assert win.genomeBody.count() > 1                          # gel + verdict + table + note rendered in the genome panel

@@ -11,7 +11,23 @@ def test_structural_failure_never_becomes_structural_absence():
     result = classify.classify([], [rt, rh], structural_ok=False)
     assert result["structural_unavailable"] is True
     assert result["te_class"] != "LINE"
+    assert result["order"] is None
     assert "structural scan did not run" in " ".join(result["evidence"])
+
+
+@pytest.mark.parametrize("module,hmm", [
+    ("GAG", "Gag_p24"),
+    ("PR", "RVP"),
+    ("RNaseH", "RNase_H"),
+    ("ENV", "TLV_coat"),
+])
+def test_structural_failure_keeps_retroelement_order_unassigned(module, hmm):
+    rt = {"domain": "RT", "hmm": "RVT_1", "nt": [100, 300], "strand": "+", "orf": 0, "score": 50}
+    corroborator = {"domain": module, "hmm": hmm, "nt": [320, 450], "strand": "+", "orf": 0, "score": 40}
+    result = classify.classify([], [rt, corroborator], structural_ok=False)
+    assert result["class"].startswith("Class I")
+    assert result["te_class"] == "retro/unassigned"
+    assert result["order"] is None
 
 
 def test_structural_failure_marks_transposase_termini_unassessed():
@@ -43,6 +59,8 @@ def test_structural_failure_with_no_domains_withholds_classification():
 def test_structural_failure_uses_dependency_tagged_evidence(domains_in, expected_outcome):
     result = classify.classify([], domains_in, structural_ok=False)
     assert result["outcome"] == expected_outcome
+    expected_prefix = "Classification withheld" if expected_outcome == "withheld" else "Classified as"
+    assert result["explanation"].startswith(expected_prefix)
     assert result["evidenceLedger"]
     assert {item["dependency"] for item in result["evidenceLedger"]} <= {"domains", "structural"}
     joined = " ".join(result["evidence"]).lower()
@@ -206,6 +224,58 @@ def _dom(code, s, e, score=100.0, hmm=None):
     # pass hmm="zf-CCHC_5" to model a nucleocapsid-only gag hit.
     return {"domain": code, "label": code, "class": "retro", "score": score, "strand": "+", "nt": [s, e],
             "hmm": hmm if hmm is not None else ("Gag_p24" if code == "GAG" else code)}
+
+
+@pytest.mark.parametrize("extra_structure", [
+    [],
+    [{"type": "TSD (target-site duplication)", "length": 5,
+      "upstream": [0, 5], "downstream": [9000, 9005]}],
+    [{"type": "TSD (target-site duplication)", "length": 3,
+      "upstream": [0, 3], "downstream": [9000, 9003]},
+     {"type": "PBS (primer-binding site)", "pos": [200, 218], "identity": 0.7}],
+])
+def test_terminal_direct_repeats_without_trusted_coding_evidence_withhold_order(extra_structure):
+    cl = classify.classify(_mock_ltr() + extra_structure, [])
+    assert cl["class"] == "unclassified"
+    assert cl["order"] is None
+    assert not cl["te_class"].startswith("LTR")
+    assert cl["outcome"] == "withheld"
+    assert "LTR retrotransposon" not in (cl["superfamily"] or "")
+    assert "LTR retroelement" not in cl["completeness"]["kind"]
+    assert "none detected in tested panel" in cl["explanation"]
+
+
+@pytest.mark.parametrize("code", ["EN", "YR", "RNaseH", "CHR", "ORF1", "GAG", "PR", "ENV", "INT"])
+def test_isolated_domain_plus_terminal_direct_repeats_does_not_license_ltr_order(code):
+    cl = classify.classify(_mock_ltr(), [_dom(code, 1000, 1400)])
+    assert cl["class"] == "unclassified"
+    assert cl["order"] is None
+    assert not cl["te_class"].startswith("LTR")
+    assert cl["outcome"] == "withheld"
+    assert code in cl["completeness"]["present"]
+
+
+@pytest.mark.parametrize("module,hmm", [("PR", "RVP"), ("INT", "rve"), ("ENV", "TLV_coat")])
+def test_core_gag_plus_any_trusted_retroviral_module_preserves_ltr_fragment_call(module, hmm):
+    doms = [_dom("GAG", 1000, 1400, hmm="Gag_p24"),
+            _dom(module, 1500, 1900, hmm=hmm)]
+    cl = classify.classify(_mock_ltr(), doms)
+    assert cl["te_class"] == "LTR/partial"
+    assert cl["outcome"] == "complete"
+
+
+def test_failed_domain_scan_is_unavailable_and_repeat_only_classification_is_withheld():
+    cl = classify.classify(_mock_ltr(), [], domains_ok=False)
+    wording = " ".join([cl["explanation"], *cl["evidence"]]).lower()
+    assert cl["domains_unavailable"] is True
+    assert cl["outcome"] == "withheld"
+    assert not cl["te_class"].startswith("LTR")
+    assert "domains: none" not in wording
+    assert "no coding domain" not in wording
+    assert any(item["dependency"] == "domains" and item["status"] == "unavailable"
+               for item in cl["evidenceLedger"])
+    assert any(item["dependency"] == "structural" and item["status"] == "complete"
+               for item in cl["evidenceLedger"])
 
 
 def test_erv_full_architecture_is_intact():

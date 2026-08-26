@@ -25,8 +25,8 @@ _HDR = re.compile(r"^>(\S+):(\d+)([+-])(\d+)\s+(\S+)\s+(\d+)bp\s+(\S+)\s+(\S+)\s
 
 def parse_ispcr(fasta_text: str) -> list:
     """Parse isPcr FASTA output into amplicon dicts. Query rows are named 'pair' (fwd+rev),
-    'fwdonly' (fwd+fwd) and 'revonly' (rev+rev); the last two are single-primer products. Every
-    genome-wide product is off-target by definition (a TE primer pair has no one designed locus)."""
+    'fwdonly' (fwd+fwd) and 'revonly' (rev+rev); the last two are single-primer products. Parsed
+    products remain neutral until an intended locus, when available, is applied upstream."""
     amps = []
     for line in fasta_text.splitlines():
         line = line.rstrip()
@@ -45,7 +45,7 @@ def parse_ispcr(fasta_text: str) -> list:
             "single_primer": name in ("fwdonly", "revonly") or fwd.upper() == rev.upper(),
             "pair": name, "on_target": False,
         })
-    # stable order: fewest surprises first — by chromosome then position
+    # stable order: fewest surprises first — by assembly sequence then position
     amps.sort(key=lambda a: (a["single_primer"], a["source"], a["start"]))
     return amps
 
@@ -56,11 +56,12 @@ def summarize(amps: list, has_locus: bool = False) -> dict:
 
     On/off-target is defined relative to an intended locus. When the primers were designed on a locus that
     sits in the scanned assembly (has_locus=True), the product overlapping that locus is the ON-TARGET
-    (marked on_target=True upstream) and the rest are OFF-target paralogs; the verdict is then a specificity
-    call — how many off-target sites accompany the intended one. When the primers are a bare consensus with
+    (marked on_target=True upstream) and the rest are OFF-target candidate priming sites; the verdict is then a specificity
+    site-count summary — how many off-target candidate priming sites accompany the intended one. When the primers are a bare consensus with
     no genome position (has_locus=False), there is no single intended locus, so a genome-wide product is
-    neither on- nor off-target — it is a neutral GENOMIC PRIMING SITE (candidate), and the verdict reads
-    family-generic vs locus-specific. isPcr's perfect-3' rule makes the count a conservative floor. Pure."""
+    neither on- nor off-target — it is a neutral GENOMIC PRIMING SITE (candidate), and the verdict reports
+    only the observed site-count pattern. The strict minimum perfect 3'-end match requirement can miss tolerated terminal mismatches,
+    while reported sites remain computational candidates, so the count is not a validated bound. Pure."""
     pair = [a for a in amps if not a.get("single_primer")]
     single = [a for a in amps if a.get("single_primer")]
     on = [a for a in pair if a.get("on_target")]
@@ -78,25 +79,27 @@ def summarize(amps: list, has_locus: bool = False) -> dict:
         if n_on == 0 and n_off == 0:
             tier, verdict = "none", "no genome-wide product — the primers do not amplify anywhere in this assembly"
         elif n_on == 0:
-            tier, verdict = "off-target-only", (f"{n_off} off-target site(s) and NO product at the intended locus — "
-                                                "the pair amplifies elsewhere, not the designed target")
+            tier, verdict = "intended-locus-negative", (f"{n_off} off-target candidate priming site(s); "
+                                                         "no product at the intended locus under current settings")
         elif n_off == 0:
-            tier, verdict = "specific", "copy-specific — 1 on-target product, no off-target site in this assembly"
+            tier, verdict = "intended-only", ("1 on-target product; no additional priming site detected in this "
+                                                "assembly under current settings")
         elif n_off <= 5:
-            tier, verdict = "low-off-target", f"1 on-target + {n_off} off-target site(s) — low-copy / paralogous"
+            tier, verdict = "limited-off-target", (f"1 on-target + {n_off} off-target candidate priming site(s) — "
+                                                     "limited off-target count")
         else:
-            tier, verdict = "family-generic", (f"1 on-target + {n_off} off-target site(s) across {n_sources} "
-                                               "sequence(s) — family-generic (expected for a TE-consensus pair)")
+            tier, verdict = "many-off-target", (f"1 on-target + {n_off} off-target candidate priming site(s) "
+                                                 f"across {n_sources} assembly sequence(s) — many-site pattern")
     else:
         if n_pair == 0:
             tier, verdict = "none", "no genome-wide priming site (in this assembly, at the current 3' match length)"
         elif n_pair == 1:
-            tier, verdict = "locus-specific", "locus-specific in this assembly (1 genomic priming site)"
+            tier, verdict = "single-site", "single-site pattern (1 genomic priming site)"
         elif n_pair <= 5:
-            tier, verdict = "low-copy", f"low-copy / paralogous ({n_pair} genomic priming sites)"
+            tier, verdict = "limited-site", f"limited-site pattern ({n_pair} genomic priming sites)"
         else:
-            tier, verdict = "family-generic", (f"family-generic — {n_pair} genomic priming sites across {n_sources} "
-                                               "sequence(s) (expected for a TE-consensus pair)")
+            tier, verdict = "many-site", (f"many-site pattern — {n_pair} genomic priming sites across {n_sources} "
+                                           "assembly sequence(s)")
     return {"n_total": len(amps), "n_pair": n_pair, "n_on": n_on, "n_off": n_off, "n_single": len(single),
             "n_sources": n_sources, "per_source": per_source, "has_locus": has_locus,
             "size_mode": size_mode, "size_mode_n": size_mode_n, "size_min": size_min, "size_max": size_max,

@@ -5,7 +5,7 @@ Each primary accession is a public GenBank record, and each expected biological 
 cited paper or annotated in the record. A separate bundled synthetic construct is used only as a negative
 control.
 
-The expected biological features below come from the cited publications or public records. They are interpretive checks, not a claim that the 3.9.0 release has reproduced every value. Clean-machine release validation is recorded separately, and no new 3.9.0 classification, assay, or prospective benchmark result is claimed in this guide. Two boundary examples deliberately do *not* use the published length as an exact acceptance criterion; see §6.
+The expected biological features below come from the cited publications or public records. They are interpretive checks, not a claim that the 4.0.0 release has reproduced every value. Clean-machine release validation is recorded separately, and no 4.0.0 benchmark or prospective wet-lab result is claimed in this guide. Protocol 2.3.6 results remain version-locked to TEagle 3.9.0. Two boundary examples deliberately do *not* use the published length as an exact acceptance criterion; see §6.
 
 Work down the list. Each specimen is chosen to drive a different branch of the tool, and together with
 the extras that follow they cover panels 01, 02 and 04–07, the splice-detection card and the

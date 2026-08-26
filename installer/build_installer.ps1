@@ -80,9 +80,10 @@ $candidates = @(
 )
 $iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $iscc) { throw "ISCC.exe not found. Install Inno Setup 6 (winget install JRSoftware.InnoSetup)." }
-$innoLines = @(Get-Content -LiteralPath $buildLock | Where-Object { $_ -match '^\s*InnoSetup==([^\s#]+)\s*$' })
-if ($innoLines.Count -ne 1) { throw "requirements-build.txt must contain exactly one InnoSetup==<version> pin" }
-$innoRequired = ([regex]::Match($innoLines[0], '^\s*InnoSetup==([^\s#]+)\s*$')).Groups[1].Value
+$innoPattern = '^\s*#\s*Native build tool:\s*InnoSetup==([^\s#]+)\s*$'
+$innoLines = @(Get-Content -LiteralPath $buildLock | Where-Object { $_ -match $innoPattern })
+if ($innoLines.Count -ne 1) { throw "requirements-build.txt must contain exactly one commented Native build tool: InnoSetup==<version> pin" }
+$innoRequired = ([regex]::Match($innoLines[0], $innoPattern)).Groups[1].Value
 $innoInstall = Split-Path -Parent $iscc
 $innoRegistry = @(
   Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1' -ErrorAction SilentlyContinue

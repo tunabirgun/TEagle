@@ -685,6 +685,14 @@ def _dialog():
     return InstallDialog()
 
 
+def test_installer_row_snap_removes_only_the_partial_button_slice():
+    from install_dialog import InstallDialog
+
+    assert InstallDialog._partial_row_delta(574, 0, [(0, 48), (54, 102), (552, 600)]) == 22
+    assert InstallDialog._partial_row_delta(574, 0, [(0, 48), (54, 102), (526, 574)]) == 0
+    assert InstallDialog._partial_row_delta(300, 100, [(80, 130), (180, 230), (390, 440)]) == 10
+
+
 def test_optional_partition_offers_install_before_it_exists():
     """The two uncurated partitions are never installed by default, so "Repair" was the first word a
     user met for a download they had not yet run."""
@@ -841,6 +849,9 @@ def test_curated_coverage_is_stated_per_lineage_and_never_as_one_number():
     assert backend_text.count("{_DFAM_YEAST_ADDITIONAL}") >= 2
     desc = next(c[3] for c in wsl._COMP_META if c[0] == "dfam_unc_euk")
     assert all(str(n) in desc for n in yeast_counts)
+    assert "copia, gypsy, hobo" not in desc.lower()
+    assert "cannot be named without it" not in desc.lower()
+    assert "many lineage-specific families may be unavailable" in desc.lower()
 
 
 _MULTI = [

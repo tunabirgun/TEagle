@@ -1,5 +1,5 @@
 """Managed WSL2 backend — runs the Linux-only annotation stack (RepeatMasker + Dfam)
-for family-level TE classification (Layer A homology).
+for optional family-level homology naming and genome annotation.
 
 Security: native Windows never runs a Linux shell built from user input. Commands go to
 WSL via fixed argument vectors; the user's sequence is piped in as STDIN (data, never
@@ -992,9 +992,9 @@ _COMP_META = [
     ("dfam_unc_euk",  "Dfam uncurated · Eukaryota (optional)", True,
      f"Optional, 3.9 GiB download that unpacks to {_gib(_DFAM_UNPACKED_B['dfam_unc_euk'])} — leave about "
      f"{_gib(_DFAM_UNPACKED_B['dfam_unc_euk'] + 5 * 1073741824)} free in WSL, since the archive and the "
-     "library it unpacks to are both on disk for a while. Adds the uncurated eukaryote "
-     "families — copia, gypsy, hobo, Ac, Tnt1, Tc1, the yeast Ty elements and most plant/invertebrate TEs "
-     "are uncurated in Dfam 4.0 and cannot be named without it. Installing it is only half of what is "
+     "library it unpacks to are both on disk for a while. Adds the uncurated eukaryote families. Many "
+     "lineage-specific families may be unavailable in curated-only mode; consult the live lineage-specific "
+     "count before deciding whether to add this partition. Installing it is only half of what is "
      "needed: RepeatMasker searches curated families ONLY unless it is asked for both, so choose the "
      "'include uncurated families' library option to actually use what this downloads. Measured on baker's "
      f"yeast, curated-only searches {_DFAM_YEAST_CURATED} of {_DFAM_YEAST_TOTAL} family models and finds "

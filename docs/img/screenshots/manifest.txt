@@ -1,15 +1,15 @@
-TEagle documentation screenshots — 2026-08-22 08:17 · TEagle v3.9.0 · screen 1920x1080 · window 1500x1150 · theme light · UI scale 1.0
+TEagle documentation screenshots — 2026-08-26 00:52 · TEagle v4.0.0 · screen 1920x1080 · window 1500x1150 · theme light · UI scale 1.0
 Every accepted figure is bound to this capture sequence; 'runs' = screenshot_runs.py, 'recap' = recapture_shots.py.
 
-OK    classify_copia             [runs  this run   1109x1643 sha256=3f58c5e9adb73b3c5d849717c3cd902f9cb6e7b37948730424cfa65aece02ddd]  Classification card: LTR/Copia specimen (M11240) — LTR pair, PBS/PPT, domain order
+OK    classify_copia             [runs  this run   1109x1643 sha256=92398b5e55c1ad38aabed8e356f7cd16d172677d57a721346f11239b33533161]  Classification card: LTR/Copia specimen (M11240) — LTR pair, PBS/PPT, domain order
                                  -> 1109x1643  M11240 -> LTR/Copia / High
-OK    classify_gypsy             [runs  this run   1109x1694 sha256=7cd3bfd24bcc0aae889468082ba02f1681099741409c25a7f68922703b2395c0]  Classification card: LTR/Gypsy specimen (M12927) — INT downstream of RT
+OK    classify_gypsy             [runs  this run   1109x1694 sha256=d60a15c923418958bfdb14f6e18bfd1239963934376dd7d847ddc192d3d2c90c]  Classification card: LTR/Gypsy specimen (M12927) — INT downstream of RT
                                  -> 1109x1694  M12927 -> LTR/Gypsy / High
-OK    classify_line              [runs  this run   1109x1741 sha256=512eddab6e477eeae015e4016e37f75cb890f9d8cf344c8d0349ffd4432f5198]  Classification card: LINE specimen (M80343) — 3' poly-A tail, RT domain, no terminal repeats
+OK    classify_line              [runs  this run   1109x1741 sha256=fa7ce915cc5ab5d5613d4c9a630b0189276d6e91116c05f38383835b8c381f5a]  Classification card: LINE specimen (M80343) — 3' poly-A tail, RT domain, no terminal repeats
                                  -> 1109x1741  M80343 -> LINE / Moderate
-OK    classify_dna_tc1           [runs  this run   1109x1519 sha256=31fb72a9aab083c904bcff15bbdbfe063dc88b8c97b6e1a0102ac502e328bba7]  Classification card: DNA/Tc1 specimen (X01005) — TIR pair + transposase
+OK    classify_dna_tc1           [runs  this run   1109x1519 sha256=185be4f2dfd4848d6769f44cdcbbd9feb6e4ac935b21db42ccf50dbc4907a1ae]  Classification card: DNA/Tc1 specimen (X01005) — TIR pair + transposase
                                  -> 1109x1519  X01005 -> DNA/Tc1-Mariner / Moderate
-OK    classify_dna_2             [runs  this run   1109x1590 sha256=e900a1d886d8e3ef97ae474ff522f7095c24c7ba7de6b2766708726b88ec0dbd]  Classification card: second DNA-transposon specimen (X05424)
+OK    classify_dna_2             [runs  this run   1109x1590 sha256=a336261008bf27a6b8d2fc59a160570e306c75f7f7a42674f360f4879d77d945]  Classification card: second DNA-transposon specimen (X05424)
                                  -> 1109x1590  X05424 -> DNA/hAT / Moderate
 OK    primers_success            [runs  this run   1109x752 sha256=14143177234aec6c36f9039d52eb8bc959696cec3ec90236c45a615533767ef7]  Primer-design card: ranked candidate pairs with per-pair secondary-structure QC
                                  -> 1109x752  5 pairs
@@ -19,80 +19,94 @@ OK    pcr_off_target             [runs  this run   1109x1037 sha256=b72cc9ba3a09
                                  -> 1109x1037  3 target-unassessed product(s) across repeated-LTR priming sites
 OK    notify_success             [runs  this run   332x147 sha256=aaa0a0699d5c041ede50c1710aebd54e179a500b4f659f63c4010635ea6b2a8b]  Notification dialog, success level
                                  -> 332x147  success
-OK    notify_info                [runs  this run   332x164 sha256=9a8579345694400bc5d778419a7570164180b2cf96d0bf978d873b254aa63c06]  Notification dialog, info level
+OK    notify_info                [runs  this run   332x164 sha256=d0f7ac650b913687a8cdc9f8f2ee48f1a17951a6106ca183754d9bfe9d237d4d]  Notification dialog, info level
                                  -> 332x164  info
 OK    notify_error               [runs  this run   332x130 sha256=63613c6aabbc6de1f9d341bd3107818ede30a5157f3d01bcad78068496500fb3]  Notification dialog, error level
                                  -> 332x130  error
 OK    manage_genomes_panel       [runs  this run   1180x995 sha256=da8f85c098ee985c8bc90905716680d5c0e62d148b4cf406ad839b617fc89c3e]  Manage-genomes dialog: full organism catalogue, per-row download/delete
                                  -> 1180x995  tabular control panel
-OK    genome_scan_result         [runs  this run   1109x1227 sha256=31577e32ef6622a0eed25b6199bc0cbf5165099d778b5ea5acbc2f45ee375562]  Whole-genome off-target scan card (panel 06): gel + verdict + full match table
-                                 -> 1109x1227  1 on / 48 off · 1 on-target + 48 off-target site(s) across 13 sequence(s) —
+OK    genome_scan_result         [runs  this run   1109x1227 sha256=c06d1d1deb5c4a20cb1524c9d227c0be5cea6e66e396ef125411c7ccd4999ba9]  Whole-genome off-target scan card (panel 06): gel + verdict + full match table
+                                 -> 1109x1227  1 on / 48 off · 1 on-target + 48 off-target candidate priming site(s) across
 OK    splice_multi_exon          [runs  this run   1109x728 sha256=9a61064054dd4273617d8ce26ceb82bbcc7f7bc475ad61a3214058a75907164a]  Splice card: multi-exon alignment — exon/intron track over the genomic window
                                  -> 1109x728  J00265 x NM_000207 -> 3 exons / 2 introns
 OK    splice_single_exon_trap    [runs  this run   1109x667 sha256=7cacf3ee6c71ead2c3a09505b75fc115308c2d90a6952653008bb162dcea3dc9]  Splice card: gapless alignment (0 introns) + the genomic-slice foot-gun warning
                                  -> 1109x667  genomic-slice foot-gun: 0 introns
 OK    family_annotation          [runs  this run   1109x509 sha256=b103b20f01cf828a599a82c60029f0211ac2a0040b862c29ec4264b097950bea]  Dfam family-annotation card (RepeatMasker), real backend run
                                  -> 1109x509  2 returned row(s): 2 TE-classified, 0 non-TE repeat, 0 unclassified; all categories displayed and exported
-OK    herv_k_domains             [recap bound recap 1109x1997 sha256=5695df4a548c9a4d18835fac68ed5b9ccf3ffb5134e2abc77c051ca5e74c441e]  Classification card, HERV-K113: full GAG-POL-ENV architecture + per-domain confidence
+OK    herv_k_domains             [recap bound recap 1109x1997 sha256=e0d1655280cc8171c3ca59c16ddf92464f1a0920f0f452bdb0c9a4dff5209a4b]  Classification card, HERV-K113: full GAG-POL-ENV architecture + per-domain confidence
                                  -> HERV-K113 GAG-POL-ENV + per-domain confidence + completeness tier
-OK    herv_h_partial             [recap bound recap 1109x1950 sha256=745b39acbef869ec8fd783bf3d72171fb8319b3072b73386d359a72f95743dc1]  Classification card, HERV-H: partial completeness tier, single 'not detected' line
+OK    herv_h_partial             [recap bound recap 1109x1950 sha256=0c48c464855687407ff7324b09b1bafe3627a1336a96a174b362330492139d3a]  Classification card, HERV-H: partial completeness tier, single 'not detected' line
                                  -> HERV-H partial tier, single 'not detected' line
-OK    methods_databases          [recap bound recap 1109x1908 sha256=411fc566490b044f73e17647ea7ba592194ff38fee0a4b93d8b48e97e06b6007]  Classification card with the methods & databases disclosure expanded
+OK    methods_databases          [recap bound recap 1109x1936 sha256=65a2bc259ae4005e29746a76c633f2bec35973734edf8274dbfedb4fd3f95fe3]  Classification card with the methods & databases disclosure expanded
                                  -> methods & databases disclosure expanded
-OK    primer_structure_detail    [recap bound recap 640x460 sha256=ca1ead49680fa7d0bd10d367d96bfa87b432caddb6e95a91ecd2693d2610d6f1]  Secondary-structure detail dialog: primer3 vs ViennaRNA, side by side
+OK    primer_structure_detail    [recap bound recap 640x460 sha256=db3a9c104f59d914cc786dfcd3868cb60c08e5d090bc94d3e1a4c8bbb368457c]  Secondary-structure detail dialog: primer3 vs ViennaRNA, side by side
                                  -> primer3 vs ViennaRNA ΔG, side by side
 OK    subregion_picker           [recap bound recap 478x200 sha256=5936cd33834b4943713351bf4437a5a6b4463fa30b0d4e312ce96a8d21079c67]  Sub-region picker dialog: choose an interval inside a feature
                                  -> pick an interval inside a feature
-OK    genome_scan_no_locus       [recap bound recap 1109x1213 sha256=80a088a635ca2a73d060554ec1982dd267c5a6d66c3f2e9e2b17838f4f520ae6]  Whole-genome scan with no design locus — neutral 'genomic priming site' wording
+OK    genome_scan_no_locus       [recap bound recap 1109x1213 sha256=c06c29e8a85c12025b78e964257dee657c9d7d432793f3ecb59ebbb09406c725]  Whole-genome scan with no design locus — neutral 'genomic priming site' wording
                                  -> live scan with no design locus — neutral 'genomic priming site' wording
 
 docs/img/ (README figures) — captured by recapture_shots.py:
-OK    overview.png               [recap bound recap 1500x1150 sha256=0580d00d7b96e3683662069677cdcce67d025213bd0ace393146c888ded5057a]  Whole main window: specimen rail, classification card, interactive genome viewer, evidence tables
-                                 -> header v3.9.0 · 1500x1150
+OK    overview.png               [recap bound recap 1500x1150 sha256=1970b7831c3ece3fe78ef5605d9cc971bd7aa051ae99f00bd60ec9ae78e5c225]  Whole main window: specimen rail, classification card, interactive genome viewer, evidence tables
+                                 -> header v4.0.0 · 1500x1150
 OK    primers.png                [recap bound recap 1109x752 sha256=14143177234aec6c36f9039d52eb8bc959696cec3ec90236c45a615533767ef7]  Panel 04 — primer design: presets, advanced parameters, ranked pair table
                                  -> panel 04 — 5 ranked pairs on M11240, per-pair structure QC · 1109x752
 OK    pcr_gel.png                [recap bound recap 1109x977 sha256=45bf09217fa6070d6ebe6d9516907aa71c248f5220e188ee9a901398156ffaca]  Panel 05 — in-silico PCR: staged pair, to-scale agarose gel, amplicon table
                                  -> panel 05 — staged pair, to-scale gel, 1 amplicon(s) on M11240 · 1109x977
-OK    genome_scan.png            [recap bound recap 1109x1227 sha256=31577e32ef6622a0eed25b6199bc0cbf5165099d778b5ea5acbc2f45ee375562]  Panel 06 — whole-genome off-target scan (isPcr): gel, verdict, match table
+OK    genome_scan.png            [recap bound recap 1109x1227 sha256=c06d1d1deb5c4a20cb1524c9d227c0be5cea6e66e396ef125411c7ccd4999ba9]  Panel 06 — whole-genome off-target scan (isPcr): gel, verdict, match table
                                  -> REAL on+off-target (1 on / 48 off) · 1109x1227
 OK    coord_fetch.png            [recap bound recap 340x1070 sha256=6cfd80a6f43b14b842124f31a6aec7f7dc293a46b701d25c0bd8116b0b4da5f2]  Panel 01 — coordinate fetch (organism + chr:start-end) in the specimen rail
                                  -> panel 01 rail after a real NCBI coordinate fetch — chr13:33,016,423-33,066,143 · GRCh38.p14 · 49,721 bp · 340x1070
-OK    installer.png              [recap bound recap 900x1048 sha256=c6edb10c2942361c509b1cc7e5fcedfb19e7e4bd4e34962d339c51b1df0ca2b9]  Backend installer: per-component status, Install or Repair per component, Install all, Check integrity, live log
-                                 -> backend installer — per-component status, per-component Install (absent) or Repair (present), Install all, Check integrity, live log · 900x1048
+OK    installer.png              [recap bound recap 900x1043 sha256=ce57e652069b8df868255709d475cc132a6daf6e2ffc7eb6e74b6587a4cabe4d]  Backend installer: per-component status, Install or Repair per component, Install all, Check integrity, live log
+                                 -> backend installer — per-component status, per-component Install (absent) or Repair (present), Install all, Check integrity, live log · 900x1043
 
 report/manual_figures/ (LaTeX manual + report figures) — captured by recapture_shots.py:
-OK    overview.png                 [recap bound recap 1500x1150 sha256=0580d00d7b96e3683662069677cdcce67d025213bd0ace393146c888ded5057a]  Whole main window — the figure the manual opens with
-                                   -> header v3.9.0 · 1500x1150
+OK    overview.png                 [recap bound recap 1500x1150 sha256=1970b7831c3ece3fe78ef5605d9cc971bd7aa051ae99f00bd60ec9ae78e5c225]  Whole main window — the figure the manual opens with
+                                   -> header v4.0.0 · 1500x1150
 OK    card_coord.png               [recap bound recap 340x1070 sha256=6cfd80a6f43b14b842124f31a6aec7f7dc293a46b701d25c0bd8116b0b4da5f2]  Panel 01 specimen rail after a real NCBI coordinate fetch
                                    -> panel 01 rail after a real NCBI coordinate fetch — chr13:33,016,423-33,066,143 · GRCh38.p14 · 49,721 bp · 340x1070
 OK    card_coord_fetch.png         [recap bound recap 340x404 sha256=2f001827ea954f12b4080cefd6d4b9748918b8bd3a9a607a3659c0e0e70149bb]  Panel 01, coordinate half only — cropped from card_coord.png
                                    -> panel 01 coordinate fetch — chr13:33,016,423-33,066,143 · GRCh38.p14 · 340x404
-OK    card_struct.png              [recap bound recap 1109x1643 sha256=3f58c5e9adb73b3c5d849717c3cd902f9cb6e7b37948730424cfa65aece02ddd]  Card 02 — classification: structural evidence, domains, gene model
+OK    card_struct.png              [recap bound recap 1109x1643 sha256=92398b5e55c1ad38aabed8e356f7cd16d172677d57a721346f11239b33533161]  Card 02 — classification: structural evidence, domains, gene model
                                    -> captured by recapture_shots.py · 1109x1643
-OK    card_herv.png                [recap bound recap 1109x1997 sha256=5695df4a548c9a4d18835fac68ed5b9ccf3ffb5134e2abc77c051ca5e74c441e]  Card 02, HERV-K113 — full GAG-POL-ENV architecture + completeness tier
+OK    card_herv.png                [recap bound recap 1109x1997 sha256=e0d1655280cc8171c3ca59c16ddf92464f1a0920f0f452bdb0c9a4dff5209a4b]  Card 02, HERV-K113 — full GAG-POL-ENV architecture + completeness tier
                                    -> HERV-K113 GAG-POL-ENV + per-domain confidence + completeness tier · 1109x1997
-OK    methods_databases.png        [recap bound recap 1109x1908 sha256=411fc566490b044f73e17647ea7ba592194ff38fee0a4b93d8b48e97e06b6007]  Card 02 with the methods & databases disclosure expanded
-                                   -> methods & databases disclosure expanded · 1109x1908
-OK    card02_methods_foot.png      [recap bound recap 1109x625 sha256=53f42c8e1263bc0fa53ec4de01f8e74dedda5a58caabf8af4b800d9da879ddea]  Card 02 foot — domain table + methods panel; cropped from methods_databases.png
-                                   -> card 02 foot — protein-domain table + methods & databases panel · 1109x625
+OK    card_herv_structural_orfs.png [recap bound recap 1109x434 sha256=c95706872247475427db4f13af36de6693cd2bb958874f01a2e431afc6b5e80e]  Card 02, HERV-K113 — enlarged structural-evidence and ORF tables
+                                   -> HERV-K113 structural-evidence and ORF tables · 1109x434
+OK    card_herv_domains_notes.png  [recap bound recap 1109x513 sha256=42b1bb7978911071e63f37291bb9d1b0dc2ec2f9c3b981b2dd8f9941e380a11f]  Card 02, HERV-K113 — enlarged protein-domain table and scope notes
+                                   -> HERV-K113 protein-domain table and scope notes · 1109x513
+OK    methods_databases.png        [recap bound recap 1109x1936 sha256=65a2bc259ae4005e29746a76c633f2bec35973734edf8274dbfedb4fd3f95fe3]  Card 02 with the methods & databases disclosure expanded
+                                   -> methods & databases disclosure expanded · 1109x1936
+OK    card02_methods_foot.png      [recap bound recap 1109x351 sha256=f8d90c37f2583017d8599f6a0181ae72a224de9eb903a3e654c1a7f4e866d691]  Card 02 foot — enlarged methods panel; cropped from methods_databases.png
+                                   -> card 02 foot — enlarged methods & databases panel · 1109x351
 OK    card_wsl.png                 [recap bound recap 1109x421 sha256=9e58d4f952c7316f29e46c70106f1c0defc87d07a0aa71bcc54641be6d79f711]  Card 03 — Dfam family annotation (RepeatMasker), real backend run
                                    -> M80343 — all 1 returned row(s): 1 TE-classified, 0 non-TE repeat, 0 unclassified · 1109x421
 OK    card_primer.png              [recap bound recap 1109x752 sha256=14143177234aec6c36f9039d52eb8bc959696cec3ec90236c45a615533767ef7]  Card 04 — primer design: ranked pairs + per-pair structure QC
                                    -> panel 04 — 5 ranked pairs on M11240, per-pair structure QC · 1109x752
-OK    primer_structure_detail.png  [recap bound recap 640x460 sha256=ca1ead49680fa7d0bd10d367d96bfa87b432caddb6e95a91ecd2693d2610d6f1]  Secondary-structure detail dialog: primer3 vs ViennaRNA
+OK    card_primer_pairs.png        [recap bound recap 1109x338 sha256=22699c74fc77caaf9a03ade65001947b6fec56798e33416adba0d4458a1c0886]  Card 04 — enlarged ranked primer-pair table and visible structure key
+                                   -> Card 04 — enlarged ranked primer-pair table and visible structure key · 1109x338
+OK    primer_structure_detail.png  [recap bound recap 640x460 sha256=db3a9c104f59d914cc786dfcd3868cb60c08e5d090bc94d3e1a4c8bbb368457c]  Secondary-structure detail dialog: primer3 vs ViennaRNA
                                    -> primer3 vs ViennaRNA ΔG, side by side · 640x460
 OK    subregion_picker.png         [recap bound recap 478x200 sha256=5936cd33834b4943713351bf4437a5a6b4463fa30b0d4e312ce96a8d21079c67]  Sub-region picker dialog
                                    -> pick an interval inside a feature · 478x200
 OK    card_pcr.png                 [recap bound recap 1109x977 sha256=45bf09217fa6070d6ebe6d9516907aa71c248f5220e188ee9a901398156ffaca]  Card 05 — in-silico PCR: staged pair, to-scale gel, amplicon table
                                    -> panel 05 — staged pair, to-scale gel, 1 amplicon(s) on M11240 · 1109x977
-OK    card_genome.png              [recap bound recap 1109x1227 sha256=31577e32ef6622a0eed25b6199bc0cbf5165099d778b5ea5acbc2f45ee375562]  Card 06 — whole-genome off-target scan (isPcr)
-                                   -> REAL on+off-target (1 on / 48 off) · 1109x1227
+OK    card_pcr_controls.png        [recap bound recap 1109x360 sha256=14d24310c1f37257bf31f6b1ff31eaee0af99792bffbf1d92b686dbc652224cf]  Card 05 — enlarged loaded-pair queue, search settings, and run control
+                                   -> Card 05 — enlarged loaded-pair queue, search settings, and run control · 1109x360
+OK    card_pcr_results.png         [recap bound recap 1109x625 sha256=702f44a53137a02c1336f1f4e93f1e3a5425767e6dc94927df61bf768b9c97a8]  Card 05 — enlarged gel, product table, exports, and scope note
+                                   -> Card 05 — enlarged gel, product table, exports, and scope note · 1109x625
+OK    card_genome_results.png      [recap bound recap 1109x535 sha256=05ff268b4b05623e38c9d66a25a536135786e9d1fe6cccaab46b871714ca8436]  Card 06 — crop source for the result-table and scope-note plates
+                                   -> whole-genome verdict, summaries, full result table, and caveat · 1109x535
+OK    card_genome_table.png        [recap bound recap 1109x458 sha256=3d0f4e00c7111192b9f230303c44126a192cda6cadf0436f45bfd1229ef04e84]  Card 06 — enlarged verdict, summaries, and result table
+                                   -> whole-genome verdict, summaries, and full result table · 1109x458
+OK    card_genome_scope.png        [recap bound recap 1109x93 sha256=69732b7750e0d65a6e997261ee179b07239b84a044dd31b282c5e3adb9262d9a]  Card 06 — enlarged computational scope note
+                                   -> whole-genome computational scope note · 1109x93
 OK    card_splice.png              [recap bound recap 1109x728 sha256=9a61064054dd4273617d8ce26ceb82bbcc7f7bc475ad61a3214058a75907164a]  Card 07 — splice/exon-intron alignment
                                    -> J00265 x NM_000207 -> 3 exons / 2 introns · 1109x728
-OK    card_prov.png                [recap bound recap 1109x644 sha256=1b918ec5c58e4197e1828f43d0ffdf72a2da91404e7e84ba42b58ed65dc98bf0]  Provenance card — the reproducibility seal
-                                   -> core v3.9.0 · 1109x644
-OK    card_installer.png           [recap bound recap 900x1048 sha256=c6edb10c2942361c509b1cc7e5fcedfb19e7e4bd4e34962d339c51b1df0ca2b9]  Backend installer dialog
-                                   -> backend installer — per-component status, per-component Install (absent) or Repair (present), Install all, Check integrity, live log · 900x1048
+OK    card_prov.png                [recap bound recap 760x644 sha256=878d454456122d6606349cc1a35beeaa715f01c346c94ce5e3a5d94e580fcf84]  Provenance card — the reproducibility seal
+                                   -> core v4.0.0 · 760x644
+OK    card_installer.png           [recap bound recap 900x1043 sha256=ce57e652069b8df868255709d475cc132a6daf6e2ffc7eb6e74b6587a4cabe4d]  Backend installer dialog
+                                   -> backend installer — per-component status, per-component Install (absent) or Repair (present), Install all, Check integrity, live log · 900x1043
 
 docs/img/ static brand assets (hand-made, NOT regenerated by these harnesses):
 OK    teagle-banner-dark.png

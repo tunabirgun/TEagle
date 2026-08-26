@@ -1,17 +1,17 @@
 """Retroviral transcript architecture (Layer E) — the correct coding-organisation model for an
 ENDOGENOUS RETROVIRUS, in place of a host exon-intron gene model.
 
-A retrovirus does not express its genes the way a host gene does. gag-pro-pol is one continuous
-coding unit translated from the full-length, UNSPLICED genomic RNA as a fused polyprotein (via
-ribosomal frameshifting OR stop-codon readthrough — the exact mechanism is genus-dependent);
-env is the only subgenomic mRNA spliced DIRECTLY from that full-length RNA — a splice donor in the
+A retrovirus does not express its genes the way a host gene does. gag, pro and pol are translated
+from the full-length, UNSPLICED genomic RNA, often through programmed ribosomal frameshifting or
+stop-codon readthrough that generates fusion precursors; the exact mechanism is genus-dependent.
+env is the principal subgenomic mRNA spliced DIRECTLY from that full-length RNA — a splice donor in the
 5' leader joins to an acceptor 5' of env, removing the whole gag-pro-pol span as ONE large intron.
 Some lineages (notably HML-2) additionally sub-splice the env mRNA to accessory transcripts
 (HERV-K rec / np9); that second splice is noted, not drawn.
 
 This module reports the PREDICTED transcript architecture anchored on the LTR + protein-domain
-positions (which are reliable), with the splice JUNCTIONS labelled approximate — the exact junction
-bases cannot be recovered from proviral DNA alone and need a supplied transcript / RNA-seq. It never
+positions (which are reliable), with the splice JUNCTIONS labelled approximate — candidate junction
+sequences are present in proviral DNA, but their actual use needs a supplied transcript / RNA-seq. It never
 fabricates a single-base donor/acceptor from motif guessing, and it is built only when the domain
 geometry is clean and internally consistent (both strands handled; degenerate layouts return None).
 
@@ -83,9 +83,9 @@ def transcript_architecture(structural_ev, domains, classification, seq_len: int
         "polyprotein": intron[:],
         "approximate": True,
         "note": ("env is expressed from a subgenomic mRNA spliced directly from the full-length RNA: the "
-                 "gag-pro-pol region is removed as a single intron and is itself a fused polyprotein "
-                 "(translated by ribosomal frameshift or stop-codon readthrough, the mechanism is "
-                 "genus-dependent), not a set of host exons. The junctions are anchored on the LTR and domain "
+                 "gag-pro-pol coding interval is removed as a single intron, not a set of host exons. "
+                 "Gag, Pro and Pol are translated from full-length RNA, often through programmed frameshifting "
+                 "or stop-codon readthrough that generates fusion precursors. The junctions are anchored on the LTR and domain "
                  "positions and are approximate — the true splice donor lies within the drawn leader (upstream "
                  "of gag) and the acceptor upstream of the env domain, so the leader exon is an upper bound; "
                  "exact splice bases need a supplied env transcript or RNA-seq."),

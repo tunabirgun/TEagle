@@ -63,7 +63,7 @@ DOMAIN_INFO = {
     "Tnp_22_dsRBD": ("ORF1", "LINE ORF1p, dsRBD-like domain", "retro:LINE", "PF17490"),
     # BROAD family: Pfam's Exo_endo_phos also covers host DNase I and AP endonucleases, so an EN hit is
     # only element evidence when it sits N-terminal to an RT in the same ORF (classify enforces this).
-    "Exo_endo_phos": ("EN", "apurinic-like endonuclease (ORF2p)", "retro:LINE?", "PF03372"),
+    "Exo_endo_phos": ("EN", "apurinic/apyrimidinic endonuclease-like (APE; ORF2p)", "retro:LINE?", "PF03372"),
     # BROAD family: tyrosine recombinases are widespread in hosts and phage. Reported as a YR signal that
     # makes a DIRS-group element plausible; never asserted as one on its own. Validated on M11340 (DIRS-1).
     "Phage_integrase": ("YR", "tyrosine recombinase (DIRS/Crypton-type)", "retro:YR?", "PF00589"),
