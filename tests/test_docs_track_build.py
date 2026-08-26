@@ -396,8 +396,12 @@ def test_docs_do_not_present_repeat_identity_as_a_calibrated_age_limit():
 
 
 def test_docs_describe_primer_thermodynamics_as_model_predictions():
-    manual = " ".join(_doc("teagle_manual.tex").split())
-    report = " ".join(_doc("teagle_report.tex").split())
+    manual = _doc("teagle_manual.tex")
+    report = _doc("teagle_report.tex")
+    if manual is None or report is None:
+        pytest.skip("manual or report not present (report/ is a gitignored working dir)")
+    manual = " ".join(manual.split())
+    report = " ".join(report.split())
     assert "using real thermodynamics" not in manual
     assert "using real thermodynamics" not in report
     assert "nearest-neighbor thermodynamic models" in manual
@@ -406,6 +410,8 @@ def test_docs_describe_primer_thermodynamics_as_model_predictions():
 
 def test_installer_figure_caption_matches_component_row_layout():
     manual = _doc("teagle_manual.tex")
+    if manual is None:
+        pytest.skip("manual not present (report/ is a gitignored working dir)")
     assert "above its own button" not in manual
     assert "alongside its own button" in manual
 

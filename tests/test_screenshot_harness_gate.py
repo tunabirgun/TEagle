@@ -10,6 +10,11 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 VERIFY = ROOT / "verification"
+if not (VERIFY / "screenshot_gate.py").is_file():
+    pytest.skip(
+        "local screenshot-harness helper is gitignored and unavailable in this checkout",
+        allow_module_level=True,
+    )
 if str(VERIFY) not in sys.path:
     sys.path.insert(0, str(VERIFY))
 
