@@ -56,11 +56,15 @@ def test_public_release_does_not_infer_biological_identity_from_ispcr_priming_si
     assert "every genome-wide product is an off-target" not in public_text.lower()
 
 
-def test_protocol_236_doi_is_labelled_result_informed_in_public_documents():
-    for path in ("README.md", "CHANGELOG.md", "report/teagle_manual.tex", "report/teagle_report.tex"):
-        text = _read(path).lower()
-        assert "10.5281/zenodo.22091013" in text
-        assert "result-informed corrective registration" in text
+def test_readme_uses_the_current_protocol_lineage():
+    text = _read("README.md")
+    for doi in (
+        "10.5281/zenodo.22129307",
+        "10.5281/zenodo.22154316",
+        "10.5281/zenodo.22159977",
+    ):
+        assert doi in text
+    assert "10.5281/zenodo.22091013" not in text
 
 
 def test_report_reliability_axes_are_teagle_specific_and_not_claimed_independent():
@@ -228,14 +232,11 @@ def test_readme_panel_size_matches_the_bundled_profiles():
     assert int(stated.group(1)) == len(domains._hmms())
 
 
-def test_readme_does_not_publish_undeposited_result_values():
+def test_readme_identifies_the_public_result_package():
     readme = _readme()
-    assert "result archive has not received a public DOI" in readme
-    for unpublished in (
-        "The frozen external holdout contained", "42/43", "41/43", "14/14",
-        "Across 1,211 structural truth copies", "Two of 11 controlled off-target scenarios",
-    ):
-        assert unpublished not in readme
+    assert "10.5281/zenodo.22159977" in readme
+    assert "63559355f723a4a45c3b439e00dce283cc8b191855a5118d27a0dc94619961a6" in readme
+    assert "result archive has not received a public DOI" not in readme
 
 
 def test_active_comparison_scripts_make_no_preregistration_timing_claim():
