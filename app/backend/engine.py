@@ -593,6 +593,8 @@ def analyze(seq_text: str, source: dict | None = None):
                 outcome = ((rec["classification"] or {}).get("outcome") or
                            ("withheld" if rec["classification"] is None else "complete"))
                 rec["processing"]["classification"] = {"status": outcome}
+                if rec["processing"]["structural"]["status"] == "complete":
+                    rec["processing"]["structural"]["count"] = len(rec["structural"])   # classify may add the TA target site it recovers
             except Exception as e:
                 rec["processing"]["classification"] = {"status": "failed", "errorType": type(e).__name__}
                 rec["notes"].append(f"classification unavailable: {type(e).__name__}")

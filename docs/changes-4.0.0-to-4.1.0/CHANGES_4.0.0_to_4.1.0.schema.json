@@ -1,0 +1,256 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TEagle change inventory 4.0.0 -> 4.1.0",
+  "type": "object",
+  "required": [
+    "meta",
+    "frozen_parameters",
+    "records",
+    "label_space",
+    "benchmark_sets",
+    "development_exposure",
+    "known_limitations"
+  ],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": [
+        "from_version",
+        "to_version",
+        "generated",
+        "schemas",
+        "record_counts"
+      ]
+    },
+    "frozen_parameters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "value",
+          "where"
+        ]
+      }
+    },
+    "unchanged_behaviours": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "category",
+          "relevance",
+          "files",
+          "functions",
+          "before",
+          "after",
+          "trigger",
+          "affected_outputs",
+          "labels_added",
+          "labels_removed",
+          "labels_renamed",
+          "parameters",
+          "tests",
+          "measured",
+          "limitations",
+          "benchmark_probe",
+          "changelog_line"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^(CLS|STR|PRM|PCR|GEN|INP|OUT|UI|INF)-[0-9]{3}$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "classification",
+              "domain_panel",
+              "structural_ltr",
+              "structural_tir",
+              "structural_tsd",
+              "structural_polya",
+              "cis_elements",
+              "orf_scan",
+              "primer_design",
+              "oligo_qc",
+              "in_silico_pcr",
+              "genome_scan",
+              "family_annotation",
+              "splice",
+              "input_fetch",
+              "provenance_schema",
+              "export_format",
+              "gff3_bed",
+              "ui_display",
+              "performance",
+              "backend_installer",
+              "robustness"
+            ]
+          },
+          "relevance": {
+            "enum": [
+              "result_changing",
+              "output_format",
+              "display_only",
+              "performance",
+              "infrastructure"
+            ]
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "functions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "before": {
+            "type": "string"
+          },
+          "after": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string"
+          },
+          "affected_outputs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "labels_added": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "labels_removed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "labels_renamed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "v4_0_0",
+                "v4_1_0",
+                "frozen_unchanged",
+                "basis"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "v4_0_0": {
+                  "type": "string"
+                },
+                "v4_1_0": {
+                  "type": "string"
+                },
+                "frozen_unchanged": {
+                  "type": "boolean"
+                },
+                "basis": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "tests": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "measured": {
+            "type": "string"
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "benchmark_probe": {
+            "type": "string"
+          },
+          "changelog_line": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "label_space": {
+      "type": "object"
+    },
+    "labels_all": {
+      "type": "object"
+    },
+    "benchmark_sets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "location",
+          "version_bound",
+          "endpoints"
+        ]
+      }
+    },
+    "parsers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "label_maps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "benchmark_breakpoints": {
+      "type": "string"
+    },
+    "catalogue_drift_checks": {
+      "type": "string"
+    },
+    "development_exposure": {
+      "type": "object"
+    },
+    "known_limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

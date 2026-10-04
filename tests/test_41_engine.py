@@ -966,3 +966,18 @@ def test_scan_scope_note_names_both_windows_for_a_very_long_record_and_neither_f
     assert "LTR seeds" in note and "TIR seeds" in note and "6000" in note and "1200" in note
     _rec, none = _scope_note("".join(r.choice("ACGT") for _ in range(900)))
     assert none is None
+
+
+def test_flanked_tc1_with_a_recovered_ta_site_exports_its_analysis_result():
+    """Classification adds the TA target-site row it recovers; the stage count recorded before it then fell one short,
+    and the analysis-result export refused the record as not bound to its manifest."""
+    import random
+    from helpers import fixture_seq
+    core = fixture_seq("X01005").upper()
+    for seed in range(6):
+        r = random.Random(seed)
+        flank = lambda: "".join(r.choices("ACGT", k=300))
+        res = engine.analyze(flank() + "TA" + core + "TA" + flank())
+        rec = res["records"][0]
+        assert rec["processing"]["structural"]["count"] == len(rec["structural"]), seed
+        assert engine.validate_analysis_result_document(engine.analysis_result_document(res)), seed
