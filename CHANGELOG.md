@@ -9,6 +9,102 @@ The application version is defined once in `app/backend/teagle_core/__init__.py`
 every run provenance manifest, and the packaged executable's Windows file-version
 metadata. Release QA separately reconciles the documentation with that source.
 
+## [4.1.0] — 2026-10-04
+
+This release corrects scientific and interface defects found by a full audit of 4.0.0 and adds guidance, assay-planning and reporting features for non-coding users. Classification, structural detection, in-silico PCR and provenance results can differ from 4.0.0 for the same input, and every manifest hash changes, so re-run any record whose 4.0.0 result is on file. The 30-model Pfam panel, the E-value cut-off, the 12-ORF search budget, the 80% LTR/TIR identity floors, the 20-bp standalone-TIR rule, the 2–12-bp TSD search range, the 200-kb warning and the Primer3 Standard preset are unchanged. The DOI-bound 4.0.0 evaluation (results DOI 10.5281/zenodo.22159977) describes 4.0.0 only and is not inherited by 4.1.0, and `benchmarks/score.py` remains the frozen 4.0.0 scorer, which does not score labels introduced in 4.1.0. Analysis-result schema is 1.1 (4.0.0 documents at 1.0 still validate); manifest schema 0.2 and source-context schema 1.0 are unchanged.
+
+### Added
+
+- A "Start here" strip with one-click published examples, "Next step" links after each result, and a Help menu with a quick start and a glossary (F1).
+- Panel 04 assay-goal chooser: detect or quantify inside a protein domain (Primer3 included region), genotype across an insertion junction with one primer in each flank, or a custom range.
+- Primer table Location and Notes columns (where each primer sits: flank, terminal repeat, internal region or domain; overlapping and shared-primer pairs; primers inside a terminal repeat that can also prime the other copy and solo copies).
+- Oligo order sheet export (one row per unique oligo with name, 5′→3′ sequence, length, Tm, GC and empty Scale/Purification columns) and copyable order rows.
+- Assay report (PDF or HTML) and a copyable notebook entry that combine the call, its cautions, the element map, the chosen pairs with locations and QC, the predicted gel, the reaction conditions and the run seals.
+- Sectioned provenance view with units and full copyable SHA-256 values, a run history covering analysis, primer design, in-silico PCR and genome scan, and an export of all runs.
+- Per-record classification TSV in TEsorter's .cls.tsv column order plus the RepeatMasker class string and Wicker code, for joining with TEsorter, EDTA or RepeatMasker output.
+- Wicker rank path with three-letter code and a RepeatMasker-style class string beside each call (a display mapping, not an additional classification).
+- A "Published as" check beside the call for the bundled published examples.
+- A scope-caution strip for large inputs, probable multiple copies and ORFs that run off the record, and a confirmation before analysing more than 200 kb; the call and its confidence are unchanged.
+- A coordinate display toggle (0-based half-open or 1-based inclusive) that never changes stored, exported or design coordinates, and convention labels on every coordinate column and FASTA header.
+- Visible record selection for multi-record input (click or arrow keys), with the bound record named in the detail title, the specimen panel and panels 04–05.
+- Visible row-action buttons beside every context menu, keyboard access to figure canvases, and a keyboard menu key on tables.
+- An on-screen-only "Your label" column showing the first word of each FASTA header; exports keep the neutral record identifiers.
+- In-silico PCR accepts a primer pair typed by the user (IUPAC letters, optional 5′ tail and name).
+- Classification results carry separate `domain_architecture` and `wicker_order` fields, and GFF3/BED export both.
+- Target-site duplication rows carry a chance probability adjusted for every length and boundary placement searched, and structural rows carry their TSD state (found, absent, partially assessable, not assessable, not assessed).
+- A live, seeded chance-TIR check runs with the test suite and guards the 20-bp standalone-TIR rule.
+
+### Changed
+
+- LTR elements whose integrase follows the reverse transcriptase and that carry a retrovirus-specific capsid/matrix or envelope profile hit no longer receive a Gypsy (Ty3) call; the superfamily is withheld because Gypsy, Bel-Pao and Retrovirus/ERV share that pol order (Wicker et al. 2007), and confidence is capped at Moderate. "Errantivirus" is named only for Gypsy-called elements. Drosophila gypsy keeps its Gypsy call.
+- Pfam RVT_3 (PF13456), an RNase H-clan profile, is reported as an RNase H-like domain instead of reverse transcriptase, so an RNase H region alone no longer licenses a Class I call. The panel still has 30 models.
+- Withheld classifications always report Candidate confidence; terminal repeats no longer raise a transposase-only call to Moderate.
+- LTR identity and length are measured from a gapped alignment, so an indel between the LTR copies no longer reads as heavy divergence or halves the LTR; boundaries are refined jointly with the target-site duplication.
+- Terminal inverted repeats are located in records that carry genomic flanks, and a Tc1/Mariner element reports its true TIR and the TA target site; poly-A tails followed by flank or interrupted by one base are found, with chance tails controlled for multiple testing.
+- TSD congruence uses superfamily length ranges (LTR 4–6 bp, preferred 5 bp) and motifs (Tc1/Mariner TA), and a short chance-level repeat is no longer described as proof that the insertion site is captured.
+- LTR cis-elements (PBS, PPT, poly(A) signal) are reported on the element's own strand, using the domain strand when the structure alone cannot orient the element.
+- The whole-genome scan labels as on-target the product at the designed product's genome position, mapped strand-aware through the fetched window; this was verified against real isPcr output.
+- In-silico PCR takes each primer's annealing core from the specimen and applies it to background sequences without dropping any product a background gives on its own; products shorter than the annealed cores are no longer reported, and a template ambiguity code always counts as a mismatch.
+- Primer design masks IUPAC ambiguity codes as N for Primer3 and reports how many were masked; Primer3's salt, Mg²⁺, dNTP and oligo concentrations are passed explicitly and sealed, and both the design and the ΔG QC condition sets are reported.
+- The truncation note appears only when an ORF carrying a detected domain runs off a sequence end and names that end, so intact reference elements no longer read as truncated.
+- Empty and all-N records are invalid with a stated reason; a domain search with no ORF to read is reported as not run; each result carries a per-stage summary.
+- With no organism chosen, family annotation is labelled and sealed as RepeatMasker's default lineage (read from its log), and splice detection takes the transcript strand from minimap2's `ts` tag.
+- The GFF3/BED TE feature spans the element rather than the whole record with host flanks; a neutral terminal direct-repeat candidate is exported with direct_repeat terms; sub-confident PBS matches are exported as candidates.
+- The record summary leads with classification, call confidence, completeness and call status; "Outcome" is renamed "Call status" and the per-domain column "Hit confidence". Table export headers changed accordingly.
+- Header controls use plain labels (Hide input / Show input, Text size, Dark mode, Help) and the status chip separates the built-in engine from the optional Linux backend; the splice panel is "03b Splice structure (transcript alignment)".
+- Primer pairs keep one name everywhere (design tag plus Primer3 number, for example D2·P3), and amplicon exports include the primer sequences.
+- Every seal is independent of how numbers were typed (60 or 60.0) and of fetch time; the provenance seal records every applied structural threshold.
+- Text and status chips meet WCAG AA contrast in both themes, focused buttons show a 2-px focus ring, figure text is at least 9 px, and units keep their case (bp, nt, aa, Tm).
+
+- Files exported by the app (PNG, PDF, SVG, XLSX and the assay report) carry no author or creator field.
+- "Export ID map (local)" is offered only from a record row's right-click menu, after a confirmation that the file pairs record identifiers with the original sequence names and should not be shared if those names are sensitive.
+- Terminal-repeat detection no longer stalls on microsatellite- or AT-rich records: low-complexity and over-represented seed words are masked (a DUST score for LTR seeds, an occurrence cap for LTR and TIR seeds), so such records scan in milliseconds instead of tens of seconds, with no change to the detection thresholds or to results on non-repetitive sequence.
+- Terminal inverted repeats whose arms are a microsatellite that can pair with its own reverse complement (periods 1–3, and period 4–6 units that are their own reverse complement, such as (AATT)n, (GATC)n, (ACGT)n and (AAATTT)n) are no longer reported, with or without flanking sequence and at up to about 10% divergence; a short arm at the edge of a record cut from such an array is read together with the 16 bp inside it, and a target-site duplication inside a microsatellite run no longer corroborates a terminal repeat. Arms made of a longer unit that cannot pair with itself, such as the (TCTA)n terminal repeat of Ginger1, are kept.
+- A transposon inserted into a run that pairs with itself, such as (TA)n, keeps its own terminal inverted repeat: the run is cut from the arms instead of the candidate being discarded. A run of any other unit at both arm ends, such as A(n), (CA)n or (CAG)n, cannot pair across an insertion and is kept as part of the element's own repeat.
+- A terminal repeat longer than about 5.1 kb is no longer rejected as a simple repeat.
+### Fixed
+
+- Results of a family annotation, splice alignment, primer design, in-silico PCR or genome scan for a previous specimen are discarded instead of being shown as current, and a slow fetch can no longer overwrite a sequence entered afterwards.
+- Invalid input names the offending characters, their positions and the likely cause (protein, alignment gaps, GenBank numbering, an accession typed into the sequence box) instead of a provenance-binding error, and the specimen readouts reset.
+- Primer-design and in-silico-PCR tables, exports and manifests carry the analysed record's identity instead of a hash shared by every pasted sequence.
+- Genome-viewer right-click actions use the feature's own strand, and minus-strand domains copy the correct DNA.
+- The gel no longer prints a red "no on-target" under a pair that had no designed target; failed and capped lanes are marked.
+- Genome-viewer PNG/PDF exports no longer paint solid black bars behind the tracks; the whole-genome TE figure no longer hides its percentages or clips its footer.
+- Fetched gene models export to GFF3 when the feature table omits `codon_start`, no introns are invented between separate CDS features or genes, and spliced CDS segments export as one feature.
+- Multi-region coordinate fetches can be analysed; unversioned and ENA-served accessions keep their fetched provenance; `NZ_` accessions are accepted.
+- The backend skips Docker Desktop and other unsuitable distributions, diagnoses why WSL did not answer before suggesting `wsl --unregister`, reports a session that dies mid-annotation as a failure, and a clean install removes the shared `te` environment only when TEagle created it.
+- The installed windowed app logs to `%LOCALAPPDATA%\TEagle\logs` instead of failing when it has no console streams, so the interface recovers after an unexpected engine fault.
+- Manage genomes, the annotation cost dialog and whole-genome annotation progress recover correctly after failures; deleting a genome warns that its annotation is deleted with it.
+- CSV/TSV exports with caveat lines load in pandas and R; Ctrl+C copies clean values; export failures are reported.
+- In-silico PCR is bound to the record it was run on: switching records discards a batch still running for the previous record and clears a finished result that belongs to another record.
+- A family annotation or splice result that returns while the same sequence is being re-analysed is kept and shown once the analysis finishes, instead of being discarded.
+- Design primers stays disabled after a design returns or fails when the chosen assay goal cannot currently be designed.
+- The gel legend on a gel that mixes designed-target and target-not-assessed lanes explains every band colour it draws and no longer calls an absent extra band an additional product.
+- Deferred refreshes of the backend installer dialog are bound to the dialog and no longer run after it has closed.
+- The hermetic test suite no longer probes the real WSL distribution or reads and writes the user's saved settings, and native test windows are deleted after each test.
+
+### Removed
+
+- The legacy browser interface (`app/web`, `server.py`) and the `--server` launcher flag; the local HTTP server had no cross-site request protection.
+
+### Security
+
+- The elevated WSL installer no longer writes a script to a user-writable folder; the command is passed directly to the elevation prompt.
+
+### Known limitations
+
+- Microsatellite arrays with about 15–20% substitutions can still yield a short (10–19 bp) terminal inverted repeat reported as class unassigned.
+- A terminal inverted repeat whose own outer end is a run that pairs with itself, such as (TA)n or (GATC)n, cannot be told apart from an insertion into such a run, and the run is cut from the reported arms.
+- A tandem run of 1 kb or more beside an element removes its terminal-repeat candidate, and terminal inverted repeats are searched within about 1.2 kb of each record end.
+- The microsatellite guard rejects random arms in AT-rich sequence slightly more often than before (at 20% GC, 3.3% of 10-bp and 1.0% of 20-bp arms, against 2.9% and 0.8%).
+
+## Post-release 4.0.0 benchmark evidence — 2026-08-29
+
+- Published the final controlling protocol at [10.5281/zenodo.22154316](https://doi.org/10.5281/zenodo.22154316) within concept lineage [10.5281/zenodo.22129307](https://doi.org/10.5281/zenodo.22129307), and published the validated results package at [10.5281/zenodo.22159977](https://doi.org/10.5281/zenodo.22159977).
+- Independently downloaded and hash-verified the 152-file results archive; primary and independent package validators passed.
+- Preserved nine original protocol 1.0.0 endpoints as not run and the admitted 13-model biological-domain subset as incomplete, non-primary and descriptive. Amended families remain separate and retain their protocol timing, denominators, failures, unsupported states, censoring and claim boundaries.
+- Recorded A1 as a post-raw, pre-score source-label-agreement analysis; A2, I2, D1 stress, P2, R1, curation and source-model domain-completion families provide bounded technical evidence only. P2 does not validate Primer3 candidate selection, assay specificity or wet-lab assay performance. R1 supports deployment consistency across four exact Windows guest observations, not universal compatibility.
+
 ## [4.0.0] — 2026-08-26
 
 This release narrows the taxonomic boundary for paired terminal direct repeats and corrects failed-domain-stage semantics. Analysis-result schema 1.0, manifest schema 0.2, and source-context schema 1.0 remain unchanged. The completed protocol 2.3.6 results remain evidence for TEagle 3.9.0 only; TEagle 4.0.0 requires a fresh, separately frozen evaluation and inherits no 3.9.0 performance value.

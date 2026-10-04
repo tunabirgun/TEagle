@@ -32,7 +32,7 @@ Family-level naming (e.g. `Copia_I`, `Gypsy-2_DM`) uses tools that only run on L
 
 ## Run it
 
-Version 4.0.0 is available from the [v4.0.0 release](https://github.com/tunabirgun/TEagle/releases/tag/v4.0.0). Verify the published SHA-256 checksum, run `TEagle-Setup-4.0.0.exe`, launch it from the Start menu or desktop, and use the manual attached to the same release. Nothing else is required for the native core — Python, Qt, Primer3, HMMER, and the Pfam profiles are bundled inside the app.
+Installers are published on the [releases page](https://github.com/tunabirgun/TEagle/releases). Verify the published SHA-256 checksum, run `TEagle-Setup-<version>.exe`, launch it from the Start menu or desktop, and use the manual attached to the same release. Nothing else is required for the native core — Python, Qt, Primer3, HMMER, and the Pfam profiles are bundled inside the app.
 
 **From source** (developers) you need **Python 3.12** exactly; the launcher refuses every other minor version. Use a virtual environment, because a normal source launch installs the pinned packages into the interpreter that runs it. Open a terminal in the `TEagle` folder:
 

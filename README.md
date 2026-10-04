@@ -4,7 +4,7 @@
   <img alt="TEagle" src="docs/img/teagle-banner-light.png" width="460">
 </picture>
 
-![Version](https://img.shields.io/badge/version-4.0.0-0A7259) ![Platform](https://img.shields.io/badge/platform-Windows%20x64-1FB89C) ![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-0A7259)
+![Version](https://img.shields.io/badge/version-4.1.0-0A7259) ![Platform](https://img.shields.io/badge/platform-Windows%20x64-1FB89C) ![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-0A7259)
 
 **Single-sequence transposable-element evaluation and PCR target planning for Windows.**
 </div>
@@ -31,7 +31,7 @@ TEagle reports `complete`, `partial`, `withheld`, `failed`, and `not_run` separa
 
 ## Install and start
 
-1. Download the installer and illustrated manual from the [TEagle 4.0.0 release](https://github.com/tunabirgun/TEagle/releases/tag/v4.0.0).
+1. Download the installer and illustrated manual from the [latest release](https://github.com/tunabirgun/TEagle/releases/latest).
 2. Verify the published SHA-256 value, then run the installer. Windows SmartScreen may show **Windows protected your PC** because the installer is not code-signed; select **More info → Run anyway** if local policy permits it.
 3. Launch TEagle, select **Load example element**, and press **Run analysis**. You can instead paste a sequence, open a FASTA file, or enter an NCBI accession.
 4. Install optional Linux-backed components from **BACKEND** inside the application when Dfam, splice detection, or assembly functions are needed.
@@ -66,7 +66,7 @@ The TEagle 4.0.0 evaluation is linked to a public protocol lineage and independe
 
 The public results archive contains 152 files and has SHA-256 `63559355f723a4a45c3b439e00dce283cc8b191855a5118d27a0dc94619961a6`. It preserves evaluated, partial, withheld, failed, and unexecuted branches instead of presenting only completed analyses.
 
-The deployment evaluation executed 12 deterministic graphical-workflow cases on each of four exact Windows 10/11 guests. Ten required formats per case produced 480 verified export observations, 48 result documents, 48 manifests, and 144 cross-guest identity sets. These results support consistency across those exact guest observations; biological accuracy and wet-lab performance remain separate questions.
+The deployment evaluation executed 12 deterministic graphical-workflow cases on each of four exact Windows 10/11 guests. Ten required formats per case produced 480 verified export observations, 48 result documents, 48 manifests, and 144 cross-guest identity sets. These results support consistency across those exact guest observations; biological accuracy and wet-lab performance remain separate questions. The evaluation describes TEagle 4.0.0 only: TEagle 4.1.0 changes classification, structural detection and in-silico PCR results for some inputs (see [CHANGELOG.md](CHANGELOG.md)) and has not been separately evaluated.
 
 Every analysis records scientific software and database versions, parameters, and input checksums. Manifest schema 0.2 and analysis result schema 1.1 (4.0.0 documents at schema 1.0 still validate) use deterministic SHA-256 content seals under an unkeyed integrity model; source-context schema 1.0 binds validated public-record identity to the sequence actually analysed. The seals detect accidental or uncoordinated changes but are not author authentication or a substitute for archiving the referenced software, databases, and inputs.
 
@@ -83,7 +83,7 @@ Source launches need Python 3.12 exactly and install the pinned packages into th
 
 ## Documentation
 
-- Illustrated user manual: attached to the [4.0.0 release](https://github.com/tunabirgun/TEagle/releases/tag/v4.0.0)
+- Illustrated user manual: attached to each [release](https://github.com/tunabirgun/TEagle/releases)
 - Reproducible example workflow: [docs/TRY-IT-YOURSELF.md](docs/TRY-IT-YOURSELF.md)
 - Current changes: [CHANGELOG.md](CHANGELOG.md)
 - Software citation metadata: [CITATION.cff](CITATION.cff)

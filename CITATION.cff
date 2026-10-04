@@ -3,9 +3,9 @@ message: "If you use this software, please cite it using the metadata below."
 type: software
 title: "TEagle: an evidence-traceable integrated single-locus workflow for transposable-element classification and PCR assay planning"
 abstract: >-
-  TEagle is a native Windows desktop application that integrates established methods for single-locus transposable-element structural detection, domain-based classification, PCR assay planning, in-silico screening, and sealed provenance. It withholds classifications when the available evidence does not support a call. Protocol 2.3.6 results are version-locked to TEagle 3.9.0. The TEagle 4.0.0 prospective benchmark is a separate public record (see references) and applies only to that release. No evaluation result establishes population-level accuracy or prospective wet-lab performance, or carries over to a later release.
-version: 4.0.0
-date-released: 2026-08-26
+  TEagle is a native Windows desktop application that integrates established methods for single-locus transposable-element structural detection, domain-based classification, PCR assay planning, in-silico screening, and sealed provenance. It withholds classifications when the available evidence does not support a call. Protocol 2.3.6 results are version-locked to TEagle 3.9.0. The TEagle 4.0.0 prospective benchmark is a separate DOI-bound public record (see references) that applies only to that release; its families provide bounded technical evidence and four-guest deployment consistency, and they do not establish general biological superiority, assay specificity or wet-lab assay performance, or universal compatibility. TEagle 4.1.0 has not been separately evaluated, and no evaluation result carries over to a later release.
+version: 4.1.0
+date-released: 2026-10-04
 license: AGPL-3.0-or-later
 repository-code: "https://github.com/tunabirgun/TEagle"
 url: "https://github.com/tunabirgun/TEagle"
