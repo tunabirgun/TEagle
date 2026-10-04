@@ -839,8 +839,8 @@ def test_curated_coverage_is_stated_per_lineage_and_never_as_one_number():
     for n in (cov["Homo sapiens"][0], cov["Arabidopsis thaliana"][0], cov["Arabidopsis thaliana"][1]):
         assert str(n) in sent                                    # built from the table, not retyped
     import pathlib
-    src = pathlib.Path(wsl.__file__).parent.parent.parent / "native" / "main.py"
-    text = src.read_text(encoding="utf-8")
+    from helpers import native_ui_source
+    text = native_ui_source()
     backend_text = pathlib.Path(wsl.__file__).read_text(encoding="utf-8")
     assert "just 9 families" not in text                          # the false claim is gone from the UI
     assert "copia, gypsy, hobo and mdg1 are not among them" not in text

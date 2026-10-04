@@ -1,9 +1,16 @@
 """Deterministic sequence builders + fixture loaders for the test suite."""
-import os, random
+import glob, os, random
 
 FIX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
 _B = "ACGT"
 _STOP = {"TAA", "TAG", "TGA"}
+
+
+def native_ui_source():
+    """Source text of app/native/main.py together with the modules it was split into (ui_common and the panel mixins)."""
+    native = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app", "native")
+    paths = [os.path.join(native, "main.py"), os.path.join(native, "ui_common.py"), *sorted(glob.glob(os.path.join(native, "panel_*.py")))]
+    return "\n".join(open(p, encoding="utf-8").read() for p in paths)
 
 
 def fixture_seq(acc):

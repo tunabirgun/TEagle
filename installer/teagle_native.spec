@@ -53,6 +53,9 @@ hiddenimports = [
     # native UI package (app/native) + engine adapter (app/backend)
     "main", "engine", "engine_worker", "figures", "widgets", "sample", "theme", "fonts", "install_dialog",
     "coords", "report", "envcheck",
+    "ui_common", "panel_chrome", "panel_family", "panel_genome", "panel_genome_annotate",
+    "panel_pcr", "panel_primers", "panel_provenance", "panel_records", "panel_report",
+    "panel_specimen", "panel_splice", "panel_structure",
     "teagle_core", "teagle_core.appdirs", "teagle_core.sequtil", "teagle_core.structural",
     "teagle_core.classify", "teagle_core.domains", "teagle_core.primers", "teagle_core.oligoqc",
     "teagle_core.fetch", "teagle_core.refs", "teagle_core.provenance", "teagle_core.timing", "teagle_core.wsl",
@@ -198,6 +201,9 @@ _ALLOWED_TOP = {
     "certifi", "pypdf",
     "teagle_core", "teagle_native", "main", "engine", "engine_worker", "envcheck",
     "figures", "widgets", "sample", "theme", "fonts", "install_dialog", "coords", "report",   # app/backend + app/native
+    "ui_common", "panel_chrome", "panel_family", "panel_genome", "panel_genome_annotate",
+    "panel_pcr", "panel_primers", "panel_provenance", "panel_records", "panel_report",
+    "panel_specimen", "panel_splice", "panel_structure",
     "_pyi_rth_utils",                                        # PyInstaller runtime shim
 }
 _counts = {}

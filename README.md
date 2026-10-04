@@ -19,13 +19,13 @@ TEagle connects structural evidence, protein domains, Wicker classification, fam
 
 | Step | TEagle provides |
 |---|---|
-| **Load** | Pasted sequence, FASTA, NCBI accession, genomic coordinates, or a bundled example |
+| **Load** | Pasted sequence, FASTA, NCBI accession, genomic coordinates, or a bundled published example (one click from the **Start here** strip) |
 | **Interpret** | Terminal features, ORFs, cis-elements, and a 30-model Pfam panel |
-| **Classify** | Evidence-linked Wicker class, order, and superfamily calls, with unsupported levels withheld |
+| **Classify** | Evidence-linked Wicker class, order, and superfamily calls, with unsupported levels withheld, shown with a Wicker rank path and RepeatMasker-style class string |
 | **Annotate** | Optional Dfam family matching and transcript-guided splice detection |
-| **Design** | Primer3 pairs, secondary-structure checks, predicted products, and a to-scale gel |
+| **Design** | Primer3 pairs for an assay goal (inside a protein domain, across an insertion junction, or a custom range), with locations, secondary-structure checks, predicted products, and a to-scale gel |
 | **Check** | Candidate priming sites against a selected downloaded assembly and fixed criteria |
-| **Record** | Versions, database checksums, parameters, input hashes, and explicit run states |
+| **Record** | Versions, database checksums, parameters, input hashes, and explicit run states, with an assay report and an oligo order sheet |
 
 TEagle reports `complete`, `partial`, `withheld`, `failed`, and `not_run` separately. These states prevent an unavailable or unexecuted analysis from appearing as a negative biological finding.
 
@@ -44,7 +44,7 @@ TEagle installs and verifies its optional WSL2 environment from the graphical in
 
 ## Results and exports
 
-The native application exports tables as **XLSX/CSV/TSV**, figures as **SVG/PNG/vector PDF**, and sequence or annotation data as **GFF3/BED/FASTA** where applicable. Validated runs can also export provenance JSON and complete-result JSON.
+The native application exports tables as **XLSX/CSV/TSV**, figures as **SVG/PNG/vector PDF**, and sequence or annotation data as **GFF3/BED/FASTA** where applicable. Validated runs can also export provenance JSON and complete-result JSON. A one-row-per-oligo order sheet exports as XLSX/CSV/TSV, the assay report as PDF or HTML, and a per-record classification table as TSV in TEsorter's `.cls.tsv` column order for joining with TEsorter, EDTA or RepeatMasker output. A header toggle switches on-screen coordinates between 0-based half-open and 1-based inclusive; exports keep their documented conventions. The **Help** menu opens a quick start and a glossary (F1).
 
 Right-click tables, features, and gel bands for context-specific actions such as copying a row, extracting sequence or flanks, sending coordinates to primer design, or exporting the selected result.
 

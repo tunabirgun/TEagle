@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+from helpers import native_ui_source
 from teagle_core import domains
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -28,6 +29,8 @@ def _read(relpath):
     path = os.path.join(_ROOT, relpath)
     if not os.path.exists(path) and relpath.replace("\\", "/").startswith(("manuscript/", "report/")):
         pytest.skip(f"{relpath} is an ignored local publication artifact")
+    if relpath == "app/native/main.py":
+        return native_ui_source()
     with io.open(path, encoding="utf-8") as fh:
         return fh.read()
 
@@ -394,7 +397,7 @@ def test_docs_do_not_call_env_the_only_subgenomic_retroviral_transcript():
         _doc("teagle_manual.tex"),
         _doc("teagle_report.tex"),
         (Path(_ROOT) / "app" / "backend" / "teagle_core" / "retroviral.py").read_text(encoding="utf-8"),
-        (Path(_ROOT) / "app" / "native" / "main.py").read_text(encoding="utf-8"),
+        native_ui_source(),
         (Path(_ROOT) / "app" / "native" / "figures.py").read_text(encoding="utf-8"),
     ]
     assert all("env is the only subgenomic mRNA" not in text for text in texts if text is not None)
@@ -409,7 +412,7 @@ def test_docs_do_not_present_repeat_identity_as_a_calibrated_age_limit():
     texts = [
         _doc("teagle_manual.tex"),
         _doc("teagle_report.tex"),
-        (Path(_ROOT) / "app" / "native" / "main.py").read_text(encoding="utf-8"),
+        native_ui_source(),
     ]
     assert all("age limit" not in text for text in texts if text is not None)
 
