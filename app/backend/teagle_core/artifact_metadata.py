@@ -1,8 +1,9 @@
 """Deterministic metadata minimisation for generated scientific artifacts.
 
-TEagle retains one human-attribution value only: ``Tuna Birgun``. Office Open
-XML package edits are namespace-aware and atomic so metadata removal cannot
-leave dangling package relationships or corrupt document XML.
+Project artifacts retain one human-attribution value only: ``Tuna Birgun``. Every cleaner and validator takes an
+``author`` keyword (default: that value); ``author=None`` writes and requires no attribution at all, which is what
+the app uses for files it writes for end users. Office Open XML package edits are namespace-aware and atomic so
+metadata removal cannot leave dangling package relationships or corrupt document XML.
 """
 from __future__ import annotations
 
@@ -32,7 +33,12 @@ _PNG_RENDERING_CHUNKS = {
     b"cHRM", b"gAMA", b"iCCP", b"sBIT", b"sRGB", b"cICP", b"mDCV", b"cLLI",
     b"bKGD", b"hIST", b"pHYs", b"sPLT", b"tRNS",
 }
-_PNG_CANONICAL_AUTHOR = b"Author\0" + AUTHOR.encode("latin-1")
+
+
+def _png_author_chunk(author: str) -> bytes:
+    return b"Author\0" + author.encode("latin-1")
+
+
 _PNG_MAX_BYTES = 512 * 1024 * 1024
 _PNG_MAX_CHUNK_BYTES = 256 * 1024 * 1024
 _PNG_MAX_PIXELS = 100_000_000
@@ -128,14 +134,13 @@ _XMLNS_NS = "http://www.w3.org/2000/xmlns/"
 _XML_NS = "http://www.w3.org/XML/1998/namespace"
 _XLINK_NS = "http://www.w3.org/1999/xlink"
 
-_CORE_XML = (
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-    '<cp:coreProperties '
-    f'xmlns:cp="{_CORE_PROPERTIES_NS}" '
-    f'xmlns:dc="{_DC_NS}">'
-    f'<dc:creator>{AUTHOR}</dc:creator>'
-    '</cp:coreProperties>'
-).encode("utf-8")
+def _core_xml(author: str | None) -> bytes:
+    creator = f"<dc:creator>{author}</dc:creator>" if author else ""
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        f'<cp:coreProperties xmlns:cp="{_CORE_PROPERTIES_NS}" xmlns:dc="{_DC_NS}">'
+        f'{creator}</cp:coreProperties>'
+    ).encode("utf-8")
 
 
 def _local_name(node: Node) -> str:
@@ -597,7 +602,7 @@ def _ooxml_unsafe_features(entries: dict[str, bytes]) -> list[str]:
     return sorted(set(problems))
 
 
-def _clean_word_xml(part_name: str, data: bytes) -> bytes:
+def _clean_word_xml(part_name: str, data: bytes, author: str | None = AUTHOR) -> bytes:
     document = _parse_xml(data, part_name)
     for element in _all_elements(document):
         if (
@@ -614,23 +619,23 @@ def _clean_word_xml(part_name: str, data: bytes) -> bytes:
         ]
         for attribute in attributes:
             kind = _word_metadata_attribute_kind(attribute)
-            if kind == "remove":
+            if kind == "remove" or (kind == "author" and not author):
                 element.removeAttributeNode(attribute)
             elif kind == "author":
-                element.setAttributeNS(attribute.namespaceURI, attribute.nodeName, AUTHOR)
+                element.setAttributeNS(attribute.namespaceURI, attribute.nodeName, author)
     return _xml_bytes(document)
 
 
-def _clean_package_xml(name: str, data: bytes, drop_parts: set[str]) -> bytes:
+def _clean_package_xml(name: str, data: bytes, drop_parts: set[str], author: str | None = AUTHOR) -> bytes:
     key = name.casefold()
     if key == _CORE_PART_KEY:
-        return _CORE_XML
+        return _core_xml(author)
     if name == _CONTENT_TYPES_PART:
         return _clean_content_types_xml(data, drop_parts)
     if name.endswith(".rels"):
         return _clean_relationships_xml(name, data, drop_parts)
     if key.startswith("word/") and key.endswith(".xml"):
-        return _clean_word_xml(name, data)
+        return _clean_word_xml(name, data, author)
     return data
 
 
@@ -650,7 +655,7 @@ def _replace_file(source: str | os.PathLike[str], target: str | os.PathLike[str]
     os.replace(source, target)
 
 
-def clean_ooxml_metadata(path: str | os.PathLike[str]) -> None:
+def clean_ooxml_metadata(path: str | os.PathLike[str], *, author: str | None = AUTHOR) -> None:
     """Rewrite a generated DOCX/XLSX package with minimal deterministic metadata."""
     target = Path(path)
     with ZipFile(target, "r") as source:
@@ -687,15 +692,15 @@ def clean_ooxml_metadata(path: str | os.PathLike[str]) -> None:
                     continue
                 destination.writestr(
                     _copy_zip_info(old),
-                    _clean_package_xml(old.filename, entries[old.filename], drop_parts),
+                    _clean_package_xml(old.filename, entries[old.filename], drop_parts, author),
                 )
             if _CORE_PART not in entries:
                 info = ZipInfo(_CORE_PART, date_time=_FIXED_ZIP_TIME)
                 info.compress_type = ZIP_DEFLATED
                 info.create_system = 0
-                destination.writestr(info, _CORE_XML)
+                destination.writestr(info, _core_xml(author))
 
-        problems = ooxml_metadata_violations(tmp_name)
+        problems = ooxml_metadata_violations(tmp_name, author=author)
         if problems:
             raise ValueError("cleaned OOXML package failed validation: " + "; ".join(problems))
         _replace_file(tmp_name, target)
@@ -704,7 +709,7 @@ def clean_ooxml_metadata(path: str | os.PathLike[str]) -> None:
             os.unlink(tmp_name)
 
 
-def _core_metadata_problems(data: bytes) -> list[str]:
+def _core_metadata_problems(data: bytes, author: str | None = AUTHOR) -> list[str]:
     problems: list[str] = []
     try:
         document = _parse_xml(data, _CORE_PART)
@@ -719,8 +724,11 @@ def _core_metadata_problems(data: bytes) -> list[str]:
         for child in children
         if child.namespaceURI == _DC_NS and _local_name(child) == "creator"
     ]
-    if len(creators) != 1:
-        problems.append("author is not exactly Tuna Birgun")
+    if not author:
+        if creators:
+            problems.append("author metadata retained")
+    elif len(creators) != 1:
+        problems.append(f"author is not exactly {author}")
     else:
         creator = creators[0]
         creator_text = "".join(
@@ -734,9 +742,9 @@ def _core_metadata_problems(data: bytes) -> list[str]:
             for index in range(creator.attributes.length)
             if creator.attributes.item(index).namespaceURI != _XMLNS_NS
         ]
-        if creator_text != AUTHOR or creator_has_elements or creator_attributes:
-            problems.append("author is not exactly Tuna Birgun")
-    if len(children) != 1 or any(child not in creators for child in children):
+        if creator_text != author or creator_has_elements or creator_attributes:
+            problems.append(f"author is not exactly {author}")
+    if len(children) != (1 if author else 0) or any(child not in creators for child in children):
         problems.append("non-author core metadata retained")
     if any(
         child.nodeType in {Node.TEXT_NODE, Node.CDATA_SECTION_NODE} and child.data.strip()
@@ -782,7 +790,7 @@ def _content_types_problems(data: bytes, drop_parts: set[str]) -> list[str]:
     return problems
 
 
-def _word_metadata_problems(part_name: str, data: bytes) -> list[str]:
+def _word_metadata_problems(part_name: str, data: bytes, author: str | None = AUTHOR) -> list[str]:
     try:
         document = _parse_xml(data, part_name)
     except ValueError as exc:
@@ -796,12 +804,12 @@ def _word_metadata_problems(part_name: str, data: bytes) -> list[str]:
         for index in range(element.attributes.length):
             attribute = element.attributes.item(index)
             kind = _word_metadata_attribute_kind(attribute)
-            if kind == "remove" or (kind == "author" and attribute.value != AUTHOR):
+            if kind == "remove" or (kind == "author" and attribute.value != author):
                 return [f"Word revision identifier or author metadata retained: {part_name}"]
     return []
 
 
-def ooxml_metadata_violations(path: str | os.PathLike[str]) -> list[str]:
+def ooxml_metadata_violations(path: str | os.PathLike[str], *, author: str | None = AUTHOR) -> list[str]:
     """Return semantic metadata-policy and package-integrity violations."""
     problems: list[str] = []
     try:
@@ -881,7 +889,7 @@ def ooxml_metadata_violations(path: str | os.PathLike[str]) -> list[str]:
     if core_name is None:
         problems.append("core metadata part missing")
     else:
-        problems.extend(_core_metadata_problems(entries[core_name]))
+        problems.extend(_core_metadata_problems(entries[core_name], author))
         if core_name != _CORE_PART:
             problems.append("core metadata part uses non-canonical name")
 
@@ -916,7 +924,7 @@ def ooxml_metadata_violations(path: str | os.PathLike[str]) -> list[str]:
             problems.append(f"ZIP entry extra metadata retained: {info.filename}")
         key = info.filename.casefold()
         if key.startswith("word/") and key.endswith(".xml"):
-            problems.extend(_word_metadata_problems(info.filename, entries[info.filename]))
+            problems.extend(_word_metadata_problems(info.filename, entries[info.filename], author))
     return sorted(set(problems))
 
 
@@ -987,8 +995,8 @@ def _pdf_unsafe_features(path: Path, reader=None) -> list[str]:
     return sorted(set(problems))
 
 
-def clean_pdf_metadata(path: str | os.PathLike[str]) -> None:
-    """Retain document navigation and pages, but only the author metadata."""
+def clean_pdf_metadata(path: str | os.PathLike[str], *, author: str | None = AUTHOR) -> None:
+    """Retain document navigation and pages, but only the author metadata (none when author is None)."""
     from pypdf import PdfReader, PdfWriter
     from pypdf.generic import NameObject
 
@@ -1004,7 +1012,8 @@ def clean_pdf_metadata(path: str | os.PathLike[str]) -> None:
     # not merely hidden from readers.
     writer.clone_document_from_reader(reader)
     writer._info = None
-    writer.add_metadata({"/Author": AUTHOR})
+    if author:
+        writer.add_metadata({"/Author": author})
     writer.xmp_metadata = None
     writer._ID = None
     writer.root_object.pop(NameObject("/Metadata"), None)
@@ -1016,7 +1025,7 @@ def clean_pdf_metadata(path: str | os.PathLike[str]) -> None:
             writer.write(stream)
             stream.flush()
             os.fsync(stream.fileno())
-        problems = media_metadata_violations(tmp_name, expected_format=".pdf")
+        problems = media_metadata_violations(tmp_name, expected_format=".pdf", author=author)
         if problems:
             raise ValueError("cleaned PDF failed validation: " + "; ".join(problems))
         _replace_file(tmp_name, target)
@@ -1202,26 +1211,28 @@ def _png_unsafe_features(chunks: list[tuple[bytes, bytes]]) -> list[str]:
     return problems
 
 
-def _png_metadata_problems(chunks: list[tuple[bytes, bytes]]) -> list[str]:
+def _png_metadata_problems(chunks: list[tuple[bytes, bytes]], author: str | None = AUTHOR) -> list[str]:
     problems: list[str] = []
+    canonical = _png_author_chunk(author) if author else None
     author_positions = [
         index for index, item in enumerate(chunks)
-        if item == (b"tEXt", _PNG_CANONICAL_AUTHOR)
+        if canonical is not None and item == (b"tEXt", canonical)
     ]
-    if author_positions != [1]:
-        problems.append("PNG does not contain one canonical author chunk immediately after IHDR")
+    if author_positions != ([1] if author else []):
+        problems.append("PNG does not contain one canonical author chunk immediately after IHDR" if author
+                        else "PNG author metadata retained")
     for chunk_type, payload in chunks:
         if chunk_type in _PNG_CRITICAL_CHUNKS or chunk_type in _PNG_RENDERING_CHUNKS:
             continue
-        if chunk_type == b"tEXt" and payload == _PNG_CANONICAL_AUTHOR:
+        if chunk_type == b"tEXt" and payload == canonical:
             continue
         label = chunk_type.decode("ascii", errors="replace")
         problems.append(f"PNG optional metadata retained: {label}")
     return problems
 
 
-def clean_png_metadata(path: str | os.PathLike[str]) -> None:
-    """Preserve PNG image chunks and replace optional metadata with one author field."""
+def clean_png_metadata(path: str | os.PathLike[str], *, author: str | None = AUTHOR) -> None:
+    """Preserve PNG image chunks and replace optional metadata with one author field (none when author is None)."""
     target = Path(path)
     original = target.read_bytes()
     chunks = _png_chunks(original)
@@ -1234,12 +1245,12 @@ def clean_png_metadata(path: str | os.PathLike[str]) -> None:
         if chunk_type not in _PNG_CRITICAL_CHUNKS and chunk_type not in _PNG_RENDERING_CHUNKS:
             continue
         cleaned.extend(_png_chunk(chunk_type, payload))
-        if index == 0:
-            cleaned.extend(_png_chunk(b"tEXt", _PNG_CANONICAL_AUTHOR))
+        if index == 0 and author:
+            cleaned.extend(_png_chunk(b"tEXt", _png_author_chunk(author)))
     result = bytes(cleaned)
     result_chunks = _png_chunks(result)
     _strict_png_decode(result, result_chunks)
-    violations = _png_metadata_problems(result_chunks)
+    violations = _png_metadata_problems(result_chunks, author)
     if violations:
         raise ValueError("invalid cleaned PNG metadata: " + "; ".join(violations))
     _atomic_write_bytes(target, result, suffix=".png")
@@ -1305,7 +1316,7 @@ def _svg_unsafe_features(document: minidom.Document, raw: bytes) -> list[str]:
     return sorted(set(problems))
 
 
-def _svg_author_metadata(document: minidom.Document) -> Node:
+def _svg_author_metadata(document: minidom.Document, author: str = AUTHOR) -> Node:
     root = document.documentElement
     svg_namespace = root.namespaceURI
     metadata_name = _qualified_child_name(root, "metadata")
@@ -1317,7 +1328,7 @@ def _svg_author_metadata(document: minidom.Document) -> Node:
     creator = document.createElementNS(_DC_NS, "dc:creator")
     sequence = document.createElementNS(_RDF_NS, "rdf:Seq")
     item = document.createElementNS(_RDF_NS, "rdf:li")
-    item.appendChild(document.createTextNode(AUTHOR))
+    item.appendChild(document.createTextNode(author))
     sequence.appendChild(item)
     creator.appendChild(sequence)
     description.appendChild(creator)
@@ -1339,8 +1350,8 @@ def _atomic_write_bytes(target: Path, payload: bytes, *, suffix: str) -> None:
             os.unlink(tmp_name)
 
 
-def clean_svg_metadata(path: str | os.PathLike[str]) -> None:
-    """Atomically replace SVG metadata with a minimal RDF/DC author record."""
+def clean_svg_metadata(path: str | os.PathLike[str], *, author: str | None = AUTHOR) -> None:
+    """Atomically replace SVG metadata with a minimal RDF/DC author record (no metadata when author is None)."""
     target = Path(path)
     original = target.read_bytes()
     try:
@@ -1367,7 +1378,8 @@ def clean_svg_metadata(path: str | os.PathLike[str]) -> None:
         if child.nodeType == Node.TEXT_NODE and not child.data.strip():
             root.removeChild(child)
             child.unlink()
-    root.insertBefore(_svg_author_metadata(document), root.firstChild)
+    if author:
+        root.insertBefore(_svg_author_metadata(document, author), root.firstChild)
     payload = document.toxml(encoding="utf-8")
     payload = b"\n".join(
         b"" if not line.strip(b" \t") else line
@@ -1378,8 +1390,8 @@ def clean_svg_metadata(path: str | os.PathLike[str]) -> None:
     except (ExpatError, ValueError) as exc:
         raise ValueError(f"cleaned SVG is invalid: {exc}") from exc
     problems = _svg_unsafe_features(candidate, payload)
-    if not _svg_metadata_is_author_only(candidate):
-        problems.append("SVG metadata is not author-only RDF/DC")
+    if not _svg_metadata_is_author_only(candidate, author):
+        problems.append("SVG metadata is not author-only RDF/DC" if author else "SVG metadata retained")
     if _xml_comments(candidate):
         problems.append("SVG XML comment retained")
     if problems:
@@ -1406,9 +1418,11 @@ def _single_child(element: Node, namespace: str, local_name: str) -> Node | None
     return child
 
 
-def _svg_metadata_is_author_only(document: minidom.Document) -> bool:
+def _svg_metadata_is_author_only(document: minidom.Document, author: str | None = AUTHOR) -> bool:
     root = document.documentElement
     metadata_elements = _svg_metadata_elements(document)
+    if not author:
+        return not metadata_elements
     if len(metadata_elements) != 1 or metadata_elements[0].parentNode is not root:
         return False
     metadata = metadata_elements[0]
@@ -1433,13 +1447,13 @@ def _svg_metadata_is_author_only(document: minidom.Document) -> bool:
         for child in item.childNodes
         if child.nodeType in {Node.TEXT_NODE, Node.CDATA_SECTION_NODE}
     )
-    return item_text == AUTHOR
+    return item_text == author
 
 
 def media_metadata_violations(
-    path: str | os.PathLike[str], *, expected_format: str | None = None,
+    path: str | os.PathLike[str], *, expected_format: str | None = None, author: str | None = AUTHOR,
 ) -> list[str]:
-    """Return semantic PDF/PNG/SVG metadata-policy violations."""
+    """Return semantic PDF/PNG/SVG metadata-policy violations (author=None: no attribution allowed)."""
     target = Path(path)
     suffix = (expected_format or target.suffix).lower()
     problems: list[str] = []
@@ -1458,8 +1472,9 @@ def media_metadata_violations(
             for key, value in (reader.metadata or {}).items()
             if value not in (None, "")
         }
-        if metadata != {"/Author": AUTHOR}:
-            problems.append(f"PDF metadata is not author-only: {metadata}")
+        if metadata != ({"/Author": author} if author else {}):
+            problems.append(f"PDF metadata is not author-only: {metadata}" if author
+                            else f"PDF metadata retained: {metadata}")
         if "/Metadata" in reader.root_object:
             problems.append("PDF XMP metadata retained")
         if reader.trailer.get("/ID") is not None:
@@ -1475,7 +1490,7 @@ def media_metadata_violations(
         except ValueError as exc:
             problems.append(f"invalid PNG: {exc}")
         else:
-            problems.extend(_png_metadata_problems(chunks))
+            problems.extend(_png_metadata_problems(chunks, author))
     elif suffix == ".svg":
         raw = target.read_bytes()
         try:
@@ -1490,8 +1505,8 @@ def media_metadata_violations(
                 problems.extend(_svg_unsafe_features(document, raw))
                 if _xml_comments(document):
                     problems.append("SVG XML comment retained")
-                if not _svg_metadata_is_author_only(document):
-                    problems.append("SVG metadata is not author-only RDF/DC")
+                if not _svg_metadata_is_author_only(document, author):
+                    problems.append("SVG metadata is not author-only RDF/DC" if author else "SVG metadata retained")
     else:
         raise ValueError(f"unsupported media file: {target}")
     return sorted(set(problems))

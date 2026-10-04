@@ -102,7 +102,7 @@ class InstallDialog(QDialog):
         self._poll = QTimer(self); self._poll.setInterval(2500); self._poll.timeout.connect(self._tick)
         # accept()/reject()/X all emit finished (closeEvent fires only for the X) — stop polling on every path
         self.finished.connect(lambda *_: self._poll.stop())
-        QTimer.singleShot(0, self._refresh)
+        QTimer.singleShot(0, self, self._refresh)
 
     # ---------- sizing ----------
     def _fit_to_content(self):
@@ -118,7 +118,7 @@ class InstallDialog(QDialog):
         need = self.grid.heightForWidth(vp.width()) if self.grid.hasHeightForWidth() else self.grid.sizeHint().height()
         extra = need - vp.height()
         if extra <= 0:
-            QTimer.singleShot(0, self._snap_component_rows)
+            QTimer.singleShot(0, self, self._snap_component_rows)
             return
         try:
             g = self.screen().availableGeometry()
@@ -132,7 +132,7 @@ class InstallDialog(QDialog):
         fg = self.frameGeometry()                       # keep the grown window on the screen it grew on
         if fg.bottom() > g.bottom():
             self.move(fg.x(), max(g.top(), fg.y() - (fg.bottom() - g.bottom())))
-        QTimer.singleShot(0, self._snap_component_rows)
+        QTimer.singleShot(0, self, self._snap_component_rows)
 
     @staticmethod
     def _partial_row_delta(viewport_height, scroll_value, button_spans):
@@ -207,7 +207,7 @@ class InstallDialog(QDialog):
             elif self._probe_errors <= self._MAX_AUTO_RETRIES:
                 self.statusLine.setText("could not read the backend status — retrying")
                 if not self._poll.isActive():            # polling re-asks by itself; otherwise nothing would
-                    QTimer.singleShot(5000, self._refresh)
+                    QTimer.singleShot(5000, self, self._refresh)
             else:
                 self.statusLine.setText("could not read the backend status — press Refresh to try again")
             uppercase_buttons(self)
@@ -228,7 +228,7 @@ class InstallDialog(QDialog):
             self._wsl2_installing = True; self._wsl2_ticks = 0
             self._set_busy(True, "a WSL install is already running — its progress is in the log below…")
             self._poll_since = time.monotonic()
-            self._poll.start(); QTimer.singleShot(0, self._tick)
+            self._poll.start(); QTimer.singleShot(0, self, self._tick)
         for c in res.get("components", []):
             row = self._ensure_row(c["key"], c["name"], c.get("desc", ""))
             ok = c.get("ok")
@@ -277,7 +277,7 @@ class InstallDialog(QDialog):
         if installing and not self._poll.isActive() and not self._wsl2_installing:
             self._set_busy(True); attached = True
             self._poll_since = time.monotonic(); self._gone_ticks = 0
-            self._poll.start(); QTimer.singleShot(0, self._tick)
+            self._poll.start(); QTimer.singleShot(0, self, self._tick)
         # The install lock is the truth about whether a run is alive. A run killed outright — the app
         # closed, WSL shut down — writes no DONE/FAILED marker, and polling for one would leave this
         # window disabled for good. The grace period covers the seconds between starting a run and its
@@ -329,7 +329,7 @@ class InstallDialog(QDialog):
                                     f"({res.get('disk_limited_by', 'storage limit')})")
         uppercase_buttons(self)                         # rows are created here and their labels re-set per state
         if not self._fitted:
-            QTimer.singleShot(0, self._fit_to_content)  # after the new rows have been laid out
+            QTimer.singleShot(0, self, self._fit_to_content)  # after the new rows have been laid out
 
     # ---------- operations ----------
     def _set_busy(self, busy, note=""):

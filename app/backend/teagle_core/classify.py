@@ -132,13 +132,15 @@ def _ordered(cset):
     return [c for c in _CODE_ORDER if c in cset] + sorted(c for c in cset if c not in _CODE_ORDER)
 
 
-def _refine_tsd(tsd, superfamily, seq):
+def _refine_tsd(tsd, superfamily, seq, placements=1):
     """Re-detect the TSD now that the superfamily is known, preferring its literature target-site length.
     detect_all runs before classification, so it picked the LONGEST exact flanking repeat — which a
     coincidental longer direct repeat in an AT-rich flank can win over the real short TSD (e.g. a Tc1/Mariner
     2 bp TA). Re-running find_tsd with `expect` returns the expected length only when it genuinely flanks
     (and it is always <= the longest pick), so this can only shorten a coincidental TSD to the diagnostic
-    one, never lengthen or fabricate. No-op without a sequence, without an expected length, or when unchanged."""
+    one, never lengthen or fabricate. `placements` is the terminal row's boundary_tests, so the refined row keeps
+    the multiple-testing count of the span it flanks. No-op without a sequence, without an expected length, or
+    when unchanged."""
     if not seq or not tsd:
         return
     up, dn = tsd.get("upstream"), tsd.get("downstream")
@@ -147,7 +149,7 @@ def _refine_tsd(tsd, superfamily, seq):
     exp = structural_mod.tsd_congruence(tsd.get("length"), superfamily).get("expected")
     if not exp:                                           # no attributable expected length for this superfamily
         return
-    refined = structural_mod.find_tsd(seq, up[1], dn[0], expect=exp)
+    refined = structural_mod.find_tsd(seq, up[1], dn[0], expect=exp, placements=placements)
     if refined and refined["length"] == exp and refined["length"] != tsd.get("length"):
         tsd.update(refined)                              # correct length/motif/coords/matched_expected in place
 
@@ -162,6 +164,8 @@ def _recover_target_site(structural, tir_ev, superfamily, seq):
     if not found or not found[1]:
         return False
     tir, tsd = found
+    if tir.get("boundary_adjustment"):                    # arms trimmed until the motif appeared: a match to it is by construction
+        tsd["selected_for_motif"] = True
     tir_ev.clear()
     tir_ev.update(tir)
     old = next((e for e in structural if e["type"].startswith("TSD") and not e.get("advisory")), None)
@@ -193,6 +197,30 @@ def _tsd_chance_clause(tsd):
     p = tsd.get("chance_probability")
     return (f"a flanking direct repeat of {tsd.get('length')} bp is short enough to arise by chance" +
             (f" (p = {p:.2g})" if p is not None else ""))
+
+
+def _gc_band():
+    lo, hi = structural_mod.CHANCE_TIR_GC_RANGE
+    return f"{lo * 100:.0f}-{hi * 100:.0f}% GC"
+
+
+def _chance_tir_caution(seq, length):
+    """Composition caution for a terminal inverted repeat that stands on length alone, or ''. The quoted
+    ceiling is a composition-blind figure checked over a GC band; outside it, or when this record's own
+    composition makes an exact repeat of this length a chance event, the call needs a second line of evidence."""
+    c = structural_mod.chance_tir(seq, length) if seq else None
+    if c is None:
+        return ""
+    p = c["chance_probability"]
+    chance_level = p > structural_mod.CHANCE_LEVEL_P
+    if c["in_measured_gc_range"] and not chance_level:
+        return ""
+    out = (f"this record is {c['gc']:.0%} GC" if not c["in_measured_gc_range"] else "composition caution")
+    if not c["in_measured_gc_range"]:
+        out += f", outside the {_gc_band()} range the chance ceiling was checked on, where chance inverted repeats run longer"
+    out += f"; for this composition a perfect {length} bp inverted repeat between the two record ends arises by chance with probability {p:.2g}"
+    return out + ((" — at chance level, so the repeat is not by itself evidence of a Class II element; " if chance_level
+                  else "; ") + "look for a flanking target-site duplication or a transposase before relying on this call")
 
 
 def _scan_gap(seq, kind):
@@ -427,7 +455,8 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
             # not credited. TSD_EXPECT already carries the Copia/Gypsy lengths; this wires them for LTR too.
             if has_tsd:
                 _ltsd = next((e for e in structural if e["type"].startswith("TSD")), None)
-                _refine_tsd(_ltsd, superfamily, seq)      # prefer the superfamily's target-site length over a coincidental longer flank
+                _ltr_row = next((e for e in credited if e["type"].startswith("LTR")), {})
+                _refine_tsd(_ltsd, superfamily, seq, _ltr_row.get("boundary_tests", 1))  # prefer the superfamily's target-site length over a coincidental longer flank
                 _lcong = structural_mod.tsd_congruence((_ltsd or {}).get("length"), superfamily, motif=(_ltsd or {}).get("motif"))
                 if _ltsd is not None:
                     _ltsd["tsd_congruence"] = _lcong["verdict"]
@@ -566,12 +595,14 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
         # superfamily's expected one, and the incongruent case is reported instead of suppressed.
         if tir_ok and has_tsd:
             _tsd = next((e for e in structural if e["type"].startswith("TSD")), None)
-            _refine_tsd(_tsd, superfamily, seq)               # prefer the superfamily's target-site length over a coincidental longer flank
+            _refine_tsd(_tsd, superfamily, seq, (tir_ev or {}).get("boundary_tests", 1))  # prefer the superfamily's target-site length over a coincidental longer flank
             _cong = structural_mod.tsd_congruence((_tsd or {}).get("length"), superfamily, motif=(_tsd or {}).get("motif"))
             if _tsd is not None:
                 _tsd["tsd_congruence"] = _cong["verdict"]     # carry the verdict to the record (GFF3 export reads it)
             _chance = _tsd_chance_clause(_tsd)
-            _fit = (f"length congruent with {superfamily}, {_cong['basis']}" if _cong["verdict"] == "congruent" else
+            _fit = (f"the {_tsd.get('motif')} motif was required to place the arms, so its match to the {superfamily} "
+                    "target site is by construction and not independent evidence" if (_tsd or {}).get("selected_for_motif") else
+                    f"length congruent with {superfamily}, {_cong['basis']}" if _cong["verdict"] == "congruent" else
                     f"no literature-attributed expected target-site length exists for {superfamily} to corroborate its length")
             if _cong["verdict"] == "incongruent":
                 ev.append(f"a target-site duplication flanks the inverted repeats, but it is "
@@ -665,10 +696,12 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
                 te_class = "DNA/non-autonomous"
                 ev.append(f"a {tir_ev.get('tir_len')} bp terminal inverted repeat was detected, beyond what chance "
                           f"inverted repeats reach ({CHANCE_TIR_MAX_BP} bp across {CHANCE_TIR_SEQUENCES:,} random "
-                          f"sequences), so it is structural evidence of a Class II element; the only coding "
-                          f"evidence is {_cs}, which host genes also carry and which may be a captured gene "
-                          f"fragment (as in Pack-MULEs), so no transposase is credited and the superfamily is "
-                          f"not called")
+                          f"sequences, checked at {_gc_band()}), so it is structural evidence of a Class II element; "
+                          f"the only coding evidence is {_cs}, which host genes also carry and which may be a "
+                          f"captured gene fragment (as in Pack-MULEs), so no transposase is credited and the "
+                          f"superfamily is not called")
+                if _caution := _chance_tir_caution(seq, tir_ev.get("tir_len")):
+                    ev.append(_caution)
             else:
                 klass = "unclassified"
                 superfamily = f"{_cs} domain(s) detected; no transposable-element assignment"
@@ -727,10 +760,12 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
                 te_class = "DNA/non-autonomous"
                 ev.append(f"a {_tl} bp terminal inverted repeat was detected with no transposase. Chance "
                           f"inverted repeats reached at most {CHANCE_TIR_MAX_BP} bp across "
-                          f"{CHANCE_TIR_SEQUENCES:,} random sequences (five seeds), so a repeat this "
-                          f"long is structural evidence of a Class II element; the absence of a transposase "
-                          f"is consistent with a non-autonomous derivative such as a MITE or an internally "
-                          f"deleted copy, which carry terminal repeats and no coding capacity")
+                          f"{CHANCE_TIR_SEQUENCES:,} random sequences (five seeds, checked at {_gc_band()}), so a "
+                          f"repeat this long is structural evidence of a Class II element; the absence of a "
+                          f"transposase is consistent with a non-autonomous derivative such as a MITE or an "
+                          f"internally deleted copy, which carry terminal repeats and no coding capacity")
+                if _caution := _chance_tir_caution(seq, _tl):
+                    ev.append(_caution)
                 ev.append("the superfamily is not called: that needs the transposase family, which was not "
                           "detected here")
             else:

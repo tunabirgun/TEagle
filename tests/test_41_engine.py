@@ -936,3 +936,33 @@ def test_annotate_budget_receives_the_source_fasta_size_and_cache_state(monkeypa
     for bad in ({"fasta_bytes": -1}, {"fasta_bytes": True}, {"fasta_bytes": 1, "fasta_cached": "yes"}):
         with pytest.raises(BadRequest):
             engine.run_annotate_budget({"library_mode": "custom", **bad})
+
+
+def _flanked_tc1(flank, seed):
+    import random
+    from helpers import fixture_seq
+    r = random.Random(seed)
+    b = lambda n: "".join(r.choice("ACGT") for _ in range(n))
+    return b(flank) + "TA" + fixture_seq("X01005") + "TA" + b(flank)
+
+
+def _scope_note(seq):
+    rec = engine.analyze(f">r\n{seq}\n")["records"][0]
+    return rec, next((n for n in rec["notes"] if "terminal-repeat" in n), None)
+
+
+def test_scan_scope_note_names_the_tir_window_for_a_record_the_ltr_window_already_covers():
+    seq = _flanked_tc1(1300, 2)                                    # ~4.2 kb: the LTR scan reads it all, the TIR scan does not
+    rec, note = _scope_note(seq)
+    assert not any(e["type"].startswith(("LTR (terminal", "TIR (terminal")) for e in rec["structural"])
+    assert note is not None, "a TIR missed beyond its 1,200 bp window left no record note"
+    assert "TIR" in note and "1200" in note and "LTR seeds" not in note
+
+
+def test_scan_scope_note_names_both_windows_for_a_very_long_record_and_neither_for_a_short_one():
+    import random
+    r = random.Random(3)
+    rec, note = _scope_note("".join(r.choice("ACGT") for _ in range(30000)))
+    assert "LTR seeds" in note and "TIR seeds" in note and "6000" in note and "1200" in note
+    _rec, none = _scope_note("".join(r.choice("ACGT") for _ in range(900)))
+    assert none is None

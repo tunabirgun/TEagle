@@ -350,7 +350,7 @@ def test_ooxml_cleaner_is_atomic_when_validation_or_replace_fails(tmp_path, monk
     monkeypatch.setattr(
         artifact_metadata,
         "ooxml_metadata_violations",
-        lambda _path: ["injected validation failure"],
+        lambda _path, **_kw: ["injected validation failure"],
     )
     with pytest.raises(ValueError, match="injected validation failure"):
         clean_ooxml_metadata(path)
@@ -797,4 +797,71 @@ def test_native_xlsx_export_cleans_metadata(tmp_path, monkeypatch):
     path = tmp_path / "export.xlsx"
     monkeypatch.setattr(widgets, "_HAS_XLSX", True)
     assert widgets._export_xlsx(["value"], [[1]], str(path)) is None
-    assert ooxml_metadata_violations(path) == []
+    assert ooxml_metadata_violations(path, author=None) == []
+    assert ooxml_metadata_violations(path)                         # a project artifact would need the attribution
+    with ZipFile(path) as package:
+        assert b"creator" not in package.read("docProps/core.xml")
+
+
+def test_authorless_cleaning_removes_every_creator_and_gate_rejects_authored_files(tmp_path):
+    from PIL import Image, PngImagePlugin
+    from pypdf import PdfWriter
+
+    svg = tmp_path / "f.svg"
+    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg"><metadata><creator>x</creator></metadata></svg>', encoding="utf-8")
+    png = tmp_path / "f.png"
+    info = PngImagePlugin.PngInfo()
+    info.add_text("Author", "someone")
+    Image.new("RGB", (2, 2), "white").save(png, pnginfo=info)
+    pdf = tmp_path / "f.pdf"
+    writer = PdfWriter()
+    writer.add_blank_page(width=10, height=10)
+    writer.add_metadata({"/Author": "someone", "/Producer": "generator"})
+    with pdf.open("wb") as stream:
+        writer.write(stream)
+    docx = tmp_path / "f.docx"
+    _dirty_ooxml(docx)
+    for path in (svg, png, pdf):
+        assert media_metadata_violations(path, author=None), path
+    assert ooxml_metadata_violations(docx, author=None)
+
+    clean_svg_metadata(svg, author=None)
+    clean_png_metadata(png, author=None)
+    clean_pdf_metadata(pdf, author=None)
+    clean_ooxml_metadata(docx, author=None)
+    for path in (svg, png, pdf):
+        assert media_metadata_violations(path, author=None) == [], path
+        assert media_metadata_violations(path), path                  # the project policy still demands the attribution
+    assert ooxml_metadata_violations(docx, author=None) == []
+    assert ooxml_metadata_violations(docx)
+    with ZipFile(docx) as package:
+        assert b"creator" not in package.read("docProps/core.xml")
+        assert b"w:rsidR" not in package.read("word/document.xml")
+
+    clean_png_metadata(png)                                           # default behaviour is unchanged
+    clean_pdf_metadata(pdf)
+    clean_svg_metadata(svg)
+    clean_ooxml_metadata(docx)
+    for path in (svg, png, pdf):
+        assert media_metadata_violations(path) == [], path
+        assert media_metadata_violations(path, author=None), path     # an authored file fails the attribution-free gate
+    assert ooxml_metadata_violations(docx) == [] and ooxml_metadata_violations(docx, author=None)
+    with ZipFile(docx) as package:
+        assert b"Tuna Birgun" in package.read("docProps/core.xml")
+
+
+def test_authorless_word_cleaning_drops_tracked_change_authors(tmp_path):
+    path = tmp_path / "t.docx"
+    _dirty_ooxml(path)
+    with ZipFile(path) as package:
+        entries = {n: package.read(n) for n in package.namelist()}
+    entries["word/document.xml"] = (
+        b'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        b'<w:p><w:commentRangeStart w:id="0" w:author="Someone"/><w:r><w:t>x</w:t></w:r></w:p></w:document>')
+    with ZipFile(path, "w", compression=ZIP_DEFLATED) as package:
+        for name, data in entries.items():
+            package.writestr(name, data)
+    clean_ooxml_metadata(path, author=None)
+    with ZipFile(path) as package:
+        assert b"author" not in package.read("word/document.xml")
+    assert ooxml_metadata_violations(path, author=None) == []

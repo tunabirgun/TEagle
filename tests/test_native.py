@@ -87,10 +87,18 @@ def test_worker_success_and_user_error():
 # ---------- full workflow ----------
 @pytest.fixture
 def win():
+    import gc
     import main
+    from PySide6.QtCore import QEvent
     w = main.MainWindow()
     yield w
     w.close()
+    # A closed window is only hidden. Left alive, every later window's stylesheet pass repolishes it, so
+    # construction cost grows with the number of earlier tests (60-70 s setups late in this file).
+    w.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+    del w
+    gc.collect()
 
 
 def _accept_analysis(win, result, sequence=None):
@@ -136,8 +144,10 @@ def test_record_summary_preserves_withheld_order_for_table_exports(win):
                           "classification": {"status": "withheld"}}}
     row = dict(zip(win._RECORD_HEADERS, win._record_summary_rows([rec])[0]))
     assert row["Classification"] == "repeat/structural-only"
-    assert row["Outcome"] == "withheld"
-    assert row["Domain architecture"] == "withheld"
+    assert row["Call status"] == "withheld"                           # the classification step's state, not element completeness
+    assert row["Call confidence"] == "n/a — call withheld"
+    assert row["Wicker order"] == "withheld"                          # the rank is withheld; the architecture is a separate fact
+    assert row["Domain architecture"] == "not assessed (domain scan failed)"
     assert row["Domain evidence"] == "unavailable_failed"
     assert "unavailable (scan failed)" in row["Rationale"]
     assert "domains=failed" in row["Processing"]
@@ -168,7 +178,7 @@ def test_record_summary_hedges_round_trip_through_csv_tsv_and_xlsx(win, tmp_path
     widgets.write_table(win._RECORD_HEADERS, [list(expected.values())], str(path))
     rows = list(load_workbook(path, read_only=True, data_only=True).active.iter_rows(values_only=True))
     xlsx = dict(zip(rows[0], rows[1]))
-    for key in ("Classification", "Outcome", "Domain architecture", "Domain evidence", "Rationale", "Processing"):
+    for key in ("Classification", "Call status", "Domain architecture", "Domain evidence", "Rationale", "Processing"):
         assert xlsx[key] == expected[key]
 
 
@@ -182,10 +192,10 @@ def test_record_summary_does_not_mislabel_classification_or_domain_architecture(
 def test_rail_toggle_collapses_and_restores(win):
     # the specimen panel collapses to free width and reopens, restoring the split (state tracked explicitly,
     # since isVisible() is unreliable before the window is shown)
-    assert win._rail_collapsed is False and win.railToggle.text().upper() == "HIDE"
+    assert win._rail_collapsed is False and win.railToggle.text().upper().endswith("HIDE INPUT")
     win._rail_sizes = [340, 900]
     win._toggle_rail()
-    assert win._rail_collapsed is True and win.rail.isHidden() is True and win.railToggle.text().upper() == "SHOW"
+    assert win._rail_collapsed is True and win.rail.isHidden() is True and win.railToggle.text().upper().endswith("SHOW INPUT")
     win._toggle_rail()
     assert win._rail_collapsed is False and win.rail.isHidden() is False and win.split.sizes()[0] > 0
 
@@ -226,7 +236,7 @@ def test_methods_html_states_databases_and_params(win):
 
 def test_ui_scale_button_present(win):
     from PySide6.QtWidgets import QPushButton
-    assert any("SCALE" in b.text() for b in win.findChildren(QPushButton))
+    assert any(b.text().upper().startswith("TEXT SIZE") for b in win.findChildren(QPushButton))
 
 
 def test_feature_subregion_routes_subset(win, monkeypatch):
@@ -257,8 +267,9 @@ def test_coord_fetch_submits_and_renders(win):
     win.coord.setPlainText("chr13:33,016,423-33,066,143")
     win.coordStrand.setCurrentIndex(1)                        # minus strand
     win._fetch_coord()
-    assert ops[0] == ("fetch_coords", {"regions": "chr13:33,016,423-33,066,143", "strand": "-",
-                                       "organism": "Homo sapiens", "customQuery": ""}, "fetch")
+    assert ops[0][:2] == ("fetch_coords", {"regions": "chr13:33,016,423-33,066,143", "strand": "-",
+                                           "organism": "Homo sapiens", "customQuery": ""})
+    assert ops[0][2].startswith("fetch#")                     # tagged, so a late result can be told from a current one
     from teagle_core import provenance
     sequence = "A" * 100
     raw_source = {
@@ -524,7 +535,8 @@ def test_stale_rendered_exports_cannot_open_after_invalidation(win, monkeypatch,
     from PySide6.QtCore import QEvent, QPoint, Qt
     from PySide6.QtWidgets import QPushButton
     from widgets import DataTable
-    sequence = ">x\n" + "ACGT" * 30
+    from helpers import make_tir_element
+    sequence = ">x\n" + make_tir_element()
     _accept_analysis(win, engine.run_analyze({"sequence": sequence}), sequence)
     downstream = (win.primBody, win.pcrBody, win.wslBody, win.spliceBody, win.genomeBody)
     helper_controls = []
@@ -660,7 +672,8 @@ def test_single_record_gets_common_summary_and_full_record_fasta_surface(win):
     from widgets import DataTable
     from PySide6.QtWidgets import QPushButton
 
-    result = engine.run_analyze({"sequence": ">single specimen\n" + "ACGT" * 30})
+    from helpers import make_tir_element
+    result = engine.run_analyze({"sequence": ">single specimen\n" + make_tir_element()})
     _accept_analysis(win, result)
     summary = next(table for table in win.card_struct.findChildren(DataTable)
                    if table.export_base.endswith("_summary"))
@@ -709,16 +722,20 @@ def test_bulk_fasta_builders_preserve_feature_sequence_and_strand():
     rid = public_record_id(rec["id"])
     from teagle_core.gff3 import _identity_sha256
     digest = _identity_sha256(rec["id"])
-    assert f">{rid}_ORF_1 coords=0-6 strand=+ frame=1 record_sha256={digest}\nAAACCC" in orfs
-    assert f">{rid}_ORF_2 coords=6-12 strand=- frame=2 record_sha256={digest}\nAAACCC" in orfs
+    cs = main._COORD_SYSTEM
+    assert f">{rid}_ORF_1 coords=0-6 strand=+ frame=1 {cs} record_sha256={digest}\nAAACCC" in orfs
+    assert f">{rid}_ORF_2 coords=6-12 strand=- frame=2 {cs} record_sha256={digest}\nAAACCC" in orfs
     assert "MPEPTIDE" in main._domains_fasta(rec) and digest in main._domains_fasta(rec)
     exons = main._splice_exons_fasta(
         {"strand": "-", "exons": [{"start": 0, "end": 3}, {"start": 9, "end": 12}]},
         rec["seq"], "splice")
     splice_id = public_record_id("splice")
     splice_digest = _identity_sha256("splice")
-    assert f">{splice_id}_exon_1 coords=0-3 strand=- record_sha256={splice_digest}\nTTT" in exons
-    assert f">{splice_id}_exon_2 coords=9-12 strand=- record_sha256={splice_digest}\nAAA" in exons
+    # minus strand: exons are numbered in transcript order, so exon_1 is the 3'-most block on the record
+    assert (f">{splice_id}_exon_1 coords=9-12 strand=- transcript_rank=1 {cs} record_sha256={splice_digest}\nAAA"
+            in exons)
+    assert (f">{splice_id}_exon_2 coords=0-3 strand=- transcript_rank=2 {cs} record_sha256={splice_digest}\nTTT"
+            in exons)
 
 
 @pytest.mark.parametrize("record_id", [
@@ -734,7 +751,8 @@ def test_native_summary_and_sequence_exports_never_repeat_local_record_ids(win, 
     import engine, main
     from teagle_core.gff3 import public_record_id
 
-    result = engine.run_analyze({"sequence": f">{record_id}\n" + "ACGT" * 30})
+    from helpers import make_tir_element
+    result = engine.run_analyze({"sequence": f">{record_id}\n" + make_tir_element()})
     public_id = public_record_id(record_id)
     assert result["records"][0]["id"] == public_id
     summary = win._record_summary_rows(result["records"])
@@ -757,7 +775,8 @@ def test_native_summary_and_fasta_preserve_public_accession(win):
     import engine, main
     from teagle_core import provenance
 
-    sequence = "ACGT" * 30
+    from helpers import make_tir_element
+    sequence = make_tir_element()
     raw_source = {"accession": "M11240.1", "source": "NCBI nuccore",
         "endpoint": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
         "retrievedUtc": "2026-08-21T00:00:00+00:00",
@@ -872,7 +891,7 @@ def test_orf_and_splice_tables_have_visible_exact_export_surfaces(win):
     seq = ">orf\nATG" + "AAA" * 45 + "TAA"
     _accept_analysis(win, engine.run_analyze({"sequence": seq}), seq)
     orf_table = next(table for table in win.card_struct.findChildren(DataTable)
-                     if table.export_base == "TEagle_ORFs")
+                     if str(table.export_base).endswith("_ORFs"))      # the file name carries the record stem
     assert orf_table.rowCount() >= 1
     assert any(button.text().upper() == "EXPORT ORFS (DNA FASTA)"
                for button in win.card_struct.findChildren(QPushButton))
@@ -1053,7 +1072,7 @@ def test_on_genome_pcr_renders_sealed_advisory(win):
     visible = " ".join(label.text() for label in win.genomeBody.parentWidget().findChildren(QLabel))
     whole_card = " ".join(label.text() for label in win.card_genome.findChildren(QLabel))
     scan_table = next(table for table in win.genomeBody.parentWidget().findChildren(DataTable)
-                      if table.export_base == "TEagle_offtarget_scan")
+                      if table.export_base.startswith("TEagle_offtarget_scan"))     # 4.1: + pair and assembly in the name
     exported = " ".join(scan_table.export_notes)
     assert "genomic priming site" in visible and "genomic priming site" in exported
     assert "on-target first" not in visible and "on-target first" not in exported
@@ -1462,7 +1481,8 @@ def test_design_blocked_after_box_edit(win):
 
 def test_user_edit_drops_fetched_source(win):
     # after a fetch, editing the box means the specimen is no longer that accession -> source must clear
-    accession, sequence = "M11240.1", "ACGT" * 30
+    from helpers import fixture_seq
+    accession, sequence = "M11240.1", fixture_seq("M11240")
     win._on_fetch({"ok": True, "accession": accession, "organism": "Drosophila melanogaster",
                    "title": "copia", "length": len(sequence), "fasta": f">{accession}\n{sequence}",
                    "taxid": "7227", "source": "NCBI nuccore",
@@ -1537,9 +1557,10 @@ def test_genome_scan_table_declares_ispcr_1based(win):
     tbl = [t for i in range(win.genomeBody.count())
            for t in ([win.genomeBody.itemAt(i).widget()] if isinstance(win.genomeBody.itemAt(i).widget(), DataTable) else [])][0]
     heads = [tbl.horizontalHeaderItem(c).text() for c in range(tbl.columnCount())]
-    assert "Coords (1-based)" in heads and "Coords" not in heads     # not the 0-based half-open key
+    assert "Start (1-based)" in heads and "End (1-based)" in heads and "Coords" not in heads   # 4.1: two numeric columns
     assert "Source" not in heads and "Assembly seq" in heads
     g = main.GLOSS
+    assert tbl.rows_data()[0][heads.index("Start (1-based)")] == "5530601" and tbl.rows_data()[0][heads.index("End (1-based)")] == "5530800"
     assert "1-based INCLUSIVE" in g["Coords (1-based)"] and "0-based" not in g["Coords (1-based)"]
     assert "contig accession" in g["Assembly seq"] and "specimen" not in g["Assembly seq"]
     assert "0-based half-open" in g["Coords"]                        # panel 05 (simulated PCR) is unchanged
@@ -1700,9 +1721,10 @@ def test_pcr_queue_buttons_are_uppercased_on_every_mutation(win):
     c = {"id": "P1", "left_seq": "ACGTACGTACGTACGTACGT", "right_seq": "TGCATGCATGCATGCATGCA",
          "product_size": 200, "left_pos": [0, 20], "right_pos": [180, 200]}
     from PySide6.QtWidgets import QPushButton
+    from widgets import caps                                     # the one casing rule: units (bp, aa, Tm) keep their case
     win._add_pcr_pair(c)
     labels = [b.text() for b in win.pcrQueueBox.parentWidget().findChildren(QPushButton)]
-    assert labels and all(l == l.upper() for l in labels), labels
+    assert labels and all(l == caps(l) for l in labels), labels
 
 
 def test_pcr_queue_missing_display_metadata_stays_recoverable(win):

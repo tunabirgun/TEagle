@@ -373,7 +373,7 @@ def test_dot_pdf_export_is_a_valid_vector_pdf(tmp_path):
     with open(p, "rb") as fh:
         assert fh.read(5) == b"%PDF-"
     from teagle_core.artifact_metadata import media_metadata_violations
-    assert media_metadata_violations(p) == []
+    assert media_metadata_violations(p, author=None) == []
 
 
 @pytest.mark.parametrize("panel_kind", ["figure", "genome"])
@@ -434,7 +434,7 @@ def test_svg_png_pdf_share_semantic_source_with_tolerant_rendered_equivalence(tm
     assert abs(png_ink - pdf_ink) < 0.04       # renderer antialiasing may differ; semantic occupancy must not
 
 
-def test_runtime_figure_exports_have_author_only_metadata(tmp_path):
+def test_runtime_figure_exports_carry_no_author_metadata(tmp_path):
     svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><text x="5" y="25">x</text></svg>'
     outputs = {
         "svg": tmp_path / "figure.svg",
@@ -446,7 +446,9 @@ def test_runtime_figure_exports_have_author_only_metadata(tmp_path):
     widgets.render_pdf(svg, str(outputs["pdf"]))
     from teagle_core.artifact_metadata import media_metadata_violations
     for path in outputs.values():
-        assert media_metadata_violations(path) == [], path
+        assert media_metadata_violations(path, author=None) == [], path
+        assert b"Tuna" not in path.read_bytes(), path
+        assert media_metadata_violations(path), path                     # the project-artifact policy rejects an attribution-free file
 
 
 def test_png_metadata_cleanup_needs_no_pillow_and_rejects_extra_text(tmp_path, monkeypatch):
@@ -551,7 +553,7 @@ def test_pdf_export_failure_preserves_existing_file(tmp_path, monkeypatch):
     monkeypatch.setattr(
         artifact_metadata,
         "clean_pdf_metadata",
-        lambda _path: (_ for _ in ()).throw(OSError("synthetic metadata-cleaning failure")),
+        lambda _path, **_kw: (_ for _ in ()).throw(OSError("synthetic metadata-cleaning failure")),
     )
     svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"/>'
     with pytest.raises(OSError, match="synthetic metadata-cleaning failure"):
@@ -571,7 +573,7 @@ def test_svg_and_png_postprocessing_failure_preserves_existing_file(kind, tmp_pa
     monkeypatch.setattr(
         artifact_metadata,
         cleaner,
-        lambda _path: (_ for _ in ()).throw(OSError("synthetic metadata-cleaning failure")),
+        lambda _path, **_kw: (_ for _ in ()).throw(OSError("synthetic metadata-cleaning failure")),
     )
     svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><rect width="100" height="50"/></svg>'
     with pytest.raises(OSError, match="synthetic metadata-cleaning failure"):

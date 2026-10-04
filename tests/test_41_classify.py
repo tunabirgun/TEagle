@@ -510,3 +510,108 @@ def test_missing_ltr_names_the_part_of_a_long_record_the_scan_did_not_read():
     doms = [_h("INT", "rve", 100, 400), _h("RT", "RVT_2", 600, 1200, score=150)]
     assert "only within 6,000 bp" in _text(classify.classify([], doms, seq=_long(30000)))
     assert "only within" not in _text(classify.classify([], doms, seq=_long(9000)))
+
+
+# ---- chance-TIR reference is composition-aware ---------------------------------------------------------
+def _gc_seq(gc, n=1500, seed=3):
+    return "".join(random.Random(seed).choices("ACGT", [(1 - gc) / 2, gc / 2, gc / 2, (1 - gc) / 2], k=n))
+
+
+@pytest.mark.parametrize("doms", [[], [_h("EN", "Exo_endo_phos", 100, 400, orf=0)]])
+def test_standalone_tir_in_an_extreme_composition_record_carries_a_composition_caution(doms):
+    seq = _gc_seq(0.15)
+    cl = classify.classify(_tir(20), doms, seq=seq)
+    text = _text(cl)
+    assert cl["te_class"] == "DNA/non-autonomous"                      # the frozen 20 bp floor still decides the call
+    assert f"{structural.chance_tir(seq, 20)['gc']:.0%} GC, outside the 35-65% GC range" in text
+    assert "chance level" in text and "target-site duplication or a transposase" in text
+
+
+def test_a_moderately_at_rich_record_is_told_the_ceiling_does_not_apply_without_a_chance_level_claim():
+    seq = _gc_seq(0.2)
+    text = _text(classify.classify(_tir(20), [], seq=seq))
+    assert f"{structural.chance_tir(seq, 20)['gc']:.0%} GC, outside the 35-65% GC range" in text
+    assert "chance level" not in text and "target-site duplication or a transposase" in text
+
+
+def test_standalone_tir_in_a_typical_record_is_qualified_but_carries_no_caution():
+    for seq in (_gc_seq(0.5), None):
+        text = _text(classify.classify(_tir(31), [], seq=seq))
+        assert f"{classify.CHANCE_TIR_MAX_BP} bp across {classify.CHANCE_TIR_SEQUENCES:,} random sequences" in text
+        assert "35-65% GC" in text
+        assert "outside" not in text and "chance level" not in text
+
+
+# ---- a refined TSD keeps the boundary-placement count -------------------------------------------------
+def _homopolymer_tsd_record(boundary_tests):
+    rng = random.Random(8)
+    b = lambda n: "".join(rng.choices("ACGT", k=n))
+    left, el, right = b(200) + "C", "C" + b(900) + "G", "G" + b(200)
+    seq = left + "AAAAAA" + el + "AAAAAA" + right
+    s = len(left) + 6
+    e = s + len(el)
+    ltr = {"type": "LTR (terminal direct repeat)", "five_prime": [s, s + 100], "three_prime": [e - 100, e],
+           "element_span": [s, e], "identity": 98.0, "boundary_tests": boundary_tests}
+    return seq, ltr, structural.find_tsd(seq, s, e, placements=boundary_tests)
+
+
+def test_refined_ltr_tsd_keeps_n_tests_and_the_placement_adjusted_probability():
+    seq, ltr, tsd = _homopolymer_tsd_record(36)
+    assert tsd["length"] == 6
+    doms = [_h("INT", "rve", 1000, 1300), _h("RT", "RVT_2", 2000, 2600, score=200)]
+    cl = classify.classify([ltr, tsd], doms, seq=seq)
+    assert cl["te_class"] == "LTR/Copia"
+    assert tsd["length"] == 5 and tsd["matched_expected"] is True
+    assert tsd["n_tests"] == 36
+    expect = 1 - (1 - structural._chance_p(seq, 5)) ** 36
+    assert tsd["chance_probability"] == pytest.approx(expect, rel=0.01)
+
+
+def test_refined_tsd_of_an_unsnapped_boundary_still_counts_one_placement():
+    seq, ltr, tsd = _homopolymer_tsd_record(1)
+    ltr.pop("boundary_tests")
+    classify.classify([ltr, tsd], [_h("INT", "rve", 1000, 1300), _h("RT", "RVT_2", 2000, 2600, score=200)], seq=seq)
+    assert tsd["length"] == 5 and tsd["n_tests"] == 1
+
+
+# ---- the recovered Tc1/Mariner TA site is congruent by construction -----------------------------------
+def _flanked_tc1(seed):
+    rng = random.Random(seed)
+    b = lambda n: "".join(rng.choices("ACGT", k=n))
+    return b(300) + "TA" + fixture_seq("X01005") + "TA" + b(300)
+
+
+def test_recovered_ta_target_site_is_flagged_as_selected_for_its_motif_and_not_credited_as_independent():
+    for seed in range(20):
+        seq = _flanked_tc1(seed)
+        st = structural.detect_all(seq)
+        if not any(e["type"].startswith("TIR") for e in st) or any(e["type"].startswith("TSD") for e in st):
+            continue                                                # only a record whose TSD classify recovers
+        cl = classify.classify(st, domains.scan_domains(seq), seq=seq)
+        if not cl["superfamily"].startswith("Tc1/Mariner"):
+            continue
+        tsd = next((e for e in st if e["type"].startswith("TSD") and e.get("motif") == "TA"), None)
+        if tsd is None:
+            continue
+        assert tsd["selected_for_motif"] is True
+        text = _text(cl)
+        assert "by construction" in text and "not independent evidence" in text
+        return
+    pytest.fail("no flanked Tc1 record recovered its TA target site")
+
+
+def test_a_directly_detected_tsd_is_not_marked_as_selected_for_a_motif():
+    seq, ltr, tsd = _homopolymer_tsd_record(1)
+    classify.classify([ltr, tsd], [_h("INT", "rve", 1000, 1300), _h("RT", "RVT_2", 2000, 2600, score=200)], seq=seq)
+    assert "selected_for_motif" not in tsd
+
+
+def test_a_ta_site_found_at_the_untrimmed_boundary_is_an_independent_observation():
+    chars = list("C" * 940)
+    chars[98:100] = list("TA"); chars[930:932] = list("TA")
+    seq = "".join(chars)
+    tsd = {"type": "TSD (target-site duplication)", "length": 2, "motif": "TA", "upstream": [98, 100], "downstream": [930, 932]}
+    tir = {"type": "TIR (terminal inverted repeat)", "tir_len": 31, "five_prime": [100, 131], "three_prime": [899, 930],
+           "element_span": [100, 930], "identity": 96.0}
+    cl = classify.classify([tir, tsd], [_h("TPase", "DDE_3", 300, 700, cls="dna:Tc1-Mariner", score=90)], seq=seq)
+    assert cl["superfamily"].startswith("Tc1/Mariner") and "selected_for_motif" not in tsd

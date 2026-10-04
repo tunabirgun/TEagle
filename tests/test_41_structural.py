@@ -83,6 +83,15 @@ def test_bare_specimens_stay_fast():
         assert sorted(t)[2] < 0.05, (acc, sorted(t))     # 4.0.0 took 0.3-1.2 ms; a generous ceiling, not a benchmark
 
 
+def test_element_between_long_microsatellite_flanks_is_scanned_quickly():
+    """A genomic window with a 2 kb (AT)n tract on each side: the low-complexity seeds are masked, not paired."""
+    for acc in ("M11240", "X01005", "M80343"):
+        seq = "AT" * 1000 + fixture_seq(acc) + "AT" * 1000
+        t0 = time.perf_counter()
+        structural.find_ltr(seq), structural.find_tir(seq), structural.detect_all(seq)
+        assert time.perf_counter() - t0 < 2.0, acc
+
+
 # ---------- flanked records: boundaries and TSD ----------
 @pytest.mark.parametrize("acc,kind,floor", [("M11240", "LTR", 0.9), ("M12927", "LTR", 0.75), ("X05424", "TIR", 0.85)])
 def test_flanked_element_boundaries_and_tsd(acc, kind, floor):
@@ -536,3 +545,37 @@ def test_text_before_the_first_header_is_reported_not_silently_dropped():
     for blank in (">a\nACGT", "\n  \n>a\nACGT", "ACGT", "", None):
         assert sequtil.fasta_preamble(blank) == ""
     assert sequtil.fasta_preamble("AC GT\r\nGG\r\n>x\r\nAA") == "ACGTGG"
+
+
+# ---------- chance-TIR reference follows the record's composition ----------
+def _gc_seq(gc, n, seed):
+    return "".join(random.Random(seed).choices("ACGT", [(1 - gc) / 2, gc / 2, gc / 2, (1 - gc) / 2], k=n))
+
+
+def test_chance_tir_probability_follows_the_record_composition():
+    at, mid = _gc_seq(0.2, 4000, 1), _gc_seq(0.5, 4000, 1)
+    a, m = structural.chance_tir(at, 20), structural.chance_tir(mid, 20)
+    assert abs(a["gc"] - 0.2) < 0.03 and abs(m["gc"] - 0.5) < 0.03
+    assert a["chance_probability"] > 100 * m["chance_probability"]
+    assert structural.chance_tir(at, 14)["chance_probability"] > a["chance_probability"]
+    assert a["in_measured_gc_range"] is False and m["in_measured_gc_range"] is True
+    assert structural.chance_tir(_gc_seq(0.5, 600, 1), 14)["placements"] == 300 * 300
+    assert structural.chance_tir("", 20) is None
+
+
+def test_chance_tir_model_bounds_the_live_detector_on_at_rich_sequence():
+    """The probability quoted for an arm must not understate what find_tir really produces on that composition."""
+    rng, n, gc = random.Random(LIVE_CHANCE_TIR_SEED), 300, 0.2
+    w = [(1 - gc) / 2, gc / 2, gc / 2, (1 - gc) / 2]
+    seqs = ["".join(rng.choices("ACGT", w, k=4000)) for _ in range(n)]
+    lens = [(structural.find_tir(s) or {}).get("tir_len", 0) for s in seqs]
+    for L in (14, 15, 16, 17, 18):
+        seen = sum(x >= L for x in lens) / n
+        model = structural.chance_tir(seqs[0], L)["chance_probability"]
+        assert seen <= 1.5 * model + 1 / n, (L, seen, model)
+
+
+def test_chance_tir_ceiling_stays_below_the_floor_at_20_and_65_percent_gc():
+    top, hits, n = live_chance_tir(per_cell=75, gcs=(0.2, 0.65))
+    print(f"20/65% GC: {hits}/{n} chance TIRs, longest {top} bp")
+    assert top < structural.MIN_TIR_STANDALONE

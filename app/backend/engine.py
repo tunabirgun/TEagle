@@ -50,6 +50,10 @@ ANALYSIS_EXPORTABLE_STATUSES = frozenset({
 ANALYSIS_STAGE_NAMES = ("structural", "orfs", "domains", "classification", "retroviral")
 
 
+# Documented single-locus scope: above this length the structural/ORF heuristics are flagged as approximate.
+LARGE_INPUT_BP = 200_000
+
+
 def derive_analysis_status(records: list) -> str:
     """Derive the only valid top-level status from record validity and structured stage outcomes."""
     if not records:
@@ -572,12 +576,16 @@ def analyze(seq_text: str, source: dict | None = None):
             if (rec["processing"]["structural"]["status"] == "complete" and
                     not any(e["type"].startswith(("LTR (terminal", "TIR (terminal")) for e in rec["structural"])):
                 sc = structural.scan_scope(seq)
-                if 2 * max(sc["ltr_seed_window_bp"], sc["tir_seed_window_bp"]) < sc["record_bp"]:
+                n = sc["record_bp"]
+                partial = [f"{name} seeds within the outer {sc[key]} bp of each end"
+                           for name, key in (("LTR", "ltr_seed_window_bp"), ("TIR", "tir_seed_window_bp")) if 2 * sc[key] < n]
+                if partial:
                     rec["notes"].append(
-                        f"the record is {sc['record_bp']} bp and no terminal repeat was found, but the terminal-repeat "
-                        f"scans read only the outer {sc['ltr_seed_window_bp']} bp (LTR seeds) and "
-                        f"{sc['tir_seed_window_bp']} bp (TIR seeds) of each end and poly(A)/poly(T) tails within "
-                        f"{sc['tail_window_bp']} bp of an end, so a repeat or tail further in was not searched for")
+                        f"the record is {n} bp and no terminal repeat was found, but the terminal-repeat scans read only "
+                        f"{' and '.join(partial)} and poly(A)/poly(T) tails within {sc['tail_window_bp']} bp of an end, "
+                        "so a repeat or tail further in was not searched for"
+                        + (f" — in a genomic window, more than {sc['tir_seed_window_bp']} bp of flank on a side hides "
+                           "the element's ends from the TIR scan" if 2 * sc["tir_seed_window_bp"] < n else ""))
             try:
                 rec["classification"] = classify.classify(rec["structural"], rec["domains"], seq=seq,
                                                           domains_ok=domains_ok, orfs_unscanned=unscanned,
@@ -613,7 +621,7 @@ def analyze(seq_text: str, source: dict | None = None):
                     f"an ORF carrying a detected domain runs off the {' and '.join(ends)} end"
                     f"{'s' if len(ends) > 1 else ''} of the supplied sequence — the element may be truncated "
                     "there, and domain calls on that ORF may be partial")
-            if len(seq) > 200_000:
+            if len(seq) > LARGE_INPUT_BP:
                 rec["notes"].append("large input — structural/ORF heuristics are tuned for single loci; treat as approximate")
         out.append(rec)
     joined = "".join(s for _, s in recs)
@@ -1159,8 +1167,9 @@ def run_pcr(body):
         amps = []
         pcr_stats = {}
         truncated = []
-        # The specimen alone fixes each primer's annealing core; backgrounds reuse it, so an identical site
-        # gets the same call there and the specimen result does not depend on the backgrounds.
+        # The specimen alone fixes each primer's annealing core; a background is capped at it, so an identical
+        # site gets the same call there, a background that does not reach it keeps its own lone-search core,
+        # and the specimen result does not depend on the backgrounds.
         cores = (primers.specimen_cores(fwd, rev, backgrounds[0]["seq"], mm, tp, ma)
                  if len(backgrounds) > 1 else None)
         used_cores = {o: {"forward_strand": None, "reverse_strand": None} for o in "FR"}

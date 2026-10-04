@@ -5,8 +5,8 @@ matches the exported SVG/PNG (the gel's Gaussian-blur glow is the one SVG-Tiny c
 from __future__ import annotations
 import contextlib, functools, math, os, re
 
-from PySide6.QtCore import Qt, QByteArray, QPointF, QRectF, QSize, Signal
-from PySide6.QtGui import QImage, QPainter, QColor, QPixmap, QIcon
+from PySide6.QtCore import Qt, QByteArray, QEvent, QPointF, QRectF, QSize, QTimer, Signal
+from PySide6.QtGui import QImage, QPainter, QColor, QPixmap, QIcon, QKeySequence, QPen
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QSizePolicy,
                                QTableWidget, QTableWidgetItem, QMenu, QFileDialog, QApplication,
@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, Q
                                QColorDialog)
 
 import theme                       # UI_SCALE: figures are authored in logical units and stretched by it
-from figures import gv_gutter, GV_MR   # label gutter is model-dependent; the hit-test must use the same value
+from figures import gv_gutter, GV_MR, DOT_ML, DOT_MT, DOT_MR   # layout the hit-tests must share with the SVG
 
 MODE_LABEL = {"dark": "dark", "white": "light", "uv": "UV", "mono": "mono", "transparent": "transparent"}
 
@@ -22,17 +22,50 @@ MODE_LABEL = {"dark": "dark", "white": "light", "uv": "UV", "mono": "mono", "tra
 EXPORT_ROLE = Qt.UserRole + 1
 
 
+# Units and symbols that keep their written case inside an uppercased label: "PROD MIN (bp)", "OPT Tm (°C)",
+# "ORFS (≥40 aa)", "LOCAL isPcr". The set IS the specification — uppercasing them is wrong notation.
+KEEP_CASE = frozenset({"bp", "kb", "Mb", "nt", "aa", "Tm", "ΔG", "kcal", "mol", "mRNA", "cDNA", "tRNA",
+                       "isPcr", "minimap2"})
+_WORD = re.compile(r"[^\W_]+")
+_NUM_UNIT = re.compile(r"(\d+)(\D.*)")
+
+
+def caps(text: str) -> str:
+    """The app's assay-terminal uppercase for labels, leaving KEEP_CASE tokens (and a number glued to one, "150bp")
+    as written. Idempotent."""
+    def word(m):
+        w = m.group(0)
+        if w in KEEP_CASE:
+            return w
+        d = _NUM_UNIT.fullmatch(w)
+        return w if d and d.group(2) in KEEP_CASE else w.upper()
+    return _WORD.sub(word, text)
+
+
+def _is_action_button(b) -> bool:
+    return not (b.property("link") or b.objectName() == "cardhdr")
+
+
+def set_caps(button, text: str):
+    """setText for a button whose label is re-set after construction: applies the same casing as
+    uppercase_buttons (none for link buttons and card headers), so a state change never leaves it in sentence case."""
+    button.setText(caps(text) if _is_action_button(button) else text)
+
+
 def uppercase_buttons(root):
-    """Uppercase every action button under `root` (the web '.btn' look). Skips link buttons and card
-    headers — their titles stay sentence-case — and leaves glyphs untouched. Idempotent. Lives here so a
-    dialog built outside MainWindow (installer, notification, genome manager) can call it as it is built,
-    instead of waiting for the next theme/scale/result refresh to reach it."""
-    for b in root.findChildren(QPushButton):
-        if b.property("link") or b.objectName() == "cardhdr":
+    """Uppercase every action button under `root` (the web '.btn' look), root itself included. Skips link buttons and
+    card headers — their titles stay sentence-case — and leaves glyphs and KEEP_CASE units untouched. Idempotent.
+    Lives here so a dialog built outside MainWindow (installer, notification, genome manager) can call it as it is
+    built, instead of waiting for the next theme/scale/result refresh to reach it."""
+    buttons = root.findChildren(QPushButton)
+    if isinstance(root, QPushButton):
+        buttons.append(root)
+    for b in buttons:
+        if not _is_action_button(b):
             continue
         t = b.text()
-        if t and t != t.upper():
-            b.setText(t.upper())
+        if t and t != caps(t):
+            b.setText(caps(t))
 
 
 def _svg_size(svg: str):
@@ -86,7 +119,7 @@ def save_svg(svg: str, path: str):
         with open(tmp, "w", encoding="utf-8", newline="\n") as f:
             f.write(svg)
         from teagle_core.artifact_metadata import clean_svg_metadata
-        clean_svg_metadata(tmp)
+        clean_svg_metadata(tmp, author=None)
 
     atomic_save(path, write_clean)
 
@@ -100,12 +133,11 @@ def render_png(svg: str, path: str, scale: int = 3):
     p = QPainter(img)
     r.render(p)
     p.end()
-    img.setText("Author", "Tuna Birgun")
     def write_clean(tmp):
         if not img.save(tmp, "PNG"):
             raise OSError("Qt could not write the PNG export")
         from teagle_core.artifact_metadata import clean_png_metadata
-        clean_png_metadata(tmp)
+        clean_png_metadata(tmp, author=None)
 
     atomic_save(path, write_clean)
 
@@ -119,7 +151,6 @@ def render_pdf(svg: str, path: str):
     w, h = _svg_size(svg)
     def write_clean(tmp):
         writer = QPdfWriter(tmp)
-        writer.setAuthor("Tuna Birgun")
         writer.setCreator("")
         writer.setTitle("")
         writer.setResolution(96)                                      # 1 SVG px == 1 device px at 96 dpi
@@ -130,13 +161,44 @@ def render_pdf(svg: str, path: str):
         r.render(p, QRectF(0, 0, writer.width(), writer.height()))   # fill the page in device pixels
         p.end()
         from teagle_core.artifact_metadata import clean_pdf_metadata
-        clean_pdf_metadata(tmp)
+        clean_pdf_metadata(tmp, author=None)
 
     atomic_save(path, write_clean)
 
 
+_BG_NAME = {"dark": "Dark", "white": "Light", "uv": "UV", "mono": "Mono", "transparent": "Transparent"}
+_EXPORT_TIP = {"SVG": "Export the figure as SVG (vector; text stays editable text)",
+               "PNG": "Export the figure as PNG (raster, 3x resolution)",
+               "PDF": "Export the figure as a vector PDF (one page, text stays text)"}
+
+
+def _name_button(b, name, tip=None):
+    """Spoken name and hover tip for a toolbar button whose label is a glyph or an abbreviation."""
+    b.setAccessibleName(name)
+    b.setToolTip(tip or name)
+
+
+def _with_ext(path, ext):
+    return path if path.lower().endswith(ext) else path + ext
+
+
+def _ring_color():
+    return QColor(theme.PAL["light" if theme.ACTIVE == "light" else "dark"]["accent"])
+
+
+def _focus_ring(widget, painter):
+    """A 2px accent frame around a canvas that has keyboard focus — canvases draw their own content, so Qt paints
+    no focus cue on them."""
+    pen = QPen(_ring_color()); pen.setWidth(2)
+    painter.setPen(pen)
+    painter.setBrush(Qt.NoBrush)
+    painter.drawRect(widget.rect().adjusted(1, 1, -1, -1))
+
+
 class SvgCanvas(QWidget):
-    """Paints an SVG string with a user scale + pan offset. Wheel = zoom at cursor, drag = pan."""
+    """Paints an SVG string with a user scale + pan offset. Wheel = zoom at cursor, drag = pan.
+    Keyboard (the canvas takes focus): arrows pan, + / - zoom, 0 or Home fits, Page Up / Page Down step through the
+    hover regions (gel bands) and show their detail, Enter or the Menu key opens that region's actions."""
     def __init__(self, parent=None):
         super().__init__(parent)
         self._svg = ""
@@ -149,13 +211,52 @@ class SvgCanvas(QWidget):
         self._user_view = False       # user zoomed/panned -> stop auto-refitting on resize
         self.regions = []             # [{x0,y0,x1,y1 (svg coords), tip, ...}] for hover / right-click
         self._on_menu = None          # callable(region) -> list[(label, fn)]
+        self._kb = -1                 # index of the region the keyboard has stepped to
         self.setMinimumHeight(300)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.setAccessibleName("Figure")
+        self.setAccessibleDescription("Arrow keys pan, plus and minus zoom, 0 fits the figure. "
+                                      "Page Up and Page Down step through the bands; Enter opens the actions for a band.")
 
     def set_hit_regions(self, regions, on_menu=None):
         self.regions = regions or []
         self._on_menu = on_menu
+        self._kb = -1
+
+    def _open_menu(self, region, gpos):
+        items = self._on_menu(region) if self._on_menu else None
+        if not items:
+            return
+        m = QMenu(self)
+        for label, fn in items:
+            m.addAction(label, fn)
+        m.exec(gpos)
+
+    def keyPressEvent(self, e):
+        k = e.key()
+        step = 40.0
+        if k in (Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down):
+            dx = {Qt.Key_Left: step, Qt.Key_Right: -step}.get(k, 0.0)
+            dy = {Qt.Key_Up: step, Qt.Key_Down: -step}.get(k, 0.0)
+            self.tx += dx; self.ty += dy; self._user_view = True; self.update()
+        elif k in (Qt.Key_Plus, Qt.Key_Equal):
+            self._zoom_at(self.width() / 2, self.height() / 2, 1.25)
+        elif k in (Qt.Key_Minus, Qt.Key_Underscore):
+            self._zoom_at(self.width() / 2, self.height() / 2, 0.8)
+        elif k in (Qt.Key_0, Qt.Key_Home):
+            self.fit()
+        elif k in (Qt.Key_PageDown, Qt.Key_PageUp) and self.regions:
+            self._kb = (self._kb + (1 if k == Qt.Key_PageDown else -1)) % len(self.regions)
+            r = self.regions[self._kb]
+            QToolTip.showText(self.mapToGlobal(self.rect().center()), r.get("tip", ""), self)
+            self.update()
+        elif k in (Qt.Key_Menu, Qt.Key_Return, Qt.Key_Enter) and self.regions and self._on_menu:
+            r = self.regions[self._kb if self._kb >= 0 else 0]
+            self._open_menu(r, self.mapToGlobal(self.rect().center()))
+        else:
+            super().keyPressEvent(e)
 
     def _svg_at(self, wx, wy):
         if self.scale <= 0:
@@ -234,22 +335,25 @@ class SvgCanvas(QWidget):
         r = self._region_at(e.pos().x(), e.pos().y())
         if not r:
             return
-        items = self._on_menu(r)
-        if not items:
-            return
-        m = QMenu(self)
-        for label, fn in items:
-            m.addAction(label, fn)
-        m.exec(e.globalPos())
+        self._open_menu(r, e.globalPos())
 
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         p.setRenderHint(QPainter.SmoothPixmapTransform)
         if self._renderer:
+            p.save()
             p.translate(self.tx, self.ty)
             p.scale(self.scale, self.scale)
             self._renderer.render(p, QRectF(0, 0, self._sw, self._sh))
+            if self.hasFocus() and 0 <= self._kb < len(self.regions):       # the band the keyboard stepped to
+                r = self.regions[self._kb]
+                pen = QPen(_ring_color()); pen.setWidthF(2.0 / max(self.scale, 0.01))
+                p.setPen(pen)
+                p.drawRect(QRectF(r["x0"] - 2, r["y0"] - 2, r["x1"] - r["x0"] + 4, r["y1"] - r["y0"] + 4))
+            p.restore()
+        if self.hasFocus():
+            _focus_ring(self, p)
         p.end()
 
 
@@ -257,12 +361,16 @@ class FigurePanel(QWidget):
     """Toolbar (bg modes + zoom + fit + export) over an SvgCanvas. `build_fn(bg)->svg` supplies
     the figure; export is WYSIWYG — it writes the currently selected background mode."""
     def __init__(self, build_fn, base_name: str, modes=("dark", "white"), parent=None,
-                 hit_regions=None, on_menu=None):
+                 hit_regions=None, on_menu=None, app_theme=None):
         super().__init__(parent)
         self.build_fn = build_fn
         self.base_name = base_name
         self.modes = list(modes)
         self.bg = self.modes[0]
+        # open in the app's look: the given app theme, else the one the stylesheet was last built for
+        first = {"light": "white", "dark": "dark"}.get(app_theme or theme.ACTIVE)
+        if first in self.modes:
+            self.bg = first
         self._theme_locked = False        # a manual bg pick pins this panel; app-theme toggles stop following it
         self._hit_regions = hit_regions
         self._on_menu = on_menu
@@ -270,19 +378,25 @@ class FigurePanel(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(4)
         bar = QHBoxLayout()
-        bar.addWidget(QLabel("bg"))
+        bar.addWidget(QLabel("Background"))
         self._mode_btns = {}
         for m in self.modes:
-            b = QPushButton(MODE_LABEL.get(m, m).upper())
+            b = QPushButton(caps(MODE_LABEL.get(m, m)))
             b.setProperty("sm", True)
+            _name_button(b, f"{_BG_NAME.get(m, m)} figure background",
+                         f"{_BG_NAME.get(m, m)} background for the figure and its exports")
             b.clicked.connect(lambda _=False, mm=m: self._set_bg(mm))
             bar.addWidget(b)
             self._mode_btns[m] = b
         bar.addStretch(1)
-        for txt, fn in (("−", self._zoom_out), ("FIT", self._fit), ("+", self._zoom_in),
-                        ("SVG", self._export_svg), ("PNG", self._export_png), ("PDF", self._export_pdf)):
+        for txt, fn, name, tip in (("−", self._zoom_out, "Zoom out", None), ("FIT", self._fit, "Fit the figure to the window", None),
+                                   ("+", self._zoom_in, "Zoom in", None),
+                                   ("SVG", self._export_svg, "Export the figure as SVG", _EXPORT_TIP["SVG"]),
+                                   ("PNG", self._export_png, "Export the figure as PNG", _EXPORT_TIP["PNG"]),
+                                   ("PDF", self._export_pdf, "Export the figure as vector PDF", _EXPORT_TIP["PDF"])):
             b = QPushButton(txt)
             b.setProperty("sm", True)
+            _name_button(b, name, tip)
             b.clicked.connect(fn)
             bar.addWidget(b)
         lay.addLayout(bar)
@@ -330,17 +444,20 @@ class FigurePanel(QWidget):
     def _export_svg(self):
         path, _ = QFileDialog.getSaveFileName(self, "Export SVG", self.base_name + ".svg", "SVG (*.svg)")
         if path:
-            save_svg(self.build_fn(self.bg), path)                 # export what you see (selected bg mode)
+            path = _with_ext(path, ".svg")
+            safe_export(self, path, lambda p: save_svg(self.build_fn(self.bg), p))   # export what you see (bg mode)
 
     def _export_png(self):
         path, _ = QFileDialog.getSaveFileName(self, "Export PNG", self.base_name + ".png", "PNG (*.png)")
         if path:
-            render_png(self.build_fn(self.bg), path)               # export what you see (selected bg mode)
+            path = _with_ext(path, ".png")
+            safe_export(self, path, lambda p: render_png(self.build_fn(self.bg), p))
 
     def _export_pdf(self):
         path, _ = QFileDialog.getSaveFileName(self, "Export PDF", self.base_name + ".pdf", "PDF (*.pdf)")
         if path:
-            render_pdf(self.build_fn(self.bg), path)               # same semantic SVG as SVG/PNG
+            path = _with_ext(path, ".pdf")
+            safe_export(self, path, lambda p: render_pdf(self.build_fn(self.bg), p))   # same semantic SVG as SVG/PNG
 
 
 class GenomePanel(QWidget):
@@ -353,24 +470,35 @@ class GenomePanel(QWidget):
         self.model = {"length": 1, "tracks": []}
         self.theme = "dark"
         self._theme_locked = False        # a manual bg pick pins this viewer; app-theme toggles stop following it
+        self._export_as_shown = False     # False: exports use the publication palette; True: the on-screen palette
         self.view = {"start": 0.0, "end": 1.0}
         self.on_feature_menu = None       # callable(region) -> list[(label, fn)] for right-click
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(4)
         bar = QHBoxLayout()
-        bar.addWidget(QLabel("bg"))
+        bar.addWidget(QLabel("Background"))
         self._th_btns = {}
         for th, lab in (("dark", "DARK"), ("white", "LIGHT")):
             b = QPushButton(lab); b.setProperty("sm", True)
+            _name_button(b, f"{_BG_NAME[th]} figure background", f"{_BG_NAME[th]} background for the viewer")
             b.clicked.connect(lambda _=False, t=th: self._set_theme(t, user=True))
             bar.addWidget(b); self._th_btns[th] = b
         self.pos = QLabel(""); self.pos.setObjectName("gvpos")
         bar.addWidget(self.pos)
         bar.addStretch(1)
-        for txt, fn in (("−", lambda: self._zoom(1.6)), ("FIT", self._fit), ("+", lambda: self._zoom(0.625)),
-                        ("SVG", self._export_svg), ("PNG", self._export_png), ("PDF", self._export_pdf)):
-            b = QPushButton(txt); b.setProperty("sm", True); b.clicked.connect(fn); bar.addWidget(b)
+        for txt, fn, name in (("−", lambda: self._zoom(1.6), "Zoom out"), ("FIT", self._fit, "Fit the whole record"),
+                              ("+", lambda: self._zoom(0.625), "Zoom in")):
+            b = QPushButton(txt); b.setProperty("sm", True); _name_button(b, name); b.clicked.connect(fn); bar.addWidget(b)
+        self.exportPalBtn = QPushButton(); self.exportPalBtn.setProperty("sm", True)
+        self.exportPalBtn.clicked.connect(self._toggle_export_palette)
+        bar.addWidget(self.exportPalBtn)
+        self._sync_export_palette_btn()
+        for txt, fn, name in (("SVG", self._export_svg, "Export the figure as SVG"),
+                              ("PNG", self._export_png, "Export the figure as PNG"),
+                              ("PDF", self._export_pdf, "Export the figure as vector PDF")):
+            b = QPushButton(txt); b.setProperty("sm", True); _name_button(b, name, _EXPORT_TIP[txt])
+            b.clicked.connect(fn); bar.addWidget(b)
         lay.addLayout(bar)
         self.canvas = _GenomeCanvas(self)
         self.canvas.setMinimumWidth(round(320 * max(theme.UI_SCALE, 0.1)))   # 320 LOGICAL units — the SVG authoring floor
@@ -389,8 +517,22 @@ class GenomePanel(QWidget):
     def _set_theme(self, t, user=False):
         if user:                          # user chose a bg explicitly -> keep it across later app-theme changes
             self._theme_locked = True
+            self._export_as_shown = True  # ... and that choice is also what the files carry (shown on the palette button)
+            self._sync_export_palette_btn()
         self.theme = t
         self._render()
+
+    def _toggle_export_palette(self):
+        self._export_as_shown = not self._export_as_shown
+        self._sync_export_palette_btn()
+
+    def _sync_export_palette_btn(self):
+        shown = self._export_as_shown
+        set_caps(self.exportPalBtn, "Palette: as shown" if shown else "Palette: publication")
+        self.exportPalBtn.setAccessibleName("Export palette: " + ("as shown on screen" if shown else "publication"))
+        self.exportPalBtn.setToolTip(
+            "Palette of the exported SVG, PNG and PDF. 'As shown' writes the viewer exactly as it looks now. "
+            "'Publication' writes dark ink on a transparent background, legible on white paper. Click to switch.")
 
     def apply_app_theme(self, app_theme):
         """Follow the app's dark/light theme (app 'light' -> viewer 'white') UNTIL the user picks a bg
@@ -400,9 +542,10 @@ class GenomePanel(QWidget):
             return
         self._set_theme("white" if app_theme == "light" else "dark")
 
-    def _cur_svg(self, w, for_export=False, theme=None):
+    def _cur_svg(self, w, for_export=False, theme=None, legend=False):
+        kw = {"legend": True} if legend else {}
         return self._svg_genome(self.model, {"start": self.view["start"], "end": self.view["end"]},
-                                w, theme or self.theme, for_export)
+                                w, theme or self.theme, for_export, **kw)
 
     def _render(self):
         for th, b in self._th_btns.items():
@@ -416,8 +559,9 @@ class GenomePanel(QWidget):
                                         w, self.theme, False, True)
         self.canvas.set_svg(svg)
         self.canvas.regions = regions
+        self.canvas._kb = -1
         L = self.model.get("length", 1) or 1
-        self.pos.setText(f"{int(self.view['start']):,}–{int(self.view['end']):,} bp · "
+        self.pos.setText(f"{int(self.view['start'])}–{int(self.view['end'])} bp · "
                          f"{(self.view['end']-self.view['start'])/1000:.2f} kb")
 
     def _clamp(self):
@@ -449,28 +593,31 @@ class GenomePanel(QWidget):
         self._render()
 
     def _export_target(self):
-        """Which palette a file export should use.
+        """Which palette a file export should use, and that every export carries its legend.
 
         The figure leaves the app to become a journal figure, so the DEFAULT export is the publication
         palette — dark ink, legible on white paper — regardless of the on-screen background, which exists
-        for reading the viewer rather than for print. An explicitly chosen background still wins: if the
-        user picked one from the bg buttons, that is a deliberate instruction and is honoured."""
-        return {"for_export": not self._theme_locked, "theme": self.theme}
+        for reading the viewer rather than for print. Choosing a background, or the 'as shown' palette
+        button, is a deliberate instruction and is honoured; the palette button always says which rule applies."""
+        return {"for_export": not self._export_as_shown, "theme": self.theme, "legend": True}
 
     def _export_svg(self):
         path, _ = QFileDialog.getSaveFileName(self, "Export SVG", self.base_name + ".svg", "SVG (*.svg)")
         if path:
-            save_svg(self._cur_svg(920, **self._export_target()), path)
+            path = _with_ext(path, ".svg")
+            safe_export(self, path, lambda p: save_svg(self._cur_svg(920, **self._export_target()), p))
 
     def _export_png(self):
         path, _ = QFileDialog.getSaveFileName(self, "Export PNG", self.base_name + ".png", "PNG (*.png)")
         if path:
-            render_png(self._cur_svg(920, **self._export_target()), path)
+            path = _with_ext(path, ".png")
+            safe_export(self, path, lambda p: render_png(self._cur_svg(920, **self._export_target()), p))
 
     def _export_pdf(self):
         path, _ = QFileDialog.getSaveFileName(self, "Export PDF", self.base_name + ".pdf", "PDF (*.pdf)")
         if path:
-            render_pdf(self._cur_svg(920, **self._export_target()), path)
+            path = _with_ext(path, ".pdf")
+            safe_export(self, path, lambda p: render_pdf(self._cur_svg(920, **self._export_target()), p))
 
 
 class _GenomeCanvas(QWidget):
@@ -494,6 +641,10 @@ class _GenomeCanvas(QWidget):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMouseTracking(True)
+        self._kb = -1                 # feature the keyboard stepped to
+        self.setAccessibleName("Genome viewer")
+        self.setAccessibleDescription("Left and Right arrows pan, plus and minus zoom, Home or 0 shows the whole record. "
+                                      "Page Up and Page Down step through the features; Enter opens the actions for one.")
 
     def _sc(self):
         """CSS-stretch factor: the SVG is authored in logical units and painted across the widget width,
@@ -509,6 +660,16 @@ class _GenomeCanvas(QWidget):
             if r["x0"] <= sx <= r["x1"] and r["y0"] <= sy <= r["y1"]:
                 return r
         return None
+
+    def _open_menu(self, region, gpos):
+        cb = getattr(self.panel, "on_feature_menu", None)
+        items = cb(region) if cb else None
+        if not items:
+            return
+        m = QMenu(self)
+        for label, fn in items:
+            m.addAction(label, fn)
+        m.exec(gpos)
 
     def set_svg(self, svg):
         self._svg = svg
@@ -544,7 +705,7 @@ class _GenomeCanvas(QWidget):
     def mouseMoveEvent(self, e):
         if self._drag:
             x0, s0, e0 = self._drag
-            dbp = (e.position().x() - x0) / self._plot_w() * (e0 - s0)
+            dbp = (e.position().x() - x0) / self._sc() / self._plot_w() * (e0 - s0)   # px -> logical units, like _x_to_bp
             self.panel.view = {"start": s0 - dbp, "end": e0 - dbp}
             self.panel._clamp(); self.panel._render()
             return
@@ -559,25 +720,23 @@ class _GenomeCanvas(QWidget):
         self.unsetCursor()
 
     def contextMenuEvent(self, e):
-        cb = getattr(self.panel, "on_feature_menu", None)
-        if not cb:
-            return
         r = self._region_at(e.pos().x(), e.pos().y())
-        if not r:
-            return
-        items = cb(r)
-        if not items:
-            return
-        m = QMenu(self)
-        for label, fn in items:
-            m.addAction(label, fn)
-        m.exec(e.globalPos())
+        if r:
+            self._open_menu(r, e.globalPos())
 
     def keyPressEvent(self, e):
         v = self.panel.view
         sp = v["end"] - v["start"]
         k = e.key()
-        if k == Qt.Key_Left:
+        if k in (Qt.Key_PageDown, Qt.Key_PageUp) and self.regions:
+            self._kb = (self._kb + (1 if k == Qt.Key_PageDown else -1)) % len(self.regions)
+            r = self.regions[self._kb]
+            QToolTip.showText(self.mapToGlobal(self.rect().center()), r.get("tip", ""), self)
+            self.update()
+        elif k in (Qt.Key_Menu, Qt.Key_Return, Qt.Key_Enter) and self.regions:
+            self._open_menu(self.regions[self._kb if 0 <= self._kb < len(self.regions) else 0],
+                            self.mapToGlobal(self.rect().center()))
+        elif k == Qt.Key_Left:
             self.panel.pan_bp(-sp * 0.15)
         elif k == Qt.Key_Right:
             self.panel.pan_bp(sp * 0.15)
@@ -597,6 +756,14 @@ class _GenomeCanvas(QWidget):
             # SVG is authored at self._w; CSS-stretch to widget width (height scales to keep aspect)
             sc = self._sc()
             self._renderer.render(p, QRectF(0, 0, self._w * sc, self._h * sc))
+            if self.hasFocus() and 0 <= self._kb < len(self.regions):          # the feature the keyboard stepped to
+                r = self.regions[self._kb]
+                pen = QPen(_ring_color()); pen.setWidth(2)
+                p.setPen(pen)
+                p.drawRect(QRectF(r["x0"] * sc - 2, r["y0"] * sc - 2, (r["x1"] - r["x0"]) * sc + 4,
+                                  (r["y1"] - r["y0"]) * sc + 4))
+        if self.hasFocus():
+            _focus_ring(self, p)
         p.end()
 
 
@@ -655,7 +822,8 @@ def _xl():
 
 def _xlsx_val(v):
     """Write a real number when the whole cell is numeric (so Excel sorts/filters it), else guarded
-    text. A leading formula char is neutralised the same way as the CSV path (CWE-1236)."""
+    text. A cell that starts with '=' is neutralised (CWE-1236); openpyxl writes every other string, '+/-' and
+    '@ref' included, as a string cell, so those carry no visible apostrophe."""
     s = "" if v is None else str(v)
     t = s.strip()
     if t:
@@ -667,7 +835,7 @@ def _xlsx_val(v):
                 return f
         except ValueError:
             pass
-    if s[:1] in ("=", "@") or (s[:1] in ("+", "-") and len(s) > 1):    # bare +/- (strand) stays literal
+    if s[:1] == "=":                                 # only '=' makes openpyxl store a formula; +, - and @ stay text
         return "'" + s
     return s
 
@@ -695,7 +863,7 @@ def _export_xlsx(headers, rows, path, notes=None):
     def write_clean(tmp):
         wb.save(tmp)
         from teagle_core.artifact_metadata import clean_ooxml_metadata
-        clean_ooxml_metadata(tmp)
+        clean_ooxml_metadata(tmp, author=None)
 
     atomic_save(path, write_clean)
 
@@ -738,25 +906,36 @@ def export_table(headers, rows, base, parent=None, fmt=None, notes=None):
     # an unhandled OSError here reached the generic crash banner as a bare exception string — the exact
     # wrong primary message on the most ordinary failure there is (a read-only folder, a
     # disconnected drive, the file open in Excel).
-    name = os.path.basename(path)
-    try:
-        write_table(headers, rows, path, notes)
-    except PermissionError:
-        _export_failed(parent, f"“{name}” could not be written — it may be open in another program "
-                               "(Excel locks a file while it is open), or the folder may be read-only. "
-                               "Close it or choose another folder, then export again.")
-    except OSError as e:
-        _export_failed(parent, f"“{name}” could not be written. If the folder is on a network or removable "
-                               f"drive, check it is still connected, or choose a folder on this computer. "
-                               f"({type(e).__name__})")
+    written = safe_export(parent, path, lambda p: write_table(headers, rows, p, notes), notify=False)
+    if written is None:
+        return
+    name = os.path.basename(written)
+    if os.path.normcase(written) != os.path.normcase(path):
+        _notify(parent, f"Excel export is unavailable on this computer, so the table was saved as CSV instead: {name}.",
+                "warn")
+    else:
+        _notify(parent, f"Saved {name}.", "success")
+
+
+def _banner_owner(parent):
+    """The nearest object that has a `_banner` (MainWindow), looking at the parent and then its window."""
+    for cand in (parent, parent.window() if hasattr(parent, "window") else None):
+        if callable(getattr(cand, "_banner", None)):
+            return cand
+    return None
+
+
+def _notify(parent, msg, level="success"):
+    owner = _banner_owner(parent)
+    if owner is not None:
+        owner._banner(msg, level)
+    return owner is not None
 
 
 def _export_failed(parent, msg):
-    """Report an export failure through the parent's banner when it has one, else a message box. The table
+    """Report an export failure through the owner's banner when there is one, else a message box. The table
     widgets are reused by dialogs that are not MainWindow, so this cannot assume _banner exists."""
-    banner = getattr(parent, "_banner", None)
-    if callable(banner):
-        banner(msg, "warn")
+    if _notify(parent, msg, "warn"):
         return
     from PySide6.QtWidgets import QMessageBox
     box = QMessageBox(parent)
@@ -764,6 +943,32 @@ def _export_failed(parent, msg):
     box.setIcon(QMessageBox.Warning)
     box.setText(msg)
     box.exec()
+
+
+def safe_export(parent, path, writer, ok=None, notify=True):
+    """Run `writer(path)` for a user-chosen file and say what happened. A PermissionError (the file open in Acrobat
+    or Excel, a read-only folder) or other OSError/ValueError is reported through the owner's banner instead of
+    escaping a Qt slot — where it prints to a stderr nobody sees and leaves the old file in place with no message.
+    Returns the path actually written (`writer` may return a different one, e.g. an Excel fallback to CSV) or None
+    on failure. With notify, success is confirmed by name; `ok` overrides the message. Public: every export path
+    in the app routes through this."""
+    name = os.path.basename(path)
+    try:
+        out = writer(path)
+    except PermissionError:
+        _export_failed(parent, f"“{name}” could not be written — it may be open in another program "
+                               "(Excel and PDF viewers lock a file while it is open), or the folder may be read-only. "
+                               "Close it or choose another folder, then export again.")
+        return None
+    except (OSError, ValueError) as e:
+        _export_failed(parent, f"“{name}” could not be written. If the folder is on a network or removable "
+                               f"drive, check it is still connected, or choose a folder on this computer. "
+                               f"({type(e).__name__}: {e})")
+        return None
+    out = out if isinstance(out, str) else path
+    if notify:
+        _notify(parent, ok or f"Saved {os.path.basename(out)}.", "success")
+    return out
 
 
 def serialize_table(headers, rows, sep=",", notes=None) -> str:
@@ -775,19 +980,26 @@ def serialize_table(headers, rows, sep=",", notes=None) -> str:
     lines += [sep.join(_csv_escape(c, sep) for c in r) for r in rows]
     # The scientific qualifications shown beside the table travel with it. An export that
     # silently drops a hedge or a units label is a defect — and these tables become figures and supplementary
-    # files in papers, where the screen the numbers came from is long gone. Comment-prefixed so the data rows
-    # stay machine-readable for anything that skips '#'.
+    # files in papers, where the screen the numbers came from is long gone. Each note is ONE field, so a plain
+    # reader never meets a ragged row: it is written as "# text" and quoted only when the text holds the
+    # separator or a quote (a comment-skipping reader, pandas comment='#' or R comment.char, then drops every
+    # note that needed no quoting).
     for n in (notes or []):
-        lines += ["# " + ln for ln in str(n).splitlines() if ln.strip()]
+        for ln in str(n).splitlines():
+            if ln.strip():
+                t = "# " + ln
+                lines.append('"' + t.replace('"', '""') + '"' if (sep in t or '"' in t) else t)
     return "\r\n".join(lines)
 
 
 def write_table(headers, rows, path, notes=None):
-    """Write a table to `path`, choosing the format from its extension. `notes` are the on-screen caveats."""
+    """Write a table to `path`, choosing the format from its extension. `notes` are the on-screen caveats.
+    Returns the path actually written: an .xlsx request whose openpyxl will not import is written as CSV beside
+    it, and the caller must be able to say so."""
     low = str(path).lower()
     if low.endswith(".xlsx") and _HAS_XLSX:
         if _export_xlsx(headers, rows, path, notes) is not False:
-            return
+            return path
         # openpyxl was locatable but would not import: write the same data as CSV under the chosen name's
         # stem rather than failing. _xl() has already cleared _HAS_XLSX, so the option disappears next time.
         path = path[:-5] + ".csv"
@@ -795,21 +1007,28 @@ def write_table(headers, rows, path, notes=None):
     sep = "\t" if low.endswith(".tsv") else ","
     with atomic_write(path, "w", encoding="utf-8-sig", newline="") as f:   # BOM so Excel reads UTF-8
         f.write(serialize_table(headers, rows, sep, notes))
+    return path
 
 
 def save_fasta(fasta: str, base: str, parent=None):
-    """Write a ready-made FASTA string to a user-chosen .fasta file."""
+    """Write a ready-made FASTA string to a user-chosen .fasta file. A name without a FASTA extension gets
+    .fasta; a write failure is reported, not raised."""
     path, _ = QFileDialog.getSaveFileName(parent, "Export FASTA", base + ".fasta",
-                                          "FASTA (*.fasta *.fa *.txt)")
+                                          "FASTA (*.fasta *.fa *.fna *.txt)")
     if not path:
         return
+    if not path.lower().endswith((".fasta", ".fa", ".fna", ".txt")):
+        path += ".fasta"
     if not fasta.endswith("\n"):
         fasta += "\n"
-    with atomic_write(path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(fasta)
+    def write(p):
+        with atomic_write(p, "w", encoding="utf-8", newline="\n") as f:
+            f.write(fasta)
+    return safe_export(parent, path, write)
 
 
 _NUM_RE = re.compile(r'-?\d+\.?\d*(?:[eE][-+]?\d+)?')
+_GROUP_COMMA = re.compile(r'(?<=\d),(?=\d{3}(?!\d))')    # a thousands separator: digit , exactly three digits
 
 def _sortkey(text: str):
     """Numeric key for a cell: a slash-composite like '2/1' or '60.1/58.3' (Mism/Tm/GC F/R) sorts by
@@ -817,6 +1036,7 @@ def _sortkey(text: str):
     when the cell has no number, so those columns fall back to case-insensitive string order."""
     if not text:
         return None
+    text = _GROUP_COMMA.sub("", text)                    # '1,500' is fifteen hundred, not 1 then 500
     nums = _NUM_RE.findall(text)
     if not nums:
         return None
@@ -892,8 +1112,16 @@ def _numeric_columns(rows, ncols):
 
 class DataTable(QTableWidget):
     """A read-only table with CSV/TSV export and a copy-cell/row context menu. Optional per-row
-    activation callback (double-click / Enter) and a right-click menu builder for FASTA-style actions."""
+    activation callback (double-click / Enter) and a right-click menu builder for FASTA-style actions.
+
+    Selection contract: `current_row_changed(orig)` fires when the user moves the current row (mouse or keyboard),
+    carrying the row's ORIGINAL index (its position in set_rows, whatever the sort) or -1 when there is none.
+    `select_orig(orig)` selects that row from code WITHOUT emitting; `current_orig()` reads it back. A rebuild
+    (set_rows / set_complete_rows / a re-sort of a capped view) re-selects the same original row silently; when
+    that row is no longer shown (a capped view re-sorted past its limit) the selection is cleared and
+    current_row_changed(-1) fires once. `row_activated(orig)` stays the double-click signal."""
     row_activated = Signal(int)
+    current_row_changed = Signal(int)
 
     def __init__(self, headers, tooltips=None, parent=None):
         super().__init__(0, len(headers), parent)
@@ -922,17 +1150,114 @@ class DataTable(QTableWidget):
         self._complete_limit = None
         self._complete_refresh = False
         self.horizontalHeader().sortIndicatorChanged.connect(self._complete_sort_changed)
+        self._quiet = 0                  # >0 while code (not the user) moves the current row: no current_row_changed
+        self._last_orig = -1             # original index last reported / restored
+        self._fit_limit = False          # False = height not fitted; None = fit every row; int = fit that many rows
+        self.currentCellChanged.connect(self._on_current_cell)
+        self._fitting = self._refit = False
+        self.horizontalScrollBar().rangeChanged.connect(self._on_hrange)
+
+    def _rows_height(self, n):
+        """Height of the frame, the header and the first n rows, plus the sideways scrollbar when one is needed."""
+        hh = max(self.horizontalHeader().height(), self.horizontalHeader().sizeHint().height())
+        h = 2 * self.frameWidth() + hh + sum(self.rowHeight(i) for i in range(min(n, self.rowCount())))
+        hb = self.horizontalScrollBar()
+        if hb.isVisible() or hb.maximum() > 0:            # a sideways-scrolling table must keep room for its bar
+            h += hb.sizeHint().height()
+        return h
 
     def sizeHint(self):
         """Height the CURRENT rows need — QAbstractScrollArea's stock 192px hint reserved 80–135px of empty
         grid under a short result. Callers still cap tall tables with setMaximumHeight()."""
         s = super().sizeHint()
-        hh = max(self.horizontalHeader().height(), self.horizontalHeader().sizeHint().height())
-        h = 2 * self.frameWidth() + hh + sum(self.rowHeight(i) for i in range(self.rowCount()))
-        hb = self.horizontalScrollBar()
-        if hb.isVisible() or hb.maximum() > 0:            # a sideways-scrolling table must keep room for its bar
-            h += hb.sizeHint().height()
-        return QSize(s.width(), max(h, self.minimumSizeHint().height()))
+        return QSize(s.width(), max(self._rows_height(self.rowCount()), self.minimumSizeHint().height()))
+
+    def fit_rows(self, limit=None):
+        """Make the table exactly as tall as its header plus its rows (all of them, or the first `limit`), with no
+        inner scrollbar when every row is shown, so the page scrolls instead of a small box capturing the wheel.
+        Stays fitted across set_rows, a UI-scale / style change and a sideways-scrollbar change."""
+        self._fit_limit = limit
+        self._apply_fit()
+
+    def _on_hrange(self, *_):
+        self._apply_fit()
+
+    def _apply_fit(self):
+        if self._fit_limit is False:
+            return
+        if self._fitting:                              # setFixedHeight moves the scrollbar range, which re-enters
+            self._refit = True
+            return
+        self._fitting = True
+        try:
+            for _ in range(2):                         # one settle pass after the scrollbar range changed
+                self._refit = False
+                n = self.rowCount() if self._fit_limit is None else min(self.rowCount(), self._fit_limit)
+                self.setFixedHeight(self._rows_height(n))
+                self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff if n >= self.rowCount() else Qt.ScrollBarAsNeeded)
+                if not self._refit:
+                    break
+        except RuntimeError:                           # a queued fit reached a widget whose C++ object is already gone
+            pass
+        finally:
+            self._fitting = False
+
+    def changeEvent(self, e):
+        super().changeEvent(e)
+        if getattr(self, "_fit_limit", False) is not False and e.type() in (QEvent.StyleChange, QEvent.FontChange):
+            QTimer.singleShot(0, self, self._apply_fit)    # row heights follow the style, which settles after this event
+
+    def _on_current_cell(self, row, _col, _prow, _pcol):
+        if self._quiet:
+            return
+        orig = self._orig(row) if row >= 0 else -1
+        if orig != self._last_orig:
+            self._last_orig = orig
+            self.current_row_changed.emit(orig)
+
+    def current_orig(self):
+        """Original index of the current row, or -1."""
+        r = self.currentRow()
+        return self._orig(r) if r >= 0 and self.item(r, 0) is not None else -1
+
+    def _visual_of(self, orig):
+        for r in range(self.rowCount()):
+            if self._orig(r) == orig:
+                return r
+        return -1
+
+    def select_orig(self, orig):
+        """Select the row whose original index is `orig` (scrolling it into view) WITHOUT emitting
+        current_row_changed; -1, or an index that is not shown, clears the selection. Returns whether a row was selected."""
+        self._quiet += 1
+        try:
+            r = self._visual_of(orig) if orig is not None and orig >= 0 else -1
+            if r >= 0:
+                self.setCurrentCell(r, 0)
+                self.scrollToItem(self.item(r, 0))
+            else:
+                self.clearSelection()
+                self.selectionModel().clearCurrentIndex()
+            self._last_orig = orig if r >= 0 else -1
+            return r >= 0
+        finally:
+            self._quiet -= 1
+
+    def keyPressEvent(self, e):
+        """Ctrl+C copies the selected rows (or the current row) as tab-separated MACHINE values, the same text as
+        'Copy row' — Qt's own copy would put one cell's display text, UI marks (! / ‡) included, on the clipboard."""
+        if e.matches(QKeySequence.Copy):
+            rows = sorted({i.row() for i in self.selectedIndexes()}) or ([self.currentRow()] if self.currentRow() >= 0 else [])
+            if rows:
+                QApplication.clipboard().setText(
+                    "\n".join("\t".join(self._value(r, j) for j in range(self.columnCount())) for r in rows))
+            e.accept()
+            return
+        if (e.key() == Qt.Key_Menu or (e.key() == Qt.Key_F10 and e.modifiers() & Qt.ShiftModifier)) and self.currentRow() >= 0:
+            self.show_row_menu()                     # the keyboard route to the same menu as the right-click
+            e.accept()
+            return
+        super().keyPressEvent(e)
 
     def _orig(self, visual_row):
         """Map a visual row (post-sort) back to the index it had in set_rows, so row menus /
@@ -948,10 +1273,29 @@ class DataTable(QTableWidget):
         """rows: list of row value-lists. Optional styles[i][j] = foreground colour (hex/QColor or None)
         and tips[i][j] = tooltip override — both additive and sort-safe (the item carries its own colour
         and tooltip when a sort moves it). exports[i][j] overrides what export/copy writes for a cell whose
-        DISPLAYED text carries a UI-only mark (the ΔG severity ! / ‡), so the exported column stays numeric."""
+        DISPLAYED text carries a UI-only mark (the ΔG severity ! / ‡), so the exported column stays numeric.
+        The previously selected row (by original index) is re-selected without emitting current_row_changed."""
         if not _from_complete:
             self._complete_rows = None
             self._complete_limit = None
+        prev = self.current_orig()
+        if prev < 0:
+            prev = self._last_orig
+        self._quiet += 1                             # the rebuild is not the user moving the selection
+        try:
+            self._fill_rows(rows, styles, tips, exports, _orig_indices)
+            r = self._visual_of(prev) if prev >= 0 else -1   # sticky selection: the same original row, if still shown
+            if r >= 0:
+                self.setCurrentCell(r, 0)
+                self._last_orig = prev
+        finally:
+            self._quiet -= 1
+        self._apply_fit()
+        if prev >= 0 and r < 0:
+            self._last_orig = -1
+            self.current_row_changed.emit(-1)
+
+    def _fill_rows(self, rows, styles, tips, exports, _orig_indices):
         self.setSortingEnabled(False)                # never sort mid-insert (it scrambles rows)
         self.setRowCount(0)
         # Numeric columns right-align so their digits form a column; everything else stays centred. The
@@ -1046,9 +1390,9 @@ class DataTable(QTableWidget):
     def set_row_menu(self, builder):
         self._row_menu = builder
 
-    def _menu(self, pos):
-        row = self.rowAt(pos.y())
-        col = self.columnAt(pos.x())
+    def _build_menu(self, row, col, gpos):
+        """The row's menu: its own actions, then Copy cell / Copy row / Export table…. One builder serves the
+        right-click, the Menu / Shift+F10 key and the visible 'Row actions' button, so they cannot drift apart."""
         m = QMenu(self)
         if row >= 0 and self._row_menu:
             for label, fn in self._row_menu(self._orig(row)):        # pass the original data index, not the sorted row
@@ -1056,9 +1400,26 @@ class DataTable(QTableWidget):
             m.addSeparator()
         m.addAction("Copy cell", lambda: self._copy_cell(row, col))
         m.addAction("Copy row", lambda: self._copy_row(row))
-        gpos = self.viewport().mapToGlobal(pos)                   # flat action (no submenu -> no native ▶ arrow to collide with)
-        m.addAction("Export table…", lambda: self._do_export(gpos))
-        m.exec(gpos)
+        m.addAction("Export table…", lambda: self._do_export(gpos))   # flat action (no submenu -> no native ▶ arrow to collide with)
+        return m
+
+    def _menu(self, pos):
+        gpos = self.viewport().mapToGlobal(pos)
+        self._build_menu(self.rowAt(pos.y()), self.columnAt(pos.x()), gpos).exec(gpos)
+
+    def row_items(self, orig):
+        """[(label, callable)] the row menu offers for the row with original index `orig` (empty when none)."""
+        return list(self._row_menu(orig)) if self._row_menu and orig is not None and orig >= 0 else []
+
+    def show_row_menu(self, gpos=None):
+        """Pop the menu for the CURRENT row (anchored under it unless `gpos` is given). False when no row is current."""
+        r = self.currentRow()
+        if r < 0:
+            return False
+        if gpos is None:
+            gpos = self.viewport().mapToGlobal(self.visualRect(self.currentIndex()).bottomLeft())
+        self._build_menu(r, max(self.currentColumn(), 0), gpos).exec(gpos)
+        return True
 
     def _do_export(self, gpos):
         """Flat table export: pop the arrow-free format picker at gpos, then route the chosen format to export_table."""
@@ -1095,7 +1456,9 @@ class DataTable(QTableWidget):
         ResizeToContents, so "Start" -> "Start (0-based)" would push the table sideways on every screen).
         On screen the convention is a GLOSS tooltip, which no export can carry."""
         m = getattr(self, "export_header_map", None) or {}
-        return [m.get(h, h) for h in self._headers]
+        # a lone '#' header is renamed 'No.': a comment-skipping reader (pandas comment='#', R comment.char) would
+        # otherwise read the whole header line as a comment and promote the first data row to column names
+        return [m.get(h, "No." if str(h).strip() == "#" else h) for h in self._headers]
 
     def rows_data(self):
         """Rows for export/copy, in the table's current on-screen (sorted) order.
@@ -1159,8 +1522,7 @@ class _DotCanvas(QWidget):
         if not m:
             return
         sc = self._sc() or 1.0
-        # geometry mirrors figures._dot_frame; kept in one place there and read back here
-        ML, MT, MR, MB = 58.0, 46.0, 16.0, 66.0
+        ML, MT, MR = DOT_ML, DOT_MT, DOT_MR                # one definition, in figures._dot_frame
         plot = max(self._w - ML - MR, 80.0)
         sx, sy = e.position().x() / sc, e.position().y() / sc
         if not (ML <= sx <= ML + plot and MT <= sy <= MT + plot):
@@ -1174,7 +1536,7 @@ class _DotCanvas(QWidget):
         bp_y = int((i + 0.5) / b * n)
         fwd, rev = m["forward"][i][j], m["reverse"][i][j]
         thr = self.panel.threshold
-        parts = [f"{bp_y:,} bp  vs  {bp_x:,} bp"]
+        parts = [f"{bp_y} bp  vs  {bp_x} bp"]
         if fwd:
             parts.append(f"direct (forward): {fwd} match{'es' if fwd != 1 else ''}"
                          + ("" if fwd >= thr else "  — at or below the chance level"))
@@ -1218,6 +1580,7 @@ class DotPanel(QWidget):
         self.show_guides = True
         self.theme = "dark"
         self._theme_locked = False
+        self._export_as_shown = False   # False: exports use the publication palette; True: the on-screen palette
         self.zoom = None             # None = fit the whole plot to the window; a float = explicit zoom factor
         self._def_fwd, self._def_rev = figures._DOT_FWD, figures._DOT_REV
         self.fwd_color, self.rev_color = self._def_fwd, self._def_rev
@@ -1252,17 +1615,23 @@ class DotPanel(QWidget):
         self.guideBtn.clicked.connect(self._toggle_guides)
         bar.addWidget(self.guideBtn)
         bar.addStretch(1)
+        # the help text is a button's tooltip: on the canvas it was overwritten, within ~20 ms of every mouse move, by
+        # the per-cell coordinate readout it shares the tooltip slot with
+        self.helpBtn = QPushButton("?")
+        self.helpBtn.setProperty("sm", True)
+        _name_button(self.helpBtn, "About this plot", self.HELP)
+        bar.addWidget(self.helpBtn)
         lay.addLayout(bar)
 
         # row 2 — zoom · export colours · export formats
         tools = QHBoxLayout()
         tools.setSpacing(6)
-        for label, tip, slot in (("−", "Zoom out (or Ctrl + mouse wheel)", lambda: self._zoom_by(1 / 1.25)),
-                                 ("Fit", "Fit the whole plot to the window", self._fit),
-                                 ("+", "Zoom in (or Ctrl + mouse wheel)", lambda: self._zoom_by(1.25))):
+        for label, name, tip, slot in (("−", "Zoom out", "Zoom out (or Ctrl + mouse wheel)", lambda: self._zoom_by(1 / 1.25)),
+                                       ("Fit", "Fit the figure to the window", "Fit the whole plot to the window", self._fit),
+                                       ("+", "Zoom in", "Zoom in (or Ctrl + mouse wheel)", lambda: self._zoom_by(1.25))):
             b = QPushButton(label)
             b.setProperty("sm", True)
-            b.setToolTip(tip)
+            _name_button(b, name, tip)
             b.clicked.connect(slot)
             tools.addWidget(b)
         tools.addSpacing(12)
@@ -1282,20 +1651,24 @@ class DotPanel(QWidget):
         tools.addWidget(self.revBtn)
         tools.addWidget(rst)
         tools.addStretch(1)
-        for label, tip, slot in (
-                ("SVG", "Vector export — text stays text, legible on white", self._export_svg),
-                ("PNG", "Raster export at publication resolution", self._export_png),
-                ("PDF", "Vector PDF — one journal-ready figure per page", self._export_pdf)):
+        self.exportPalBtn = QPushButton()
+        self.exportPalBtn.setProperty("sm", True)
+        self.exportPalBtn.clicked.connect(self._toggle_export_palette)
+        tools.addWidget(self.exportPalBtn)
+        self._sync_export_palette_btn()
+        for label, name, tip, slot in (
+                ("SVG", "Export the figure as SVG", "Vector export — text stays text, legible on white", self._export_svg),
+                ("PNG", "Export the figure as PNG", "Raster export at publication resolution", self._export_png),
+                ("PDF", "Export the figure as vector PDF", "Vector PDF — one journal-ready figure per page", self._export_pdf)):
             b = QPushButton(label)
             b.setProperty("sm", True)
-            b.setToolTip(tip)
+            _name_button(b, name, tip)
             b.clicked.connect(slot)
             tools.addWidget(b)
         lay.addLayout(tools)
 
         # the canvas lives in a scroll area so a zoomed plot can exceed the window and be panned
         self.canvas = _DotCanvas(self)
-        self.canvas.setToolTip(self.HELP)
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(False)
         self._scroll.setAlignment(Qt.AlignCenter)
@@ -1303,7 +1676,7 @@ class DotPanel(QWidget):
         lay.addWidget(self._scroll, 1)
 
         self.note = QLabel("")
-        self.note.setObjectName("cardmeta")
+        self.note.setObjectName("cardnote")             # running prose: the sans face, 12px floor
         self.note.setWordWrap(True)
         lay.addWidget(self.note)
         self._sync_swatches()
@@ -1381,8 +1754,20 @@ class DotPanel(QWidget):
 
     def _toggle_guides(self):
         self.show_guides = not self.show_guides
-        self.guideBtn.setText("Show guides" if not self.show_guides else "Hide guides")
+        set_caps(self.guideBtn, "Show guides" if not self.show_guides else "Hide guides")
         self._render()
+
+    def _toggle_export_palette(self):
+        self._export_as_shown = not self._export_as_shown
+        self._sync_export_palette_btn()
+
+    def _sync_export_palette_btn(self):
+        shown = self._export_as_shown
+        set_caps(self.exportPalBtn, "Palette: as shown" if shown else "Palette: publication")
+        self.exportPalBtn.setAccessibleName("Export palette: " + ("as shown on screen" if shown else "publication"))
+        self.exportPalBtn.setToolTip(
+            "Palette of the exported SVG, PNG and PDF. 'As shown' writes the plot exactly as it looks now. "
+            "'Publication' writes dark ink on white, legible on paper. Click to switch.")
 
     def _svg(self, w, for_export=False):
         import figures
@@ -1401,7 +1786,7 @@ class DotPanel(QWidget):
             b.style().unpolish(b)
             b.style().polish(b)
         self.layerBtn.setEnabled(self.mode == "heat")
-        self.layerBtn.setText("Direct layer" if self.layer == "reverse" else "Inverted layer")
+        set_caps(self.layerBtn, "Direct layer" if self.layer == "reverse" else "Inverted layer")
         # author the SVG once at a fixed logical width; the zoom factor scales the display, not the SVG
         self.canvas.set_svg(self._svg(self._BASE_W))
         self._apply_zoom()
@@ -1409,14 +1794,17 @@ class DotPanel(QWidget):
     def _export_svg(self):
         path, _ = QFileDialog.getSaveFileName(self, "Export SVG", self.base_name + ".svg", "SVG (*.svg)")
         if path:
-            save_svg(self._svg(920, for_export=not self._theme_locked), path)
+            path = _with_ext(path, ".svg")
+            safe_export(self, path, lambda p: save_svg(self._svg(920, for_export=not self._export_as_shown), p))
 
     def _export_png(self):
         path, _ = QFileDialog.getSaveFileName(self, "Export PNG", self.base_name + ".png", "PNG (*.png)")
         if path:
-            render_png(self._svg(920, for_export=not self._theme_locked), path)
+            path = _with_ext(path, ".png")
+            safe_export(self, path, lambda p: render_png(self._svg(920, for_export=not self._export_as_shown), p))
 
     def _export_pdf(self):
         path, _ = QFileDialog.getSaveFileName(self, "Export PDF", self.base_name + ".pdf", "PDF (*.pdf)")
         if path:
-            render_pdf(self._svg(920, for_export=not self._theme_locked), path)
+            path = _with_ext(path, ".pdf")
+            safe_export(self, path, lambda p: render_pdf(self._svg(920, for_export=not self._export_as_shown), p))

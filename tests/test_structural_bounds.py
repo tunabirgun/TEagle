@@ -8,6 +8,9 @@ the 80% identity gate unreachable. None of it carried a flag — the truncated n
 evidence and propagated into element_span, TSD/PBS/PPT, primer targets and the sealed manifest.
 """
 import random
+import time
+
+import pytest
 
 from teagle_core import structural
 from teagle_core.sequtil import reverse_complement
@@ -100,6 +103,172 @@ def test_simple_repeats_are_not_called_terminal_repeats():
     for seq in ("AT" * 3000, "TA" * 40, "CAG" * 2000, "GATC" * 1500, "A" * 5000):
         assert structural.find_ltr(seq) is None, seq[:12]
         assert structural.find_tir(seq) is None, seq[:12]     # (AT)n is its own reverse complement
+
+
+def _mutated(unit, n, rate, seed):
+    r = random.Random(seed)
+    s = unit * n
+    return "".join(r.choice("ACGT") if r.random() < rate else c for c in s)
+
+
+def _terminal_scans(seq):
+    t0 = time.perf_counter()
+    structural.find_ltr(seq), structural.find_tir(seq), structural.detect_all(seq)
+    return time.perf_counter() - t0
+
+
+@pytest.mark.parametrize("name,seq", [
+    ("(AT)n", "AT" * 3000), ("(CAG)n", "CAG" * 2000), ("(GATC)n", "GATC" * 1500), ("A5000", "A" * 5000),
+    ("(AT)n 5% diverged", _mutated("AT", 3000, 0.05, 1)), ("(CAG)n 5% diverged", _mutated("CAG", 2000, 0.05, 2)),
+    ("random 6 kb", _rnd(6000, seed=77))], ids=lambda v: v if len(v) < 30 else "seq")
+def test_low_complexity_and_random_records_are_scanned_quickly(name, seq):
+    """Seeds from a low-complexity word pair with each other thousands of times; the seed search must mask them
+    (4.1 first took 20-45 s on (AT)n and (GATC)n, 4.0.0 milliseconds)."""
+    assert _terminal_scans(seq) < 2.0, name
+
+
+def test_dust_mask_flags_microsatellites_and_leaves_random_sequence_alone():
+    assert all(structural._dust("AT" * 100)) and all(structural._dust(_mutated("CAG", 100, 0.05, 3)))
+    assert sum(structural._dust(_rnd(6000, seed=5))) == 0
+    flank = structural._dust(_rnd(300, seed=6) + "A" * 80 + _rnd(300, seed=7))
+    assert all(flank[300:380]) and not any(flank[:230]) and not any(flank[450:])
+
+
+def _diverged(unit, n, rate, rng):
+    return "".join(rng.choice("ACGT".replace(c, "")) if rng.random() < rate else c for c in unit * n)
+
+
+def _tir_rows(seq):
+    return [r for r in [structural.find_tir(seq)] + [e for e in structural.detect_all(seq) if e["type"].startswith("TIR")] if r]
+
+
+@pytest.mark.parametrize("unit,n", [("AT", 3000), ("CAG", 2000)])
+def test_diverged_microsatellite_arrays_yield_no_terminal_inverted_repeat(unit, n):
+    """A short-period tandem repeat pairs with its own reverse complement, so a record that is nothing else holds no TIR."""
+    for seed in range(8):
+        for rate in (0.02, 0.05):
+            seq = _diverged(unit, n, rate, random.Random(seed * 1000 + int(rate * 100)))
+            assert not _tir_rows(seq), (unit, rate, seed, _tir_rows(seq)[0]["tir_len"])
+
+
+def test_specimens_between_diverged_microsatellite_flanks_carry_no_arm_inside_a_flank():
+    """The specimens' own ends lie 2 kb inside the record, beyond the TIR seed window: a row whose arm is in a flank is spurious."""
+    from helpers import fixture_seq
+    for acc in ("M11240", "M12927", "M80343", "X01005", "X05424"):
+        for seed in range(3):
+            for rate in (0.02, 0.05):
+                rng = random.Random(seed * 7 + int(rate * 100))
+                seq = _diverged("AT", 1000, rate, rng) + fixture_seq(acc) + _diverged("AT", 1000, rate, rng)
+                for r in _tir_rows(seq):
+                    assert r["five_prime"][1] > 2000 and r["three_prime"][0] < len(seq) - 2000, (acc, rate, seed, r["five_prime"])
+
+
+@pytest.mark.parametrize("arm", ["ATATATATATATATATATATATATA", "TATATATATATATATATATATATATATATCTAT", "ATATATATATATATATATATATATATATGT"])
+def test_arms_that_are_a_microsatellite_with_a_few_substitutions_are_not_a_terminal_repeat(arm):
+    """_is_simple passes a 35-bp (TA)n arm that carries one C."""
+    assert not structural.find_tir(arm + _rnd(2000, seed=3) + reverse_complement(arm))
+
+
+def test_a_tsd_inside_a_microsatellite_run_does_not_corroborate_a_short_terminal_repeat(monkeypatch):
+    """11-bp arms between 40-bp poly-A runs share a 12-bp 'TSD' that the run alone supplies (chance arms stay uncorroborated)."""
+    def record(seed):
+        r = random.Random(seed)
+        arm = "".join(r.choices("ACGT", k=11))
+        return _rnd(100, seed) + "A" * 40 + arm + _rnd(2000, seed + 1) + reverse_complement(arm) + "A" * 40 + _rnd(100, seed + 2)
+    seqs = [record(s) for s in range(30)]
+    corroborated = lambda: [s for s in seqs if (structural.find_tir(s) or {}).get("boundary_tests")]
+    assert not corroborated()
+    monkeypatch.setattr(structural, "_tsd_in_microsatellite", lambda *a: False)
+    assert corroborated(), "the control no longer exercises the guard"
+
+
+
+def test_a_long_random_ltr_is_not_rejected_as_a_simple_repeat():
+    """The distinct-4-mer floor scaled with length past the 256 possible 4-mers, rejecting every repeat over 5.1 kb."""
+    ltr_len = 5500
+    ev = structural.find_ltr(_ltr_element(ltr_len, inner=1500, flank=200, seed=11))
+    assert ev is not None and abs(ev["ltr_len"] - ltr_len) <= 5
+    assert not structural._is_simple(_rnd(ltr_len, seed=12))
+    assert structural._is_simple("ATTA" * 2000) and structural._is_simple("AT" * 3000)
+
+
+def _tc1_in_flanks(runlen, rate, seed, tsd="TA"):
+    """X01005 (Tc1, 54-bp arms) inserted at a TA site: random flank, (TA)n run, TA TSD, element, TA TSD, run, flank."""
+    from helpers import fixture_seq
+    core = fixture_seq("X01005").upper()
+    r = random.Random(seed)
+    flank = lambda: "".join(r.choices("ACGT", k=r.randint(100, 400)))
+    run = lambda: _diverged("TA", runlen // 2, rate, r)
+    left = flank() + run() + tsd
+    return left + core + tsd + run() + flank(), len(left), len(left) + len(core)
+
+
+def _tc1_arm(seq, core_start):
+    """(arm length after trimming the palindromic TA TSD, whether that TSD was found, offset of the arm start from the element start)."""
+    row = structural.find_tir(seq)
+    if not row:
+        return None
+    hit = structural.palindromic_target_site(seq, row, "TA")
+    row2, tsd = hit if hit else (row, None)
+    return row2["tir_len"], bool(tsd), row2["five_prime"][0] - core_start
+
+
+def test_a_tc1_next_to_a_ta_run_keeps_its_own_terminal_repeat():
+    """The arms ran through the TA site into the (TA)n run, and the microsatellite guard then discarded the whole candidate
+    (27 of 30 records dropped to Candidate for a run of 60 bp or more); the run is trimmed off instead."""
+    cells = [(n, d) for n in (20, 40, 60, 100, 200) for d in (0.0, 0.05)]
+    seeds = range(6)
+    got = {(n, d): [_tc1_arm(*_tc1_in_flanks(n, d, 100 * n + s + int(d * 100))[:2]) for s in seeds] for n, d in cells}
+    free = [_tc1_arm(*_tc1_in_flanks(0, 0.0, s)[:2]) for s in seeds]
+    rate = lambda xs: sum(bool(x) and x[0] == 54 and x[2] == 0 for x in xs) / len(xs)
+    assert rate(free) >= 0.8, free
+    for (n, d), xs in got.items():
+        assert all(xs), (n, d, xs)
+        assert all(abs(x[2]) <= 8 and x[0] <= 62 for x in xs), (n, d, xs)     # no arm through the run (they were 70-250 bp)
+        assert rate(xs) >= (1.0 if d == 0 else 0.6), (n, d, xs)               # a substitution at the run's edge can leave a few of its bases in the arm
+        assert sum(x[1] for x in xs) >= len(xs) - 1, (n, d, xs)               # the TA TSD is still reported
+
+
+@pytest.mark.parametrize("unit", ["AATT", "GATC", "ACGT", "AAATTT"])
+def test_palindromic_period_4_to_6_arrays_yield_no_terminal_inverted_repeat(unit):
+    """(AATT)n, (GATC)n, (ACGT)n and (AAATTT)n are their own reverse complements; a diverged copy was reported as a TIR whose
+    arms ran to the 1-kb limit (the guard tested periods 1-3)."""
+    for seed in range(4):
+        for rate in (0.02, 0.05, 0.10):
+            seq = _diverged(unit, 6000 // len(unit), rate, random.Random(555 + seed * 131 + int(rate * 1000) + len(unit)))
+            assert not _tir_rows(seq), (unit, rate, seed, _tir_rows(seq)[0]["tir_len"])
+
+
+@pytest.mark.parametrize("unit", ["AATT", "GATC"])
+def test_specimens_between_diverged_palindromic_flanks_carry_no_arm_inside_a_flank(unit):
+    from helpers import fixture_seq
+    for acc in ("M80343", "X01005", "X05424"):
+        for seed in range(2):
+            rng = random.Random(seed * 11 + len(unit))
+            seq = _diverged(unit, 500, 0.03, rng) + fixture_seq(acc) + _diverged(unit, 500, 0.03, rng)
+            for r in _tir_rows(seq):
+                assert r["five_prime"][1] > 2000 and r["three_prime"][0] < len(seq) - 2000, (unit, acc, seed, r["five_prime"])
+
+
+def test_short_arm_at_the_edge_of_a_record_cut_from_a_microsatellite_array_is_not_a_terminal_repeat():
+    """A record cut from a (CAG)n array has no outside sequence at its ends: the 10-bp arm CAGCTGCAGC of a 20%-diverged
+    array was never tested for period 3 (the window was under 20 bp); the 16 bp inside each arm are now read with it."""
+    rows = []
+    for seed in range(10):
+        seq = _diverged("CAG", 2000, 0.2, random.Random(555 + seed * 131 + 200 + 3))
+        rows += _tir_rows(seq)
+    assert not rows, [r["tir_len"] for r in rows]
+    seq = _diverged("CAG", 2000, 0.2, random.Random(90210 + 200 + 3))
+    assert not _tir_rows(seq)
+
+
+def test_the_tandem_run_test_rarely_rejects_a_random_window():
+    """Random 10-40 bp windows read as a run of period 1-6: 0.04% at 10 bp and 0.08% at 20 bp at GC 0.5 (100,000 windows per cell)."""
+    r = random.Random(41)
+    for length, ceiling in ((10, 0.005), (20, 0.005), (26, 0.005), (40, 0.001)):
+        n = 20000
+        hits = sum(structural._period_run("".join(r.choices("ACGT", k=length))) for _ in range(n))
+        assert hits / n < ceiling, (length, hits / n)
 
 
 # ---------- negative control: the detectors must stay quiet on random sequence ----------

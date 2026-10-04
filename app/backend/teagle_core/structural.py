@@ -2,7 +2,8 @@
 inverted repeats (TIR), poly-A tails, flanking target-site duplications (TSD).
 Heuristic detectors — reported as candidate structural evidence, never as family/DB calls."""
 from __future__ import annotations
-from bisect import bisect_left
+import math
+from bisect import bisect_left, bisect_right
 from collections import Counter
 from .sequtil import reverse_complement
 
@@ -19,21 +20,68 @@ def _is_simple(s: str) -> bool:
     quads = {u[i:i + 4] for i in range(len(u) - 3)}
     # absolute floor as well as proportional: a short (TA)n tract yields 2 distinct 4-mers, which clears
     # any percentage of a small window but is still a microsatellite, not a terminal repeat.
-    return len(quads) < max(4, 0.05 * (len(u) - 3))
+    return len(quads) < max(4, min(192, 0.05 * (len(u) - 3)))     # 192 = 0.75 x the 256 possible 4-mers: longer repeats stay judgeable
 
 
-def _kmer_index(a: str, k: int):
+# A seed word seen more than this often in one search window is a microsatellite, a homopolymer or a repeat
+# family, not terminal-repeat evidence, and is masked (the word masking of BLAST/DUST). Unmasked, its occurrences
+# pair with each other quadratically (a 3-kb (AT)n window gives millions of seed pairs, 45-90 s in find_tir).
+# A random 11-mer is seen about once in 4 Mb, a random 6-mer about once in a 400-bp window, and a word that a
+# real terminal repeat carries is seen in each window about once, so 20 bounds the pairs at 20 x window without
+# touching ordinary sequence.
+_SEED_MAX_OCC = 20
+# Diverged microsatellites escape a count cap (every mutated copy of the word is rare) and then chain into a
+# gapped alignment of up to _MAX_BAND_CELLS, so the LTR seed words are also masked where the sequence is
+# low-complexity by the DUST score (Morgulis et al. 2006 J Comput Biol 13:1028): in a 64-bp window, sum over
+# triplets of c(c-1)/2, divided by (triplets - 1), above 2 (dustmasker's default level 20, window 64; random
+# sequence scores about 0.5). The TIR seed search uses the count cap only: DUST also masks 9-20% of the Ac and
+# Tc1 specimens (their terminal and subterminal repeats), which would change real calls.
+_DUST_WINDOW, _DUST_SCORE = 64, 2.0
+
+
+def _dust(s: str) -> bytearray:
+    """1 at every base of a window whose DUST score exceeds _DUST_SCORE, else 0."""
+    n = len(s)
+    bad = bytearray(n)
+    if n < 4:
+        return bad
+    w = min(_DUST_WINDOW, n)
+    limit = _DUST_SCORE * (w - 3)
+    counts, score = {}, 0
+    for i in range(n - 2):
+        t = s[i:i + 3]
+        c = counts.get(t, 0)
+        score += c
+        counts[t] = c + 1
+        if i >= w - 2:
+            r = s[i + 2 - w:i + 5 - w]
+            c = counts[r] - 1
+            counts[r] = c
+            score -= c
+        if i >= w - 3 and score > limit:
+            bad[i + 3 - w:i + 3] = b"\x01" * w
+    return bad
+
+
+def _kmer_index(a: str, k: int, max_occ: int | None = None, mask: bool = False):
     idx = {}
     clean = "N" not in a and "n" not in a
+    bad = _dust(a) if mask else b""
+    if 1 not in bad:
+        bad = b""
     for i in range(len(a) - k + 1):
         kmer = a[i:i + k]
         if not clean and ("N" in kmer or "n" in kmer):   # an N-run is not repeat evidence; never seed anchors on it
+            continue
+        if bad and bad.find(1, i, i + k) >= 0:           # a word on low-complexity sequence seeds nothing
             continue
         hit = idx.get(kmer)
         if hit is None:
             idx[kmer] = [i]
         else:
             hit.append(i)
+    if max_occ:
+        idx = {w: p for w, p in idx.items() if len(p) <= max_occ}
     return idx
 
 
@@ -382,10 +430,14 @@ def find_ltr(seq: str, k: int = 13, min_ltr: int = 80, min_anchors: int = 4, nea
     if W < min_ltr:
         return None
     a, b = seq[:W], seq[n - W:]                     # b offset by (n-W) in full seq
-    idx = _kmer_index(a, k)
+    idx = _kmer_index(a, k, _SEED_MAX_OCC, True)
+    idx_b = _kmer_index(b, k, _SEED_MAX_OCC, True)         # a word masked in either window seeds nothing
     diag, pts = Counter(), {}
     for j in range(len(b) - k + 1):
-        for i in idx.get(b[j:j + k], ()):
+        w = b[j:j + k]
+        if w not in idx_b:
+            continue
+        for i in idx.get(w, ()):
             p5, p3 = i, (n - W) + j
             if p3 <= p5 + min_ltr:                   # 3' copy must be downstream
                 continue
@@ -462,6 +514,7 @@ _TIR_JOINT_K = 6
 _TIR_JOINT_ANCHORS = 2          # 6-mer seeds needed on one diagonal: an exact run of 7+, or two shorter ones
 MIN_TIR_LEN = 10               # find_tir's default min_tir; arms are never trimmed below it
 _TIR_XDROP = 60                # score below the best at which a seeded candidate's scan stops
+_TIR_MAX_SEEDS = 64             # candidate diagonals kept per seed search; each costs a scan, and ordinary sequence has a handful
 _TIR_JOINT_MAX = 60             # longest arm a 6-mer-seeded candidate is measured to; longer arms carry 11-mer seeds
 _TIR_WEAK_TSD = 6
 _TIR_WEAK_IDENTITY = 90.0        # identity the arms of a TSD-corroborated candidate are measured at
@@ -478,8 +531,33 @@ def scan_scope(seq: str) -> dict:
             "tail_window_bp": tail, "covers_whole_record": 2 * max(ltr, tir) >= n and tail >= n}
 
 
+# GC range over which the random-sequence TIR ceiling quoted with a call was checked: the benchmark runs at
+# 50% GC and the seeded tests at 35% and 65%. Chance inverted repeats lengthen as composition departs from
+# uniform, so the ceiling is not a statement about a record outside this range.
+CHANCE_TIR_GC_RANGE = (0.35, 0.65)
+
+
+def chance_tir(seq: str, length: int):
+    """Chance that random sequence of this record's composition holds a perfect inverted repeat of `length` bp
+    between the two outer seed windows, or None without ACGT bases. Per placement a base pairs with probability
+    q = 2(fA fT + fC fG); the two windows give W x W placements, so p = 1 - exp(-W^2 q^length). Exact arms only:
+    an imperfect arm of the same length is likelier by chance, so this understates it. It bounds the live
+    detector from above for arms of 14 bp and longer (tests/test_41_structural.py)."""
+    s = seq.upper()
+    f = {b: s.count(b) for b in "ACGT"}
+    tot = sum(f.values())
+    if not tot:
+        return None
+    q = 2 * (f["A"] * f["T"] + f["C"] * f["G"]) / tot ** 2
+    w = scan_scope(seq)["tir_seed_window_bp"]
+    gc = (f["C"] + f["G"]) / tot
+    return {"gc": round(gc, 3), "placements": w * w, "per_placement": float(f"{q ** length:.3g}"),
+            "chance_probability": float(f"{-math.expm1(-w * w * q ** length):.3g}"),
+            "in_measured_gc_range": CHANCE_TIR_GC_RANGE[0] <= gc <= CHANCE_TIR_GC_RANGE[1]}
+
+
 def _scan_tir(seq: str, s: int, e: int, min_tir: int, max_tir: int, min_ident: float = MIN_TIR_IDENTITY,
-              x_drop: int | None = None):
+              x_drop: int | None = None, reach: int = 16):
     """Inverted-repeat arms of an element whose outer ends are [s, e): returns (length, identity, matches,
     scan limit) of the best window, or None. A real TIR is often imperfect, so the length is the LONGEST
     window whose identity stays above threshold before the identity 'cliff' where the match becomes random —
@@ -513,9 +591,97 @@ def _scan_tir(seq: str, s: int, e: int, min_tir: int, max_tir: int, min_ident: f
             break                                        # past the cliff: a seeded candidate need not be walked to the limit
         elif x_drop and not best and L >= 2 * min_tir and ident < min_ident - 10:
             break                                        # never reached the identity floor and now far below it
-    if best and not _is_simple(seq[s:s + best[0]]):      # (AT)n is its own reverse complement — not a TIR
+    if best and not _simple_arms(seq, s, e, best[0], reach):    # (AT)n is its own reverse complement — not a TIR
         return best
     return None
+
+
+def _period_run(w: str) -> bool:
+    """w is a tandem run of period 1-2, (AT)n or A(n), or from 20 bp of period 3-6, (CAG)n, (GATC)n, with at most
+    15% of its comparisons broken (30% from 20 bp). Such a repeat satisfies an inverted-repeat identity test against
+    itself (a palindromic unit pairs with itself outright), so it is no terminal-repeat evidence."""
+    tol = 0.15 if len(w) < 20 else 0.3
+    return any(sum(w[i] != w[i + p] for i in range(len(w) - p)) <= tol * (len(w) - p) for p in range(1, 7 if len(w) >= 20 else 3))
+
+
+def _simple_arms(seq: str, s: int, e: int, L: int, reach: int = 16) -> bool:
+    """The arms seq[s:s+L] and seq[e-L:e] are a microsatellite, alone or with the `reach` bp outside them or the same
+    length inside them. A tandem repeat pairs with its own reverse complement, so it is no inverted-repeat evidence,
+    and a few substitutions do not make it one (a 35-bp (TA)n arm with one C, or a 10-bp CTGCAGCAGC, is not
+    _is_simple). The inside context is what exposes a short arm at the edge of a record cut from an array, which has
+    no outside; `reach` is 0 for arms from which a run outside has been cut."""
+    ws = (seq[s:s + L], seq[e - L:e], seq[max(0, s - reach):s + L], seq[e - L:e + reach],
+          seq[s:s + L + 16], seq[max(0, e - L - 16):e])
+    return _is_simple(ws[0]) or any(_period_run(w) for w in ws)
+
+
+def _tsd_in_microsatellite(seq: str, s: int, e: int, t: int, reach: int = 8) -> bool:
+    """The t-bp TSD flanking [s, e) lies in a tandem run that goes on for `reach` more bases outside it."""
+    return any(len(w) >= t + reach and _period_run(w) for w in (seq[max(0, s - t - reach):s], seq[e:e + t + reach]))
+
+
+_RUN_TRIM_SCORE = 10             # net matching comparisons (+1 match / -2 mismatch) that make a stretch of sequence a tandem run
+_RUN_TRIM_SLACK = 10             # a seeded extension can stop short of, or overshoot, the run's edge: the run may start this far in
+_RUN_TRIM_OUT = 40               # bases outside the arm that are read with it, so that a few run bases left inside the arm are seen
+
+
+def _run_extent(seq: str, i: int, step: int, limit: int, x_drop: int = 14) -> int:
+    """Bases of the arm that starts at seq[i] and runs inward by `step` (+1 from a 5' end, -1 from a 3' end) that belong
+    to a tandem run of period 1-6 continuing from the arm's outer end. Each base is compared with the one a period
+    further in; the run is a stretch of those comparisons that scores _RUN_TRIM_SCORE (+1 / -2, as _outer_start walks
+    a diagonal) and starts within _RUN_TRIM_SLACK bases of the arm's end, and it ends where the score falls x_drop below
+    its peak, so a few substitutions do not end it. The walk starts _RUN_TRIM_OUT bases outside the arm, so that the
+    last few bases of a run that the arm only just entered are seen. 0 when no such run enters the arm; random
+    sequence and a TA site do not reach the score."""
+    n = len(seq)
+    out = min(_RUN_TRIM_OUT, i if step > 0 else n - 1 - i)
+    limit = min(limit, n - i if step > 0 else i + 1)
+    line = seq[i - out:i + limit + 6] if step > 0 else seq[max(0, i - limit - 5):i + out + 1][::-1]    # line[k] is x = k - out
+    clean = set(line) <= _ACGT
+    runs = []
+    for p in range(1, 7):
+        cur = best = 0
+        start, best_end, held = -out, -p, False
+        for k in range(min(len(line) - p, out + limit)):
+            u, v = line[k], line[k + p]
+            if clean or (u in _ACGT and v in _ACGT):
+                cur += 1 if u == v else -2
+            x = k - out
+            if held:
+                if cur > best:
+                    best, best_end = cur, x + 1
+                elif cur < best - x_drop:
+                    break
+            elif cur <= 0:
+                cur, start = 0, x + 1
+                if start > _RUN_TRIM_SLACK:
+                    break                                  # a run that starts here no longer reaches the arm's end
+            elif cur >= _RUN_TRIM_SCORE:
+                best, best_end, held = cur, x + 1, True
+        if held and best_end + p > 0:
+            runs.append((best, p, best_end + p))
+            if best_end >= limit:
+                break                                      # the run fills the walk: a longer period would only agree
+    top = max((r[0] for r in runs), default=0)
+    return next((end for score, p, end in runs if score >= 0.9 * top), 0)   # the smallest period that fits as well as the best: a multiple of it, or chance matches with a substituted base, would overshoot
+
+
+def _run_trim(seq: str, s: int, e: int, cap: int) -> int:
+    """Bases to cut from both ends of the arms [s, e) because their outer ends are a tandem run, or -1 when the run fills
+    every base an arm can have (`cap`, or half the span). A transposon inserted next to a (TA)n run has its arms
+    extended through the target site into the run, where the two runs pair with each other (a run is its own reverse
+    complement); the run is no part of the element, so it is cut rather than the whole candidate discarded. The longer
+    of the two runs is cut from both ends, since the arms pair base for base."""
+    limit = min(cap, (e - s) // 2 - MIN_TIR_LEN)
+    if limit <= 0:
+        return 0
+    cut = 0
+    for i, step in ((s, 1), (e - 1, -1)):
+        x = _run_extent(seq, i, step, limit)
+        if x >= limit:
+            return -1
+        cut = max(cut, x)
+    return cut
 
 
 def _tir_row(s: int, e: int, L: int, ident: float, method: str, lower_bound: bool = False) -> dict:
@@ -601,26 +767,41 @@ def _tir_candidates(seq, rc, k, min_tir, max_tir, min_anchors):
         W = min(n // 2, window)
         if W < kk or W < min_tir:
             continue
-        idx = _kmer_index(seq[:W], kk)
+        idx = _kmer_index(seq[:W], kk, _SEED_MAX_OCC)
+        idx_q = _kmer_index(rc[:W], kk, _SEED_MAX_OCC)
         hits = {}
         for j in range(W - kk + 1):
-            for i in idx.get(rc[j:j + kk], ()):
+            w = rc[j:j + kk]
+            if w not in idx_q:
+                continue
+            for i in idx.get(w, ()):
                 hits.setdefault(j - i, []).append(i)
+        found = {}
         for d, il in hits.items():
             if len(il) >= need and d not in seeds:   # seed the densest cluster, not a chance hit elsewhere on the diagonal
-                dens = {x: sum(abs(x - y) <= kk + 4 for y in il) for x in il}
+                srt = sorted(il)
+                dens = {x: bisect_right(srt, x + kk + 4) - bisect_left(srt, x - kk - 4) for x in il}
                 i = max(il, key=dens.get)
                 if dens[i] >= need:
-                    seeds[d] = ((i, i + d), limit)
+                    found[d] = (dens[i], ((i, i + d), limit))
+        if len(found) > _TIR_MAX_SEEDS:              # repeat-rich window: keep the densest diagonals, in discovery order
+            keep = set(sorted(found, key=lambda d: -found[d][0])[:_TIR_MAX_SEEDS])
+            found = {d: v for d, v in found.items() if d in keep}
+        seeds.update({d: v for d, (_, v) in found.items()})
     out = []
     for d, ((i, j), limit) in seeds.items():
         i0, j0 = _outer_start(seq, rc, i, j)
         s, e = i0, n - j0
-        r = _scan_tir(seq, s, e, min_tir, limit, x_drop=_TIR_XDROP)
+        cut = _run_trim(seq, s, e, max_tir)
+        if cut < 0:
+            continue                                       # nothing but a tandem run to pair: not a terminal repeat
+        s, e, j0 = s + cut, e - cut, j0 + cut
+        r = _scan_tir(seq, s, e, min_tir, limit, x_drop=_TIR_XDROP, reach=0 if cut else 16)
         if r:
             L, ident, m, hi = r
             core, off = _core_run(seq, rc, s, j0, L)
-            out.append({"s": s, "e": e, "L": L, "ident": ident, "hi": hi, "j0": j0, "core": core, "off": off})
+            out.append({"s": s, "e": e, "L": L, "ident": ident, "hi": hi, "j0": j0, "core": core, "off": off,
+                        "reach": 0 if cut else 16})
     return out
 
 
@@ -651,13 +832,15 @@ def find_tir(seq: str, k: int = 11, min_tir: int = MIN_TIR_LEN, max_tir: int = 1
         a = pick[0] if pick else 0
         s2, e2, L2 = s + a, e - a, L - a
         t = _tsd_at(seq, s2, e2, MIN_TSD, MAX_TSD)[0] if (s2 > 0 and e2 < n) else 0
+        if t >= _TIR_WEAK_TSD and _tsd_in_microsatellite(seq, s2, e2, t):
+            t = 0                                         # a TSD inside an (AT)n run is no evidence of an insertion site
         supported = t >= _TIR_WEAK_TSD
         strong = c["core"] >= min_anchors + k - 1
         if not (supported or strong):
             continue
         if a:
             ident = _identity(seq[s2:s2 + L2], reverse_complement(seq[e2 - L2:e2]))
-            if ident < MIN_TIR_IDENTITY or L2 < min_tir or _is_simple(seq[s2:s2 + L2]):
+            if ident < MIN_TIR_IDENTITY or L2 < min_tir or _simple_arms(seq, s2, e2, L2, c["reach"]):
                 s2, e2, L2, a = s, e, L, 0
         if supported:
             # A candidate accepted on the strength of its TSD has its arms measured at _TIR_WEAK_IDENTITY:
@@ -676,6 +859,8 @@ def find_tir(seq: str, k: int = 11, min_tir: int = MIN_TIR_LEN, max_tir: int = 1
             s2, e2, L2, a = s + c["off"], e - c["off"], c["core"], 0
         if L2 < min_tir:
             continue                                      # an exact core shorter than the detection floor is not a TIR call
+        if _simple_arms(seq, s2, e2, L2, c["reach"]):
+            continue                                      # whichever path set the arms: a microsatellite pairs with its own reverse complement
         long_ = strong and L2 >= MIN_TIR_STANDALONE       # longer than chance reaches: outranks a corroborated short candidate
         key = (supported and long_, long_, supported, t if supported else 0, strong, L2)
         if best_key is None or key > best_key:

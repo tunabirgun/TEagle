@@ -1,8 +1,7 @@
-"""Qt stylesheet for the TEagle 'assay terminal' look — a monospace-forward precision instrument,
-matching the web UI (app/web/app.css): exact near-black + teal-mint palette, sharp 2px edges,
-tabular-mono data, uppercase tracked micro-labels, and a teal accent reserved for interactive
-affordances. Qt QSS has no letter-spacing / text-transform, so the wordmark spacing and uppercased
-labels are applied in code (main.py).
+"""Qt stylesheet for the TEagle 'assay terminal' look — a monospace-forward precision instrument:
+exact near-black + teal-mint palette, sharp 2px edges, tabular-mono data, uppercase tracked
+micro-labels, and a teal accent reserved for interactive affordances. Qt QSS has no letter-spacing /
+text-transform, so the wordmark spacing and uppercased labels are applied in code (main.py).
 
 Single source of colour truth for the whole app: the chrome palettes (_DARK/_LIGHT), every token
 derived from them (ACCENT/TEXT/HEADRULE/FLAG) and the figure data hues (OKABE_ITO/OK/GENECOL/ARCHCOL/
@@ -47,8 +46,8 @@ QLabel {{ background: transparent; }}
 
 /* header wordmark + chrome (mono, tracked) */
 QLabel#word {{ font-family: {mono}; font-weight: 700; font-size: 16px; }}
-QLabel#tagline {{ font-family: {sans}; color: {faint}; font-size: 10px; }}
-QLabel#ver {{ font-family: {mono}; color: {faint}; font-size: 9px; font-weight: 600;
+QLabel#tagline {{ font-family: {sans}; color: {faint}; font-size: 11px; }}
+QLabel#ver {{ font-family: {mono}; color: {faint}; font-size: 11px; font-weight: 600;
     border: 1px solid {line}; border-radius: 3px; padding: 1px 5px; }}
 QLabel#statusTxt {{ font-family: {sans}; color: {dim}; font-size: 11px; }}
 QFrame#statuschip {{ border: 1px solid {line}; background: {panel2}; border-radius: 2px; }}
@@ -70,8 +69,10 @@ QPushButton#cardhdr:hover {{ color: {accent}; }}
 QPushButton#cardhdr:checked {{ border-bottom: none; }}
 
 /* data-entry fields = mono, near-black well, sharp */
+/* placeholder-text-color: Qt's default is the text colour at 50% alpha (3.24:1 light), so it is set to the
+   opaque `faint` token, which clears 4.5:1 on the field background in both themes */
 QLineEdit, QTextEdit, QPlainTextEdit {{ background: {bg}; border: 1px solid {line2}; border-radius: 2px;
-    padding: 7px 9px; color: {text}; font-family: {mono}; font-size: 12px;
+    padding: 7px 9px; color: {text}; font-family: {mono}; font-size: 12px; placeholder-text-color: {faint};
     selection-background-color: {accentsoft}; selection-color: {text}; }}
 QComboBox {{ background: {bg}; border: 1px solid {line2}; border-radius: 2px; padding: 6px 9px;
     color: {text}; font-family: {sans}; font-size: 12px; }}
@@ -92,14 +93,14 @@ QSpinBox::down-button, QDoubleSpinBox::down-button {{ background: {panel2}; bord
 QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
 QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {{ background: {panel3}; }}
 QLineEdit:focus, QTextEdit:focus, QComboBox:focus {{ border: 1px solid {accent}; }}
-QComboBox::drop-down {{ border: none; width: 18px; }}
+QComboBox::drop-down {{ border: none; width: 22px; }}{arrow}
 /* the popup's highlighted row is drawn by QComboBox's own delegate, which honours selection-background-color
    but ignores ::item rules and paints no focus rect — so outline here is inert either way (measured, Qt 6.11) */
 QComboBox QAbstractItemView {{ background: {panel3}; color: {text}; border: 1px solid {line2};
     selection-background-color: {accentsoft}; selection-color: {text}; font-family: {sans}; outline: none; }}
 
 /* buttons = mono, uppercase (applied in code), sharp 2px */
-QPushButton {{ background: {panel2}; border: 1px solid {line2}; border-radius: 2px; padding: 8px 13px;
+QPushButton {{ background: {panel2}; border: 1px solid {line2}; border-radius: 2px; padding: {pad_base};
     color: {text}; font-family: {sans}; font-size: 12px; font-weight: 600; }}
 QPushButton:hover {{ border: 1px solid {accent}; background: {panel}; }}
 QPushButton:pressed {{ background: {panel3}; }}
@@ -107,23 +108,18 @@ QPushButton:disabled {{ color: {faint}; border: 1px solid {line}; background: {p
 QPushButton[primary="true"] {{ background: {accent}; color: {accentink}; border: 1px solid {accent}; font-weight: 700; }}
 QPushButton[primary="true"]:hover {{ background: {accent2}; }}
 QPushButton[primary="true"]:disabled {{ background: {panel2}; color: {faint}; border: 1px solid {line}; }}
-QPushButton[sm="true"] {{ padding: 5px 9px; font-size: 11px; }}
+QPushButton[sm="true"] {{ padding: {pad_sm}; font-size: 11px; }}
 /* in-table action button: the ONLY property set on it (never combined with sm -> no selector-specificity
    clash), compact enough to sit inside a table row without crowding it */
-QPushButton[cellbtn="true"] {{ padding: 4px 8px; font-size: 11px; font-weight: 600; }}
+QPushButton[cellbtn="true"] {{ padding: {pad_cell}; font-size: 11px; font-weight: 600; }}
 QPushButton[link="true"] {{ background: transparent; border: none; color: {accent};
     font-family: {sans}; font-size: 11px; text-align: left; padding: 2px; font-weight: 600; }}
 QPushButton[link="true"]:hover {{ color: {accent2}; }}
-/* keyboard focus (web parity: app.css ::focus-visible). NOT `outline`: Qt paints outline at the CONTENTS rect
-   (border box minus padding), so on the 2px-padded link buttons it lands on the glyphs and shears the text.
-   Focus therefore recolours the 1px border and tints the fill — same border WIDTH as the base rule, so nothing
-   shifts, and the tint keeps focus distinguishable from hover (which recolours the border only). */
-QPushButton:focus {{ border: 1px solid {accent}; background: {accentsoft}; }}
-/* primary sits on an accent fill: ring in accent ink. The fill MUST be restated — the generic :focus rule above
-   has equal specificity and comes later, so without this it overwrites the accent fill with the tint and the
-   accentink label drops to ~1.1:1 against it (measured), i.e. the label vanishes on click-focus. */
-QPushButton[primary="true"]:focus {{ border: 1px solid {accentink}; background: {accent}; }}
-/* link/cardhdr have border:none, so the generic :focus border above would ADD a box and shift them. Give link its
+/* keyboard focus. NOT `outline`: Qt paints outline at the CONTENTS rect (border box minus padding), so on the
+   2px-padded link buttons it lands on the glyphs and shears the text. The 2px ring/padding rules for the other
+   buttons are appended by qss() (one rule per padding class, so the ring is paid for out of the padding at
+   every UI scale and the box never moves). */
+/* link/cardhdr have border:none, so a generic :focus border would ADD a box and shift them. Give link its
    own ring and pay for it out of the padding (1px border + 1px pad == the base 2px pad), so the box is unchanged
    and the ring sits outside the glyph area. cardhdr keeps its bottom rule and takes a tint only. */
 QPushButton[link="true"]:focus {{ border: 1px solid {accent}; padding: 1px; background: {accentsoft}; }}
@@ -136,7 +132,7 @@ QPushButton#cardhdr:focus {{ border: 2px solid {accent}; border-bottom: 1px soli
 
 /* metric readout gauges + key/value chrome */
 QFrame#cell {{ background: {panel}; border: 1px solid {line}; border-radius: 2px; }}
-QLabel#kdim {{ font-family: {mono}; color: {faint}; font-size: 9px; font-weight: 600; }}
+QLabel#kdim {{ font-family: {mono}; color: {faint}; font-size: 11px; font-weight: 600; }}
 QLabel#value {{ font-family: {mono}; font-size: 21px; font-weight: 600; color: {text}; }}
 QLabel#value[state="good"] {{ color: {good}; }}
 QLabel#value[state="bad"] {{ color: {bad}; }}
@@ -147,7 +143,7 @@ QTableWidget {{ background: {panel}; gridline-color: {line}; border: 1px solid {
 QTableWidget::item {{ padding: {tpadv}px {tpadh}px; }}
 QTableWidget::item:selected {{ background: {accentsoft}; color: {text}; }}
 QHeaderView::section {{ background: {panel2}; color: {faint}; padding: 6px 8px; border: none;
-    border-bottom: 1px solid {line}; font-family: {mono}; font-size: 10px; font-weight: 700; }}
+    border-bottom: 1px solid {line}; font-family: {mono}; font-size: 11px; font-weight: 700; }}
 QTableCornerButton::section {{ background: {panel2}; border: none; }}
 
 /* classification banner (left accent border, big title) */
@@ -155,24 +151,24 @@ QFrame#classbn {{ background: {panel2}; border: 1px solid {line2}; border-left: 
 QLabel#classbig {{ font-family: {sans}; font-size: 18px; font-weight: 700; color: {text}; }}
 QLabel#classkls {{ font-family: {mono}; font-size: 11px; color: {dim}; }}
 QLabel#classexp {{ font-family: {sans}; font-size: 12px; color: {text2}; }}
-QLabel#cf {{ font-family: {sans}; font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 2px; }}
+QLabel#cf {{ font-family: {sans}; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 2px; }}
 QLabel#cf[level="High"] {{ background: {goodsoft}; color: {good}; }}
 QLabel#cf[level="Moderate"] {{ background: {panel3}; color: {dim}; }}
 QLabel#cf[level="Candidate"] {{ background: {warnsoft}; color: {warn}; }}
 
 /* prose + misc chrome */
-QLabel#orient {{ font-family: {sans}; color: {text2}; font-size: 11px; background: {panel2};
+QLabel#orient {{ font-family: {sans}; color: {text2}; font-size: 12px; background: {panel2};
     border-left: 2px solid {line2}; border-radius: 2px; padding: 11px 14px; }}
-QLabel#sectionlabel {{ font-family: {mono}; color: {faint}; font-size: 10px; font-weight: 700; }}
+QLabel#sectionlabel {{ font-family: {mono}; color: {faint}; font-size: 11px; font-weight: 700; }}
 QLabel#cardmeta {{ font-family: {mono}; color: {dim}; font-size: 11px; }}
-/* Running prose inside a card. Identical weight, size and colour to #cardmeta — only the face differs —
-   so the multi-sentence scope/caveat paragraphs stop being set in the data face. This file's own contract
+/* Running prose inside a card. Same weight and colour as #cardmeta, one px larger (12px prose floor) — and the
+   sans face — so the multi-sentence scope/caveat paragraphs stop being set in the data face. This file's own contract
    (SANS = prose/chrome, MONO = data/brand) was being broken by the longest text on the screen. Deliberately
    NOT #orient: that is a bordered, tinted callout box, and boxing four consecutive paragraphs would add
    chrome to say something the typeface already says. */
-QLabel#cardnote {{ font-family: {sans}; color: {dim}; font-size: 11px; }}
+QLabel#cardnote {{ font-family: {sans}; color: {dim}; font-size: 12px; }}
 QLabel#empty {{ font-family: {sans}; color: {faint}; font-size: 12px; }}
-QLabel#gvpos {{ font-family: {mono}; color: {faint}; font-size: 10px; }}
+QLabel#gvpos {{ font-family: {mono}; color: {faint}; font-size: 11px; }}
 /* Level vocabulary, shared by the panel note (#errbanner) and the notification dialog (#notifmsg). TWO
    channels, because colour alone is a weak one (the gel learned this):
    1. hue — error red / warn amber / success green / info BLUE. info must NOT reuse the teal accent: light
@@ -219,20 +215,23 @@ QMenu {{ background: {panel3}; border: 1px solid {line2}; font-family: {sans}; f
 QMenu::item {{ padding: 7px 28px 7px 16px; }}
 QMenu::right-arrow {{ width: 10px; margin-right: 8px; }}
 QMenu::item:selected {{ background: {accentsoft}; color: {text}; }}
-QToolTip {{ background: {panel3}; color: {text}; border: 1px solid {line2}; font-family: {sans}; font-size: 11px; padding: 4px 6px; }}
+QToolTip {{ background: {panel3}; color: {text}; border: 1px solid {line2}; font-family: {sans}; font-size: 12px; padding: 4px 6px; }}
 """
 
 _DARK = dict(bg="#0A0D10", panel="#0F1317", panel2="#131A1F", panel3="#19222A", line="#1E272E",
              line2="#2B3740", text="#E6EDF1", text2="#B4BEC5", dim="#8A959D", faint="#7E8A93",
              accent="#33D6B8", accent2="#1FB89C", accentink="#042420", accentsoft="rgba(51,214,184,0.14)",
              good="#40C088", goodsoft="rgba(64,192,136,0.16)", warn="#D8B368", warnsoft="rgba(216,179,104,0.16)",
-             bad="#EC5F49", badsoft="rgba(236,95,73,0.14)",
+             bad="#EC614B", badsoft="rgba(236,95,73,0.14)",      # +2 HLS steps: 4.47 -> 4.52:1 on badsoft over panel2
              info="#58A6FF", infosoft="rgba(88,166,255,0.16)", mono=MONO, sans=SANS)
 _LIGHT = dict(bg="#EDF1F3", panel="#FFFFFF", panel2="#F2F5F7", panel3="#E7ECEF", line="#DCE3E7",
               line2="#C6D0D6", text="#141B21", text2="#3A454D", dim="#57636B", faint="#5E6A72",
               accent="#0A7259", accent2="#086048", accentink="#FFFFFF", accentsoft="rgba(10,114,89,0.12)",
-              good="#14774F", goodsoft="rgba(23,138,92,0.14)", warn="#7C621F", warnsoft="rgba(138,109,34,0.16)",
-              bad="#BA3F2B", badsoft="rgba(198,67,46,0.12)",
+              # good/warn inks are one HLS-lightness step darker than the originals (#14774F/#7C621F, hue and
+              # saturation unchanged): on the classification banner's panel2 the HIGH chip measured 4.28:1 and the
+              # ORDER WITHHELD chip 4.34:1 — below the 4.5:1 floor for 11px text. Now 5.16:1 and 5.17:1.
+              good="#126946", goodsoft="rgba(23,138,92,0.14)", warn="#6E571C", warnsoft="rgba(138,109,34,0.16)",
+              bad="#B23C29", badsoft="rgba(198,67,46,0.12)",      # was #BA3F2B: 4.26 -> 4.57:1 on badsoft over panel2
               # info is the ONE level hue that is not the brand teal — see the level-vocabulary note above.
               # Blue also survives the red-green deficiencies: the info/success background pair holds
               # dE 7.6 (light) / 11.3 (dark) at full deuteranomaly AND protanomaly. J*=40.8 C=27.8 puts it
@@ -241,6 +240,7 @@ _LIGHT = dict(bg="#EDF1F3", panel="#FFFFFF", panel2="#F2F5F7", panel3="#E7ECEF",
               info="#1A5FA8", infosoft="rgba(26,95,168,0.16)", mono=MONO, sans=SANS)
 
 _PAL = {"dark": _DARK, "light": _LIGHT}
+PAL = _PAL                                             # public name: callers map one theme's tokens onto another's
 # every token below DERIVES from the palettes above — never restate a palette hex here
 ACCENT = {k: p["accent"] for k, p in _PAL.items()}
 TEXT = {k: p["text"] for k, p in _PAL.items()}         # wordmark "TE" ink, per theme
@@ -259,7 +259,16 @@ FLAG = {k: {"warn": p["bad"], "caution": p["warn"]} for k, p in _PAL.items()}
 OKABE_ITO = {"orange": "#E69F00", "skyblue": "#56B4E9", "green": "#009E73",
              "blue": "#0072B2", "vermillion": "#D55E00", "purple": "#CC79A7"}
 _OI = OKABE_ITO
-# domain / feature hues — must match the web figure bands (app/web/app.js).
+# domain / feature hues.
+# EN, ORF1, HEL and YR (the LINE endonuclease, LINE ORF1p, Helitron helicase and DIRS/Crypton tyrosine
+# recombinase) had no key and fell back to the same #888 as an unnamed hit. Picked by random search over sRGB with
+# >=3:1 on BOTH the light (#f6f8fa) and dark (#10171e) tracks, maximising the smallest CAM02-UCS distance to every
+# other figure hue and to #888 under normal vision, deuteranomaly and protanomaly (colorspacious 1.1.2, Machado
+# 2009 severity 100). Smallest CAM02-UCS distance to any other figure hue: EN 10.3, ORF1 8.7, HEL 8.8, YR 10.2
+# (the existing set's own worst pair is 3.7). The one weak pair is EN vs HEL under deuteranomaly (2.7), which
+# never share an element (LINE endonuclease vs Helitron helicase); EN, ORF1 and RT, which do co-occur in a LINE,
+# are >=13.8 apart in all three visions. ORF1 and HEL pass 3:1 on the light track only just (3.02 and 4.40).
+# Re-measure both tracks AND deuteranomaly/protanomaly before changing any of them.
 # ENV needs its own hue — without a key it fell back to grey beside GAG's grey. Okabe-Ito yellow #F0E442 was
 # tried and rejected: 1.24:1 on the light track (the #888 fallback it replaced managed 3.33:1). #B15928 is the
 # measured pick — 3.72:1 dark / 4.56:1 light, and the only candidate that holds up under CVD (worst separation
@@ -273,6 +282,7 @@ _OI = OKABE_ITO
 # brown (#8C564B 13.0, but nearest neighbour is ENV) were measurably worse. Re-measure before changing it.
 OK = {"RT": _OI["blue"], "INT": _OI["orange"], "RNaseH": _OI["green"], "PR": _OI["purple"], "GAG": "#6438FC",
       "ENV": "#B15928", "CHR": _OI["vermillion"], "TPase": _OI["vermillion"], "LTR": _OI["skyblue"],
+      "EN": "#A84748", "ORF1": "#1098DB", "HEL": "#6C794D", "YR": "#F6406A",
       "TIR": _OI["orange"], "tail": _OI["purple"], "ORF": "#4C6C97",
       "on": _OI["green"], "off": _OI["vermillion"], "ladder": "#999999"}
 # exon_derived = a lighter tint of the annotated-exon green: same family, reads "inferred, not annotated";
@@ -295,14 +305,19 @@ CISCOL = {"PBS": "#8459C4", "PPT": "#2C7FB8", "PAS": "#B5316B"}
 # genome-viewer chrome per render target. 'export' is a print-neutral scheme (transparent paper), NOT the app's
 # light theme. Only values that genuinely equal a chrome token derive from one; figure-specific greys stay
 # literal here, because snapping them onto the nearest palette token would silently repalette the figure.
+# track_op / lane_op are written as fill-opacity: an 8-digit CSS hex ("#00000000") is read by QColor as #AARRGGBB
+# and QtSvg then drops the alpha, which painted every export track opaque black.
 _GV_WIN = "#1f6feb"                                    # viewport-window blue, on light/neutral paper
 GV_THEME = {
     "export": {"paper": "none", "ink": "#222", "faint": "#555", "grid": "#dcdfe3",
-               "track": "#00000000", "lane": "#0000000d", "frame": "#c7ccd2", "win": _GV_WIN},
+               "track": "#000000", "track_op": 0.0, "lane": "#000000", "lane_op": 0.05,
+               "frame": "#c7ccd2", "win": _GV_WIN},
     "white":  {"paper": _LIGHT["panel"], "ink": _LIGHT["text"], "faint": "#5a6570", "grid": "#eceef1",
-               "track": "#f6f8fa", "lane": "#eef1f4", "frame": "#dde1e6", "win": _GV_WIN},
+               "track": "#f6f8fa", "track_op": 1.0, "lane": "#eef1f4", "lane_op": 1.0, "frame": "#dde1e6",
+               "win": _GV_WIN},
     "dark":   {"paper": "#0b1016", "ink": _DARK["text"], "faint": _DARK["dim"], "grid": "#182029",
-               "track": "#10171e", "lane": "#121b23", "frame": "#243039", "win": "#4aa8ff"},
+               "track": "#10171e", "track_op": 1.0, "lane": "#121b23", "lane_op": 1.0, "frame": "#243039",
+               "win": "#4aa8ff"},
 }
 
 # agarose-gel palettes. "site" = a NEUTRAL colour for a whole-genome scan with no design locus: the products are
@@ -342,10 +357,54 @@ def _scale_px(css: str, f: float) -> str:
 # source of truth: the QSS below is built from these, and callers read them instead of re-hardcoding 6/9.
 TABLE_ITEM_PAD_V, TABLE_ITEM_PAD_H = 6, 9
 
+# QPushButton padding (vertical, horizontal) as UNSCALED px, keyed by the selector that applies it. The base rules and
+# the focus rings are both built from this, so a 2px focus border is always paid for out of the padding and the
+# focused button box equals the unfocused one at every UI scale.
+BTN_PAD = {"": (8, 13), '[sm="true"]': (5, 9), '[cellbtn="true"]': (4, 8)}
+
+# Theme of the most recent qss() call — the app's current look. Figure panels that are built before their owner has
+# pushed a theme to them read it, so a new figure never opens in the wrong palette.
+ACTIVE = None
+
+
+def _chevron(color: str):
+    """Path of a small down-chevron PNG in `color`, written once under the user data dir (QSS cannot draw a chevron
+    from borders: a border triangle renders as a flat bar). None when it cannot be written."""
+    try:
+        from PySide6.QtCore import Qt, QPointF
+        from PySide6.QtGui import QImage, QPainter, QPen, QColor
+        from teagle_core import appdirs
+        d = os.path.join(appdirs.user_data_dir(), "ui")
+        os.makedirs(d, exist_ok=True)
+        path = os.path.join(d, f"chevron-{color.lstrip('#').lower()}.png")
+        if not os.path.exists(path):
+            img = QImage(30, 18, QImage.Format_ARGB32)
+            img.fill(Qt.transparent)
+            p = QPainter(img)
+            p.setRenderHint(QPainter.Antialiasing)
+            pen = QPen(QColor(color)); pen.setWidthF(3.4); pen.setCapStyle(Qt.RoundCap); pen.setJoinStyle(Qt.RoundJoin)
+            p.setPen(pen)
+            p.drawPolyline([QPointF(5, 4.5), QPointF(15, 13.5), QPointF(25, 4.5)])
+            p.end()
+            tmp = f"{path}.{os.getpid()}.part"
+            if not img.save(tmp, "PNG"):
+                return None
+            os.replace(tmp, path)
+        return path.replace("\\", "/")
+    except Exception:
+        return None
+
 
 def qss(theme: str = "dark") -> str:
+    global ACTIVE
+    ACTIVE = "light" if theme == "light" else "dark"
     pal = _LIGHT if theme == "light" else _DARK
-    css = _scale_px(_COMMON.format(**pal, tpadv=TABLE_ITEM_PAD_V, tpadh=TABLE_ITEM_PAD_H), UI_SCALE)
+    chev = _chevron(pal["text2"])
+    arrow = (f"\nQComboBox::down-arrow {{ image: url(\"{chev}\"); width: 10px; height: 6px; margin-right: 4px; }}"
+             if chev else "")
+    pad = {k: f"{v}px {h}px" for k, (v, h) in BTN_PAD.items()}
+    css = _scale_px(_COMMON.format(**pal, tpadv=TABLE_ITEM_PAD_V, tpadh=TABLE_ITEM_PAD_H, arrow=arrow,
+                                   pad_base=pad[""], pad_sm=pad['[sm="true"]'], pad_cell=pad['[cellbtn="true"]']), UI_SCALE)
     # Current-cell keyboard cue. MUST be ::item:focus — a view-level `outline` paints 0px under the windows11
     # style the app actually ships on (its CE_ItemViewItem never issues PE_FrameFocusRect); it only worked on
     # fusion/vista. Independent of selection, so NoSelection tables (the genome manager) still get a cue.
@@ -356,4 +415,16 @@ def qss(theme: str = "dark") -> str:
     fph = max(0, math.ceil(TABLE_ITEM_PAD_H * UI_SCALE) - 2)
     css += (f"\nQTableWidget::item:focus {{ border: 2px solid {pal['accent']}; "
             f"padding: {fpv}px {fph}px; }}\n")
+    # Button focus ring, 2px, paid for out of the padding: one rule per padding class so each keeps its own box
+    # (a generic :focus rule ties with [sm]/[cellbtn] on specificity and would swap the padding for the wrong one).
+    # _scale_px leaves values below 6px unscaled and Qt rounds a fractional px up, so fp mirrors both per value.
+    def fp(v):
+        px = float(f"{v * UI_SCALE:.1f}") if (v >= 6 and abs(UI_SCALE - 1.0) >= 1e-3) else v
+        return max(0, math.ceil(px) - 1)
+    for sel, (v, h) in BTN_PAD.items():
+        css += (f"QPushButton{sel}:focus {{ border: 2px solid {pal['accent']}; background: {pal['accentsoft']}; "
+                f"padding: {fp(v)}px {fp(h)}px; }}\n")
+    for sel, (v, h) in BTN_PAD.items():                  # primary: ring in the text ink on the accent fill, fill restated
+        css += (f"QPushButton{sel}[primary=\"true\"]:focus {{ border: 2px solid {pal['text']}; "
+                f"background: {pal['accent']}; padding: {fp(v)}px {fp(h)}px; }}\n")
     return css

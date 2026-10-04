@@ -166,9 +166,12 @@ def _call(a):
 def test_core_decision_is_the_same_for_a_site_in_specimen_and_background():
     fwd, rev, good, bad = _core_case()
     both = _run(good + rnd(1000, 40) + bad, bad, fwd, rev)
-    from_bad = [a for a in both["amplicons"] if a["fwd_mm"] or a["fwd_tail5"]]
-    assert from_bad == [], "the imperfect copy was dropped in the specimen but reported in the background"
-    assert len(both["amplicons"]) == 1
+    spec = [a for a in both["amplicons"] if a["source"].endswith("(input)")]
+    assert len(spec) == 1 and spec[0]["fwd_mm"] == 0 and spec[0]["fwd_tail5"] == 0
+    alone = primers.in_silico_pcr(fwd, rev, bad, "b", prod_min=70, prod_max=400)
+    bg = [a for a in both["amplicons"] if not a["source"].endswith("(input)")]
+    assert [_call(a) for a in bg] == [_call(a) for a in alone] and len(alone) == 1, \
+        "a background product the lone search reports was dropped because the specimen has a longer site"
     same = _run(bad, bad, fwd, rev)
     assert len(same["amplicons"]) == 2
     assert _call(same["amplicons"][0]) == _call(same["amplicons"][1]) and same["amplicons"][0]["fwd_tail5"] == 6
@@ -209,6 +212,32 @@ def test_a_lone_search_keeps_the_per_sequence_core():
     fwd, rev, _good, bad = _core_case()
     amps = primers.in_silico_pcr(fwd, rev, bad, "b", prod_min=70, prod_max=400)
     assert len(amps) == 1 and amps[0]["fwd_tail5"] == 6 and amps[0]["fwd_mm"] == 2
+
+
+def _footprint(a):
+    """Core-invariant identity of a product: the 5'-end-to-5'-end span of the two oligos."""
+    return (a["fwd_primer"], a["rev_primer"], a["start"] - a["fwd_tail5"], a["end"] + a["rev_tail5"], a["product_length"])
+
+
+def _random_unit(r, fwd, rev, p_mut):
+    f = mutate(fwd, {i for i in range(len(fwd) - 6) if r.random() < p_mut})
+    return rnd(40, r.random()) + f + rnd(r.randint(40, 200), r.random()) + RC(rev) + rnd(40, r.random())
+
+
+def test_every_background_keeps_all_of_its_lone_search_products_and_the_specimen_is_untouched():
+    r = random.Random(5)
+    fwd, rev = rnd(26, 11), rnd(22, 12)
+    kw = dict(max_mm=2, tp=5, prod_min=70, prod_max=400)
+    lost = 0
+    for _ in range(80):
+        specimen, bg = _random_unit(r, fwd, rev, 0.05), _random_unit(r, fwd, rev, 0.35)
+        cores = primers.specimen_cores(fwd, rev, specimen, 2, 5)
+        alone = primers.in_silico_pcr(fwd, rev, specimen, "s", **kw)
+        assert primers.in_silico_pcr(fwd, rev, specimen, "s", cores=None, **kw) == alone
+        lone = {_footprint(a) for a in primers.in_silico_pcr(fwd, rev, bg, "b", **kw)}
+        both = {_footprint(a) for a in primers.in_silico_pcr(fwd, rev, bg, "b", cores=cores, **kw)}
+        lost += len(lone - both)
+    assert lost == 0, f"{lost} lone-search background products were dropped under the specimen core"
 
 
 # ---- primers2-5: design and sealed PCR apply one geometry rule ------------------------------------

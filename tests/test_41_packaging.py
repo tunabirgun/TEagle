@@ -464,3 +464,50 @@ def test_second_launch_leaves_the_running_instances_log_alone(monkeypatch, tmp_p
     finally:
         _close_kept(mod)
     assert log.stat().st_size == 1_100_000
+
+
+SPEC = ROOT / "installer" / "teagle_native.spec"
+_DEV_ONLY = {"__init__", "build_assembly_maps"}          # package marker; regenerates bundled data at dev time only
+
+
+def _spec_lists():
+    import ast
+    tree = ast.parse(SPEC.read_text(encoding="utf-8"))
+    out = {"hiddenimports": set(), "_ALLOWED_TOP": set()}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and isinstance(node.value, (ast.List, ast.Set)):
+            for t in node.targets:
+                if isinstance(t, ast.Name) and t.id in out:
+                    out[t.id] |= {e.value for e in node.value.elts if isinstance(e, ast.Constant)}
+    return out["hiddenimports"], out["_ALLOWED_TOP"]
+
+
+def _first_party():
+    native = {p.stem for p in [*(ROOT / "app" / "native").glob("*.py"),
+                               *(ROOT / "app" / "backend").glob("*.py")]} - _DEV_ONLY
+    core ={p.stem for p in (ROOT / "app" / "backend" / "teagle_core").glob("*.py")} - _DEV_ONLY
+    return native, core
+
+
+def _uncovered(hidden, allowed, native, core):
+    return sorted(
+        [f"native:{m} hiddenimports" for m in native if m not in hidden]
+        + [f"native:{m} _ALLOWED_TOP" for m in native if m not in allowed]
+        + [f"teagle_core.{m} hiddenimports" for m in core if f"teagle_core.{m}" not in hidden]
+        + ([] if "teagle_core" in allowed else ["teagle_core _ALLOWED_TOP"])
+    )
+
+
+def test_spec_covers_every_first_party_module():
+    native, core = _first_party()
+    assert {"coords", "report"} <= native and {"gff3", "dotplot", "artifact_metadata"} <= core
+    hidden, allowed = _spec_lists()
+    assert _uncovered(hidden, allowed, native, core) == []
+
+
+def test_spec_coverage_check_fails_when_a_module_is_dropped():
+    native, core = _first_party()
+    hidden, allowed = _spec_lists()
+    assert _uncovered(hidden - {"report"}, allowed, native, core) == ["native:report hiddenimports"]
+    assert _uncovered(hidden, allowed - {"coords"}, native, core) == ["native:coords _ALLOWED_TOP"]
+    assert _uncovered(hidden - {"teagle_core.dotplot"}, allowed, native, core) == ["teagle_core.dotplot hiddenimports"]

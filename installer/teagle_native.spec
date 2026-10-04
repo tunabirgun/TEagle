@@ -52,11 +52,12 @@ binaries = []
 hiddenimports = [
     # native UI package (app/native) + engine adapter (app/backend)
     "main", "engine", "engine_worker", "figures", "widgets", "sample", "theme", "fonts", "install_dialog",
-    "envcheck",
+    "coords", "report", "envcheck",
     "teagle_core", "teagle_core.appdirs", "teagle_core.sequtil", "teagle_core.structural",
     "teagle_core.classify", "teagle_core.domains", "teagle_core.primers", "teagle_core.oligoqc",
     "teagle_core.fetch", "teagle_core.refs", "teagle_core.provenance", "teagle_core.timing", "teagle_core.wsl",
     "teagle_core.examples", "teagle_core.oligoqc_wsl", "teagle_core.retroviral", "teagle_core.genomepcr",
+    "teagle_core.artifact_metadata", "teagle_core.dotplot", "teagle_core.gff3",
     # Qt modules actually used (PySide6's hook collects the matching libs + plugins, incl. QtSvg)
     "PySide6.QtCore", "PySide6.QtGui", "PySide6.QtWidgets", "PySide6.QtSvg",
 ]
@@ -196,7 +197,7 @@ _ALLOWED_TOP = {
     "openpyxl", "et_xmlfile",                                # openpyxl (+ its only dependency)
     "certifi", "pypdf",
     "teagle_core", "teagle_native", "main", "engine", "engine_worker", "envcheck",
-    "figures", "widgets", "sample", "theme", "fonts", "install_dialog",   # app/backend + app/native
+    "figures", "widgets", "sample", "theme", "fonts", "install_dialog", "coords", "report",   # app/backend + app/native
     "_pyi_rth_utils",                                        # PyInstaller runtime shim
 }
 _counts = {}

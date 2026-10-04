@@ -323,8 +323,9 @@ def anchored_sites(primer, seq, max_mm, tp, min_anneal, on_reverse, core=None):
     every site of a long core is already a site of its own 3' suffix. The shortest permitted core is
     therefore scanned once and each hit extended 5' while the mismatch budget holds. The longest
     extension reached anywhere is the core the assay uses, which is what the descending scan returns.
-    `core` replaces that maximum with a core length fixed from the specimen (see specimen_cores); every site
-    that reaches at least that long is called at that core.
+    `core` (see specimen_cores) caps that maximum at the specimen's core: every site that reaches at least that
+    long is called at it, and a sequence whose own longest core is shorter keeps its own, so no product the
+    lone search of this sequence reports is lost.
 
     Returns (sites, capped). `on_reverse` selects the strand the primer primes from; on that strand a 5'
     extension of the primer appends complemented bases to the RIGHT of the matched window, because
@@ -334,7 +335,9 @@ def anchored_sites(primer, seq, max_mm, tp, min_anneal, on_reverse, core=None):
     if not viable:
         return [], capped
     L = len(primer)
-    best = max(n for _i, n in viable) if core is None else core
+    best = max(n for _i, n in viable)
+    if core is not None:
+        best = min(best, core)
     pat_best = primer[L - best:]
     if on_reverse:
         pat_best = reverse_complement(pat_best)
@@ -359,9 +362,10 @@ _STRANDS = (("forward_strand", False), ("reverse_strand", True))
 def specimen_cores(fwd, rev, seq, max_mm=2, tp=5, min_anneal=MIN_PRIMER_SIZE):
     """The annealing core of each primer on each strand as the specimen alone decides it: the longest core
     reached in `seq`, which is exactly what a lone search of `seq` uses. Passed to in_silico_pcr as `cores`
-    for the backgrounds, it gives an identical site the same core/tail call there as in the specimen while
-    the specimen's own result stays independent of the backgrounds. None means the specimen has no site for
-    that primer and strand, so a background falls back to its own per-sequence core."""
+    for the backgrounds, it gives an identical site the same core/tail call there as in the specimen wherever
+    the background reaches that core, while the specimen's own result stays independent of the backgrounds.
+    A background that does not reach it keeps its own per-sequence core, and None means the specimen has no
+    site for that primer and strand, so a background uses its own core there too."""
     out = {}
     for label, primer in (("F", normalize_primer(fwd, "forward primer")), ("R", normalize_primer(rev, "reverse primer"))):
         out[label] = {}
@@ -396,7 +400,7 @@ def in_silico_pcr(fwd: str, rev: str, seq: str, seq_id: str = "template",
     those differ for a tailed pair and a user comparing against a gel needs the latter. Each product
     carries the primer sequence over its whole footprint (tail and annealed core) and template bases only
     between the footprints. A product must be longer than either annealed core, so two cores cannot cross.
-    ``cores`` (from specimen_cores) applies the specimen's core to a background; without it the core is the
+    ``cores`` (from specimen_cores) caps a background's core at the specimen's; without it the core is the
     longest reached in this sequence.
 
     Returns real amplicon list."""

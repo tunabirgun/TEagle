@@ -363,8 +363,8 @@ def test_first_probe_failure_retries_then_points_to_refresh(monkeypatch):
 
     class FakeTimer:
         @staticmethod
-        def singleShot(ms, fn):
-            calls.append((ms, fn))
+        def singleShot(ms, *args):                          # (ms, fn) or (ms, context, fn)
+            calls.append((ms, args[-1]))
     monkeypatch.setattr(mod, "QTimer", FakeTimer)
     comps = [dict(_WSL2_ROW, detail="probe failed")]
     d._render_components({"error": "timed out", "components": comps})
@@ -382,7 +382,7 @@ def test_successful_probe_resets_the_retry_budget(monkeypatch):
         d._render_components({"error": "x"})
     d._render_components({"wsl2": True, "installing": False, "ready": False, "components": []})
     calls = []
-    monkeypatch.setattr(mod, "QTimer", type("T", (), {"singleShot": staticmethod(lambda ms, fn: calls.append(ms))}))
+    monkeypatch.setattr(mod, "QTimer", type("T", (), {"singleShot": staticmethod(lambda ms, *args: calls.append(ms))}))
     d._render_components({"error": "x"})
     assert calls
 
