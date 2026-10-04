@@ -20,7 +20,7 @@ This release corrects scientific and interface defects found by a full audit of 
 - Primer table Location and Notes columns (where each primer sits: flank, terminal repeat, internal region or domain; overlapping and shared-primer pairs; primers inside a terminal repeat that can also prime the other copy and solo copies).
 - Oligo order sheet export (one row per unique oligo with name, 5′→3′ sequence, length, Tm, GC and empty Scale/Purification columns) and copyable order rows.
 - Assay report (PDF or HTML) and a copyable notebook entry that combine the call, its cautions, the element map, the chosen pairs with locations and QC, the predicted gel, the reaction conditions and the run seals.
-- Sectioned provenance view with units and full copyable SHA-256 values, a run history covering analysis, primer design, in-silico PCR and genome scan, and an export of all runs.
+- Sectioned provenance view with units and full copyable SHA-256 values, a run history covering analysis, primer design, in-silico PCR, genome scan, family naming and splice alignment, and an export of all runs.
 - Per-record classification TSV in TEsorter's .cls.tsv column order plus the RepeatMasker class string and Wicker code, for joining with TEsorter, EDTA or RepeatMasker output.
 - Wicker rank path with three-letter code and a RepeatMasker-style class string beside each call (a display mapping, not an additional classification).
 - A "Published as" check beside the call for the bundled published examples.
@@ -33,12 +33,15 @@ This release corrects scientific and interface defects found by a full audit of 
 - Classification results carry separate `domain_architecture` and `wicker_order` fields, and GFF3/BED export both.
 - Target-site duplication rows carry a chance probability adjusted for every length and boundary placement searched, and structural rows carry their TSD state (found, absent, partially assessable, not assessable, not assessed).
 - A live, seeded chance-TIR check runs with the test suite and guards the 20-bp standalone-TIR rule.
+- A Cancel button for a running accession or coordinate fetch; whatever the fetch returns afterwards is ignored and the current sequence is kept.
+- A "Close TEagle?" confirmation when the window is closed while a job is still running.
+- A "Show all N ORFs" link under the ORF table, which otherwise lists the ORFs searched for domains.
 
 ### Changed
 
-- LTR elements whose integrase follows the reverse transcriptase and that carry a retrovirus-specific capsid/matrix or envelope profile hit no longer receive a Gypsy (Ty3) call; the superfamily is withheld because Gypsy, Bel-Pao and Retrovirus/ERV share that pol order (Wicker et al. 2007), and confidence is capped at Moderate. "Errantivirus" is named only for Gypsy-called elements. Drosophila gypsy keeps its Gypsy call.
+- LTR elements whose integrase follows the reverse transcriptase and that carry a retrovirus-specific capsid/matrix or envelope profile hit no longer receive a Gypsy (Ty3) call; the superfamily is reported as not resolved because Gypsy, Bel-Pao and Retrovirus/ERV share that pol order (Wicker et al. 2007), and confidence is capped at Moderate. "Errantivirus" is named only for Gypsy-called elements. Drosophila gypsy keeps its Gypsy call.
 - Pfam RVT_3 (PF13456), an RNase H-clan profile, is reported as an RNase H-like domain instead of reverse transcriptase, so an RNase H region alone no longer licenses a Class I call. The panel still has 30 models.
-- Withheld classifications always report Candidate confidence; terminal repeats no longer raise a transposase-only call to Moderate.
+- A classification that is withheld outright always reports Candidate confidence; terminal repeats no longer raise a transposase-only call to Moderate.
 - LTR identity and length are measured from a gapped alignment, so an indel between the LTR copies no longer reads as heavy divergence or halves the LTR; boundaries are refined jointly with the target-site duplication.
 - Terminal inverted repeats are located in records that carry genomic flanks, and a Tc1/Mariner element reports its true TIR and the TA target site; poly-A tails followed by flank or interrupted by one base are found, with chance tails controlled for multiple testing.
 - TSD congruence uses superfamily length ranges (LTR 4–6 bp, preferred 5 bp) and motifs (Tc1/Mariner TA), and a short chance-level repeat is no longer described as proof that the insertion site is captured.
@@ -55,13 +58,13 @@ This release corrects scientific and interface defects found by a full audit of 
 - Primer pairs keep one name everywhere (design tag plus Primer3 number, for example D2·P3), and amplicon exports include the primer sequences.
 - Every seal is independent of how numbers were typed (60 or 60.0) and of fetch time; the provenance seal records every applied structural threshold.
 - Text and status chips meet WCAG AA contrast in both themes, focused buttons show a 2-px focus ring, figure text is at least 9 px, and units keep their case (bp, nt, aa, Tm).
-
 - Files exported by the app (PNG, PDF, SVG, XLSX and the assay report) carry no author or creator field.
 - "Export ID map (local)" is offered only from a record row's right-click menu, after a confirmation that the file pairs record identifiers with the original sequence names and should not be shared if those names are sensitive.
 - Terminal-repeat detection no longer stalls on microsatellite- or AT-rich records: low-complexity and over-represented seed words are masked (a DUST score for LTR seeds, an occurrence cap for LTR and TIR seeds), so such records scan in milliseconds instead of tens of seconds, with no change to the detection thresholds or to results on non-repetitive sequence.
-- Terminal inverted repeats whose arms are a microsatellite that can pair with its own reverse complement (periods 1–3, and period 4–6 units that are their own reverse complement, such as (AATT)n, (GATC)n, (ACGT)n and (AAATTT)n) are no longer reported, with or without flanking sequence and at up to about 10% divergence; a short arm at the edge of a record cut from such an array is read together with the 16 bp inside it, and a target-site duplication inside a microsatellite run no longer corroborates a terminal repeat. Arms made of a longer unit that cannot pair with itself, such as the (TCTA)n terminal repeat of Ginger1, are kept.
-- A transposon inserted into a run that pairs with itself, such as (TA)n, keeps its own terminal inverted repeat: the run is cut from the arms instead of the candidate being discarded. A run of any other unit at both arm ends, such as A(n), (CA)n or (CAG)n, cannot pair across an insertion and is kept as part of the element's own repeat.
+- Terminal inverted repeats whose arms are a microsatellite of period 1–3, or of period 4–6 with a unit that is its own reverse complement, such as (AATT)n, (GATC)n, (ACGT)n and (AAATTT)n, or that repeats a shorter unit, are no longer reported, with or without flanking sequence and at up to about 10% divergence; a short arm at the edge of a record cut from such an array is read together with the 16 bp inside it, and a target-site duplication inside a tandem run of any unit no longer corroborates a terminal repeat. Arms made of a longer unit that cannot pair with itself, such as the (TCTA)n terminal repeat of Ginger1, are kept.
+- A transposon inserted into a run that pairs with itself, such as (TA)n, keeps its own terminal inverted repeat: the run is cut from the arms instead of the candidate being discarded. Between random flanks, a run of any other unit at both arm ends, such as A(n), (CA)n or (CAG)n, cannot pair across an insertion and is kept as part of the element's own repeat.
 - A terminal repeat longer than about 5.1 kb is no longer rejected as a simple repeat.
+
 ### Fixed
 
 - Results of a family annotation, splice alignment, primer design, in-silico PCR or genome scan for a previous specimen are discarded instead of being shown as current, and a slow fetch can no longer overwrite a sequence entered afterwards.
@@ -95,6 +98,8 @@ This release corrects scientific and interface defects found by a full audit of 
 
 - Microsatellite arrays with about 15–20% substitutions can still yield a short (10–19 bp) terminal inverted repeat reported as class unassigned.
 - A terminal inverted repeat whose own outer end is a run that pairs with itself, such as (TA)n or (GATC)n, cannot be told apart from an insertion into such a run, and the run is cut from the reported arms.
+- When a transposon whose terminal repeat begins with a run of another unit, such as A(n) or (CA)n, sits in a (TA)n run, the longer of the two runs decides the reported arms: a longer (TA)n run is cut together with the element's own run, and a longer element run leaves the (TA)n run in the arms or loses the terminal repeat. A (TA)n stretch shorter than about 10 bp beside a Tc1/Mariner element is not cut and can lengthen the arms by a few base pairs.
+- An element flanked by an inverted pair of runs of a unit that cannot pair with itself, such as (CA)n on one side and (TG)n on the other, has its terminal-repeat arms extended into those runs.
 - A tandem run of 1 kb or more beside an element removes its terminal-repeat candidate, and terminal inverted repeats are searched within about 1.2 kb of each record end.
 - The microsatellite guard rejects random arms in AT-rich sequence slightly more often than before (at 20% GC, 3.3% of 10-bp and 1.0% of 20-bp arms, against 2.9% and 0.8%).
 

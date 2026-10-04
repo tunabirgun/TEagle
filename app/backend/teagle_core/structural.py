@@ -596,14 +596,15 @@ def _scan_tir(seq: str, s: int, e: int, min_tir: int, max_tir: int, min_ident: f
     return None
 
 
-def _period_run(w: str) -> bool:
+def _period_run(w: str, any_unit: bool = False) -> bool:
     """w is a tandem run of period 1-2, (AT)n or A(n), or from 20 bp of period 3, (CAG)n, or of period 4-6 with a
     unit that is its own reverse complement, (GATC)n, (AAATTT)n, or repeats a shorter unit, with at most 15% of its
     comparisons broken (30% from 20 bp). Such a repeat satisfies an inverted-repeat identity test against itself (a
     palindromic unit pairs with itself outright), so it is no terminal-repeat evidence. A longer unit that is neither,
-    (TCTA)n, cannot pair with itself, and an arm made of it is left to the identity test."""
+    (TCTA)n, cannot pair with itself, and an arm made of it is left to the identity test. With `any_unit` every
+    period-4-6 unit counts: a direct repeat inside any tandem run is uninformative."""
     tol = 0.15 if len(w) < 20 else 0.3
-    return any(sum(w[i] != w[i + p] for i in range(len(w) - p)) <= tol * (len(w) - p) and (p < 4 or _short_or_paired(w, p))
+    return any(sum(w[i] != w[i + p] for i in range(len(w) - p)) <= tol * (len(w) - p) and (p < 4 or any_unit or _short_or_paired(w, p))
                for p in range(1, 7 if len(w) >= 20 else 3))
 
 
@@ -620,7 +621,7 @@ def _simple_arms(seq: str, s: int, e: int, L: int, reach: int = 16) -> bool:
 
 def _tsd_in_microsatellite(seq: str, s: int, e: int, t: int, reach: int = 8) -> bool:
     """The t-bp TSD flanking [s, e) lies in a tandem run that goes on for `reach` more bases outside it."""
-    return any(len(w) >= t + reach and _period_run(w) for w in (seq[max(0, s - t - reach):s], seq[e:e + t + reach]))
+    return any(len(w) >= t + reach and _period_run(w, any_unit=True) for w in (seq[max(0, s - t - reach):s], seq[e:e + t + reach]))
 
 
 _RUN_TRIM_SCORE = 10             # net matching comparisons (+1 match / -2 mismatch) that make a stretch of sequence a tandem run

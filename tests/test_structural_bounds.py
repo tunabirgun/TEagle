@@ -269,6 +269,14 @@ def test_a_terminal_repeat_made_of_a_unit_that_cannot_pair_with_itself_is_kept()
     assert not structural._period_run("TCTA" * 10) and structural._period_run("GATC" * 10) and structural._period_run("CAG" * 10)
 
 
+def test_a_tsd_inside_any_tandem_run_is_uninformative():
+    """A 12-bp direct repeat inside (GATA)n says nothing about an insertion, although (GATA)n cannot pair with itself."""
+    body = _rnd(300, seed=77)
+    for run, flagged in (("GATA" * 10, True), ("CAG" * 14, True), (_rnd(40, seed=78), False)):
+        seq = run + body + run
+        assert structural._tsd_in_microsatellite(seq, len(run), len(run) + len(body), 12) is flagged, run[:8]
+
+
 def test_only_a_run_whose_unit_is_its_own_reverse_complement_is_trimmed():
     for w, p, paired in (("TA" * 8, 2, True), ("GATC" * 4, 4, True), ("AATT" * 4, 4, True), ("AAATTT" * 3, 6, True),
                          ("A" * 12, 1, False), ("CA" * 8, 2, False), ("CAG" * 5, 3, False), ("AAT" * 5, 3, False)):
