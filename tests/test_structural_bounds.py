@@ -229,6 +229,53 @@ def test_a_tc1_next_to_a_ta_run_keeps_its_own_terminal_repeat():
         assert sum(x[1] for x in xs) >= len(xs) - 1, (n, d, xs)               # the TA TSD is still reported
 
 
+def _headed_element(head, arm_len, tsd, seed):
+    """An element whose own arms begin with a simple run (head + random), between random flanks with a TSD."""
+    r = random.Random(seed)
+    rnd = lambda n: "".join(r.choices("ACGT", k=n))
+    arm = head + rnd(arm_len - len(head))
+    el = arm + rnd(1500) + reverse_complement(arm)
+    tsd = tsd or rnd(8)
+    left = rnd(r.randint(150, 500)) + tsd
+    return left + el + tsd + rnd(r.randint(150, 500)), len(left), arm_len
+
+
+@pytest.mark.parametrize("head", ["A" * 10, "CA" * 8, "CAG" * 4])
+def test_a_terminal_repeat_that_begins_with_a_simple_run_keeps_its_full_length(head):
+    """The run trim cut a real arm's own head between random flanks (54-bp arms with an A10 or (CA)8 head reported as
+    38-46 bp, 0 of 8 at full length). Only a run whose unit is its own reverse complement can pair across an insertion
+    that split it; these heads cannot."""
+    for tsd in (None, "TA"):
+        for arm_len in (30, 54):
+            exact = inside = 0
+            for seed in range(8):
+                seq, start, L = _headed_element(head, arm_len, tsd, 7000 + seed * 37 + arm_len + len(head))
+                row = structural.find_tir(seq)
+                f = row["five_prime"][0] if row else None
+                exact += bool(row) and start - 4 <= f <= start + 1 and row["tir_len"] >= L - 1
+                inside += bool(row) and f > start + 1
+            assert exact >= 6 and inside == 0, (head, tsd, arm_len, exact, inside)
+
+
+def test_a_terminal_repeat_made_of_a_unit_that_cannot_pair_with_itself_is_kept():
+    """Ginger1 (Dfam) has a (TCTA)n terminal inverted repeat. (TCTA)n cannot pair with its own reverse complement, so an
+    array of it yields no chance inverted repeat, and its arms are evidence; the period-4-6 guard rejected them."""
+    found = 0
+    for seed in range(8):
+        seq, start, L = _headed_element("TCTA" * 12, 63, None, 9100 + seed)
+        row = structural.find_tir(seq)
+        found += bool(row) and abs(row["five_prime"][0] - start) <= 2 and row["tir_len"] >= L - 2
+    assert found >= 7, found
+    assert not structural._period_run("TCTA" * 10) and structural._period_run("GATC" * 10) and structural._period_run("CAG" * 10)
+
+
+def test_only_a_run_whose_unit_is_its_own_reverse_complement_is_trimmed():
+    for w, p, paired in (("TA" * 8, 2, True), ("GATC" * 4, 4, True), ("AATT" * 4, 4, True), ("AAATTT" * 3, 6, True),
+                         ("A" * 12, 1, False), ("CA" * 8, 2, False), ("CAG" * 5, 3, False), ("AAT" * 5, 3, False)):
+        assert structural._self_paired(w, p) is paired, w
+    assert structural._self_paired("TATATACATATATA", 2)                     # a substitution does not change the unit
+
+
 @pytest.mark.parametrize("unit", ["AATT", "GATC", "ACGT", "AAATTT"])
 def test_palindromic_period_4_to_6_arrays_yield_no_terminal_inverted_repeat(unit):
     """(AATT)n, (GATC)n, (ACGT)n and (AAATTT)n are their own reverse complements; a diverged copy was reported as a TIR whose

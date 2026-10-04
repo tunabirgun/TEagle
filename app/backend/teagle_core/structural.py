@@ -597,11 +597,14 @@ def _scan_tir(seq: str, s: int, e: int, min_tir: int, max_tir: int, min_ident: f
 
 
 def _period_run(w: str) -> bool:
-    """w is a tandem run of period 1-2, (AT)n or A(n), or from 20 bp of period 3-6, (CAG)n, (GATC)n, with at most
-    15% of its comparisons broken (30% from 20 bp). Such a repeat satisfies an inverted-repeat identity test against
-    itself (a palindromic unit pairs with itself outright), so it is no terminal-repeat evidence."""
+    """w is a tandem run of period 1-2, (AT)n or A(n), or from 20 bp of period 3, (CAG)n, or of period 4-6 with a
+    unit that is its own reverse complement, (GATC)n, (AAATTT)n, or repeats a shorter unit, with at most 15% of its
+    comparisons broken (30% from 20 bp). Such a repeat satisfies an inverted-repeat identity test against itself (a
+    palindromic unit pairs with itself outright), so it is no terminal-repeat evidence. A longer unit that is neither,
+    (TCTA)n, cannot pair with itself, and an arm made of it is left to the identity test."""
     tol = 0.15 if len(w) < 20 else 0.3
-    return any(sum(w[i] != w[i + p] for i in range(len(w) - p)) <= tol * (len(w) - p) for p in range(1, 7 if len(w) >= 20 else 3))
+    return any(sum(w[i] != w[i + p] for i in range(len(w) - p)) <= tol * (len(w) - p) and (p < 4 or _short_or_paired(w, p))
+               for p in range(1, 7 if len(w) >= 20 else 3))
 
 
 def _simple_arms(seq: str, s: int, e: int, L: int, reach: int = 16) -> bool:
@@ -631,8 +634,9 @@ def _run_extent(seq: str, i: int, step: int, limit: int, x_drop: int = 14) -> in
     further in; the run is a stretch of those comparisons that scores _RUN_TRIM_SCORE (+1 / -2, as _outer_start walks
     a diagonal) and starts within _RUN_TRIM_SLACK bases of the arm's end, and it ends where the score falls x_drop below
     its peak, so a few substitutions do not end it. The walk starts _RUN_TRIM_OUT bases outside the arm, so that the
-    last few bases of a run that the arm only just entered are seen. 0 when no such run enters the arm; random
-    sequence and a TA site do not reach the score."""
+    last few bases of a run that the arm only just entered are seen. Returns (bases in the arm, start of the run, which
+    is negative when it begins outside, period); (0, 0, 0) when no such run enters the arm, as random sequence and a
+    TA site do not reach the score."""
     n = len(seq)
     out = min(_RUN_TRIM_OUT, i if step > 0 else n - 1 - i)
     limit = min(limit, n - i if step > 0 else i + 1)
@@ -659,25 +663,46 @@ def _run_extent(seq: str, i: int, step: int, limit: int, x_drop: int = 14) -> in
             elif cur >= _RUN_TRIM_SCORE:
                 best, best_end, held = cur, x + 1, True
         if held and best_end + p > 0:
-            runs.append((best, p, best_end + p))
+            runs.append((best, p, best_end + p, start))
             if best_end >= limit:
                 break                                      # the run fills the walk: a longer period would only agree
     top = max((r[0] for r in runs), default=0)
-    return next((end for score, p, end in runs if score >= 0.9 * top), 0)   # the smallest period that fits as well as the best: a multiple of it, or chance matches with a substituted base, would overshoot
+    return next(((end, st, p) for score, p, end, st in runs if score >= 0.9 * top), (0, 0, 0))   # the smallest period that fits as well as the best: a multiple of it, or chance matches with a substituted base, would overshoot
+
+
+def _unit(w: str, p: int) -> str:
+    """The repeat unit of the period-p run w: the majority base at each phase."""
+    return "".join(Counter(w[j::p]).most_common(1)[0][0] for j in range(p))
+
+
+def _self_paired(w: str, p: int) -> bool:
+    """The unit of the period-p run w is its own reverse complement up to rotation: (TA)n, (GATC)n and (AATT)n are,
+    A(n), (CA)n and (CAG)n are not, and no odd period can be."""
+    u = _unit(w, p)
+    return reverse_complement(u) in u + u
+
+
+def _short_or_paired(w: str, p: int) -> bool:
+    """A period-4-6 reading of w counts as a run when its unit is palindromic or repeats a unit of period 1-3."""
+    u = _unit(w, p)
+    return reverse_complement(u) in u + u or any(u == u[:q] * (p // q) for q in (1, 2, 3) if p % q == 0)
 
 
 def _run_trim(seq: str, s: int, e: int, cap: int) -> int:
-    """Bases to cut from both ends of the arms [s, e) because their outer ends are a tandem run, or -1 when the run fills
-    every base an arm can have (`cap`, or half the span). A transposon inserted next to a (TA)n run has its arms
-    extended through the target site into the run, where the two runs pair with each other (a run is its own reverse
-    complement); the run is no part of the element, so it is cut rather than the whole candidate discarded. The longer
-    of the two runs is cut from both ends, since the arms pair base for base."""
+    """Bases to cut from both ends of the arms [s, e) because their outer ends are a tandem run that pairs with its own
+    reverse complement, or -1 when such a run fills every base an arm can have (`cap`, or half the span). A transposon
+    inserted into a (TA)n run splits it, and its arms extend through the target site into the two halves, which pair
+    with each other; that run is no part of the element, so it is cut rather than the whole candidate discarded. A
+    run of any other unit, A(n) or (CA)n, cannot pair across a split, so at both arm ends it is the element's own.
+    The longer of the two runs is cut from both ends, since the arms pair base for base."""
     limit = min(cap, (e - s) // 2 - MIN_TIR_LEN)
     if limit <= 0:
         return 0
     cut = 0
     for i, step in ((s, 1), (e - 1, -1)):
-        x = _run_extent(seq, i, step, limit)
+        x, st, p = _run_extent(seq, i, step, limit)
+        if not x or not _self_paired(seq[max(0, i + st):i + x] if step > 0 else seq[max(0, i - x + 1):i - st + 1], p):
+            continue
         if x >= limit:
             return -1
         cut = max(cut, x)
