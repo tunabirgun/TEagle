@@ -27,7 +27,7 @@ def user_data_dir() -> str:
 
 
 def resource(*parts: str) -> str | None:
-    """Absolute path to a bundled read-only resource (e.g. web/, data/) when frozen; else None."""
+    """Absolute path to a bundled read-only resource (e.g. data/, native/assets/) when frozen; else None."""
     if _frozen():
         return os.path.join(sys._MEIPASS, *parts)
     return None

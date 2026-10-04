@@ -7,7 +7,7 @@ part of a command); the only interpolated values are a self-generated run-id and
 strictly-validated species token. No shell-string concatenation of untrusted input.
 """
 from __future__ import annotations
-import os, subprocess, re, secrets, threading, hashlib, base64, shutil
+import os, subprocess, re, secrets, threading, hashlib, base64, shutil, math, time
 from . import appdirs
 
 # Suppress the console-window flash when the windowed GUI spawns wsl.exe (Windows only; 0 elsewhere).
@@ -31,6 +31,21 @@ def _persist_distro(name: str | None):
         pass
 
 
+def _remembered_distro() -> str | None:
+    try:
+        with open(_DISTRO_FILE, encoding="utf-8") as f:
+            return f.read().strip() or None
+    except OSError:
+        return None
+
+
+def set_distro(name: str):
+    """Pin the distro the backend uses (for a user choice) and drop the cached resolution."""
+    global _distro_cache
+    _persist_distro(name)
+    _distro_cache = None
+
+
 def _decode(b: bytes) -> str:
     # wsl.exe list commands emit UTF-16LE; normal command output is UTF-8
     if b[:1] == b"\xff" or (len(b) > 1 and b[1] == 0):
@@ -38,9 +53,53 @@ def _decode(b: bytes) -> str:
     return b.decode("utf-8", "ignore")
 
 
+# Container runtimes register their own minimal distros: they have no bash, are not a place to install
+# conda packages, and Docker Desktop makes one the Windows default.
+_RUNTIME_DISTROS = ("docker-desktop", "docker-desktop-data", "rancher-desktop", "rancher-desktop-data",
+                    "podman-machine-default")
+
+
+def is_runtime_distro(name: str) -> bool:
+    return (name or "").strip().lower() in _RUNTIME_DISTROS
+
+
+def parse_distro_table(text: str):
+    """(names, default) from the text of `wsl -l -v`; only rows of the NAME/STATE/VERSION table count."""
+    default, names = None, []
+    for line in (text or "").replace("\x00", "").splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        row = re.fullmatch(r"(.+?)\s+\S+\s+[12]", s.lstrip("*").strip())
+        if row:
+            name = row.group(1).strip()
+            names.append(name)
+            if s.startswith("*"):
+                default = name
+    return names, default
+
+
+def _distro_usable(name: str):
+    """True when the distro has bash and python3 (what the backend scripts need), False when it lacks
+    either, None when it could not be asked in time (a cold start): unknown is not a verdict."""
+    try:
+        p = subprocess.run(["wsl.exe", "-d", name, "--", "sh", "-c",
+                            "command -v bash >/dev/null && command -v python3 >/dev/null"],
+                           capture_output=True, timeout=60, creationflags=_NO_WINDOW)
+    except subprocess.TimeoutExpired:
+        return None
+    except Exception:
+        return False
+    return p.returncode == 0
+
+
+_last_found: list[str] = []
+
+
 def resolve_distro():
-    """Return the DEFAULT WSL distro (marked '*' in `wsl -l -v`), else the first listed."""
-    global _distro_cache
+    """The WSL distro the backend runs in: the remembered one, else the Windows default, else the first
+    listed, skipping container-runtime distros and any distro that lacks bash or python3."""
+    global _distro_cache, _last_found
     if _distro_cache is not None:
         return _distro_cache
     try:
@@ -48,20 +107,14 @@ def resolve_distro():
         if out.returncode != 0:
             _distro_cache = None
             return None
-        txt = _decode(out.stdout).replace("\x00", "")
-        default, names = None, []
-        for line in txt.splitlines():
-            s = line.strip()
-            if not s:
-                continue
-            star = s.startswith("*")
-            row = re.fullmatch(r"(.+?)\s+\S+\s+[12]", s.lstrip("*").strip())
-            if row:
-                name = row.group(1).strip()
-                names.append(name)
-                if star:
-                    default = name
-        _distro_cache = default or (names[0] if names else None)
+        names, default = parse_distro_table(_decode(out.stdout))
+        _last_found = names
+        eligible = [n for n in names if not is_runtime_distro(n)]
+        order = []
+        for n in (_remembered_distro(), default, *eligible):
+            if n in eligible and n not in order:
+                order.append(n)
+        _distro_cache = next((n for n in order if _distro_usable(n) is not False), None)
     except Exception:
         _distro_cache = None
     return _distro_cache
@@ -158,22 +211,45 @@ def _wsl_script(script: str, timeout: int = 90):
     return p.returncode, _decode(p.stdout), _decode(p.stderr)
 
 
+_WSL_ERROR_CODE = re.compile(r"0x8[0-9a-f]{7}|Wsl/\w+|WSL_E_\w+|ERROR_\w+", re.I)
+
+
+def _classify_probe_failure(rc: int, out: str, err: str) -> str:
+    """Why `bash -lc 'echo ok'` failed. Only a WSL registration/start error code confirms a broken distro;
+    a slow cold start, a restarting VM and a distro without bash are different problems with different fixes."""
+    text = f"{out} {err}".lower()
+    if rc == 127 or ("bash" in text and ("not found" in text or "no such file" in text)):
+        return "no_bash"
+    if "terminated" in text or "shut down" in text:
+        return "starting"
+    if _WSL_ERROR_CODE.search(f"{out} {err}"):
+        return "start_failed"
+    return "unknown"
+
+
 def available() -> dict:
     global _distro_cache
     distro = resolve_distro()
     if not distro:
+        if _last_found:
+            return {"wsl2": False, "distro": None, "reason": "no_suitable_distro", "found": list(_last_found),
+                    "error": "no usable Linux distribution (found: " + ", ".join(_last_found) + ")"}
         return {"wsl2": False, "distro": None, "error": "WSL not installed / no distro"}
     try:
         rc, out, err = _wsl("echo ok", timeout=30)
         ok = rc == 0 and "ok" in out
         if not ok:
             _distro_cache = None                     # cached distro no longer usable -> re-resolve on the next probe
-        else:
-            _persist_distro(distro)                  # record the working distro so uninstall/clean targets the right one
-        return {"wsl2": ok, "distro": distro, "error": None if rc == 0 else err.strip()[:120]}
+            return {"wsl2": False, "distro": distro, "reason": _classify_probe_failure(rc, out, err),
+                    "error": (err.strip() or out.strip() or f"exit {rc}")[:120]}
+        _persist_distro(distro)                      # record the working distro so uninstall/clean targets the right one
+        return {"wsl2": True, "distro": distro, "error": None}
+    except subprocess.TimeoutExpired:
+        _distro_cache = None
+        return {"wsl2": False, "distro": distro, "reason": "timeout", "error": "the distro did not answer in 30 s"}
     except Exception as e:
         _distro_cache = None                          # distro changed/removed mid-session -> drop the stale cache
-        return {"wsl2": False, "distro": distro, "error": str(e)[:120]}
+        return {"wsl2": False, "distro": distro, "reason": "unknown", "error": str(e)[:120]}
 
 
 _FAMDB_B, _FAMDB_E = "===TEAGLE_FAMDB_BEGIN===", "===TEAGLE_FAMDB_END==="
@@ -518,8 +594,20 @@ mm_reset_cache(){
   rm -rf "$MAMBA_ROOT_PREFIX/pkgs/cache" "$HOME/.cache/mamba" "$HOME/.cache/rattler" \
          "$HOME/.cache/conda" 2>/dev/null || true
 }
+# 'te' lives in micromamba's shared default root, so a same-named environment may belong to someone else.
+# It is adopted only when TEagle made it: the marker, or the pinned RepeatMasker an earlier TEagle install left.
+OWNED="$ENV/.teagle-owned"
+env_owned(){
+  [ -f "$OWNED" ] && return 0
+  compgen -G "$ENV/conda-meta/repeatmasker-__RM_PIN__-*.json" >/dev/null || return 1
+  : > "$OWNED" 2>/dev/null; echo "[teagle] adopted the existing 'te' environment from an earlier TEagle install"
+}
 mm_create(){   # create the shared 'te' env if absent; clean-index + retry once on a solve failure
-  [ -d "$ENV/conda-meta" ] && return 0
+  if [ -d "$ENV/conda-meta" ]; then
+    env_owned && return 0
+    echo "[teagle] an environment named 'te' already exists at $ENV and was not created by TEagle, so it was left untouched. Rename or remove it (micromamba env remove -n te), then run this step again."
+    return 1
+  fi
   # A prefix that exists but holds no conda-meta is not an environment, and micromamba refuses it
   # outright ("Non-conda folder exists at prefix - aborting"), permanently. A Dfam partition installed
   # before the environment existed leaves exactly that: its famdb directory creates the prefix. Set the
@@ -538,6 +626,7 @@ mm_create(){   # create the shared 'te' env if absent; clean-index + retry once 
       return 1
     fi
   fi
+  : > "$OWNED"
   if [ -n "$STASH" ]; then
     OLDFAM="$STASH/share/RepeatMasker/Libraries/famdb"
     if [ -d "$OLDFAM" ]; then
@@ -554,7 +643,8 @@ mm_install(){  # called only after a functional/version probe fails, so restore 
   mm_reset_cache; "$MM" install --force-reinstall -y -n te -c conda-forge -c bioconda "$@"
 }
 echo "[teagle] START $(date -u +%FT%TZ)"
-'''
+[ -d "$ENV/conda-meta" ] && { env_owned || true; }
+'''.replace("__RM_PIN__", _CONDA_PINS["repeatmasker"])
 
 
 def _dfam_step(key: str) -> str:
@@ -843,6 +933,10 @@ mm_fetch(){
 if [ -x "$MM" ] && [ "$("$MM" --version 2>/dev/null)" = "$MM_VERSION" ]; then
   echo "[teagle] micromamba $MM_VERSION already present"
 else
+  # ~/bin/micromamba is where the official manual install puts it, so an existing one may be the user's own
+  if [ -e "$MM" ] && [ ! -e "$MM.pre-teagle" ] && cp -p "$MM" "$MM.pre-teagle"; then
+    echo "[teagle] kept the micromamba already at $MM as $MM.pre-teagle (it is not version $MM_VERSION)"
+  fi
   FOUND=""
   for c in "$HOME/.local/bin/micromamba" "$HOME/micromamba/bin/micromamba" "$(command -v micromamba 2>/dev/null)"; do
     if [ -n "$c" ] && [ "$c" != "$MM" ] && [ -x "$c" ] && [ "$("$c" --version 2>/dev/null)" = "$MM_VERSION" ]; then FOUND="$c"; break; fi
@@ -987,8 +1081,8 @@ _COMP_META = [
     ("dfam_curated", "Dfam 4.0 curated library",  True,  "Dfam curated consensus partition."),
     ("famdb_conf",   "FamDB configuration",       True,  "Points RepeatMasker at the downloaded Dfam library."),
     ("dfam_unc_root", "Dfam uncurated · root (optional)", True,
-     "Optional. Uncurated root partition (0.3 MiB). Curated-only search names very few families outside "
-     "the root set."),
+     "Optional. Uncurated root partition (0.3 MiB). How much a curated-only search finds depends on the "
+     "lineage: " + curated_coverage_sentence()),
     ("dfam_unc_euk",  "Dfam uncurated · Eukaryota (optional)", True,
      f"Optional, 3.9 GiB download that unpacks to {_gib(_DFAM_UNPACKED_B['dfam_unc_euk'])} — leave about "
      f"{_gib(_DFAM_UNPACKED_B['dfam_unc_euk'] + 5 * 1073741824)} free in WSL, since the archive and the "
@@ -1007,8 +1101,50 @@ _COMP_META = [
 ]
 
 
+# Components installed independently: each step runs in its own subshell, so one failure ends only that
+# step. A step whose prerequisite did not complete is skipped, and the run ends with a single terminal line.
+_STEP_NEEDS = {"repeatmasker": ("micromamba",), "minimap2": ("micromamba",), "miniprot": ("micromamba",),
+               "genomescan": ("micromamba",), "viennarna": ("micromamba",), "famdb_conf": ("repeatmasker",)}
+
+_RUN_STEP = r'''
+STEPS_OK=""; STEPS_FAILED=""; STEPS_SKIPPED=""
+bg_cleanup(){ [ -n "$BG" ] && kill $BG 2>/dev/null; return 0; }
+run_step(){
+  local key=$1 needs=$2 d rc
+  for d in $needs; do
+    case " $STEPS_FAILED $STEPS_SKIPPED " in
+      *" $d "*) echo "[teagle] STEP $key SKIPPED (needs $d, which did not complete)"; STEPS_SKIPPED="$STEPS_SKIPPED $key"; return 0;;
+    esac
+  done
+  (
+    fail(){ echo "[teagle] STEP $key FAILED: $1"; exit 1; }
+    trap bg_cleanup EXIT
+    trap 'bg_cleanup; exit 143' TERM HUP INT
+    "step_$key"
+  )
+  rc=$?
+  if [ "$rc" -eq 0 ]; then STEPS_OK="$STEPS_OK $key"
+  else echo "[teagle] STEP $key ended with exit code $rc"; STEPS_FAILED="$STEPS_FAILED $key"; fi
+  return 0
+}
+'''
+
+_RUN_SUMMARY = r'''
+if [ -n "$STEPS_FAILED$STEPS_SKIPPED" ]; then
+  echo "[teagle] SUMMARY installed:${STEPS_OK:- none}; failed:${STEPS_FAILED:- none}; skipped:${STEPS_SKIPPED:- none}"
+  echo "[teagle] FAILED: not installed:$STEPS_FAILED$STEPS_SKIPPED (the other components were installed; see the lines above)"
+  exit 1
+fi
+echo "[teagle] DONE $(date -u +%FT%TZ)"
+'''
+
+
 def _build_script(keys) -> str:
-    script = _PRELUDE + "".join(_STEP[k] for k in keys) + '\necho "[teagle] DONE $(date -u +%FT%TZ)"\n'
+    keys = list(keys)
+    body = "".join(
+        f"\nstep_{k}(){{\n{_STEP[k]}\n}}\nrun_step {k} '{' '.join(d for d in _STEP_NEEDS.get(k, ()) if d in keys)}'\n"
+        for k in keys)
+    script = _PRELUDE + _RUN_STEP + body + _RUN_SUMMARY
     host_free = _windows_backing_free_bytes()
     script = script.replace("__HOST_FREE_B__", str(host_free if host_free is not None else -1))
     # force LF: bash chokes on CRLF (a heredoc terminator "PY\r" never matches "PY"), and a
@@ -1112,18 +1248,47 @@ def components_status() -> dict:
     comp["wsl2"]["ok"] = bool(av["wsl2"])
     comp["wsl2"]["detail"] = av.get("distro") or av.get("error") or "not installed"
     if not av["wsl2"]:
-        # distinguish absent (no distro) from registered-but-won't-start (broken ext4.vhdx) — different actions
-        broken = bool(av.get("distro"))
+        # Diagnose before advising: a cold start, a restarting VM, a distro without bash and a registration
+        # failure need different actions, and only the last is ever answered by `wsl --unregister`.
+        d, reason = av.get("distro"), av.get("reason")
+        log_state = _wsl2_log_state()
+        reboot = log_state == "done"
         win = os.name == "nt"
-        if broken:
-            comp["wsl2"]["detail"] = f"'{av['distro']}' registered but won't start"
-            comp["wsl2"]["guide"] = (f"In an Administrator PowerShell run:  wsl --unregister {av['distro']}  "
-                                     "then click Install WSL to reinstall (a restart may be required).")
+        installable = win
+        if reboot:
+            comp["wsl2"]["detail"] = "installed — restart Windows to finish setup, then reopen this installer"
+            comp["wsl2"]["guide"] = ("Nothing is lost by restarting. If Ubuntu then asks for a Linux user name, "
+                                     "create one.")
+        elif reason in ("timeout", "starting"):
+            comp["wsl2"]["detail"] = f"WSL is still starting ('{d}' did not answer yet)"
+            comp["wsl2"]["guide"] = ("Wait a minute, then click Refresh. The first start after boot or after "
+                                     "`wsl --shutdown` can take longer than this check allows.")
+            installable = False
+        elif reason == "no_bash":
+            comp["wsl2"]["detail"] = f"'{d}' is not a usable Linux distribution (it has no bash)"
+            comp["wsl2"]["guide"] = ("Click Install WSL to add Ubuntu. If Ubuntu is already installed, make it "
+                                     "the default with  wsl --set-default Ubuntu  and click Refresh.")
+        elif reason == "no_suitable_distro":
+            comp["wsl2"]["detail"] = av.get("error") or "no usable Linux distribution"
+            comp["wsl2"]["guide"] = ("Container-runtime distributions cannot host the backend. Click Install WSL "
+                                     "to add Ubuntu, then click Refresh.")
+        elif reason == "start_failed":
+            comp["wsl2"]["detail"] = f"'{d}' is registered but could not be started"
+            comp["wsl2"]["guide"] = (f"Click Refresh first. If it still fails, in an Administrator PowerShell run:  "
+                                     f"wsl --unregister {d}  then click Install WSL to reinstall. This permanently "
+                                     "deletes everything in that distribution: its home directory, the Dfam libraries "
+                                     "and the cached genomes (a restart may be required).")
+        elif d:
+            comp["wsl2"]["detail"] = f"'{d}' did not respond ({av.get('error') or 'no error text'})"
+            comp["wsl2"]["guide"] = (f"Click Refresh. If it persists, run  wsl -d {d} -- echo ok  in a Windows "
+                                     "terminal to see the error.")
+            installable = False
         else:
             comp["wsl2"]["guide"] = ("Click Install WSL to install WSL2 + Ubuntu (needs Administrator; "
                                      "a Windows restart may be required before first use).")
-        comp["wsl2"]["installable"] = win           # the dialog shows an in-app Install WSL button on Windows
-        return {"wsl2": False, "installing": _wsl2_installing(), "ready": False,
+        comp["wsl2"]["installable"] = installable   # the dialog shows an in-app Install WSL button on Windows
+        return {"wsl2": False, "installing": False, "wsl2_installing": log_state == "running",
+                "wsl2_install_stale": log_state == "stale", "reboot_pending": reboot, "ready": False,
                 "install_cost": _DEFAULT_INSTALL_COST, "resource_guide": _WSLCONFIG_GUIDE,
                 "components": [comp[c[0]] for c in _COMP_META]}
     try:
@@ -1194,7 +1359,7 @@ export MAMBA_ROOT_PREFIX="$HOME/micromamba"
 MM="$HOME/bin/micromamba"; ENV="$HOME/micromamba/envs/te"; VRNAENV="$HOME/micromamba/envs/teagle-vrna"; FAMDIR="$ENV/share/RepeatMasker/Libraries/famdb"
 echo "=RM="; "$MM" run -n te RepeatMasker -v 2>&1 | head -1
 echo "=MM="; "$ENV/bin/minimap2" --version 2>&1 | head -1
-echo "=FAMDB="; "$MM" run -n te famdb.py info 2>&1 | grep -iE "version|families|consensus" | head -3
+echo "=FAMDB="; famdb_out=$("$MM" run -n te famdb.py info 2>&1); echo "FAMDB_RC=$?"; printf '%s\n' "$famdb_out" | head -60
 echo "=FILES="; for spec in ''' + " ".join(f"{_DFAM_FILES[k][0]}:{_DFAM_UNPACKED_B[k]}" for k in _DFAM_REQUIRED) + r'''; do f=${spec%%:*}; expected=${spec##*:}; got=$(stat -c %s "$FAMDIR/$f" 2>/dev/null || echo 0); if [ "$got" = "$expected" ]; then echo "present $f $got"; elif [ -f "$FAMDIR/$f" ]; then echo "INVALID $f size=$got expected=$expected"; else echo "MISSING $f"; fi; done
 echo "=OPTFILES="; for f in ''' + " ".join(_DFAM_FILES[k][0] for k in _DFAM_OPTIONAL) + r'''; do if [ -f "$FAMDIR/$f" ]; then echo "present $f"; else echo "absent $f"; fi; done
 echo "=SCAN="
@@ -1249,7 +1414,11 @@ def integrity_check() -> dict:
             sec[cur].append(line)
     rm_txt = " ".join(sec.get("RM", []))
     mm_txt = " ".join(sec.get("MM", [])).strip()
-    fam_txt = " ".join(sec.get("FAMDB", []))
+    fam_lines = sec.get("FAMDB", [])
+    fam_rc = next((l.strip().partition("=")[2] for l in fam_lines if l.startswith("FAMDB_RC=")), None)
+    fam_body = "\n".join(l for l in fam_lines if not l.startswith("FAMDB_RC="))
+    fam_ok = fam_rc == "0" and parse_famdb_info(fam_body) is not None     # exit status AND the header a real library prints
+    fam_txt = " ".join(l.strip() for l in fam_body.splitlines() if l.strip())
     files = [l for l in sec.get("FILES", []) if l.strip()]
     # optional partitions are REPORTED, never graded: absent is a normal state, and a user who has just
     # spent 40 minutes downloading one should be able to see it named here rather than infer it
@@ -1275,7 +1444,8 @@ def integrity_check() -> dict:
     checks = [
         {"name": "RepeatMasker runs", "ok": f"RepeatMasker version {_CONDA_PINS['repeatmasker']}" in rm_txt, "detail": rm_txt.strip()[:80] or "no version reported"},
         {"name": "minimap2 runs", "ok": mm_txt.split("-", 1)[0] == _CONDA_PINS["minimap2"], "detail": mm_txt[:60] or "no version reported"},
-        {"name": "FamDB loads", "ok": bool(re.search(r"(?i)version|families|consensus", fam_txt)), "detail": fam_txt.strip()[:90] or "famdb.py info returned nothing"},
+        {"name": "FamDB loads", "ok": fam_ok,
+         "detail": (f"exit {fam_rc}: " if fam_rc not in (None, "0") else "") + (fam_txt[:90] or "famdb.py info returned nothing")},
         {"name": "Dfam library files present",
          "ok": len(files) >= len(_DFAM_REQUIRED) and all(f.startswith("present") for f in files),
          "detail": ("; ".join(files)[:90] or "missing")
@@ -1331,61 +1501,114 @@ def wsl2_install_log(tail: int = 200) -> str:
         return ""
 
 
-def _wsl2_installing() -> bool:
-    """A WSL2 install is in progress = the Windows-side log exists but has no terminal marker yet."""
+_WSL2_STALE_AFTER_S = 2 * 3600
+
+
+def _boot_time():
+    try:
+        import psutil
+        return psutil.boot_time()
+    except Exception:
+        return None
+
+
+def _wsl2_log_state() -> str:
+    """none / running / stale / done / failed, from the Windows-side install log. A log with no terminal
+    marker is only 'running' while it is recent and written since the last boot: a batch killed by a restart
+    or abandoned for hours never writes one. A 'done' log from before the last boot is a restart already
+    taken, so it no longer means one is pending."""
+    try:
+        mtime = os.stat(os.path.join(appdirs.user_data_dir(), _WIN_WSL_LOG)).st_mtime
+    except OSError:
+        return "none"
     log = wsl2_install_log(500)
-    return bool(log) and "DONE-WSL" not in log and "[teagle] FAILED" not in log
+    if not log:
+        return "none"
+    boot = _boot_time()
+    before_boot = boot is not None and mtime < boot
+    if "[teagle] FAILED" in log:
+        return "failed"
+    if "DONE-WSL" in log:
+        return "none" if before_boot else "done"
+    return "stale" if (before_boot or time.time() - mtime > _WSL2_STALE_AFTER_S) else "running"
 
 
-def _wsl2_bat_script() -> str:
-    """The elevated batch: install WSL2 + Ubuntu (no interactive launch), tolerant of pre-reboot state,
-    logging everything (incl. a terminal DONE-WSL marker) beside the batch file for the dialog to poll."""
-    return (
-        "@echo off\r\n"
-        "setlocal EnableExtensions EnableDelayedExpansion\r\n"
-        f'set "TEAGLE_WSL_LOG=%~dp0{_WIN_WSL_LOG}"\r\n'
-        '> "%TEAGLE_WSL_LOG%" echo [teagle] installing WSL2 + Ubuntu (elevated)\r\n'
-        'wsl.exe --install -d Ubuntu --no-launch >> "%TEAGLE_WSL_LOG%" 2>&1\r\n'
-        'set "TEAGLE_INSTALL_RC=!ERRORLEVEL!"\r\n'
-        "if not \"!TEAGLE_INSTALL_RC!\"==\"0\" (\r\n"
-        '  >> "%TEAGLE_WSL_LOG%" echo [teagle] first attempt returned !TEAGLE_INSTALL_RC!; retrying: wsl --install\r\n'
-        '  wsl.exe --install >> "%TEAGLE_WSL_LOG%" 2>&1\r\n'
-        '  set "TEAGLE_INSTALL_RC=!ERRORLEVEL!"\r\n'
-        ")\r\n"
-        'wsl.exe --set-default-version 2 >> "%TEAGLE_WSL_LOG%" 2>&1 || rem VirtualMachinePlatform is inactive until reboot\r\n'
-        '>> "%TEAGLE_WSL_LOG%" echo [teagle] wsl --status:\r\n'
-        'wsl.exe --status >> "%TEAGLE_WSL_LOG%" 2>&1\r\n'
-        '>> "%TEAGLE_WSL_LOG%" echo [teagle] DONE-WSL !TEAGLE_INSTALL_RC! (restart Windows if the distro is not usable yet, then reopen this installer)\r\n'
-    )
+def _wsl2_installing() -> bool:
+    """A WSL2 install is in progress = the Windows-side log is recent and has no terminal marker yet."""
+    return _wsl2_log_state() == "running"
+
+
+def _wsl2_elevated_command(log: str, wsl_exe: str = r"%SystemRoot%\System32\wsl.exe"):
+    """The elevated command line: install WSL2 + Ubuntu (no interactive launch), tolerant of the pre-reboot
+    state, logging everything (incl. a terminal DONE-WSL marker) to the file the dialog polls.
+
+    The command travels as ShellExecute parameters, not as a script staged in a user-writable folder, so
+    nothing that could be rewritten between staging and the UAC consent is ever executed with admin rights.
+    `wsl --install` is only ever called with --no-launch: a plain one can open the distro's interactive first
+    run in a window nobody can see, which stalls the install until the dialog gives up."""
+    q = f'"{log}"'
+    steps = [
+        f"echo [teagle] installing WSL2 + Ubuntu (elevated) >> {q}",
+        f'"{wsl_exe}" --install -d Ubuntu --no-launch >> {q} 2>&1',
+        "set TEAGLE_RC=!errorlevel!",
+        # VirtualMachinePlatform is inactive until the reboot, so this may legitimately fail
+        f'"{wsl_exe}" --set-default-version 2 >> {q} 2>&1',
+        f"echo [teagle] wsl --status: >> {q}",
+        f'"{wsl_exe}" --status >> {q} 2>&1',
+        f"echo [teagle] DONE-WSL !TEAGLE_RC! (restart Windows if the distro is not usable yet, then reopen "
+        f"this installer) >> {q}",
+    ]
+    cmd = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "cmd.exe")
+    return cmd, '/v:on /d /s /c "' + " & ".join(steps) + '"'
+
+
+def _shell_execute_runas(exe: str, params: str) -> int:
+    import ctypes
+    # verb 'runas' -> UAC. Return > 32 = launched; <= 32 = failed (e.g. 1223 = declined).
+    return int(ctypes.windll.shell32.ShellExecuteW(None, "runas", exe, params, None, 0))
+
+
+def _account_is_administrator() -> bool:
+    """True when this account is in Administrators (a filtered token still lists the group). A standard user
+    reaching the UAC prompt must type another account's credentials, and WSL distributions are registered
+    per user, so the distro would land in that other account's profile. Unknown reads as True: no warning."""
+    try:
+        p = subprocess.run(["whoami", "/groups"], capture_output=True, timeout=15, creationflags=_NO_WINDOW)
+        return "S-1-5-32-544" in p.stdout.decode("utf-8", "ignore")
+    except Exception:
+        return True
+
+
+_OVER_THE_SHOULDER = ("This Windows account is not an administrator, so the prompt asks for a different account's "
+                      "credentials, and the Linux distribution is registered to the account that approves it, "
+                      "not to yours. If TEagle still reports no distribution afterwards, ask an administrator to "
+                      "enable WSL, then run  wsl --install -d Ubuntu  from your own account.")
 
 
 def install_wsl2() -> dict:
     """Install WSL2 + Ubuntu from an ELEVATED helper (`wsl --install` requires Administrator).
-    Fire-and-forget: an elevated .bat runs `wsl --install -d Ubuntu --no-launch` (falling back to a
-    plain `wsl --install` on older wsl.exe) and logs to a Windows-side file the dialog polls. If the
-    UAC prompt is declined or the user is not an admin, a terminal FAILED marker is written so the
-    poller never hangs. A Windows restart may be required before the new distro is usable."""
+    Fire-and-forget: an elevated cmd.exe runs `wsl --install -d Ubuntu --no-launch` and logs to a Windows-side
+    file the dialog polls. If the UAC prompt is declined or the user is not an admin, a terminal FAILED marker
+    is written so the poller never hangs. A Windows restart may be required before the distro is usable."""
     global _wsl2_thread
     if os.name != "nt":
         return {"started": False, "error": "WSL installation is only available on Windows"}
     if _wsl2_thread is not None and _wsl2_thread.is_alive():
         return {"started": False, "error": "WSL install already running"}
-    d = appdirs.user_data_dir()
-    bat = os.path.join(d, "install_wsl.bat")
-    log = os.path.join(d, _WIN_WSL_LOG)
+    log = os.path.join(appdirs.user_data_dir(), _WIN_WSL_LOG)
+    warning = None if _account_is_administrator() else _OVER_THE_SHOULDER
     try:
-        with open(bat, "w", encoding="ascii", newline="") as f:
-            f.write(_wsl2_bat_script())
         with open(log, "w", encoding="utf-8", newline="") as f:
             f.write("[teagle] launching the elevated WSL installer - accept the Windows (UAC) prompt...\n")
+            if warning:
+                f.write("[teagle] NOTE: " + warning + "\n")
     except Exception as e:
         return {"started": False, "error": f"could not stage the WSL installer: {type(e).__name__}: {e}"}
+    exe, params = _wsl2_elevated_command(log)
 
     def _run():
         try:
-            import ctypes
-            # ShellExecuteW verb 'runas' -> UAC. Return > 32 = launched; <= 32 = failed (e.g. 1223 = declined).
-            rc = int(ctypes.windll.shell32.ShellExecuteW(None, "runas", bat, None, None, 0))
+            rc = _shell_execute_runas(exe, params)
             if rc <= 32:
                 with open(log, "a", encoding="utf-8") as f:
                     f.write(f"\n[teagle] FAILED - could not elevate (code {rc}); the UAC prompt was declined or you "
@@ -1399,7 +1622,7 @@ def install_wsl2() -> dict:
 
     _wsl2_thread = threading.Thread(target=_run, daemon=True)
     _wsl2_thread.start()
-    return {"started": True, "windows_log": True}
+    return {"started": True, "windows_log": True, **({"warning": warning} if warning else {})}
 
 
 def resolve_species(species: str, timeout: int = 90) -> dict:
@@ -1427,8 +1650,27 @@ def resolve_species(species: str, timeout: int = 90) -> dict:
                           f"name that maps to exactly one taxon (“human”) also works.")}
     if "no species" in low or "not found" in low:
         return {"ok": False, "error": f"“{species}” was not found in the installed Dfam library. Check the "
-                                      f"spelling, or leave the organism blank to search all installed families."}
+                                      f"spelling, or leave the organism blank to use RepeatMasker's default "
+                                      f"lineage (Homo sapiens)."}
     return {"ok": True}
+
+
+_RM_DEFAULT_LINEAGE = "Homo sapiens"        # RepeatMasker 4.2.4: `$species = "homo sapiens" if ( $species eq "" )`
+
+
+def _backend_not_ready(st: dict, need_dfam: bool = True) -> str:
+    """Name the condition that failed, in words, and where to fix it."""
+    if st.get("wsl2") is False:
+        why = "WSL is not installed or not running — install or start it from the Backend installer"
+    elif not st.get("repeatmasker"):
+        why = "RepeatMasker is not installed in the WSL backend — install it from the Backend installer"
+    elif need_dfam and not st.get("dfam"):
+        why = "the Dfam root and curated libraries are not both installed — install them from the Backend installer"
+    elif need_dfam and not st.get("dfam_library"):
+        why = "FamDB could not open the Dfam library — run Check integrity in the Backend installer"
+    else:
+        why = "the backend status could not be read — try again"
+    return f"WSL annotation backend not ready: {why}."
 
 
 def annotate(fasta_text: str, species: str | None = None, threads: int = 4, timeout: int = 600,
@@ -1456,8 +1698,7 @@ def annotate(fasta_text: str, species: str | None = None, threads: int = 4, time
                 "both uncurated partitions in the backend manager or use curated families only",
                 "status": st, "uncurated_available": False}
     if not st["ready"]:
-        return {"ok": False, "error": "WSL annotation backend not ready "
-                f"(RepeatMasker={st['repeatmasker']}, Dfam={st['dfam']})", "status": st}
+        return {"ok": False, "error": _backend_not_ready(st), "status": st}
     rid = "teagle_" + secrets.token_hex(6)
     try:
         rc, out, err = _wsl(f'mkdir -p /tmp/{rid} && cat > /tmp/{rid}/q.fa',
@@ -1469,13 +1710,27 @@ def annotate(fasta_text: str, species: str | None = None, threads: int = 4, time
         # preserves the quotes. The species token is already validated (_SPECIES_RE), so no injection risk.
         # capture RepeatMasker's own exit code (not the trailing cat's) inside the SAME STDIN script — a nonzero
         # exit (unknown lineage, corrupt Dfam shard, OOM) must fail loudly, not be sealed as a clean "0 families".
-        script = (f'cd /tmp/{rid} && {_MM} run -n te RepeatMasker -pa {int(threads)} {sp} -qq q.fa '
-                  f'>rm.log 2>&1; ec=$?; echo "EXIT $ec"; [ "$ec" = "0" ] && cat q.fa.out 2>/dev/null || tail -8 rm.log')
+        # The script's own exit status is RepeatMasker's, and RepeatMasker prints the taxon it actually
+        # searched (the line after 'Species/Taxa Search:'), which is read back so the result can say so.
+        script = (f'cd /tmp/{rid} || exit 97\n'
+                  f'{_MM} run -n te RepeatMasker -pa {int(threads)} {sp} -qq q.fa >rm.log 2>&1; ec=$?\n'
+                  'echo "EXIT $ec"\n'
+                  "sed -n '/^Species\\/Taxa Search:/{n;p;q}' rm.log 2>/dev/null | sed 's/^/TEAGLE_SEARCHED /'\n"
+                  'if [ "$ec" = "0" ]; then cat q.fa.out 2>/dev/null; else tail -8 rm.log; fi\n'
+                  'exit "$ec"\n')
         rc, out, err = _wsl_script(script, timeout=timeout)
         m = re.search(r"^EXIT (\d+)", out, re.M)
-        if m and m.group(1) != "0":
+        if not m:                                             # wsl.exe died (VM shut down, crash): nothing ran to completion
+            return {"ok": False, "error": "the WSL session ended before RepeatMasker reported, so nothing was "
+                    "searched. Check that WSL is running, then run the annotation again.", "status": st}
+        if m.group(1) != "0":
             tail = out.split(f"EXIT {m.group(1)}", 1)[-1].strip()[:250]
             return {"ok": False, "error": f"RepeatMasker exited {m.group(1)}: {tail or 'see backend log'}", "status": st}
+        if rc != 0:
+            return {"ok": False, "error": f"RepeatMasker reported success but the WSL session returned exit {rc}, "
+                    "so the result was discarded; run the annotation again.", "status": st}
+        sm = re.search(r"^TEAGLE_SEARCHED\s+(.+?)\s*(?:\[NCBI Taxonomy ID:\s*(\d+)\])?\s*$", out, re.M)
+        lineage, taxid = (sm.group(1), sm.group(2)) if sm else (None, None)
         hits = parse_out(out)                                 # repeatmasker version already resolved by env_status() above
         lib = st.get("dfam_library")                          # resolved from famdb in the SAME env_status probe
         return {"ok": True, "hits": hits, "n_hits": len(hits),
@@ -1486,7 +1741,11 @@ def annotate(fasta_text: str, species: str | None = None, threads: int = 4, time
                 "include_uncurated": bool(include_uncurated),
                 "library_kind": ("installed Dfam partitions, curated + uncurated" if include_uncurated
                                  else "installed Dfam partitions, curated families only"),
-                "species": species or "(all installed families)"}
+                # With no organism RepeatMasker searches ITS default lineage (Homo sapiens), not every
+                # installed family, so that is what is named here and sealed.
+                "species": species or f"{lineage or _RM_DEFAULT_LINEAGE} (RepeatMasker default lineage)",
+                "species_requested": species, "species_defaulted": not species,
+                "lineage_searched": lineage, "lineage_taxid": taxid}
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": f"RepeatMasker timed out after {timeout}s"}
     except Exception as e:
@@ -1519,7 +1778,13 @@ def _parse_sam_splice(sam: str):
         if flag & 4 or flag & 0x100 or flag & 0x800:          # unmapped / secondary / supplementary
             continue
         pos = int(f[3]) - 1
-        strand = "-" if (flag & 16) else "+"
+        # FLAG 16 says which way the READ lies on the reference; minimap2's ts:A tag (-ub, splice preset) gives
+        # the transcript strand relative to the read. The gene's genomic strand combines the two, so an
+        # antisense read (3' ESTs, first-strand cDNA) is not mistaken for a minus-strand gene.
+        aln = "-" if (flag & 16) else "+"
+        ts = next((t[5:] for t in f[11:] if t.startswith("ts:A:")), None)
+        ts = ts if ts in ("+", "-") else None
+        strand = aln if ts in (None, "+") else ("+" if aln == "-" else "-")
         exons, introns, ref, cur = [], [], pos, pos
         for n, op in _CIGAR_RE.findall(f[5]):
             n = int(n)
@@ -1531,7 +1796,8 @@ def _parse_sam_splice(sam: str):
                 ref += n
                 cur = ref
         exons.append({"start": cur, "end": ref})
-        return {"exons": exons, "introns": introns, "strand": strand, "ref_start": pos, "ref_end": ref}
+        return {"exons": exons, "introns": introns, "strand": strand, "alignment_strand": aln,
+                "transcript_strand": ts, "strand_determined": ts is not None, "ref_start": pos, "ref_end": ref}
     return None
 
 
@@ -1843,6 +2109,7 @@ FSHA=$(sha256sum "$FNA" | cut -d' ' -f1)
 [ -n "$FSHA" ] || { echo "FAIL checksum failed"; exit 1; }   # never write .done/meta with an empty seal hash
 NSEQ=$(grep -c '^>' "$FNA")
 [ "${NSEQ:-0}" -ge 1 ] || { echo "FAIL extracted FASTA has no sequences"; exit 1; }   # never seal a 0-contig genome
+FABYTES=$(stat -c %s "$FNA" 2>/dev/null || echo 0)       # the source FASTA size is what annotation must re-fetch and split
 plog "building compact isPcr target (2bit)"
 TARGET=""
 if [ -x "$ENV/bin/faToTwoBit" ] && "$ENV/bin/faToTwoBit" "$FNA" genome.2bit 2>/dev/null; then
@@ -1854,7 +2121,7 @@ TBYTES=$(stat -c %s "$TARGET" 2>/dev/null || echo 0)
 TSHA=$(sha256sum "$TARGET" | cut -d' ' -f1)
 [ -n "$TSHA" ] || { echo "FAIL target checksum failed"; exit 1; }
 rm -rf ex
-printf 'accession=%s\ntarget=%s\nsha256=%s\ntarget_sha256=%s\nn_seqs=%s\nbytes=%s\n' "$ACC" "$TARGET" "$FSHA" "$TSHA" "$NSEQ" "$TBYTES" > meta.txt
+printf 'accession=%s\ntarget=%s\nsha256=%s\ntarget_sha256=%s\nn_seqs=%s\nbytes=%s\nfasta_bytes=%s\n' "$ACC" "$TARGET" "$FSHA" "$TSHA" "$NSEQ" "$TBYTES" "$FABYTES" > meta.txt
 touch .done
 plog "done"
 echo "PREPARED"
@@ -1871,7 +2138,13 @@ def genome_prepare(accession: str, assembly_name: str = "", timeout: int = 3600)
     av = available()
     if not av["wsl2"]:
         return {"ok": False, "error": "WSL2 not available"}
-    rc, out, _ = _wsl(f'[ -x "{_ENV}/bin/datasets" ] && [ -x "{_ENV}/bin/isPcr" ] && echo yes || echo no', timeout=20)
+    try:
+        rc, out, _ = _wsl(f'[ -x "{_ENV}/bin/datasets" ] && [ -x "{_ENV}/bin/isPcr" ] && echo yes || echo no', timeout=20)
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "WSL did not answer the check for the genome-scan tools in time (it may "
+                "still be starting); try again in a minute"}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
     if "yes" not in out:
         return {"ok": False, "error": "genome-scan tools not installed in the WSL backend (run Install backend)"}
     try:
@@ -1889,7 +2162,8 @@ def genome_prepare(accession: str, assembly_name: str = "", timeout: int = 3600)
         return _operation_failure("genome preparation failed", out, err)
     return {"ok": True, "accession": accession, "assembly_name": assembly_name,
             "target": meta.get("target"), "sha256": meta.get("sha256"),
-            "n_seqs": int(meta.get("n_seqs", 0) or 0), "bytes": int(meta.get("bytes", 0) or 0)}
+            "n_seqs": int(meta.get("n_seqs", 0) or 0), "bytes": int(meta.get("bytes", 0) or 0),
+            "fasta_bytes": int(meta.get("fasta_bytes", 0) or 0)}
 
 
 def genome_prepare_log(tail: int = 1) -> str:
@@ -1899,6 +2173,11 @@ def genome_prepare_log(tail: int = 1) -> str:
         return out.strip()
     except Exception:
         return ""
+
+
+# The checksum reads the whole cached target. 30 s timed out on a multi-GB genome read cold from the VHDX;
+# 1800 s covers a 25 GB target at 15 MB/s, and the probe before it (available(), 30 s) already filters a hung WSL.
+_HASH_PROBE_TIMEOUT_S = 1800
 
 
 def genome_scan(accession: str, query_text: str, max_size: int = 4000, min_size: int = 0,
@@ -1929,7 +2208,13 @@ GOT=$(sha256sum "$GDIR/$TARGET" | cut -d' ' -f1)
 echo CACHE_OK
 cat "$GDIR/meta.txt"
 '''
-    rc, out, err = _wsl_script(probe, timeout=30)
+    try:
+        rc, out, err = _wsl_script(probe, timeout=_HASH_PROBE_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": f"checking the cached genome's checksum timed out after {_HASH_PROBE_TIMEOUT_S} s "
+                "(WSL may be busy or still starting, or the disk is slow); try again"}
+    except Exception as e:
+        return {"ok": False, "error": f"could not verify the cached genome: {type(e).__name__}: {e}"}
     if rc != 0:
         return {"ok": False, "error": "could not verify the cached genome: " + err.strip()[:160]}
     if "CACHE_BAD" in out:
@@ -2026,6 +2311,15 @@ FNA="$GDIR/genome.fna"
 WANT=$(sed -n 's/^sha256=//p' "$GDIR/meta.txt" | head -1)
 [ -n "$WANT" ] || { echo "FAIL CACHE_CORRUPT prepared genome has no sealed source FASTA checksum"; exit 1; }
 if [ ! -s "$FNA" ]; then
+  # Check free space BEFORE the download, not after it: the zip and the extracted FASTA coexist (at most twice
+  # the FASTA), and the stage-2 check below only runs once that space has already been spent.
+  FB=$(sed -n 's/^fasta_bytes=//p' "$GDIR/meta.txt" | head -1)
+  # caches prepared before the FASTA size was recorded: a 2bit packs four bases per byte, so the FASTA is at least 4x it
+  [ -n "$FB" ] || { BY=$(sed -n 's/^bytes=//p' "$GDIR/meta.txt" | head -1 | tr -dc '0-9'); FB=$(( ${BY:-0} * 4 )); }
+  wsl_avail_b=$(df -B1 --output=avail "$GDIR" 2>/dev/null | tail -1 | tr -dc '0-9')
+  avail_b=$(effective_free_b "${wsl_avail_b:-0}")
+  need_b=$(( 2 * FB + 1073741824 ))
+  [ "$avail_b" -ge "$need_b" ] || { echo "FAIL insufficient usable disk to re-fetch the genome FASTA ($((avail_b/1073741824))G free after applying the smaller WSL/Windows backing-volume limit, need >=$((need_b/1073741824))G for the download and extraction)"; exit 1; }
   plog "fetching genome FASTA (one time; kept for later runs)"
   cd "$GDIR" || exit 1
   ok=0; delay=5
@@ -2072,7 +2366,11 @@ RUNSIG="genome_sha256=$GENOME_SHA|species=__SPSIG__|sens=$SENS|chunkbp=$CHUNKBP"
 if [ -f "$ADIR/.runsig" ]; then
   OLDSIG=$(cat "$ADIR/.runsig")
   if [ "$OLDSIG" != "$RUNSIG" ]; then
-    echo "FAIL this genome has a part-finished annotation run with different settings ($OLDSIG) than the ones requested ($RUNSIG). Finish or discard that run before starting a different one."
+    if [ -f "$ADIR/.complete" ]; then
+      echo "FAIL a completed annotation of this genome exists with different settings ($OLDSIG) than the ones requested ($RUNSIG). Discard it to run again with the new settings."
+    else
+      echo "FAIL this genome has a part-finished annotation run with different settings ($OLDSIG) than the ones requested ($RUNSIG). Finish or discard that run before starting a different one."
+    fi
     exit 1
   fi
 fi
@@ -2150,7 +2448,7 @@ echo "TOTAL_CHUNKS $TOTAL"
 # 4) RepeatMasker per chunk. A chunk whose .out already exists is skipped (resume). Each exit code is
 # checked: a nonzero exit aborts the run instead of contributing an empty .out to the summary.
 cd "$ADIR" || exit 1
-idx=0
+idx=$DONE_N        # progress counts the chunks already finished, so a resumed run still ends at N of N
 for c in chunk_*.fa; do
   [ -e "$c" ] || continue
   idx=$((idx+1))
@@ -2187,6 +2485,9 @@ plog "summarising"
 cat chunk_*.out > all.out 2>/dev/null || true
 GENOME_BP=$(awk '!/^>/ { t += length($0) } END { print t+0 }' "$FNA")
 echo "GENOME_SHA256 $GENOME_SHA"
+# the taxon RepeatMasker actually searched (its default lineage when no -species was given), from a chunk log
+RML=$(ls chunk_*.rmlog 2>/dev/null | head -1)
+if [ -n "$RML" ]; then SPL=$(sed -n '/^Species\/Taxa Search:/{n;p;q}' "$RML" 2>/dev/null); [ -n "$SPL" ] && echo "SPECIES_SEARCHED $SPL"; fi
 # BEGIN_COVERAGE_SUMMARY -- tests execute this exact production block on synthetic RepeatMasker rows.
 # Coverage is computed on interval unions. RepeatMasker legitimately emits
 # overlapping rows for the same bases (a younger element inserted into an older one, and its own
@@ -2251,6 +2552,7 @@ awk '
 FINAL_GENOME_SHA=$(sha256sum "$FNA" | cut -d' ' -f1)
 [ "$FINAL_GENOME_SHA" = "$GENOME_SHA" ] \
   || { echo "FAIL CACHE_CORRUPT genome FASTA changed during annotation; no result was sealed"; exit 1; }
+printf '%s' "$RUNSIG" > "$ADIR/.complete"      # marks the run finished, so a later settings clash is worded for a completed run
 echo "ANNOT_OK"
 '''
 
@@ -2297,16 +2599,32 @@ def dfam_lineage_families(species: str, include_uncurated: bool = False) -> dict
         f'[ -f "{_LIBDIR}/dfam40.uncurated.consensus.1.h5" ] || '
         '{ echo "TEAGLE_UNCURATED_MISSING"; exit 3; }\n'
         if include_uncurated else "")
+    # famdb's own exit status decides: an ambiguous or unknown name makes it print usage and fail, and a dead
+    # WSL session prints nothing, and neither is a lineage with zero family models.
     script = (availability_gate
-              + f'"{_MM}" run -n te famdb.py -i "{_LIBDIR}" families -a{curated_flag} -f summary "{species}" 2>/dev/null '
-              f'| grep -c "len="\n')
+              + f'o=$("{_MM}" run -n te famdb.py -i "{_LIBDIR}" families -a{curated_flag} -f summary "{species}" 2>/dev/null)\n'
+              'frc=$?\n'
+              '[ "$frc" = "0" ] || { echo "TEAGLE_FAMDB_FAILED $frc"; exit 4; }\n'
+              'n=$(printf \'%s\\n\' "$o" | grep -c "len=")\n'
+              'echo "$n"\n')
     try:
         rc, out, _ = _wsl_script(script, timeout=300)
-        if include_uncurated and (rc != 0 or "TEAGLE_UNCURATED_MISSING" in out):
+        if "TEAGLE_UNCURATED_MISSING" in out:
             return {"ok": False, "species": species, "include_uncurated": True,
                     "uncurated_available": False,
                     "error": "the optional uncurated Dfam partitions are not installed"}
-        n = int((out.strip().splitlines() or ["0"])[-1] or 0)
+        if rc != 0 or "TEAGLE_FAMDB_FAILED" in out:
+            return {"ok": False, "species": species,
+                    "error": f"the Dfam library could not list the families for {species} "
+                             "(the name may be ambiguous, or WSL was not running); no count is available"}
+        n = int((out.strip().splitlines() or [""])[-1])
+        if n == 0:
+            # famdb exits 0 with no families for an ambiguous or unknown name ('drosophila' matches 141 taxa),
+            # so a zero is only a count once the name is known to resolve to one taxon
+            chk = resolve_species(species)
+            if not chk.get("ok"):
+                return {"ok": False, "species": species, "error": chk["error"],
+                        "ambiguous_species": chk.get("ambiguous", False)}
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
     return {"ok": True, "species": species, "families": n,
@@ -2314,8 +2632,13 @@ def dfam_lineage_families(species: str, include_uncurated: bool = False) -> dict
             "uncurated_available": True if include_uncurated else None}
 
 
-def annotate_budget(genome_bytes: int = 0) -> dict:
+def annotate_budget(genome_bytes: int = 0, fasta_bytes: int | None = None, fasta_cached: bool | None = None) -> dict:
     """CPU / RAM / disk the annotation may use, bounded by WSL and its Windows backing volume.
+
+    Disk is sized from the SOURCE FASTA (`fasta_bytes`, recorded at prepare time). `genome_bytes` is the cached
+    search target, which is about a quarter of that when it is a 2bit file, so it under-states the need and is
+    used only when the FASTA size is unknown. A FASTA that is not cached must be downloaded and extracted first
+    (the zip and the FASTA coexist, at most twice the FASTA); the chunk copy of it comes after.
 
     WSL2 caps cores and memory independently of the Windows host (.wslconfig), so the host's numbers would
     over-promise. RepeatMasker's -pa starts N parallel RMBlast jobs, each needing its own memory, so the
@@ -2338,7 +2661,10 @@ def annotate_budget(genome_bytes: int = 0) -> dict:
     by_cpu = max(1, cores - 1)
     by_ram = max(1, int(mem_gb // 2))
     threads = max(1, min(by_cpu, by_ram))
-    need_gb = int(genome_bytes / 1073741824) + 2 if genome_bytes else None
+    if fasta_bytes:
+        need_gb = math.ceil((1 if fasta_cached else 2) * fasta_bytes / 1073741824) + 2
+    else:
+        need_gb = int(genome_bytes / 1073741824) + 2 if genome_bytes else None
     return {"ok": True, "cores": cores, "mem_gb": mem_gb, "avail_gb": avail_gb,
             "recommended_threads": threads, "limited_by": ("memory" if by_ram < by_cpu else "cores"),
             "disk_needed_gb": need_gb,
@@ -2422,8 +2748,7 @@ def genome_annotate(accession: str, species: str | None = None, threads: int = 4
     # here would make a valid custom-library run unavailable because of a database it never uses.
     backend_ready = bool(st.get("repeatmasker") and (lib_info or st.get("dfam")))
     if not backend_ready:
-        return {"ok": False, "error": "WSL annotation backend not ready "
-                f"(RepeatMasker={st['repeatmasker']}, Dfam={st['dfam']})", "status": st}
+        return {"ok": False, "error": _backend_not_ready(st, need_dfam=not lib_info), "status": st}
     if include_uncurated and not lib_info and not st.get("dfam_uncurated"):
         return {"ok": False, "error": "the optional uncurated Dfam partitions are not installed; install "
                 "both uncurated partitions in the backend manager or use curated families only",
@@ -2457,8 +2782,14 @@ def genome_annotate(accession: str, species: str | None = None, threads: int = 4
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
     if "ANNOT_OK" not in out:
-        return _operation_failure("genome annotation failed", out, err, partial=True)
+        failure = _operation_failure("genome annotation failed", out, err, partial=True)
+        if "a completed annotation" in failure["error"]:
+            failure["annotation_state"] = "complete"          # a finished run, not part-finished work, is what would be discarded
+        elif "part-finished" in failure["error"]:
+            failure["annotation_state"] = "part_finished"
+        return failure
     repeat_names, totals = [], {}
+    lineage = taxid = None
     for line in out.splitlines():
         if line.startswith("REP\t"):
             _, repeat_name, class_family, n, bp, div = line.split("\t")
@@ -2471,6 +2802,10 @@ def genome_annotate(accession: str, species: str | None = None, threads: int = 4
             totals[kind.lower() + "_bp"] = int(bp)
         elif line.startswith("GENOME_SHA256 "):
             totals["genome_sha256"] = line.split(None, 1)[1].strip()
+        elif line.startswith("SPECIES_SEARCHED "):
+            sm = re.match(r"SPECIES_SEARCHED\s+(.+?)\s*(?:\[NCBI Taxonomy ID:\s*(\d+)\])?\s*$", line)
+            if sm:
+                lineage, taxid = sm.group(1), sm.group(2)
     gbp = totals.get("genome_bp", 0)
     genome_sha = totals.get("genome_sha256")
     for row in repeat_names:
@@ -2529,7 +2864,11 @@ def genome_annotate(accession: str, species: str | None = None, threads: int = 4
                      "lineage at all, or supply a species-specific library.")))),
             "repeatmasker_version": st["repeatmasker"], "dfam_version": (lib or {}).get("version"),
             "dfam_library": lib,
-            "species": (None if lib_info else (species or "(all installed families)")),
+            # no organism means RepeatMasker's default lineage, not every installed family
+            "species": (None if lib_info else
+                        (species or f"{lineage or _RM_DEFAULT_LINEAGE} (RepeatMasker default lineage)")),
+            "species_requested": species, "species_defaulted": bool(not lib_info and not species),
+            "lineage_searched": None if lib_info else lineage, "lineage_taxid": None if lib_info else taxid,
             "sensitivity": sensitivity, "threads": int(threads), "chunk_mb": int(chunk_mb),
             "complete": True}
 
@@ -2593,7 +2932,8 @@ def genome_list() -> dict:
         m = _parse_meta(block)
         if m.get("accession"):
             genomes.append({"accession": m["accession"], "target": m.get("target"), "sha256": m.get("sha256"),
-                            "n_seqs": int(m.get("n_seqs", 0) or 0), "bytes": int(m.get("bytes", 0) or 0)})
+                            "n_seqs": int(m.get("n_seqs", 0) or 0), "bytes": int(m.get("bytes", 0) or 0),
+                            "fasta_bytes": int(m.get("fasta_bytes", 0) or 0)})
     return {"ok": True, "genomes": genomes}
 
 

@@ -3,7 +3,7 @@ message: "If you use this software, please cite it using the metadata below."
 type: software
 title: "TEagle: an evidence-traceable integrated single-locus workflow for transposable-element classification and PCR assay planning"
 abstract: >-
-  TEagle is a native Windows desktop application that integrates established methods for single-locus transposable-element structural detection, domain-based classification, PCR assay planning, in-silico screening, and sealed provenance. It withholds classifications when the available evidence does not support a call. Protocol 2.3.6 results are version-locked to TEagle 3.9.0 and do not establish TEagle 4.0.0 performance, population-level accuracy, or prospective wet-lab performance.
+  TEagle is a native Windows desktop application that integrates established methods for single-locus transposable-element structural detection, domain-based classification, PCR assay planning, in-silico screening, and sealed provenance. It withholds classifications when the available evidence does not support a call. Protocol 2.3.6 results are version-locked to TEagle 3.9.0. The TEagle 4.0.0 prospective benchmark is a separate public record (see references) and applies only to that release. No evaluation result establishes population-level accuracy or prospective wet-lab performance, or carries over to a later release.
 version: 4.0.0
 date-released: 2026-08-26
 license: AGPL-3.0-or-later
@@ -12,6 +12,20 @@ url: "https://github.com/tunabirgun/TEagle"
 authors:
   - family-names: Birgun
     given-names: Tuna
+references:
+  - type: dataset
+    title: "TEagle 4.0.0 prospective benchmark results: validated evidence, failures, and reproducibility package"
+    authors:
+      - family-names: Birgun
+        given-names: Tuna
+      - family-names: Gunay
+        given-names: Melih
+      - family-names: Yilmaz
+        given-names: Sibel
+    version: 1.0.0
+    date-released: 2026-08-29
+    doi: 10.5281/zenodo.22159977
+    license: CC-BY-4.0
 keywords:
   - transposable elements
   - retrotransposons

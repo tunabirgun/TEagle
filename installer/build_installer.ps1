@@ -65,7 +65,9 @@ $buildLock = Join-Path $PSScriptRoot "requirements-build.txt"
 $pyiLine = Get-Content -LiteralPath $buildLock | Where-Object { $_ -match '^\s*PyInstaller==([^\s#]+)\s*$' } | Select-Object -First 1
 if (-not $pyiLine) { throw "requirements-build.txt must contain exactly one PyInstaller==<version> pin" }
 $pyiRequired = ([regex]::Match($pyiLine, '^\s*PyInstaller==([^\s#]+)\s*$')).Groups[1].Value
-$pyiInstalled = & $python -c "import importlib.metadata as m; print(m.version('PyInstaller'))" 2>$null
+# Windows PowerShell 5.1 turns the first stderr line of a redirected native command into a terminating error under
+# 'Stop'; relax it for the probe so a missing PyInstaller reaches the message below instead of a raw traceback.
+$pyiInstalled = & { $ErrorActionPreference = 'Continue'; & $python -c "import importlib.metadata as m; print(m.version('PyInstaller'))" 2>$null }
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller $pyiRequired is required but is not installed in $python" }
 $pyiInstalled = ($pyiInstalled | Select-Object -Last 1).Trim()
 if ($pyiInstalled -ne $pyiRequired) {

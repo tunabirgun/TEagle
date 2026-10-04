@@ -11,7 +11,8 @@ score   div. del. ins.  sequence  begin end   (left)   repeat    class/family be
 """
 
 
-def test_resolve_distro_rejects_no_distribution_diagnostic(monkeypatch):
+def test_resolve_distro_rejects_no_distribution_diagnostic(monkeypatch, tmp_path):
+    monkeypatch.setattr(wsl, "_DISTRO_FILE", str(tmp_path / "wsl_distro.txt"))
     diagnostic = ("Windows Subsystem for Linux has no installed distributions.\r\n\r\n"
                   "You can resolve this by installing a distribution with the instructions below.\r\n")
 
@@ -24,7 +25,8 @@ def test_resolve_distro_rejects_no_distribution_diagnostic(monkeypatch):
     assert wsl.resolve_distro() is None
 
 
-def test_resolve_distro_accepts_only_version_table_rows(monkeypatch):
+def test_resolve_distro_accepts_only_version_table_rows(monkeypatch, tmp_path):
+    monkeypatch.setattr(wsl, "_DISTRO_FILE", str(tmp_path / "wsl_distro.txt"))
     table = ("  NAME                   STATE           VERSION\r\n"
              "* Ubuntu 24.04 LTS       Running         2\r\n"
              "  Archive                Stopped         2\r\n")

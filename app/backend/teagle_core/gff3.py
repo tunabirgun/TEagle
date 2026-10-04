@@ -39,6 +39,9 @@ SO = {
     "primer_binding_site": "SO:0005850",
     "RR_tract": "SO:0000435",
     "ORF": "SO:0000236",
+    # verified against the Sequence Ontology (OLS4, 2026-10-04): "A repeat where the same sequence is repeated
+    # in the same direction." The orientation-neutral term for an unconfirmed terminal direct-repeat pair.
+    "direct_repeat": "SO:0000314",
     "polypeptide_domain": "SO:0000417",
     # A LINE's genomic 3' poly-A / 5' poly-T tail. SO's polyA_sequence (SO:0000610) is specifically the
     # post-transcriptional poly-A ADDED TO AN mRNA, so it would misdescribe this genomic tract; the honest
@@ -95,11 +98,12 @@ def so_term_for(classification) -> str:
     tier = (comp.get("tier") or "").lower()
     present = comp.get("present") or []
     missing = comp.get("missing") or []
+    unassessed = comp.get("unassessed") or []
     if not te_class or te_class == "none" or "structural-only" in tier or "structural-only" in te_class:
         return "repeat_region"
     for prefix, term in _CLASS_TERM.items():
         if te_class.startswith(prefix):
-            if term == "terminal_inverted_repeat_element" and any("TIR" in m for m in missing):
+            if term == "terminal_inverted_repeat_element" and any("TIR" in m for m in list(missing) + list(unassessed)):
                 return "DNA_transposon"
             if term == "LTR_retrotransposon" and "RT" not in present:
                 return "repeat_region"
@@ -122,8 +126,62 @@ def _attrs(pairs) -> str:
     return ";".join(f"{k}={_esc(v)}" for k, v in pairs if v not in (None, "", []))
 
 
+def domain_scan_state(cl) -> tuple:
+    """(domain_evidence_status, ORFs outside the profile search's ORF budget) for one classification.
+    The status keeps its three values; a partial search is declared beside it so a negative is never
+    read as a complete one."""
+    cl = cl or {}
+    if cl.get("domains_unavailable"):
+        return "unavailable_failed", 0
+    status = "tested_empty" if not cl.get("n_domains") else "tested_with_hits"
+    return status, max(0, int(cl.get("orfs_unscanned") or 0))
+
+
+def _orders(cl) -> tuple:
+    """(wicker_order, domain_architecture) from a classification; a hand-built one without them falls back."""
+    cl = cl or {}
+    withheld = cl.get("outcome") == "withheld"
+    return (cl.get("wicker_order") or ("withheld" if withheld else "unassigned"),
+            cl.get("domain_architecture") or cl.get("order"))
+
+
+def is_neutral_tdr(cl) -> bool:
+    """A withheld terminal direct-repeat candidate: the repeats are exported, but nothing in the file may
+    assert LTR (retroviral) origin that the classification itself declines to claim."""
+    cl = cl or {}
+    kind = str((cl.get("completeness") or {}).get("kind") or "")
+    return cl.get("te_class") == "repeat/structural-only" and kind.startswith("terminal direct-repeat candidate")
+
+
+def _element_span(cl, structural, length):
+    """0-based half-open [start, end) of the element from the non-advisory terminal-repeat evidence behind
+    the call, or None when no evidence bounds it (domain-only and poly-A-only calls keep the record extent)."""
+    te_class = (cl.get("te_class") or "")
+    if te_class.startswith("LTR/"):
+        kind = "LTR"
+    elif te_class.startswith("DNA/"):
+        comp = cl.get("completeness") or {}
+        if any("TIR" in m for m in list(comp.get("missing") or []) + list(comp.get("unassessed") or [])):
+            return None                                # TIRs not credited to this call do not bound the element
+        kind = "TIR"
+    elif te_class == "repeat/structural-only":
+        kind = "TIR" if "inverted" in (cl.get("superfamily") or "") else "LTR"
+    else:
+        return None
+    for ev in structural or []:
+        span = ev.get("element_span")
+        if ((ev.get("type") or "").split(" ")[0] == kind and not ev.get("advisory") and
+                isinstance(span, (list, tuple)) and len(span) == 2 and 0 <= span[0] < span[1] <= length):
+            return int(span[0]), int(span[1])
+    return None
+
+
 def build_features(rec, seqid="locus", *, identity_trust="local_input", record_id_sha256=None):
-    """One annotation record -> a list of GFF3 feature tuples, parent first."""
+    """One annotation record -> a list of GFF3 feature tuples, parent first.
+
+    The parent is the element itself: its terminal-repeat span when the evidence bounds it, else the
+    analysed record. Flanking target-site duplications lie outside the element, so a flanked record also
+    gets a repeat_region wrapper (TE_1.region) that parents them."""
     original_seqid = str(seqid or "")
     identity = _writer_identity(original_seqid, identity_trust, record_id_sha256)
     seqid = _safe_seqid(identity["id"])
@@ -132,33 +190,26 @@ def build_features(rec, seqid="locus", *, identity_trust="local_input", record_i
     length = (rec.get("composition") or {}).get("length") or len(rec.get("seq_preview") or "") or 1
     term = so_term_for(cl)
     outcome = cl.get("outcome") or "complete"
-    order = cl.get("order") or ("withheld" if outcome == "withheld" else "unassigned")
-    domain_status = ("unavailable_failed" if cl.get("domains_unavailable") else
-                     ("tested_empty" if not cl.get("n_domains") else "tested_with_hits"))
-    rows = []
+    wicker_order, architecture = _orders(cl)
+    domain_status, orfs_unscanned = domain_scan_state(cl)
+    neutral = is_neutral_tdr(cl)
     gene_id = "TE_1"
-    # parent: the element itself. Wicker code and the tier ride in lowercase custom attributes.
-    rows.append((seqid, "TEagle", term, 1, length, ".", ".", ".", _attrs([
-        ("ID", gene_id),
-        ("Name", cl.get("superfamily") or term),
-        ("Ontology_term", SO.get(term, "")),
-        ("wicker_code", cl.get("te_class")),
-        ("te_class", cl.get("te_class")),
-        ("classification_confidence", cl.get("confidence")),
-        ("classification_outcome", outcome),
-        ("classification_order", order),
-        ("domain_evidence_status", domain_status),
-        ("classification_explanation", cl.get("explanation")),
-        ("completeness_tier", comp.get("tier")),
-        ("domains_tested_scope", comp.get("scope")),
-        ("original_record_sha256", identity.get("idSha256")),
-    ])))
+    structural = rec.get("structural") or []
+    span = _element_span(cl, structural, length)
+    children = []                                  # (start0, end0, is_tsd, row builder taking the Parent)
     n = 0
-    for ev in rec.get("structural") or []:
+    for ev in structural:
         kind = (ev.get("type") or "").split(" ")[0]
         sub = _STRUCT_TERM.get(kind)
         if not sub:
             continue
+        name = kind
+        if neutral and kind == "LTR":
+            sub, name = "direct_repeat", "terminal_direct_repeat"
+        elif neutral and kind == "PPT":
+            sub = "sequence_feature"
+        elif kind == "PBS" and ev.get("confident") is False:
+            sub, name = "sequence_feature", "PBS_candidate"      # below the confident threshold: advisory, not a PBS call
         spans = []
         if ev.get("five_prime"):
             spans.append(ev["five_prime"])
@@ -172,43 +223,94 @@ def build_features(rec, seqid="locus", *, identity_trust="local_input", record_i
             spans.append(ev["downstream"])
         if not spans and ev.get("start") is not None:
             spans.append([ev["start"], ev.get("end", ev["start"])])
-        for span in spans:
+        for sp in spans:
             n += 1
-            rows.append((seqid, "TEagle", sub, int(span[0]) + 1, int(span[1]), ".", ".", ".", _attrs([
-                ("ID", f"{gene_id}.s{n}"), ("Parent", gene_id), ("Name", kind),
-                ("Ontology_term", SO.get(sub, "")),
-                # a length still limited by the record is declared here too, not silently exported
-                ("length_is_lower_bound", "true" if ev.get("length_is_lower_bound") else None),
-                # carry the evidence's OWN confidence/hedge into the file — dropping it would let a browser
-                # read an unhedged call the on-screen panel qualified (e.g. a diverged PBS whose priming tRNA
-                # is "undetermined"). _attrs omits any field that is None/""/[] , so these appear only when set.
-                ("identity_pct", ev.get("identity")),
-                ("priming_trna", ev.get("priming_trna")),
-                ("priming_trna_best_match", ev.get("best_match")),
-                ("confident", ("true" if ev.get("confident") else "false") if "confident" in ev else None),
-                ("note", ev.get("note")),
-                ("purine_frac", ev.get("purine_frac")),   # PPT tract quality (fraction of purines)
-                # the TSD-length congruence verdict classify() computed against the superfamily's expected
-                # length — the hedge shown on screen ("ends not credited from it") must reach the file too.
-                ("tsd_congruence", ev.get("tsd_congruence")),
-                # poly(A)-signal motif: which hexamer, how common that variant is, whether the gating
-                # downstream element was found (or could not be assessed), and whether both LTR copies
-                # agree. A browser must not read this motif as a located cleavage site.
-                ("polya_variant", ev.get("variant")),
-                ("downstream_element", ev.get("dse_state")),
-                ("in_both_ltr_copies", ("true" if ev.get("in_both_ltr_copies") else "false")
-                 if "in_both_ltr_copies" in ev else None),
-            ])))
+
+            def build(parent, sp=sp, ev=ev, sub=sub, name=name, kind=kind, n=n):
+                return (seqid, "TEagle", sub, int(sp[0]) + 1, int(sp[1]), ".", ".", ".", _attrs([
+                    ("ID", f"{gene_id}.s{n}"), ("Parent", parent), ("Name", name),
+                    ("Ontology_term", SO.get(sub, "")),
+                    # the repeats of an unconfirmed-origin candidate must not read as established LTR cis-elements
+                    ("context", "ltr_origin_unconfirmed" if neutral and kind in ("LTR", "PBS", "PPT", "polyA-signal")
+                     else None),
+                    # a length still limited by the record is declared here too, not silently exported
+                    ("length_is_lower_bound", "true" if ev.get("length_is_lower_bound") else None),
+                    # carry the evidence's OWN confidence/hedge into the file — dropping it would let a browser
+                    # read an unhedged call the on-screen panel qualified (e.g. a diverged PBS whose priming tRNA
+                    # is "undetermined"). _attrs omits any field that is None/""/[] , so these appear only when set.
+                    ("identity_pct", ev.get("identity")),
+                    ("priming_trna", ev.get("priming_trna")),
+                    ("priming_trna_best_match", ev.get("best_match")),
+                    ("confident", ("true" if ev.get("confident") else "false") if "confident" in ev else None),
+                    ("note", ev.get("note")),
+                    ("purine_frac", ev.get("purine_frac")),   # PPT tract quality (fraction of purines)
+                    # the TSD-length congruence verdict classify() computed against the superfamily's expected
+                    # length — the hedge shown on screen ("ends not credited from it") must reach the file too.
+                    ("tsd_congruence", ev.get("tsd_congruence")),
+                    ("tsd_state", ev.get("tsd_state")),
+                    # poly(A)-signal motif: which hexamer, how common that variant is, whether the gating
+                    # downstream element was found (or could not be assessed), and whether both LTR copies
+                    # agree. A browser must not read this motif as a located cleavage site.
+                    ("polya_variant", ev.get("variant")),
+                    ("downstream_element", ev.get("dse_state")),
+                    ("in_both_ltr_copies", ("true" if ev.get("in_both_ltr_copies") else "false")
+                     if "in_both_ltr_copies" in ev else None),
+                ]))
+            children.append((int(sp[0]), int(sp[1]), kind == "TSD", build))
     for i, d in enumerate(rec.get("domains") or [], 1):
         nt = d.get("nt") or [0, 0]
-        rows.append((seqid, "TEagle", "polypeptide_domain", int(nt[0]) + 1, int(nt[1]),
-                     f"{d.get('score', '.')}", d.get("strand", "."), ".", _attrs([
-                         ("ID", f"{gene_id}.d{i}"), ("Parent", gene_id),
-                         ("Name", d.get("label") or d.get("domain")),
-                         ("Ontology_term", SO["polypeptide_domain"]),
-                         ("domain_code", d.get("domain")), ("hmm_profile", d.get("hmm")),
-                         ("pfam_accession", d.get("pfam")), ("evalue", d.get("evalue")),
-                     ])))
+
+        def build(parent, d=d, nt=nt, i=i):
+            return (seqid, "TEagle", "polypeptide_domain", int(nt[0]) + 1, int(nt[1]),
+                    f"{d.get('score', '.')}", d.get("strand", "."), ".", _attrs([
+                        ("ID", f"{gene_id}.d{i}"), ("Parent", parent),
+                        ("Name", d.get("label") or d.get("domain")),
+                        ("Ontology_term", SO["polypeptide_domain"]),
+                        ("domain_code", d.get("domain")), ("hmm_profile", d.get("hmm")),
+                        ("pfam_accession", d.get("pfam")), ("evalue", d.get("evalue")),
+                    ]))
+        children.append((int(nt[0]), int(nt[1]), False, build))
+    te_lo, te_hi = span if span else (0, length)
+    wrapper = None                                 # element plus its TSDs only; never stretched over other flank features
+    if span:
+        tsds = [c for c in children if c[2]]
+        if tsds:
+            wrapper = (min([te_lo] + [c[0] for c in tsds]), max([te_hi] + [c[1] for c in tsds]))
+    rows = []
+    wrapper_id = f"{gene_id}.region"
+    name = cl.get("superfamily") or term
+    if wrapper:
+        rows.append((seqid, "TEagle", "repeat_region", wrapper[0] + 1, wrapper[1], ".", ".", ".", _attrs([
+            ("ID", wrapper_id), ("Name", f"{name} region"), ("Ontology_term", SO["repeat_region"]),
+            ("note", "the element plus the target-site duplications that flank it")])))
+    # parent: the element itself. Wicker code and the tier ride in lowercase custom attributes.
+    rows.append((seqid, "TEagle", term, te_lo + 1, te_hi, ".", ".", ".", _attrs([
+        ("ID", gene_id),
+        ("Parent", wrapper_id if wrapper else None),
+        ("Name", name),
+        ("Ontology_term", SO.get(term, "")),
+        ("wicker_code", cl.get("te_class")),
+        ("te_class", cl.get("te_class")),
+        ("classification_confidence", cl.get("confidence")),
+        ("classification_outcome", outcome),
+        ("wicker_order", wicker_order),
+        ("domain_architecture", architecture),
+        ("classification_order", architecture or wicker_order),      # deprecated alias of domain_architecture
+        ("domain_evidence_status", domain_status),
+        ("domain_scan_scope", "partial" if orfs_unscanned else None),
+        ("orfs_not_scanned", orfs_unscanned or None),
+        ("structural_evidence_status", "unavailable_failed" if cl.get("structural_unavailable") else None),
+        ("classification_explanation", cl.get("explanation")),
+        ("completeness_tier", comp.get("tier")),
+        ("domains_tested_scope", comp.get("scope")),
+        ("original_record_sha256", identity.get("idSha256")),
+    ])))
+    for lo, hi, is_tsd, build in children:
+        if is_tsd and wrapper:
+            parent = wrapper_id
+        else:                                      # a feature outside the element has no parent rather than a wrong one
+            parent = gene_id if te_lo <= lo and hi <= te_hi else None
+        rows.append(build(parent))
     return rows
 
 
@@ -267,9 +369,8 @@ def to_bed(rec, seqid="locus", offset: int = 0, *, identity_trust="local_input",
     seqid = _safe_seqid(identity["id"])
     cl = rec.get("classification") or {}
     outcome = cl.get("outcome") or "complete"
-    order = cl.get("order") or ("withheld" if outcome == "withheld" else "unassigned")
-    domain_status = ("unavailable_failed" if cl.get("domains_unavailable") else
-                     ("tested_empty" if not cl.get("n_domains") else "tested_with_hits"))
+    order = _orders(cl)[0]
+    domain_status, orfs_unscanned = domain_scan_state(cl)
     for r in build_features(rec, original_seqid, identity_trust=identity_trust,
                             record_id_sha256=record_id_sha256):
         if offset:
@@ -280,8 +381,10 @@ def to_bed(rec, seqid="locus", offset: int = 0, *, identity_trust="local_input",
             if part.startswith("Name="):
                 name = part[5:]
                 break
-        if "ID=TE_1" in attrs and "Parent=" not in attrs:
+        if "ID=TE_1" in attrs.split(";"):
             name += f"|outcome={outcome}|order={order}|domains={domain_status}"
+            if orfs_unscanned:
+                name += f"|domain_scan=partial|orfs_not_scanned={orfs_unscanned}"
         if identity.get("idSha256"):
             name += f"|record_sha256={identity['idSha256']}"
         lines.append("\t".join([str(chrom), str(int(start) - 1), str(int(end)), name,
@@ -495,12 +598,15 @@ def gene_model_to_gff3(model: dict, seqid, *, sequence: str | None = None, sourc
             if isinstance(phase, bool) or not isinstance(phase, int) or phase not in {0, 1, 2}:
                 raise ValueError(f"cds[{row['source_index']}] has no valid GFF3 phase; BED and FASTA remain available")
             phase = str(phase)
-        attrs = [("ID", f"annotation.{row['type'].lower()}.{counters[row['type']]}"),
-                 ("Name", f"{row['type']}_{counters[row['type']]}"),
+        group = feature.get("cds_group") if row["type"] == "CDS" else None
+        # the segments of one spliced CDS are ONE discontinuous feature, which GFF3 writes as lines sharing an ID
+        # (and one Name, so validators do not see conflicting attributes on the shared ID)
+        attrs = [("ID", f"annotation.{group}" if group else f"annotation.{row['type'].lower()}.{counters[row['type']]}"),
+                 ("Name", group or f"{row['type']}_{counters[row['type']]}"),
                  ("Ontology_term", row["ontology"]), ("model_kind", kind),
                  ("original_record_sha256", identity.get("idSha256")),
                  ("derived", "true" if feature.get("derived") else None),
-                 ("cds_group", feature.get("cds_group")),
+                 ("cds_group", group),
                  ("note", feature.get("note")), ("donor", feature.get("donor")),
                  ("acceptor", feature.get("acceptor")),
                  ("canonical", ("true" if feature.get("canonical") else "false")
@@ -529,6 +635,8 @@ def gene_model_to_bed(model: dict, seqid, *, sequence_length: int | None = None,
     for row in rows:
         counters[row["type"]] += 1
         name = f"{row['type']}_{counters[row['type']]}"
+        if row["feature"].get("derived"):
+            name += "|derived=true"
         if identity.get("idSha256"):
             name += f"|record_sha256={identity['idSha256']}"
         out.append("\t".join((safe, str(row["start"]), str(row["end"]), name, "0", row["strand"])))
@@ -559,6 +667,7 @@ def gene_model_to_fasta(model: dict, sequence: str, seqid, *, feature_types=("ex
         if row["strand"] == "-":
             fragment = fragment.translate(complement)[::-1]
         digest_note = f" record_sha256={identity['idSha256']}" if identity.get("idSha256") else ""
+        digest_note += " derived=true" if row["feature"].get("derived") else ""
         desc = (f">{safe}.{row['type'].lower()}{counters[row['type']]}{digest_note} "
                 f"coordinates={row['start']}-{row['end']} coordinate_system=0-based-half-open "
                 f"strand={row['strand']}")

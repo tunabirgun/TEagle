@@ -11,18 +11,33 @@ in `app/backend/requirements.txt`; the provenance manifest of every run records 
 | [primer3-py](https://github.com/libnano/primer3-py) | 2.3.0 | GPL-2.0-**or-later** | Primer design and nearest-neighbour thermodynamics |
 | [PySide6](https://doc.qt.io/qtforpython/) | 6.11.1 | LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only | Qt user interface |
 | [shiboken6](https://doc.qt.io/qtforpython/shiboken6/) | 6.11.1 | LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only | PySide6 binding runtime |
-| [pyhmmer](https://github.com/althonos/pyhmmer) | 0.12.1 | MIT | HMMER3 profile search, in-process |
+| [pyhmmer](https://github.com/althonos/pyhmmer) | 0.12.1 | MIT AND BSD-3-Clause AND BSD-2-Clause | HMMER3 profile search, in-process; the wheel statically links HMMER and Easel (BSD-3-Clause, see below) |
 | [openpyxl](https://openpyxl.readthedocs.io/) | 3.1.5 | MIT | XLSX table export |
-| et_xmlfile | (openpyxl dependency) | MIT | XLSX writing |
+| [psutil](https://github.com/giampaolo/psutil) | 7.2.2 | BSD-3-Clause | Process and memory inspection for the resource gates |
+| et_xmlfile | 2.0.0 (openpyxl dependency) | MIT | XLSX writing |
 | [certifi](https://github.com/certifi/python-certifi) | 2026.7.22 | MPL-2.0 | CA bundle for NCBI/Ensembl requests |
 | [pypdf](https://github.com/py-pdf/pypdf) | 6.15.0 | BSD-3-Clause | PDF metadata minimisation while preserving document navigation |
-| Pfam-A TE domain profiles (`data/te_domains.hmm`) | Pfam 37.x | CC0-1.0 | Protein-domain panel |
+| Pfam-A TE domain profiles (`data/te_domains.hmm`) | 30 profiles, listed below | CC0-1.0 | Protein-domain panel |
+| CPython runtime | 3.12 | PSF-2.0 | Python interpreter and standard library frozen into the executable |
+| OpenSSL libraries linked by CPython | as shipped with CPython 3.12 | Apache-2.0 | TLS for NCBI/Ensembl requests |
 | [Cascadia Code / Cascadia Mono](https://github.com/microsoft/cascadia-code) | — | SIL OFL 1.1 | Bundled UI typeface |
 | [Roboto](https://github.com/googlefonts/roboto) | — | Apache-2.0 | Bundled UI typeface |
 
 primer3-py is distributed under "version 2 of the License, or (at your option) any later version", which is
 what allows it to be combined with AGPL-3.0 code. PySide6 and shiboken6 are used under their LGPL-3.0 option.
 MPL-2.0 and Apache-2.0 are both compatible with GPL-3.0 / AGPL-3.0.
+
+### Licence texts installed with the application
+
+The installer places `LICENSE` (AGPL-3.0-or-later), this file, `LGPL-3.0.txt`, `GPL-3.0.txt`, `HMMER-BSD-3-Clause.txt` and `Easel-BSD-2-Clause.txt` in the `licenses` folder of the installation directory. The LGPL-3.0 text is required because Qt and PySide6 are redistributed under that option; the wheels carry only the commercial-licence notice. The Qt and PySide6 libraries are used unmodified and are loaded as separate shared libraries (DLLs) in the installation folder, so they can be replaced by a user-built version. Their source code is available from <https://download.qt.io/official_releases/QtForPython/> and <https://code.qt.io/cgit/pyside/pyside-setup.git/>. primer3-py's GPL-2.0 text, psutil's, certifi's, pypdf's, openpyxl's and pyhmmer's licence files travel inside the bundled `*.dist-info` directories.
+
+### HMMER and Easel
+
+pyhmmer statically links HMMER 3 and its Easel library. HMMER is distributed under the BSD three-clause licence and Easel under the BSD two-clause licence, which accounts for the licence expression declared by the pyhmmer wheel. The licence files are installed verbatim as `HMMER-BSD-3-Clause.txt` and `Easel-BSD-2-Clause.txt` in the `licenses` folder. They were taken from the bioconda hmmer 3.3.2 package, not from the HMMER release that pyhmmer 0.12.1 compiles in, so their copyright years and contributor lists may be older than that release's own files. Replace them with the files of the bundled release once those are verified.
+
+### Pfam profiles in the bundled panel
+
+The bundled file holds 30 HMMER3 profiles from Pfam-A, retrieved through InterPro (initial set 2026-07-17, retroviral GAG/ENV set 2026-07-23, the remaining profiles later). The Pfam release number is not asserted here; each profile is identified by the accession and version stored in the file itself: RVT_1 PF00078.33, RVT_2 PF07727.20, RVT_3 PF13456.13, rve PF00665.33, RNase_H PF00075.31, RVP PF00077.26, PEG10_N-capsid PF03732.25, Chromo PF00385.31, HTH_Tnp_Tc3_2 PF01498.25, DDE_1 PF03184.26, DDE_3 PF13358.13, Transposase_1 PF01359.25, Dimer_Tnp_hAT PF05699.20, hAT-like_RNase-H PF14372.13, Gag_p24 PF00607.26, Gag_p24_C PF19317.5, Gag_p10 PF02337.23, zf-CCHC_5 PF14787.12, HERV-K_env_2 PF13804.13, GP41 PF00517.23, TLV_coat PF00429.25, Transposase_22 PF02994.21, Tnp_22_trimer PF17489.8, Tnp_22_dsRBD PF17490.8, Exo_endo_phos PF03372.30, Phage_integrase PF00589.28, Helitron_like_N PF14214.12, Transposase_24 PF03004.20, MULE PF10551.16, DDE_Tnp_1_7 PF13843.13.
 
 ## Deliberately NOT bundled
 

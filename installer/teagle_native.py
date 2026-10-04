@@ -22,10 +22,31 @@ if not getattr(sys, "frozen", False):
 _KEEP = []            # keep OS handles alive for the whole process lifetime
 
 
-def _msgbox(text, title="TEagle"):
+def _ensure_std_streams():
+    """A windowed build started from Explorer has no std handles, so sys.stdout/stderr are None and any
+    write raises. Give them a UTF-8 log (devnull if it cannot be opened) before anything imports main."""
+    if sys.stdout is not None and sys.stderr is not None:
+        return
+    try:
+        d = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "TEagle", "logs")
+        os.makedirs(d, exist_ok=True)
+        path = os.path.join(d, "teagle.log")
+        f = open(path, "w" if os.path.exists(path) and os.path.getsize(path) > 1_000_000 else "a",
+                 encoding="utf-8", buffering=1)
+    except OSError:
+        f = open(os.devnull, "w", encoding="utf-8")
+    _KEEP.append(f)
+    if sys.stdout is None:
+        sys.stdout = f
+    if sys.stderr is None:
+        sys.stderr = f
+
+
+def _msgbox(text, title="TEagle", icon=0x10):
+    """icon: MB_ICONERROR (default) or MB_ICONINFORMATION (0x40)."""
     try:
         import ctypes
-        ctypes.windll.user32.MessageBoxW(0, str(text), title, 0x10)   # MB_ICONERROR
+        ctypes.windll.user32.MessageBoxW(0, str(text), title, icon)
     except Exception:
         sys.stderr.write(f"{title}: {text}\n")
 
@@ -40,6 +61,31 @@ def _windows_single_instance() -> bool:
         return k.GetLastError() == 183               # ERROR_ALREADY_EXISTS
     except Exception:
         return False
+
+
+def _raise_running_window(title="TEagle") -> bool:
+    """Bring the already-running instance's main window forward. True if a Qt window with that title was found."""
+    try:
+        import ctypes
+        u = ctypes.windll.user32
+        hwnd = u.FindWindowW(None, title)
+        if not hwnd:
+            return False
+        cls = ctypes.create_unicode_buffer(256)
+        u.GetClassNameW(hwnd, cls, 256)
+        if not cls.value.startswith("Qt"):                      # a folder or document that happens to be named TEagle
+            return False
+        if u.IsIconic(hwnd):
+            u.ShowWindow(hwnd, 9)                               # SW_RESTORE
+        u.SetForegroundWindow(hwnd)
+        return True
+    except Exception:
+        return False
+
+
+# KILL_ON_JOB_CLOSE reaps wsl.exe children; BREAKAWAY_OK lets a launcher that must outlive TEagle (a browser opened
+# from a link) start itself with CREATE_BREAKAWAY_FROM_JOB.
+_JOB_LIMIT_FLAGS = 0x2000 | 0x800
 
 
 def _enable_kill_on_close_job():
@@ -76,7 +122,7 @@ def _enable_kill_on_close_job():
         if not job:
             return
         info = _EXT()
-        info.BasicLimitInformation.LimitFlags = 0x2000        # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        info.BasicLimitInformation.LimitFlags = _JOB_LIMIT_FLAGS
         k.SetInformationJobObject(job, 9, ctypes.byref(info), ctypes.sizeof(info))   # ExtendedLimitInformation
         k.AssignProcessToJobObject(job, k.GetCurrentProcess())
         _KEEP.append(job)
@@ -86,12 +132,16 @@ def _enable_kill_on_close_job():
 
 def main():
     if os.environ.get("TEAGLE_SELFTEST"):
+        _ensure_std_streams()
         import main as native_main                            # app/native/main.py
         return native_main.selftest()
     if sys.platform == "win32":
         _enable_kill_on_close_job()                           # before any WSL child is spawned
-        if _windows_single_instance():
-            return 0                                          # another TEagle is already running
+        if _windows_single_instance():                        # another TEagle is already running
+            if not _raise_running_window():
+                _msgbox("TEagle is already running.", icon=0x40)
+            return 0
+    _ensure_std_streams()                                     # after the mutex: a second launch must not touch the running instance's log
     try:
         import main as native_main
         return native_main.main()

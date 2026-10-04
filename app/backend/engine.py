@@ -1,14 +1,14 @@
 """TEagle engine adapter — the single source of truth for every operation.
 
 Each `run_*` function takes an already-parsed request dict and returns a result dict,
-or raises `BadRequest` for a malformed client request (never an unhandled 500 for user error).
-Both the stdlib HTTP server (server.py) and the native PySide6 app (app/native) call these
-functions, so request validation and scientific behaviour cannot drift between the two front ends.
+or raises `BadRequest` for a malformed client request (never an unhandled fault for user error).
+The native PySide6 app (app/native) calls these functions through its engine worker, so request
+validation and scientific behaviour live in one place.
 
-Error taxonomy (consumed by the Qt worker, obs 4702):
+Error taxonomy (consumed by the Qt worker):
   - returns dict              -> success
-  - raises BadRequest         -> user-correctable input error (HTTP 400 / inline message)
-  - raises anything else      -> unexpected fault (HTTP 500 / error banner + traceback to log)
+  - raises BadRequest         -> user-correctable input error (inline message)
+  - raises anything else      -> unexpected fault (error banner + traceback to log)
 """
 from __future__ import annotations
 import copy, hashlib, re, time
@@ -19,10 +19,13 @@ import envcheck
 
 
 class BadRequest(Exception):
-    """A malformed client request — surfaced as HTTP 400 / an inline user message, never a 500."""
+    """A malformed client request, surfaced as an inline user message and never as an unhandled fault."""
 
 
-ANALYSIS_RESULT_SCHEMA = "1.0"
+ANALYSIS_RESULT_SCHEMA = "1.1"
+# 1.0 documents are validated under the 4.0.0 rules: no domains "not_run" state and no invalidReason field.
+ANALYSIS_LEGACY_SCHEMA = "1.0"
+ANALYSIS_ACCEPTED_SCHEMAS = frozenset({ANALYSIS_LEGACY_SCHEMA, ANALYSIS_RESULT_SCHEMA})
 ANALYSIS_RESULT_FORMAT = "TEagle analysis result"
 ANALYSIS_STATUS_COMPLETE = "complete"
 ANALYSIS_STATUS_COMPLETE_WITH_INVALID_RECORDS = "complete_with_invalid_records"
@@ -66,12 +69,25 @@ def derive_analysis_status(records: list) -> str:
     return ANALYSIS_STATUS_COMPLETE
 
 
+def stage_summary(records: list) -> dict:
+    """Records per stage state across the valid records, so a run with partial or withheld stages is not
+    mistaken for a fully searched one by a reader who filters on the top-level status alone."""
+    summary = {stage: {} for stage in ANALYSIS_STAGE_NAMES}
+    for rec in records:
+        if rec.get("valid") is True:
+            for stage in ANALYSIS_STAGE_NAMES:
+                state = rec.get("processing", {}).get(stage, {}).get("status")
+                summary[stage][state] = summary[stage].get(state, 0) + 1
+    return summary
+
+
 def _nonnegative_int(value) -> bool:
     return not isinstance(value, bool) and isinstance(value, int) and value >= 0
 
 
-def _analysis_processing_valid(rec: dict) -> bool:
+def _analysis_processing_valid(rec: dict, schema: str = ANALYSIS_RESULT_SCHEMA) -> bool:
     """Validate the complete per-record stage universe and each outcome's exact schema."""
+    legacy = schema == ANALYSIS_LEGACY_SCHEMA
     required = {"id", "valid", "invalid", "composition", "structural", "domains", "classification",
                 "orfs", "seq", "seq_preview", "notes", "processing", "identitySource"}
     if (not isinstance(rec, dict) or not required.issubset(rec) or
@@ -101,11 +117,14 @@ def _analysis_processing_valid(rec: dict) -> bool:
     else:
         return False
     processing = rec["processing"]
+    reason = rec.get("invalidReason")
+    if legacy and "invalidReason" in rec:
+        return False
     if rec.get("valid") is False:
-        return (bool(rec["invalid"]) and not rec["structural"] and not rec["domains"] and not rec["orfs"] and
+        return ((bool(rec["invalid"]) or (isinstance(reason, str) and bool(reason))) and not rec["structural"] and not rec["domains"] and not rec["orfs"] and
                 rec["classification"] is None and rec.get("retroviral") is None and
                 all(processing[stage] == {"status": "not_run"} for stage in ANALYSIS_STAGE_NAMES))
-    if rec.get("valid") is not True or rec["invalid"]:
+    if rec.get("valid") is not True or rec["invalid"] or reason is not None:
         return False
 
     structural_state = processing["structural"]
@@ -130,12 +149,16 @@ def _analysis_processing_valid(rec: dict) -> bool:
         return False
 
     domain_state = processing["domains"]
-    if domain_state.get("status") in {"complete", "partial"}:
+    if domain_state.get("status") in ({"complete", "partial"} if legacy else {"complete", "partial", "not_run"}):
         keys = {"status", "count", "orfsScanned", "orfsNotScanned"}
         if set(domain_state) != keys or not all(_nonnegative_int(domain_state[k]) for k in keys - {"status"}):
             return False
-        if (domain_state["count"] != len(rec["domains"]) or
-                (domain_state["status"] == "partial") != (domain_state["orfsNotScanned"] > 0)):
+        if domain_state["count"] != len(rec["domains"]):
+            return False
+        if domain_state["status"] == "not_run":
+            if domain_state["orfsScanned"] or domain_state["count"]:
+                return False
+        elif (domain_state["status"] == "partial") != (domain_state["orfsNotScanned"] > 0):
             return False
         if orf_state["status"] == "complete":
             expected_scanned = min(orf_state["count"], domains.MAX_ORFS_SCANNED)
@@ -291,59 +314,117 @@ def run_analyze(body):
     return analyze(body.get("sequence", ""), body.get("source"))
 
 
+# Seal key -> (module, function name, parameter) whose signature default is the value that function applies.
+# Every numeric default of a domain or ORF function is sealed here, and of a structural function either here or
+# under a derived key (_other_structural_thresholds); tests/test_every_applied_threshold_is_sealed.py checks it.
+_SEALED_DEFAULTS = {
+    "orf_min_aa": (sequtil, "find_orfs", "min_aa"),
+    "domain_evalue_max": (domains, "scan_domains", "evalue"),
+    "domain_orfs_scanned_max": (domains, "scan_domains", "max_orfs"),
+    "ltr_seed_k": (structural, "find_ltr", "k"),
+    "ltr_min_len": (structural, "find_ltr", "min_ltr"),
+    "ltr_min_anchors": (structural, "find_ltr", "min_anchors"),
+    "ltr_extend_x_drop": (structural, "_extend", "x_drop"),
+    "tir_seed_k": (structural, "find_tir", "k"),
+    "tir_min_len": (structural, "find_tir", "min_tir"),
+    "tir_max_len": (structural, "find_tir", "max_tir"),
+    "tir_min_anchors": (structural, "find_tir", "min_anchors"),
+    "polya_min_run": (structural, "find_polya", "min_run"),
+    "polya_signal_dse_lo": (structural, "find_polya_signal", "lo"),
+    "polya_signal_dse_hi": (structural, "find_polya_signal", "hi"),
+    "polya_signal_dse_min_gt_frac": (structural, "find_polya_signal", "min_gt_frac"),
+    "polya_signal_dse_min_t": (structural, "find_polya_signal", "min_t"),
+    "pbs_search_window": (structural, "find_pbs", "search"),
+    "pbs_min_identity": (structural, "find_pbs", "min_ident"),
+    "ppt_window": (structural, "find_ppt", "window"),
+    "ppt_min_len": (structural, "find_ppt", "min_len"),
+    "ppt_min_purine": (structural, "find_ppt", "min_purine"),
+    "ppt_max_defects": (structural, "find_ppt", "max_defects"),
+}
+# Applied from module scope rather than a signature default: seal key -> structural attribute. These keys are
+# stable names; every other numeric constant and default in structural.py is sealed below under a derived key.
+_SEALED_STRUCTURAL_CONSTANTS = {
+    "ltr_min_identity_pct": "MIN_LTR_IDENTITY",
+    "tir_min_identity_pct": "MIN_TIR_IDENTITY",
+    # MIN_TIR_STANDALONE is the length at or above which a terminal inverted repeat licenses a Class II call
+    # with no transposase, and the bound the benchmark measures a chance ceiling against.
+    "tir_min_standalone": "MIN_TIR_STANDALONE",
+    # _LTR_SEED_WINDOW caps the region searched for terminal-repeat seeds, so on a long record it decides what
+    # can be found at all.
+    "ltr_seed_window": "_LTR_SEED_WINDOW",
+    "tsd_min_len": "MIN_TSD",
+    "tsd_max_len": "MAX_TSD",
+}
+# The random-sequence TIR ceiling the classification explanations quote (17 bp across 22,500 sequences); it is
+# reported with the call, so it is sealed with the run. Other numeric names in classify.py are not listed here
+# because none of them is applied or reported (_MIN_LINE_RECORD_BP is read by nothing).
+_SEALED_CLASSIFY_CONSTANTS = {
+    "classify_chance_tir_max_bp": "CHANCE_TIR_MAX_BP",
+    "classify_chance_tir_sequences": "CHANCE_TIR_SEQUENCES",
+}
+# Numeric names in structural.py that decide nothing: an overflow-safe minimum sentinel and accumulator starts.
+_NOT_THRESHOLDS = {"_NEG", ("_ltr_stats", "events"), ("_ltr_stats", "gap_cols")}
+
+
+def _threshold_value(value):
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return value
+    if isinstance(value, range):
+        return [value.start, value.stop]
+    if isinstance(value, tuple) and value and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value):
+        return list(value)
+    return None
+
+
+def _other_structural_thresholds():
+    """Every numeric module constant and signature default in structural.py that has no stable key above, under
+    a key derived from its name. A threshold added to the detectors is therefore sealed without anyone having to
+    remember to list it here."""
+    import inspect
+    explicit_attrs = set(_SEALED_STRUCTURAL_CONSTANTS.values())
+    explicit_defaults = {(fname, name) for _module, fname, name in _SEALED_DEFAULTS.values()}
+    out = {}
+    for name, value in sorted(vars(structural).items()):
+        if (re.fullmatch(r"_?[A-Z][A-Z0-9_]*", name) and name not in explicit_attrs and name not in _NOT_THRESHOLDS
+                and _threshold_value(value) is not None):
+            out["structural_" + name.lstrip("_").lower()] = _threshold_value(value)
+    for fname, fn in sorted(inspect.getmembers(structural, inspect.isfunction)):
+        if fn.__module__ != structural.__name__:
+            continue
+        for pname, param in inspect.signature(fn).parameters.items():
+            if ((fname, pname) not in explicit_defaults and (fname, pname) not in _NOT_THRESHOLDS
+                    and _threshold_value(param.default) is not None):
+                out[f"structural_{fname.lstrip('_')}_{pname}"] = _threshold_value(param.default)
+    return out
+
+
 def _detector_parameters():
-    """Every threshold that decides a structural or domain call, READ FROM THE FUNCTION THAT APPLIES IT.
+    """Every threshold that decides a structural or domain call, READ FROM THE CODE THAT APPLIES IT.
 
-    The analysis manifest sealed exactly one parameter — a hand-written {"orf_min_aa": 40} — while the
-    numbers that actually determine what is found (the HMMER E-value, the LTR seed/length/anchor/identity
-    floors, the TIR and PPT and poly-A thresholds, the TSD window, the ORF budget) lived only as function
-    defaults. A manifest that omits them cannot reproduce the run it claims to seal, and a reader cannot
-    check the call against its own criteria.
+    The analysis manifest once sealed a single hand-written parameter while the numbers that determine what is
+    found (the HMMER E-value, the LTR seed/length/anchor/identity floors, the TIR, PPT and poly-A thresholds,
+    the TSD window, the ORF budget) lived only as function defaults. A manifest that omits them cannot
+    reproduce the run it claims to seal.
 
-    Values come from `inspect.signature`, never restated here: a default changed in a detector changes the
-    seal automatically, so the manifest cannot drift from the code the way the hand-written entry did."""
+    Values come from `inspect.signature` and from the defining module's constants, never restated here: a
+    default changed in a detector changes the seal automatically."""
     import inspect
 
-    def d(fn, name):
-        return inspect.signature(fn).parameters[name].default
-
-    return {
-        "orf_min_aa": d(sequtil.find_orfs, "min_aa"),
-        "domain_evalue_max": d(domains.scan_domains, "evalue"),
-        # Read from the signature of the function that applies it, like every other entry here. It was
-        # previously read from the module constant, which is the value scan_domains defaults to today but
-        # is not the value scan_domains applies by construction; the two could diverge without the seal
-        # noticing. A key-identity coverage audit is what surfaced the difference.
-        "domain_orfs_scanned_max": d(domains.scan_domains, "max_orfs"),
-        "ltr_seed_k": d(structural.find_ltr, "k"),
-        "ltr_min_len": d(structural.find_ltr, "min_ltr"),
-        "ltr_min_anchors": d(structural.find_ltr, "min_anchors"),
-        "ltr_min_identity_pct": structural.MIN_LTR_IDENTITY,
-        "tir_seed_k": d(structural.find_tir, "k"),
-        "tir_min_len": d(structural.find_tir, "min_tir"),
-        "tir_max_len": d(structural.find_tir, "max_tir"),
-        "tir_min_anchors": d(structural.find_tir, "min_anchors"),
-        # Two thresholds that decide a call from module scope rather than from a signature default, so
-        # the inspect.signature idiom above could not reach them and a coverage audit keyed on detector
-        # functions did not miss them so much as never look. Both are applied:
-        # MIN_TIR_STANDALONE is the length at or above which a terminal inverted repeat licenses a
-        # Class II call with no transposase (classify.py), and it is the constant the benchmark measures
-        # a chance ceiling against — so a manifest that omits it cannot reconstruct the one bound the
-        # paper reports as empirically set. _LTR_SEED_WINDOW caps the region searched for terminal-repeat
-        # seeds (structural.py), so on a long record it determines what can be found at all.
-        "tir_min_standalone": structural.MIN_TIR_STANDALONE,
-        "ltr_seed_window": structural._LTR_SEED_WINDOW,
-        "tsd_min_len": structural.MIN_TSD,
-        "tsd_max_len": structural.MAX_TSD,
-        "polya_min_run": d(structural.find_polya, "min_run"),
-        "pbs_search_window": d(structural.find_pbs, "search"),
-        "pbs_min_identity": d(structural.find_pbs, "min_ident"),
-        "ppt_window": d(structural.find_ppt, "window"),
-        "ppt_min_len": d(structural.find_ppt, "min_len"),
-        "ppt_min_purine": d(structural.find_ppt, "min_purine"),
-        "ppt_max_defects": d(structural.find_ppt, "max_defects"),
-        "tir_min_identity_pct": structural.MIN_TIR_IDENTITY,
-    }
+    params = {key: inspect.signature(getattr(module, fname)).parameters[name].default
+              for key, (module, fname, name) in _SEALED_DEFAULTS.items()}
+    params.update({key: getattr(structural, attr) for key, attr in _SEALED_STRUCTURAL_CONSTANTS.items()})
+    params.update(_other_structural_thresholds())
+    params.update({key: getattr(classify, attr) for key, attr in _SEALED_CLASSIFY_CONSTANTS.items()})
+    # the expected TSD length (and accepted range and motif, where the table defines them) per superfamily
+    # decides whether a TSD is called congruent or incongruent
+    params["tsd_expectation_by_superfamily"] = {
+        name: {"length": entry[0],
+               **({"range": list(entry[1])} if len(entry) > 1 and isinstance(entry[1], (tuple, list)) else {}),
+               **({"motif": entry[3]} if len(entry) > 3 and entry[3] else {})}
+        for name, entry in structural.TSD_EXPECT.items()}
+    return params
 
 
 def _validated_operation_source(source, records):
@@ -356,8 +437,39 @@ def _operation_record_identity(source_context, record_id, index=0):
         if index < len(bindings):
             return {**gff3.public_record_identity(bindings[index]["id"], trust="validated_fetch"),
                     "identitySource": "validated_fetch"}
+    if record_id == "input_sequence":
+        # parse_fasta's label for header-less text, which analyze() seals as a generated identity; hashing
+        # the constant would give every bare specimen the same hash-derived record id
+        return {**gff3.public_record_identity(record_id, trust="generated"), "identitySource": "generated"}
     identity = gff3.public_record_identity(record_id)
     return {**identity, "identitySource": "local_input"}
+
+
+def _rna_flags(seq_text) -> list:
+    """Per record, whether its sequence lines contain U. parse_fasta normalizes U to T, so this reads the raw
+    text, splitting records as parse_fasta does: header lines never count and text before the first header
+    belongs to no record."""
+    if not isinstance(seq_text, str):
+        return []
+    if ">" not in seq_text:
+        return ["U" in seq_text.upper()]
+    flags = []
+    for line in seq_text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        if line.startswith(">"):
+            flags.append(False)
+        elif flags and "U" in line.upper():
+            flags[-1] = True
+    return flags
+
+
+_ORIENTING_DOMAINS = frozenset({"RT", "INT", "TPase"})
+
+
+def _domain_strand_vote(hits) -> str | None:
+    """The strand every RT, integrase and transposase hit reads on, or None when there is no such hit or
+    they disagree (nested or adjacent elements, or a cross-scoring INT/TPase fold on the other strand)."""
+    strands = {h.get("strand", "+") for h in hits if h.get("domain") in _ORIENTING_DOMAINS}
+    return strands.pop() if len(strands) == 1 and strands <= {"+", "-"} else None
 
 
 def analyze(seq_text: str, source: dict | None = None):
@@ -375,12 +487,16 @@ def analyze(seq_text: str, source: dict | None = None):
         generated_bare = isinstance(seq_text, str) and ">" not in seq_text and len(recs) == 1
         identities = [gff3.public_record_identity(rid, trust="generated" if generated_bare else "local_input")
                       for rid, _seq in recs]
-    # RNA input (normalized U->T by parse_fasta): detect U in the SEQUENCE body only, never in a header line
-    _body = "".join(l for l in seq_text.splitlines() if not l.startswith(">")) if isinstance(seq_text, str) else ""
-    rna = "U" in _body.upper()
     out = []
-    for (rid, seq), identity in zip(recs, identities):
+    for (rid, seq), identity, rna in zip(recs, identities, _rna_flags(seq_text)):
         ok, bad = sequtil.validate_iupac(seq)
+        # A record with no A/C/G/T has no evidence to search; every detector would return nothing and the
+        # result would read as a complete negative classification.
+        reason = None
+        if ok and not any(base in seq for base in "ACGT"):
+            ok = False
+            reason = ("empty record (a header with no sequence)" if not seq
+                      else "no informative bases (only N and ambiguity codes)")
         not_run = {"status": "not_run"}
         identity_source = ("validated_fetch" if input_type != "local_input" else
                            ("generated" if "idSha256" not in identity else "local_input"))
@@ -393,6 +509,8 @@ def analyze(seq_text: str, source: dict | None = None):
                # from the whole-input textbox — which concatenated every record for a multi-FASTA paste.
                "seq": seq, "seq_preview": seq[:120], "notes": [],
                "processing": {stage: dict(not_run) for stage in ANALYSIS_STAGE_NAMES}}
+        if reason:
+            rec["invalidReason"] = reason
         if ok:
             structural_ok = True
             try:
@@ -419,10 +537,12 @@ def analyze(seq_text: str, source: dict | None = None):
             domains_ok = True
             try:
                 rec["domains"] = domains.scan_domains(seq)
+                scanned = min(len(rec["orfs"]), domains.MAX_ORFS_SCANNED)
                 rec["processing"]["domains"] = {
-                    "status": "partial" if unscanned else "complete",
+                    # with no ORF to read the profile search had nothing to search: not run, not an empty result
+                    "status": "partial" if unscanned else ("complete" if scanned else "not_run"),
                     "count": len(rec["domains"]),
-                    "orfsScanned": min(len(rec["orfs"]), domains.MAX_ORFS_SCANNED),
+                    "orfsScanned": scanned,
                     "orfsNotScanned": unscanned,
                 }
             except Exception as e:
@@ -437,6 +557,27 @@ def analyze(seq_text: str, source: dict | None = None):
                     f"protein-domain search read the {domains.MAX_ORFS_SCANNED} longest ORFs of "
                     f"{len(rec['orfs'])}; {unscanned} shorter ORF(s) were not searched, so a domain listed as "
                     "not detected was not necessarily absent from the whole sequence")
+            vote = _domain_strand_vote(rec["domains"])
+            ltr_row = next((e for e in rec["structural"] if e["type"].startswith("LTR (terminal")), None)
+            if vote and structural_ok and (ltr_row or {}).get("cis_orientation") == "undetermined":
+                try:
+                    # the record does not state its orientation; the coding strand of RT/INT/TPase does
+                    redone = structural.detect_all(seq, orientation=vote)
+                    new_ltr = next(e for e in redone if e["type"].startswith("LTR (terminal"))
+                    new_ltr["cis_orientation_source"] = "domain-strand"
+                    rec["structural"] = redone
+                    rec["processing"]["structural"] = {"status": "complete", "count": len(redone)}
+                except Exception as e:
+                    rec["notes"].append(f"orientation from the domain strand unavailable: {type(e).__name__}")
+            if (rec["processing"]["structural"]["status"] == "complete" and
+                    not any(e["type"].startswith(("LTR (terminal", "TIR (terminal")) for e in rec["structural"])):
+                sc = structural.scan_scope(seq)
+                if 2 * max(sc["ltr_seed_window_bp"], sc["tir_seed_window_bp"]) < sc["record_bp"]:
+                    rec["notes"].append(
+                        f"the record is {sc['record_bp']} bp and no terminal repeat was found, but the terminal-repeat "
+                        f"scans read only the outer {sc['ltr_seed_window_bp']} bp (LTR seeds) and "
+                        f"{sc['tir_seed_window_bp']} bp (TIR seeds) of each end and poly(A)/poly(T) tails within "
+                        f"{sc['tail_window_bp']} bp of an end, so a repeat or tail further in was not searched for")
             try:
                 rec["classification"] = classify.classify(rec["structural"], rec["domains"], seq=seq,
                                                           domains_ok=domains_ok, orfs_unscanned=unscanned,
@@ -461,27 +602,46 @@ def analyze(seq_text: str, source: dict | None = None):
                     rec["notes"].append(f"retroviral architecture unavailable: {type(e).__name__}")
             if rna:
                 rec["notes"].append("RNA input — U was read as T (DNA equivalent) for all steps")
-            if any(o.get("open_end") for o in rec["orfs"]):
-                rec["notes"].append("sequence appears 3′-truncated — some ORFs are open-ended; domain calls on them may be partial")
+            # Only an open-ended ORF that hosts a detected domain says anything about truncation: a 40-aa ATG..end
+            # stretch in any of six frames is common by chance. find_orfs leaves a forward ORF open at the
+            # sequence's 3′ end and a reverse-strand ORF open at its 5′ end.
+            hosts = {d.get("orf") for d in rec["domains"]}
+            ends = sorted({"3′" if o["strand"] == "+" else "5′"
+                           for i, o in enumerate(rec["orfs"]) if i in hosts and o.get("open_end")})
+            if ends:
+                rec["notes"].append(
+                    f"an ORF carrying a detected domain runs off the {' and '.join(ends)} end"
+                    f"{'s' if len(ends) > 1 else ''} of the supplied sequence — the element may be truncated "
+                    "there, and domain calls on that ORF may be partial")
             if len(seq) > 200_000:
                 rec["notes"].append("large input — structural/ORF heuristics are tuned for single loci; treat as approximate")
         out.append(rec)
     joined = "".join(s for _, s in recs)
-    any_dom = any(r["domains"] for r in out)
-    references = refs.for_run("analysis", domains=any_dom, fetched=input_type != "local_input")
+    # HMMER and Pfam produced a result wherever the profile search read at least one ORF, including a negative
+    any_searched = any(r["processing"]["domains"].get("orfsScanned") for r in out)
+    references = refs.for_run("analysis", domains=any_searched, fetched=input_type != "local_input")
     dbs = ([{"name": "Pfam TE-domain profiles (bundled, CC0)", "file": "data/te_domains.hmm",
              "sha256": domains.HMM_SHA256}] if domains.HMM_SHA256 else [])
     result = {"resultSchemaVersion": ANALYSIS_RESULT_SCHEMA, "records": out, "references": references}
     result["status"] = derive_analysis_status(out)
+    result["stageSummary"] = stage_summary(out)
+    unusable = [f"record {i} ({r['invalidReason']})" for i, r in enumerate(out, 1) if r.get("invalidReason")]
+    skipped = f" Not analysed: {'; '.join(unusable)}." if unusable else ""
     if not recs:
         result["warning"] = "No sequence provided — paste, upload, or fetch a sequence first."
     elif result["status"] == ANALYSIS_STATUS_NO_VALID_RECORDS:
-        result["warning"] = "No valid nucleotide record was available for analysis."
+        result["warning"] = "No valid nucleotide record was available for analysis." + skipped
     elif len(recs) > 1:
         valid_n = sum(rec.get("valid") is True for rec in out)
         result["warning"] = (f"{len(recs)} records found and {valid_n} were valid for analysis. The detail view and "
                              f"every downstream step (primers, in-silico PCR, family naming, splice) act on the "
-                             f"ONE record selected in the summary table — the first by default.")
+                             f"ONE record selected in the summary table — the first valid record by default." + skipped)
+    preamble = len(sequtil.fasta_preamble(seq_text))
+    if preamble:
+        lead = (f"{preamble} characters before the first FASTA header belong to no record and were not analysed."
+                if preamble > 1 else
+                "1 character before the first FASTA header belongs to no record and was not analysed.")
+        result["warning"] = f"{result['warning']} {lead}" if result.get("warning") else lead
     result["resultPayloadSha256"] = scientific_result_sha256(result)
     manifest_identity = (gff3.public_record_identity("multiple_records", trust="generated") if len(recs) > 1 else
                          (identities[0] if identities else gff3.public_record_identity("record", trust="generated")))
@@ -524,7 +684,7 @@ def verify_scientific_result_payload(result: dict) -> bool:
 
 def analysis_result_document(result: dict) -> dict:
     """Build the versioned, complete JSON document exported for one analysis run."""
-    if not isinstance(result, dict) or result.get("resultSchemaVersion") != ANALYSIS_RESULT_SCHEMA:
+    if not isinstance(result, dict) or result.get("resultSchemaVersion") not in ANALYSIS_ACCEPTED_SCHEMAS:
         raise ValueError("unsupported analysis result")
     if result.get("status") not in ANALYSIS_EXPORTABLE_STATUSES:
         raise ValueError("analysis has no exportable valid result")
@@ -554,7 +714,7 @@ def validate_analysis_result_document(document: dict) -> bool:
     try:
         manifest = document.get("provenance")
         if (document.get("format") != ANALYSIS_RESULT_FORMAT or
-                document.get("resultSchemaVersion") != ANALYSIS_RESULT_SCHEMA or
+                document.get("resultSchemaVersion") not in ANALYSIS_ACCEPTED_SCHEMAS or
                 document.get("status") not in ANALYSIS_EXPORTABLE_STATUSES or
                 not provenance.verify_manifest(manifest)):
             return False
@@ -564,7 +724,7 @@ def validate_analysis_result_document(document: dict) -> bool:
             return False
         records = document.get("records")
         bound = manifest["input"].get("records")
-        if (not isinstance(records, list) or not all(_analysis_processing_valid(rec) for rec in records) or
+        if (not isinstance(records, list) or not all(_analysis_processing_valid(rec, document["resultSchemaVersion"]) for rec in records) or
                 not isinstance(bound, list) or len(records) != len(bound)):
             return False
         observed = [{**({"id": str(rec["id"]), "identitySource": rec["identitySource"]} |
@@ -572,7 +732,8 @@ def validate_analysis_result_document(document: dict) -> bool:
                      "length": len(rec["seq"]),
                      "sha256": hashlib.sha256(rec["seq"].encode("utf-8")).hexdigest()}
                     for rec in records]
-        return observed == bound and document["status"] == derive_analysis_status(records)
+        return (observed == bound and document["status"] == derive_analysis_status(records) and
+                document.get("stageSummary", stage_summary(records)) == stage_summary(records))
     except (AttributeError, KeyError, TypeError, ValueError):
         return False
 
@@ -832,10 +993,14 @@ def run_primers(body):
         res = primers.design_primers(seq, effective_params, target, inc)
     except (ImportError, RuntimeError):                # environment fault (Primer3 unavailable) -> 500, not a user 400
         raise
+    except primers.TemplateError as e:
+        raise BadRequest(str(e))
     except Exception as e:
         msg = str(e)
         if "PRIMER_PRODUCT_SIZE_RANGE" in msg or "SEQUENCE_INCLUDED_REGION" in msg:
             raise BadRequest("requested product size is larger than the sequence — lower the product-size range")
+        if "invalid sequence character" in msg:
+            raise BadRequest(f"the template contains a character Primer3 cannot use: {msg}")
         raise BadRequest(f"primer parameters rejected: {type(e).__name__}: {e}")
     _prime_vienna(res.get("candidates", []))          # optional out-of-process cross-check, one round trip
     for c in res.get("candidates", []):               # secondary-structure QC (hairpin/dimer/3'-end) per pair
@@ -844,12 +1009,20 @@ def run_primers(body):
         except Exception as e:                        # a QC fault must never drop the designed pair
             c["qc"] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
     res["oligoqc_engines"] = oligoqc.available()
+    res["design_tm_conditions"] = dict(primers.TM_CONDITIONS)     # conditions behind the Tm columns (sealed)
+    res["oligoqc_conditions"] = dict(oligoqc.CONDITIONS)          # conditions behind QC Tm / ΔG (advisory, not sealed)
+    ambiguity = res.setdefault("template_ambiguity", primers.template_ambiguity(0))
+    res["cautions"] = ([f"{ambiguity['masked_to_n']} ambiguous template base(s) were treated as N for Primer3; "
+                        "no primer covers them."] if ambiguity["masked_to_n"] else [])
     res["oligoqc_references"] = refs.oligoqc_refs()    # advisory-method citations — reported, NOT sealed
     references = refs.for_run("primer", fetched=source_context["inputType"] != "local_input")
     res["references"] = references
     seal_params = dict(effective_params)
     seal_params.update({"coordinateSystem": "0-based-half-open",
-                        "primer3_target": target, "included_region": inc})
+                        "primer3_target": target, "included_region": inc,
+                        "tm_conditions": dict(primers.TM_CONDITIONS),
+                        "max_ns_accepted": primers.MAX_NS_ACCEPTED,
+                        "template_ambiguity_masked": ambiguity["masked_to_n"]})
     res["provenance"] = provenance.build_manifest(
         "primer", seq, identity["id"], seal_params, source=source_context, references=references,
         input_identity=identity)
@@ -886,8 +1059,11 @@ def run_pcr(body):
     if not isinstance(fwd, str) or not isinstance(rev, str):
         raise BadRequest("fwd and rev primers must be strings")
     _require_nt(seq)
-    _require_nt(fwd, "forward primer")     # a non-nucleotide primer must error, not scan as empty
-    _require_nt(rev, "reverse primer")
+    try:                                   # whitespace/case/U normalised; a non-IUPAC primer must error, not scan as empty
+        fwd = primers.normalize_primer(fwd, "forward primer")
+        rev = primers.normalize_primer(rev, "reverse primer")
+    except ValueError as e:
+        raise BadRequest(str(e))
     p = _clean_params(body.get("params", {}))
     assay_identity = _operation_record_identity(source_context, recs[0][0])
     backgrounds = [{"id": assay_identity["id"], "source": assay_identity["id"] + " (input)", "seq": seq,
@@ -983,6 +1159,11 @@ def run_pcr(body):
         amps = []
         pcr_stats = {}
         truncated = []
+        # The specimen alone fixes each primer's annealing core; backgrounds reuse it, so an identical site
+        # gets the same call there and the specimen result does not depend on the backgrounds.
+        cores = (primers.specimen_cores(fwd, rev, backgrounds[0]["seq"], mm, tp, ma)
+                 if len(backgrounds) > 1 else None)
+        used_cores = {o: {"forward_strand": None, "reverse_strand": None} for o in "FR"}
         for k, bg in enumerate(backgrounds):
             st = {}
             found = primers.in_silico_pcr(
@@ -992,7 +1173,11 @@ def run_pcr(body):
                 intended_product_span=(intended if k == 0 and same_design_record else None),
                 intended_endpoint_tolerance_bp=tolerance,
                 assess_design_geometry=(k == 0 and same_design_record),
-                stats=st)
+                stats=st, cores=(cores if k else None))
+            for o, per_strand in (st.get("cores") or {}).items():
+                for strand, n in per_strand.items():
+                    if n is not None and n > (used_cores[o][strand] or 0):
+                        used_cores[o][strand] = n
             if bg.get("idSha256"):
                 for amplicon in found:
                     amplicon["sourceIdSha256"] = bg["idSha256"]
@@ -1056,7 +1241,12 @@ def run_pcr(body):
                      "backgrounds": search_inputs[1:], "designAssessment": design_assessment},
         "notSearched": ["Reference assembly (needs WSL/NCBI)", "External NCBI Primer-BLAST",
                         "IUPAC-ambiguous template bases"],
+        "cautions": ([f"3′ exact bases ({tp}) exceed the shortest annealed core ({ma}): the exact window is "
+                      "measured inside the annealed core, and primer bases 5′ of it are reported as a tail "
+                      "that is not scored for mismatches."] if tp > ma else []),
         "criteria": {"max_mismatch": mm, "three_prime_strict": tp, "min_anneal": ma,
+                     "three_prime_strict_effective": min(tp, ma),
+                     "annealing_core": used_cores,
                      "product_size": [pmin, pmax], "coordinateSystem": "0-based-half-open",
                      "primer3_target": target, "included_region": inc,
                      "intended_product_span": intended,
@@ -1147,7 +1337,14 @@ def run_annotate_budget(body):
     choice instead of rendering it under the newly selected one.
     """
     b = body or {}
-    r = wsl.annotate_budget(int(_num(b.get("genome_bytes"), 0)))
+    size = {}
+    if b.get("fasta_bytes") is not None:
+        fasta_bytes = _num(b["fasta_bytes"], 0)
+        cached = b.get("fasta_cached")
+        if fasta_bytes < 0 or (cached is not None and not isinstance(cached, bool)):
+            raise BadRequest("fasta_bytes must be non-negative and fasta_cached a boolean")
+        size = {"fasta_bytes": int(fasta_bytes), "fasta_cached": cached}
+    r = wsl.annotate_budget(int(_num(b.get("genome_bytes"), 0)), **size)
     mode = b.get("library_mode")
     if mode is None:
         mode = "dfam_uncurated" if bool(b.get("include_uncurated")) else "dfam_curated"
@@ -1239,6 +1436,9 @@ def run_genome_annotate(body):
         if isinstance(genome_bp, bool) or not isinstance(genome_bp, int) or genome_bp < 1:
             return {"ok": False, "error": "annotation completed but its verified genome length was missing; "
                     "the result was not sealed", "partial": True}
+        if r.get("accession", acc) != acc or not provenance.is_public_accession(acc):
+            return {"ok": False, "error": "annotation completed but its assembly accession did not match the "
+                    "request; the result was not sealed", "partial": True}
         # The seal identifies the GENOME by the checksum recorded at prepare time and records every
         # parameter that changes which families could be found. `complete` is sealed too: a run that
         # stopped early must never be indistinguishable from one that covered the whole assembly.
@@ -1253,12 +1453,14 @@ def run_genome_annotate(body):
              "include_uncurated": bool(r.get("include_uncurated")),
              "custom_library_sha256": (custom or {}).get("sha256")},
             not_run=not_run,
-            databases=[library_db, {"name": "RepeatMasker", "version": r.get("repeatmasker_version")}],
+            # the assembly is named by its accession beside the checksum, as in the genome scan, so a reader
+            # can tell which genome was annotated; the input identity below hashes only the accession text
+            databases=[library_db, {"name": "RepeatMasker", "version": r.get("repeatmasker_version")},
+                       {"name": "RefSeq genome assembly", "version": acc, "sha256": genome_sha}],
             # the genome's sealed checksum comes from the PREPARE step's own meta.txt (wsl returns it),
             # not from whatever the caller passed in — a caller-supplied hash would let the manifest
             # claim an identity the analysed sequence was never checked against.
-            source={"assemblyAccession": acc}, references=references,
-            input_sha256=genome_sha, input_length=genome_bp)
+            references=references, input_sha256=genome_sha, input_length=genome_bp)
     return r
 
 
@@ -1296,12 +1498,44 @@ def run_add_custom_assembly(body):
         raise BadRequest(e.args[0] if getattr(e, "args", None) else str(e))
 
 
+def _design_loci(raw):
+    """Genome positions of the designed product from `design_locus` entries (dict or list of dicts).
+
+    An entry is {accession, start, end (or stop), strand (1/2 or '+'/'-'), intended_product_span [a, b],
+    intended_endpoint_tolerance_bp}: the fetched window in 1-based inclusive assembly coordinates plus the
+    designed product's 0-based half-open span within that fetched record. The span is mapped through the
+    window, strand-aware: a reverse-complement fetch counts from the window's end. An entry that lacks the
+    accession, either window end, the strand or the span names no intended product and is ignored."""
+    raw = raw if isinstance(raw, list) else ([raw] if isinstance(raw, dict) else [])
+    loci = []
+    for L in raw:
+        if not isinstance(L, dict) or not L.get("accession") or L.get("intended_product_span") is None:
+            continue
+        end = L.get("end", L.get("stop"))
+        if L.get("start") is None or end is None or L.get("strand") is None:
+            continue
+        start, end, strand = int(_num(L["start"], 0)), int(_num(end, 0)), L["strand"]
+        if isinstance(strand, bool) or strand not in (1, 2, "+", "-"):
+            raise BadRequest("design_locus strand must be 1 or + for the forward strand, 2 or - for reverse")
+        if start < 1 or end < start:
+            raise BadRequest("design_locus window must satisfy 1 <= start <= end")
+        try:
+            a, b = primers.endpoint_span(L["intended_product_span"], end - start + 1, "intended_product_span")
+            tol = primers.endpoint_tolerance(L.get("intended_endpoint_tolerance_bp",
+                                                   primers.INTENDED_ENDPOINT_TOLERANCE_BP))
+        except (TypeError, ValueError) as e:
+            raise BadRequest(str(e))
+        lo, hi = (start + a, start + b - 1) if strand in (1, "+") else (end - b + 1, end - a)
+        loci.append({"acc": str(L["accession"]), "lo": lo, "hi": hi, "tol": tol})
+    return loci
+
+
 def run_genome_pcr(body):
     """Whole-genome off-target scan of one primer pair against a LOCAL, downloaded RefSeq assembly (isPcr).
     No remote query; a local safety timeout applies (body.timeout, default 600s — a very large genome may need
     it raised). The assembly is a fixed checksummed file, so the result IS reproducible and sealed (accession +
     source-FASTA sha256 + isPcr version + params). Products are candidate priming sites, not validated bands;
-    on/off-target labels are applied only when the request supplies a matching intended locus."""
+    on/off-target labels are applied only when the request maps the designed product to a genome position."""
     fwd, rev = body.get("fwd"), body.get("rev")
     if not isinstance(fwd, str) or not isinstance(rev, str):
         raise BadRequest("a forward and reverse primer are required for the genome scan")
@@ -1314,6 +1548,7 @@ def run_genome_pcr(body):
     min_good = int(_num(p.get("min_good"), 15))
     max_size = int(_num(p.get("prod_max"), 4000))
     min_size = int(_num(p.get("prod_min"), 0))
+    loci = _design_loci(body.get("design_locus"))
     r = wsl.genome_scan(acc, genomepcr.query_rows(fwd, rev), max_size=max_size, min_size=min_size,
                         min_perfect=min_perfect, min_good=min_good, timeout=int(_num(body.get("timeout"), 600)))
     if not r.get("ok"):
@@ -1337,30 +1572,24 @@ def run_genome_pcr(body):
         databases=[{"name": "RefSeq genome assembly", "version": acc, "sha256": r.get("sha256")}],
         references=refs.for_run("genome-scan"),
         not_run=["Wet-lab validation of predicted products", "Off-target scan of unlisted organisms"])
-    # on-target from the DESIGN LOCUS: if the specimen sits at a known position in this assembly, the product
-    # overlapping it is the on-target and the rest are off-target candidate priming sites; with no locus there is no single
-    # intended target, so the products are neutral 'genomic priming sites'. This labeling is DERIVED, not sealed
+    # on-target from the DESIGNED PRODUCT: when the request maps the designed product to a genome position
+    # (see _design_loci), the pair product at that position is the on-target and the rest are off-target candidate
+    # priming sites; with no designed position there is no single intended target, so the products are neutral
+    # 'genomic priming sites'. This labeling is DERIVED, not sealed
     # (like the summary): the isPcr product set — the sealed content — is identical with or without a design locus.
-    raw_loci = body.get("design_locus")
-    raw_loci = raw_loci if isinstance(raw_loci, list) else ([raw_loci] if isinstance(raw_loci, dict) else [])
-    loci = [{"acc": str(L["accession"]),
-             "lo": min(int(_num(L.get("start"), 0)), int(_num(L.get("stop"), 0))),
-             "hi": max(int(_num(L.get("start"), 0)), int(_num(L.get("stop"), 0)))}
-            for L in raw_loci if isinstance(L, dict) and L.get("accession")]
     has_locus = bool(loci)
     n_on = 0
     if has_locus:
-        def _overlap(a):                                 # best 1-based-inclusive overlap of product a with any region
-            best = 0
+        best = None                                      # exactly ONE on-target: the product whose two endpoints match the
+        for a in amps:                                   # designed product's genome position; never another product that
+            if a.get("single_primer"):                   # merely overlaps it, and nothing when the designed product is absent
+                continue
             for L in loci:
-                if a["source"] == L["acc"]:
-                    best = max(best, min(a["end"], L["hi"]) - max(a["start"], L["lo"]) + 1)
-            return best
-        overlapping = [(a, _overlap(a)) for a in amps if not a.get("single_primer")]
-        overlapping = [(a, ov) for a, ov in overlapping if ov > 0]
-        if overlapping:                                  # exactly ONE on-target = the best-overlapping product (never
-            best = max(overlapping, key=lambda t: (t[1], -t[0]["start"]))[0]   # every overlapper, or a nearby second site
-            best["on_target"] = True                     # inside the window would falsely imply intended-locus-only)
+                err = max(abs(a["start"] - L["lo"]), abs(a["end"] - L["hi"]))
+                if a["source"] == L["acc"] and err <= L["tol"] and (best is None or (err, a["start"]) < best[0]):
+                    best = ((err, a["start"]), a)
+        if best:
+            best[1]["on_target"] = True
             n_on = 1
     # interpretation (on/off split, per-assembly-sequence spread, verdict). DERIVED, NOT sealed — never passed to
     # build_manifest, so the same primers+genome seal identically regardless of the design locus or the products.

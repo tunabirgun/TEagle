@@ -26,20 +26,26 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PKG = os.path.join(ROOT, "reviewer_package")
 SCRIPTS = os.path.join(PKG, "scripts")
 RESULTS = os.path.join(PKG, "results")
+FIGURES = os.path.join(PKG, "figures")
+CORPORA = os.path.join(PKG, "corpora")
 
 # Where each copied file's original lives. Directories rather than a file list, so a file added to the
 # package later is covered without anyone remembering to extend this.
 SOURCE_DIRS = {
     SCRIPTS: [os.path.join(ROOT, "benchmarks")],
-    RESULTS: [os.path.join(ROOT, "benchmarks", "raw"), os.path.join(ROOT, "manuscript", "tables")],
+    RESULTS: [os.path.join(ROOT, "benchmarks", "raw"), os.path.join(ROOT, "benchmarks", "provenance"),
+              os.path.join(ROOT, "manuscript", "tables")],
+    FIGURES: [os.path.join(ROOT, "benchmarks", "figures"), os.path.join(ROOT, "manuscript", "figures")],
+    CORPORA: [os.path.join(ROOT, "benchmarks")],
 }
 
 
 def _copied_files(pkg_dir):
     """(package copy, original) for every file in pkg_dir that has an original elsewhere.
 
-    A file with no counterpart is not an error here — `corpora/` and the README are assembled for the
-    package and have no single upstream — but a file that DOES have one must match it.
+    A file with no counterpart is not an error here — the README is assembled for the package and has no
+    single upstream, and the 7 table files originate in the ignored manuscript workspace — but a file that
+    DOES have one must match it. Scripts, results, figures and corpora are all covered.
     """
     if not os.path.isdir(pkg_dir):
         return []
@@ -56,7 +62,7 @@ def _copied_files(pkg_dir):
     return out
 
 
-ALL_PAIRS = _copied_files(SCRIPTS) + _copied_files(RESULTS)
+ALL_PAIRS = [p for d in (SCRIPTS, RESULTS, FIGURES, CORPORA) for p in _copied_files(d)]
 
 
 def test_the_package_actually_copies_something():
@@ -75,6 +81,15 @@ def test_reviewer_package_copy_matches_its_source(copy, original):
     assert filecmp.cmp(original, copy, shallow=False), (
         f"{rel_c} has drifted from {rel_o}. The reviewer package promises to be a copy, so regenerate "
         f"or re-copy it in the same commit as the change that made them differ.")
+
+
+def test_figures_and_corpora_are_part_of_the_checked_copy():
+    """The nine figures and four corpus files were once outside every equality check."""
+    covered = {os.path.basename(c) for c, _o in ALL_PAIRS}
+    for pkg_dir in (FIGURES, CORPORA):
+        if os.path.isdir(pkg_dir):
+            files = {n for n in os.listdir(pkg_dir) if os.path.isfile(os.path.join(pkg_dir, n))}
+            assert files and files <= covered, sorted(files - covered)
 
 
 def test_table_s1_reports_all_three_reliability_axes():

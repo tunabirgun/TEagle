@@ -32,11 +32,24 @@ def _read(relpath):
         return fh.read()
 
 
+def _local(relpath):
+    """Text of an ignored local publication artifact, or None when it is absent (public checkout, CI).
+    A test that also reads tracked files must use this, not `_read`, so the tracked assertions still run."""
+    path = os.path.join(_ROOT, relpath)
+    if not os.path.exists(path):
+        return None
+    with io.open(path, encoding="utf-8") as fh:
+        return fh.read()
+
+
+def _tracked_and_local(tracked, local=()):
+    return "\n".join([_read(p) for p in tracked] + [t for t in map(_local, local) if t is not None])
+
+
 def test_public_release_text_omits_internal_review_or_assistant_attribution():
-    public_text = "\n".join(_read(path) for path in (
-        "CHANGELOG.md", "README.md", "app/README.md", "docs/TRY-IT-YOURSELF.md",
-        "report/teagle_manual.tex", "report/teagle_report.tex",
-    ))
+    public_text = _tracked_and_local(
+        ("CHANGELOG.md", "README.md", "app/README.md", "docs/TRY-IT-YOURSELF.md"),
+        ("report/teagle_manual.tex", "report/teagle_report.tex"))
     prohibited = re.compile(
         r"\b(?:multi-agent|review[ -]loops?|fix[ -]loops?|triple-reviewer|adversarial review|AI-generated|ChatGPT|Codex|Claude|OpenAI)\b",
         re.IGNORECASE,
@@ -45,11 +58,10 @@ def test_public_release_text_omits_internal_review_or_assistant_attribution():
 
 
 def test_public_release_does_not_infer_biological_identity_from_ispcr_priming_sites():
-    public_text = "\n".join(_read(path) for path in (
-        "CHANGELOG.md", "README.md", "app/README.md", "docs/TRY-IT-YOURSELF.md",
-        "report/teagle_manual.tex", "report/teagle_report.tex", "app/native/main.py",
-        "app/backend/engine.py", "app/backend/teagle_core/genomepcr.py",
-    ))
+    public_text = _tracked_and_local(
+        ("CHANGELOG.md", "README.md", "app/README.md", "docs/TRY-IT-YOURSELF.md", "app/native/main.py",
+         "app/backend/engine.py", "app/backend/teagle_core/genomepcr.py"),
+        ("report/teagle_manual.tex", "report/teagle_report.tex"))
     assert not re.search(r"\bparalog(?:s|ous)?\b", public_text, re.IGNORECASE)
     for unsupported in ("copy-specific", "family-generic", "locus-specific", "more-diverged copies"):
         assert unsupported not in public_text.lower()
@@ -67,14 +79,16 @@ def test_readme_uses_the_current_protocol_lineage():
     assert "10.5281/zenodo.22091013" not in text
 
 
+def test_changelog_does_not_claim_independent_reliability_axes():
+    assert "two independent axes" not in " ".join(_read("CHANGELOG.md").split())
+
+
 def test_report_reliability_axes_are_teagle_specific_and_not_claimed_independent():
     text = " ".join(_read("report/teagle_report.tex").split())
-    changelog = " ".join(_read("CHANGELOG.md").split())
     assert "No transposable-element tool publishes" not in text
     assert "three independent axes" not in text
     assert "three independent, citable" not in text
     assert "missing core module or interrupted reading frame" not in text
-    assert "two independent axes" not in changelog
     assert "Reliability: three separate axes" in text
 
 
@@ -90,11 +104,12 @@ def test_rmblast_dfam_docs_name_consensus_partitions_not_profile_hmm_search():
 
 
 def test_dfam_homology_naming_is_not_described_as_a_classification_layer():
-    manual = " ".join(_read("report/teagle_manual.tex").split())
     backend = _read("app/backend/teagle_core/wsl.py")
-    assert "classification workflow's family-database layer" not in manual
     assert "family-level TE classification" not in backend
     assert "family-level homology naming" in backend
+    manual = _local("report/teagle_manual.tex")
+    if manual is not None:
+        assert "classification workflow's family-database layer" not in " ".join(manual.split())
 
 
 def test_report_distinguishes_te_family_copy_number_from_an_individual_insertion():
@@ -117,31 +132,32 @@ def test_report_does_not_require_identical_primer_melting_temperatures():
 
 
 def test_accession_version_is_scoped_to_sequence_not_the_entire_record():
-    manual = " ".join(_read("report/teagle_manual.tex").split())
     app_readme = " ".join(_read("app/README.md").split())
-    assert "fixed, immutable object" not in manual
     assert "explicit accession version" in app_readme
     assert "is immutable" not in app_readme
-    for text in (manual, app_readme):
-        assert "fixed sequence version" in text
+    assert "fixed sequence version" in app_readme
+    manual = _local("report/teagle_manual.tex")
+    if manual is not None:
+        manual = " ".join(manual.split())
+        assert "fixed, immutable object" not in manual
+        assert "fixed sequence version" in manual
 
 
 def test_line_endonuclease_uses_ape_terminology():
-    public_text = " ".join(_read(path) for path in (
-        "CHANGELOG.md", "app/README.md", "report/teagle_manual.tex", "report/teagle_report.tex",
-    ))
+    public_text = " ".join(_tracked_and_local(
+        ("CHANGELOG.md", "app/README.md"), ("report/teagle_manual.tex", "report/teagle_report.tex")).split())
     assert "apurinic-like" not in public_text
-    assert "apurinic/apyrimidinic endonuclease-like (APE)" in public_text
+    assert "apurinic/apyrimidinic endonuclease-like (APE)" in " ".join(_read("app/README.md").split())
 
 
 def test_ispcr_candidate_count_is_not_claimed_as_a_conservative_floor():
-    public_text = " ".join(_read(path) for path in (
-        "CHANGELOG.md", "report/teagle_manual.tex", "report/teagle_report.tex",
-        "app/backend/teagle_core/genomepcr.py",
-    ))
+    public_text = _tracked_and_local(("CHANGELOG.md", "app/backend/teagle_core/genomepcr.py"),
+                                     ("report/teagle_manual.tex", "report/teagle_report.tex"))
     assert "conservative floor" not in public_text
     for path in ("report/teagle_manual.tex", "report/teagle_report.tex"):
-        assert "neither a validated lower nor upper bound" in " ".join(_read(path).split())
+        text = _local(path)
+        if text is not None:
+            assert "neither a validated lower nor upper bound" in " ".join(text.split())
 
 
 def test_ispcr_specific_behavior_cites_official_ucsc_documentation():
@@ -164,14 +180,13 @@ def test_ispcr_specific_behavior_cites_official_ucsc_documentation():
 
 
 def test_ispcr_acceptance_parameter_is_not_described_as_a_seed_or_count_floor():
-    public_text = " ".join(_read(path) for path in (
-        "CHANGELOG.md", "report/teagle_manual.tex", "report/teagle_report.tex",
-        "app/native/main.py", "app/backend/engine.py", "app/backend/teagle_core/genomepcr.py",
-    ))
+    public_text = " ".join(_tracked_and_local(
+        ("CHANGELOG.md", "app/native/main.py", "app/backend/engine.py", "app/backend/teagle_core/genomepcr.py"),
+        ("report/teagle_manual.tex", "report/teagle_report.tex")).split())
     assert "perfect-match seed" not in public_text
     assert "perfect-3' seed" not in public_text
     assert "a floor at ≥15 bp" not in public_text
-    assert "minimum perfect match" in public_text
+    assert re.search(r"minimum perfect (?:3['′]-end )?match", public_text)
 
 
 def test_bounded_search_docs_do_not_guarantee_host_resource_immunity():
@@ -189,13 +204,16 @@ def test_manual_describes_longest_orf_selection_as_a_search_budget_heuristic():
 
 
 def test_line_rule_uses_only_line_specific_corroboration():
+    assert "R2/R4-type" in _read("app/README.md")
     for path in ("report/teagle_report.tex", "report/teagle_manual.tex"):
-        text = " ".join(_read(path).split())
+        text = _local(path)
+        if text is None:
+            continue
+        text = " ".join(text.split())
         assert "RNase~H, gag, protease, or env" not in text
         assert "LINE-specific corroboration" in text
         assert "ORF1p or an accepted same-ORF, N-terminal ORF2p endonuclease--RT arrangement" in text
         assert "R2/R4-type" in text
-    assert "R2/R4-type" in _read("README.md")
 
 
 def _require_manuscript():
@@ -486,8 +504,10 @@ def test_native_genome_scan_wording_matches_runtime_behavior():
     assert ("Runtime depends on genome size, the installed isPcr build and cached RefSeq assembly, local "
             "hardware, and the fixed candidate-product-size cap") in flat
     assert "_render_genome_busy" in native
-    assert "max_size: int = 4000" in wsl
-    assert "timeout: int = 600" in wsl
+    import inspect
+    from teagle_core import wsl as wsl_module
+    params = inspect.signature(wsl_module.genome_scan).parameters
+    assert params["max_size"].default == 4000 and params["timeout"].default == 600
     assert '"error": f"isPcr timed out after {timeout}s"' in wsl
 
 
@@ -529,16 +549,16 @@ def test_current_release_text_tracks_version_and_schema_contracts():
         assert stale not in combined
 
 
-def test_current_docs_state_native_and_legacy_export_boundaries():
+def test_current_docs_state_native_export_boundaries_and_no_retired_web_ui():
     readme = _read("README.md")
-    app_readme = _read("app/README.md")
     for required in (
         "XLSX/CSV/TSV", "SVG/PNG/vector PDF", "GFF3/BED/FASTA",
         "provenance JSON", "complete-result JSON",
     ):
         assert required in readme
-    assert "legacy browser" in readme.lower()
-    assert "disables XLSX, PDF, provenance JSON, and complete-result JSON" in app_readme
+    for path in ("README.md", "app/README.md", "docs/TRY-IT-YOURSELF.md"):
+        text = _read(path).lower()
+        assert "legacy browser" not in text and "--server" not in text and "legacy web" not in text, path
 
 
 def test_screenshot_index_records_completed_40_capture_contract():

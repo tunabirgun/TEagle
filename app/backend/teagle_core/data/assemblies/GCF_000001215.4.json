@@ -45,6 +45,12 @@
    "ucscStyleName": "chrY",
    "refseqAccession": "NC_024512.1",
    "length": 3667352
+  },
+  {
+   "chrName": "MT",
+   "ucscStyleName": "chrM",
+   "refseqAccession": "NC_024511.2",
+   "length": 19524
   }
  ]
 }

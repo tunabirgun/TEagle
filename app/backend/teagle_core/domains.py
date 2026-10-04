@@ -34,7 +34,9 @@ HMM_SHA256 = _hmm_sha256()
 DOMAIN_INFO = {
     "RVT_1": ("RT", "reverse transcriptase", "retro", "PF00078"),
     "RVT_2": ("RT", "reverse transcriptase", "retro", "PF07727"),
-    "RVT_3": ("RT", "reverse transcriptase", "retro", "PF13456"),
+    # Pfam names PF13456 "Reverse transcriptase-like", but it sits in the RNase H clan (CL0219) and InterPro
+    # integrates it under IPR002156 (Ribonuclease H domain): an RNase H-like fold, not the RT polymerase core.
+    "RVT_3": ("RNaseH", "RNase H-like (Pfam RVT_3)", "retro", "PF13456"),
     "rve": ("INT", "integrase", "retro", "PF00665"),
     "RNase_H": ("RNaseH", "RNase H", "retro", "PF00075"),
     "RVP": ("PR", "aspartic protease", "retro", "PF00077"),
@@ -104,8 +106,8 @@ def scan_domains(seq: str, max_orfs: int = MAX_ORFS_SCANNED, evalue: float = 1e-
     the element by genomic position, each with nucleotide coordinates.
 
     Only the `max_orfs` longest ORFs are searched — see MAX_ORFS_SCANNED."""
-    if pyhmmer is None:                             # domain detection unavailable in this environment
-        return []
+    if pyhmmer is None:                             # not "no domains": the scan did not run, so analyze() records a failure
+        raise RuntimeError(f"pyhmmer unavailable: {PYHMMER_ERROR}")
     orfs = find_orfs(seq)[:max_orfs]
     seqs, meta = [], {}
     for n, o in enumerate(orfs):
@@ -146,14 +148,23 @@ def scan_domains(seq: str, max_orfs: int = MAX_ORFS_SCANNED, evalue: float = 1e-
     return _dedup_domains(hits)
 
 
+def _overlap(a, b):
+    return min(a["nt"][1], b["nt"][1]) - max(a["nt"][0], b["nt"][0])
+
+
 def _dedup_domains(hits):
     """Keep the best-scoring hit per (domain-code, STRAND, overlapping-nt-region), then order along the
     element by genomic position. The strand check keeps a genuine minus-strand hit that merely overlaps a
-    higher-scoring plus-strand hit of the same code — they are different biological features."""
+    higher-scoring plus-strand hit of the same code — they are different biological features.
+    Integrase and transposase are both DDE folds and their models cross-score, so where an INT and a TPase
+    hit cover the same region on one strand (overlap >= half the shorter), only the stronger is kept."""
     kept = []
     for hh in sorted(hits, key=lambda x: -x["score"]):
         if any(o["domain"] == hh["domain"] and o["strand"] == hh["strand"]
                and not (hh["nt"][1] <= o["nt"][0] or hh["nt"][0] >= o["nt"][1]) for o in kept):
             continue                                          # overlapping same-domain same-strand, lower score -> drop
+        if any({o["domain"], hh["domain"]} == {"INT", "TPase"} and o["strand"] == hh["strand"]
+               and _overlap(o, hh) * 2 >= min(o["nt"][1] - o["nt"][0], hh["nt"][1] - hh["nt"][0]) for o in kept):
+            continue                                          # a weaker DDE cross-hit over the same region
         kept.append(hh)
     return sorted(kept, key=lambda x: x["nt"][0])

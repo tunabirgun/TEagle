@@ -1,5 +1,5 @@
 """Verified database/tool references. Every DOI here was confirmed against a primary
-source (CrossRef / the audited resource matrix, Deliverables/01_resource_matrix.md).
+source (CrossRef / PubMed).
 Citations are attached to results so a database call always carries its reference.
 Never fabricate a citation — if a source is unverified it does not go here."""
 from __future__ import annotations
@@ -15,8 +15,8 @@ try:
 except Exception:
     _P3 = "unknown"
 
-# Note: version strings state only what is verifiable. The bundled Pfam-A profiles were
-# fetched from InterPro on 2026-07-17 (exact Pfam release not reconciled — see matrix §3.2);
+# Note: version strings state only what is verifiable. The bundled Pfam-A profiles are identified by
+# accession version (data/README.md), fetched from InterPro in three batches; no Pfam release is claimed.
 # HMMER runs via the engine bundled in pyhmmer; Primer3 via the primer3-py wheel.
 REFS = {
     "HMMER": {
@@ -24,7 +24,7 @@ REFS = {
         "citation": "Eddy SR (2011) Accelerated Profile HMM Searches. PLoS Comput Biol 7(10):e1002195.",
         "doi": "10.1371/journal.pcbi.1002195", "license": "BSD-3-Clause", "url": "http://hmmer.org"},
     "Pfam": {
-        "name": "Pfam-A profiles (via InterPro, retrieved 2026-07-17)",
+        "name": "Pfam-A profiles (via InterPro, 30 accession versions, retrieved 2026-07-17/23/28)",
         "citation": "Mistry J, Chuguransky S, Williams L, et al. (2021) Pfam: The protein families database in 2021. Nucleic Acids Res 49(D1):D412-D419.",
         "doi": "10.1093/nar/gkaa913", "license": "CC0", "url": "https://www.ebi.ac.uk/interpro/"},
     "Primer3": {
@@ -36,11 +36,11 @@ REFS = {
         "citation": "Sayers E. A General Introduction to the E-utilities. Entrez Programming Utilities Help. Bethesda (MD): NCBI.",
         "doi": "", "license": "Public Domain", "url": "https://www.ncbi.nlm.nih.gov/books/NBK25497/"},
     "Dfam": {
-        "name": "Dfam 4.0 (curated)",
+        "name": "Dfam (transposable-element family database)",
         "citation": "Storer J, Hubley R, Rosen J, Wheeler TJ, Smit AF (2021) The Dfam community resource of transposable element families, sequence models, and genome annotations. Mob DNA 12:2.",
         "doi": "10.1186/s13100-020-00230-y", "license": "CC0", "url": "https://www.dfam.org/"},
     "RepeatMasker": {
-        "name": "RepeatMasker 4.2.4 (RMBLAST engine)",
+        "name": "RepeatMasker (RMBLAST engine)",
         "citation": "Smit AFA, Hubley R, Green P. RepeatMasker Open-4.0. http://www.repeatmasker.org",
         "doi": "", "license": "OSL-2.1", "url": "https://www.repeatmasker.org/"},
     "Wicker2007": {

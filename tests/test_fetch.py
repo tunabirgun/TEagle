@@ -3,7 +3,7 @@ from teagle_core import fetch
 
 
 def test_validate_accession_valid():
-    for acc in ["M11240", "NC_003075.7", "X05424", "AB087615"]:
+    for acc in ["M11240", "NC_003075.7", "X05424", "AB087615", "NZ_CP012345.1"]:
         assert fetch.validate_accession(acc) == acc
 
 
@@ -23,6 +23,7 @@ def test_retrieve_caches_and_reuses(tmp_path, monkeypatch):
                 "title": "copia", "length": 5146, "moltype": "DNA", "source": "NCBI nuccore"}
     monkeypatch.setattr(fetch, "resolve", fake_resolve)
     monkeypatch.setattr(fetch, "fetch_fasta", lambda acc, served=None: ">M11240.1\n" + "ACGT" * 20)
+    monkeypatch.setattr(fetch, "fetch_features", lambda acc: fetch.build_gene_model([]))
     first = fetch.retrieve("M11240")
     assert first["fromCache"] is False and calls["n"] == 1
     second = fetch.retrieve("M11240")
@@ -63,11 +64,16 @@ def test_cds_phase_is_derived_in_transcription_order_on_minus_strand():
 
 
 @pytest.mark.parametrize("codon_start", ["", "0", "4", "x"])
-def test_missing_or_invalid_codon_start_retains_cds_but_marks_phase_unavailable(codon_start):
-    qualifier = f"\n\t\t\tcodon_start\t{codon_start}" if codon_start else ""
-    ft = f">Feature gb|X.1|Y\n1\t9\tCDS{qualifier}\n"
+def test_invalid_codon_start_retains_cds_but_marks_phase_unavailable(codon_start):
+    ft = f">Feature gb|X.1|Y\n1\t9\tCDS\n\t\t\tcodon_start\t{codon_start}\n"
     gm = fetch.build_gene_model(fetch.parse_feature_table(ft))
     assert len(gm["cds"]) == 1 and gm["cds"][0]["phase"] is None
+
+
+def test_absent_codon_start_defaults_to_frame_one():
+    # INSDC: codon_start defaults to 1, and NCBI's feature table omits the qualifier in that case
+    gm = fetch.build_gene_model(fetch.parse_feature_table(">Feature gb|X.1|Y\n1\t9\tCDS\n"))
+    assert gm["cds"][0]["phase"] == 0
 
 
 def test_complete_gene_model_fills_cds_implied_exon():

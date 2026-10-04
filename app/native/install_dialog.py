@@ -23,6 +23,8 @@ _ICON = {"ok": ("✓", "#33D6B8"), "bad": ("✕", "#E06A5A"), "work": ("●", "#
 
 
 class InstallDialog(QDialog):
+    _MAX_AUTO_RETRIES = 3
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("TEagle — backend installer")
@@ -50,6 +52,7 @@ class InstallDialog(QDialog):
         self._wsl2_installing = False    # a Windows-side elevated WSL install is in progress
         self._wsl2_ticks = 0
         self._wsl2_reboot_pending = False  # a WSL install completed this session but Windows needs a restart
+        self._probe_errors = 0           # consecutive status probes that failed (bounds the automatic retries)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 14, 16, 14); root.setSpacing(10)
@@ -192,13 +195,40 @@ class InstallDialog(QDialog):
             # probe runs several tools inside WSL and can time out while a download saturates the disk,
             # and a raw "Command '[...]' timed out after 90 seconds" replacing a live progress line reads
             # as a crash. Polling continues, so the next probe repaints the real state.
-            self.statusLine.setText("still working — the backend did not answer this check"
-                                    if self._busy else "could not read the backend status — retrying")
+            self._probe_errors += 1
+            for c in res.get("components", []):          # a first-open failure must not leave an empty window
+                if c["key"] not in self._rows:
+                    row = self._ensure_row(c["key"], c["name"], c.get("desc", ""))
+                    self._set_icon(c["key"], "unknown")
+                    row["detail"].setText("status unavailable")
+                    row["btn"].setVisible(False)
+            if self._busy:
+                self.statusLine.setText("still working — the backend did not answer this check")
+            elif self._probe_errors <= self._MAX_AUTO_RETRIES:
+                self.statusLine.setText("could not read the backend status — retrying")
+                if not self._poll.isActive():            # polling re-asks by itself; otherwise nothing would
+                    QTimer.singleShot(5000, self._refresh)
+            else:
+                self.statusLine.setText("could not read the backend status — press Refresh to try again")
+            uppercase_buttons(self)
             return
+        self._probe_errors = 0
         installing = res.get("installing")
         self._wsl2_ok = bool(res.get("wsl2"))
+        if res.get("reboot_pending") and not self._wsl2_ok:
+            self._wsl2_reboot_pending = True        # decided by the backend from the Windows log, not by this window's memory
         if self._wsl2_ok:
             self._wsl2_reboot_pending = False       # WSL came up -> the reboot is done, clear the sticky state
+        stale_released = False
+        if self._wsl2_installing and res.get("wsl2_install_stale"):
+            self._poll.stop(); self._set_busy(False); self._wsl2_installing = False
+            stale_released = True                    # the elevated batch ended without a marker (killed, rebooted)
+        elif res.get("wsl2_installing") and not self._wsl2_installing and not self._poll.isActive():
+            # a Windows-side WSL install started before this window opened: follow ITS log, not the in-WSL one
+            self._wsl2_installing = True; self._wsl2_ticks = 0
+            self._set_busy(True, "a WSL install is already running — its progress is in the log below…")
+            self._poll_since = time.monotonic()
+            self._poll.start(); QTimer.singleShot(0, self._tick)
         for c in res.get("components", []):
             row = self._ensure_row(c["key"], c["name"], c.get("desc", ""))
             ok = c.get("ok")
@@ -268,6 +298,9 @@ class InstallDialog(QDialog):
         if abandoned:
             self.statusLine.setText("the install stopped before it finished — start it again; "
                                     "Dfam archive downloads resume, but an interrupted NCBI genome ZIP restarts")
+        elif stale_released:
+            self.statusLine.setText("the WSL install is no longer running — see the log; if it did not "
+                                    "finish, start it again")
         elif self._wsl2_installing:
             pass                                        # keep the install-in-progress status line
         elif self._wsl2_reboot_pending:

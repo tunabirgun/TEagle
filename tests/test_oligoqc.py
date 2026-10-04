@@ -50,7 +50,7 @@ def test_pair_shape_and_worst_rollup():
     for k in ("left", "right", "hetero_dimer", "end_stability", "worst", "conditions", "engines"):
         assert k in r
     assert r["worst"] in ("ok", "caution", "warn")
-    assert r["conditions"]["temp_c"] == 37.0             # sealed, IDT-comparable conditions
+    assert r["conditions"]["temp_c"] == 37.0             # reported, IDT-comparable conditions
 
 
 def test_gc_clamp_and_polyx():

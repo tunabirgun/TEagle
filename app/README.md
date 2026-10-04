@@ -4,7 +4,7 @@ TEagle is a **native Windows desktop app** (PySide6/Qt). The following workflows
 
 1. **Reads a DNA sequence** — paste, FASTA, or **fetch by accession live from NCBI** — and checks it.
 2. **Finds structural features** — LTRs (the repeated ends of some transposons), inverted repeats (TIRs), ORFs (protein-coding stretches), and tails.
-3. **Detects protein domains** — gag (matrix/capsid/nucleocapsid), protease, reverse transcriptase, RNase H, integrase, envelope, chromodomain, LINE ORF1p and apurinic/apyrimidinic endonuclease-like (APE) domain, tyrosine recombinase, Helitron helicase, and the Tc1/*mariner*, hAT, CACTA, MULE and IS4 transposases — from a **30-model Pfam panel** (bundled, CC0) using **HMMER** (runs natively, no Linux needed).
+3. **Detects protein domains** — gag (matrix/capsid/nucleocapsid), protease, reverse transcriptase, RNase H, integrase, envelope, chromodomain, LINE ORF1p and apurinic/apyrimidinic endonuclease-like (APE) domain, tyrosine recombinase, Helitron helicase, and the Tc1/*mariner*, hAT, CACTA, MULE and IS4 transposases and an unclassified DDE transposase model — from a **30-model Pfam panel** (bundled, CC0) using **HMMER** (runs natively, no Linux needed).
 4. **Classifies the element** — Class I vs II, the **LINE** and **DIRS** orders, and superfamilies including **Copia, Gypsy, hAT, Tc1/Mariner, CACTA, MULE, and IS4-like/piggyBac** — from the domain architecture. Copia vs Gypsy is decided by the diagnostic **integrase-vs-RT order**. LINE requires reverse transcriptase plus LINE-specific ORF1p or an accepted same-ORF, N-terminal ORF2p endonuclease–RT arrangement; GAG, protease, RNase H, or ENV without LTR/integrase evidence leaves the Class I order unassigned. R2/R4-type and other non-LTR architectures outside those bundled profiles remain order-unassigned. Paired terminal direct repeats plus reverse transcriptase and an envelope-domain hit additionally flag an **ERV/errantivirus architecture**; an isolated envelope hit cannot upgrade a repeat candidate, and the ERV flag does not replace the order/superfamily result.
 5. **Designs PCR primers** with **Primer3**, including **domain-specific PCR** (primers placed inside a chosen domain).
 6. **Runs in-silico PCR** — predicts which product(s) your primer pair would make, shown as a gel.
@@ -34,13 +34,12 @@ Family-level naming (e.g. `Copia_I`, `Gypsy-2_DM`) uses tools that only run on L
 
 Version 4.0.0 is available from the [v4.0.0 release](https://github.com/tunabirgun/TEagle/releases/tag/v4.0.0). Verify the published SHA-256 checksum, run `TEagle-Setup-4.0.0.exe`, launch it from the Start menu or desktop, and use the manual attached to the same release. Nothing else is required for the native core — Python, Qt, Primer3, HMMER, and the Pfam profiles are bundled inside the app.
 
-**From source** (developers) you need **Python 3.10+**. Open a terminal in the `TEagle` folder:
+**From source** (developers) you need **Python 3.12** exactly; the launcher refuses every other minor version. Use a virtual environment, because a normal source launch installs the pinned packages into the interpreter that runs it. Open a terminal in the `TEagle` folder:
 
 ```powershell
 python app/teagle.py             # native PySide6 window
-python app/teagle.py --check      # just run the environment check and print it
+python app/teagle.py --check      # print the environment check and exit; never installs anything
 python app/teagle.py --selftest   # headless self-test (imports + figure rendering + a real analysis)
-python app/teagle.py --server     # legacy browser mode → http://127.0.0.1:8765
 ```
 
 From source, the first run — and again after any upgrade — checks Python and the pinned packages and installs them for you, then starts. It records a signature so it doesn't reinstall on every launch. If an install fails it says so and refuses to start on a broken environment (never a silent half-start). The in-app **Environment** panel shows the live status (Python, packages, WSL2).
@@ -49,7 +48,7 @@ No command-line bioinformatics, no Linux needed for the core workflow.
 
 ## Fetch by accession (live)
 
-Type a nucleotide accession in the Specimen box — e.g. **`M11240`** (Drosophila copia), **`NC_003075.7`** (Arabidopsis chr4), **`X05424`** (maize Ac) — and press **Fetch**. TEagle retrieves it from NCBI, shows the organism / taxid / length / title so you can **verify before analyzing**, and fills the sequence. Invalid or unknown accessions give a clear error, never a wrong sequence.
+Type a nucleotide accession in the Specimen box — e.g. **`M11240`** (Drosophila copia), **`NC_003075.7`** (Arabidopsis chr4), **`X05424`** (maize Ac) — and press **Fetch**. TEagle retrieves it from NCBI, shows the organism, length and title so you can **verify before analyzing**, and fills the sequence. Invalid or unknown accessions give a clear error, never a wrong sequence.
 
 You can also **Upload FASTA** — a `.fa` / `.fasta` / `.fna` / `.txt` file, or a gzipped `.gz` (decompressed in the app) — instead of pasting or fetching.
 
@@ -76,21 +75,20 @@ The paste-a-background in-silico PCR check on panel **05** is a direct O(n·m) s
 - Primer3 target coverage and an intended-product endpoint match are separate 0-based half-open assessments. Without design-bound geometry they are reported as unassessed, not as failed or off-target. Non-templated 5′ tails contribute to the full predicted band length but not to the template-coordinate span.
 - Structural findings are **candidate evidence**, never a family name.
 - A source it did not run is shown as **not run**, a classifier that lacks support is **withheld**, and a failed or bounded stage is not rendered as a zero finding.
-- Manifest schema 0.2 and analysis-result schema 1.0 use strict UTF-8 JSON and SHA-256 bindings. They detect content changes but are unkeyed integrity checks, not proof of authorship or origin.
+- Manifest schema 0.2 and analysis-result schema 1.1 (4.0.0 documents at schema 1.0 still validate) use strict UTF-8 JSON and SHA-256 bindings. They detect content changes but are unkeyed integrity checks, not proof of authorship or origin.
 - Source-context schema 1.0 preserves public accession or coordinate labels only when the provider context exactly matches the ordered record identifiers, lengths, and sequence hashes. A mismatch is treated as local input, and local FASTA headers are replaced in public exports by neutral hash-bound identifiers.
 - **Click any detected domain** to see its DNA + protein sequence and copy it (DNA / protein / FASTA), or design a primer inside it.
 
-Changing the specimen invalidates prior analysis, primer, PCR, annotation, and export state. Late results from an older request are discarded. The native app revalidates a manifest or complete analysis-result binding immediately before JSON export. The legacy browser shares the engine but deliberately exposes only CSV/TSV tables, SVG/PNG figures, FASTA, and gene/splice GFF3/BED/FASTA; it disables XLSX, PDF, provenance JSON, and complete-result JSON because it cannot independently verify those exports.
+Changing the specimen invalidates prior analysis, primer, PCR, annotation, and export state. Late results from an older request are discarded. The native app revalidates a manifest or complete analysis-result binding immediately before JSON export.
 
 ## Version-locked evidence
 
-The separately deposited [v3.8.0 benchmark evidence](https://doi.org/10.5281/zenodo.21848814) contains sanitized corpus definitions, scored aggregates, compact provenance checks, and audit scripts. The completed protocol 2.3.6 results apply only to tagged TEagle 3.9.0. Neither evidence set is presented as a 4.0.0 execution: the 4.0.0 classifier boundary requires a fresh, separately frozen benchmark before any performance claim. Exact regeneration of historical evidence requires the corresponding tagged source and refetching the cited public records.
+The separately deposited [v3.8.0 benchmark evidence](https://doi.org/10.5281/zenodo.21848814) contains sanitized corpus definitions, scored aggregates, compact provenance checks, and audit scripts. The completed protocol 2.3.6 results apply only to tagged TEagle 3.9.0. Each applies only to the release that generated it. The TEagle 4.0.0 prospective benchmark is recorded separately ([results package](https://doi.org/10.5281/zenodo.22159977); the protocol lineage is listed in the repository README) and applies only to that release; no evaluation result carries over to a later version. Exact regeneration of historical evidence requires the corresponding tagged source and refetching the cited public records.
 
 ## What’s under the hood
 
 - `backend/teagle_core/` — the real science (pure Python): `sequtil` (parse/validate/GC/N/reverse-complement/ORFs), `structural` (LTR/TIR/TSD/poly-A detection), `domains` (HMMER/pyhmmer), `classify` (superfamily), `primers` (Primer3 design + pair-aware in-silico PCR), `provenance` (the run manifest).
-- `backend/engine.py` — the single source of truth: one validated function per operation, returning a result or raising a clear input error. Both the native app and the legacy web server call it.
+- `backend/engine.py` — the single source of truth: one validated function per operation, returning a result or raising a clear input error. The native app calls it.
 - `native/` — the native PySide6 app (the “assay terminal”): `main.py` (window + panels), `engine_worker.py` (runs the engine off the UI thread), `figures.py` (genome viewer + gel SVG), `widgets.py` (interactive figure/table widgets).
-- `backend/server.py` + `web/` — the legacy browser UI, kept for `--server` / headless use; it displays the same engine results.
 
 Dependencies are pinned in `backend/requirements.txt` for reproducibility.

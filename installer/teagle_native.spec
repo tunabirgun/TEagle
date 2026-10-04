@@ -12,7 +12,8 @@ _vsrc = open(os.path.join(ROOT, "app", "backend", "teagle_core", "__init__.py"),
 VERSION = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', _vsrc).group(1)
 _vt = tuple(int(x) for x in (re.findall(r"\d+", VERSION) + [0, 0, 0, 0])[:4])
 
-_verinfo = os.path.join(SPECPATH, "_version_info.txt")
+os.makedirs(workpath, exist_ok=True)                         # PyInstaller's build workpath: the generated file stays out of the tree
+_verinfo = os.path.join(workpath, "_version_info.txt")
 open(_verinfo, "w", encoding="utf-8").write(f"""VSVersionInfo(
   ffi=FixedFileInfo(filevers={_vt}, prodvers={_vt}, mask=0x3f, flags=0x0,
                     OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
@@ -45,16 +46,13 @@ _fontdir = os.path.join(ROOT, "app", "native", "assets", "fonts")
 datas += [(os.path.join(_fontdir, fn), "native/assets/fonts") for fn in os.listdir(_fontdir)]
 # metadata so envcheck's importlib.metadata.version(...) resolves for the bundled deps (env panel stays green)
 for dist in ("PySide6", "shiboken6", "primer3-py", "pyhmmer", "psutil", "openpyxl", "et_xmlfile", "certifi", "pypdf"):
-    try:
-        datas += copy_metadata(dist)
-    except Exception:
-        pass
+    datas += copy_metadata(dist)                              # a missing distribution must fail the build, not ship a red Environment panel
 
 binaries = []
 hiddenimports = [
     # native UI package (app/native) + engine adapter (app/backend)
     "main", "engine", "engine_worker", "figures", "widgets", "sample", "theme", "fonts", "install_dialog",
-    "envcheck", "server",
+    "envcheck",
     "teagle_core", "teagle_core.appdirs", "teagle_core.sequtil", "teagle_core.structural",
     "teagle_core.classify", "teagle_core.domains", "teagle_core.primers", "teagle_core.oligoqc",
     "teagle_core.fetch", "teagle_core.refs", "teagle_core.provenance", "teagle_core.timing", "teagle_core.wsl",
@@ -197,7 +195,7 @@ _ALLOWED_TOP = {
     "primer3", "pyhmmer", "psutil",                          # primer3-py, pyhmmer (+ pinned psutil)
     "openpyxl", "et_xmlfile",                                # openpyxl (+ its only dependency)
     "certifi", "pypdf",
-    "teagle_core", "teagle_native", "main", "engine", "engine_worker", "envcheck", "server",
+    "teagle_core", "teagle_native", "main", "engine", "engine_worker", "envcheck",
     "figures", "widgets", "sample", "theme", "fonts", "install_dialog",   # app/backend + app/native
     "_pyi_rth_utils",                                        # PyInstaller runtime shim
 }

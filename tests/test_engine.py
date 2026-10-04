@@ -1,6 +1,6 @@
-"""Engine-adapter validation tests. These guard the request-coercion logic that used to live
-in server.py (_num / _clean_params / _require_nt) and is now the single source of truth shared
-by the HTTP server and the native app. Each encodes a hard-won 400-not-500 fix."""
+"""Engine-adapter validation tests. These guard the request-coercion logic (_num / _clean_params /
+_require_nt), the single source of truth for the native app's requests. Each encodes a hard-won
+bad-input-is-a-BadRequest-not-a-fault fix."""
 import copy, hashlib, json, math
 import pytest
 import engine
@@ -162,7 +162,7 @@ def test_run_genome_pcr_summary_not_in_seal(monkeypatch):
 
 
 def test_run_genome_pcr_marks_on_target_from_design_locus(monkeypatch):
-    # a product overlapping the design locus is the on-target; the sibling elsewhere is off-target
+    # the product at the designed product's genome position is the on-target; the sibling elsewhere is off-target
     raw = "\n".join([
         ">NC_1:1000+1240 pair 241bp AAAAAAAAAAAAAAAAAAAA CCCCCCCCCCCCCCCCCCCC",   # overlaps locus -> on-target
         ">NC_1:5000+5240 pair 241bp AAAAAAAAAAAAAAAAAAAA CCCCCCCCCCCCCCCCCCCC",   # elsewhere -> off-target
@@ -171,7 +171,8 @@ def test_run_genome_pcr_marks_on_target_from_design_locus(monkeypatch):
                         lambda acc, query, **k: {"ok": True, "raw": raw, "isPcr_version": "33x2",
                                                  "target": "genome.2bit", "sha256": "s", "n_seqs": 2})
     r = engine.run_genome_pcr({"fwd": "A" * 20, "rev": "C" * 20, "organism": "Homo sapiens",
-                               "design_locus": {"accession": "NC_1", "start": 950, "stop": 1300}})
+                               "design_locus": {"accession": "NC_1", "start": 950, "end": 1300, "strand": 1,
+                                    "intended_product_span": [50, 291]}})
     assert r["has_locus"] and r["n_on_target"] == 1 and r["summary"]["n_on"] == 1 and r["summary"]["n_off"] == 1
     on = [a for a in r["amplicons"] if a.get("on_target")]
     assert len(on) == 1 and on[0]["start"] == 1000
@@ -194,7 +195,8 @@ def test_run_genome_pcr_design_locus_not_in_seal(monkeypatch):
                                                  "target": "genome.2bit", "sha256": "SAME", "n_seqs": 1})
     base = {"fwd": "A" * 20, "rev": "C" * 20, "assemblyAccession": "GCF_9.9", "taxid": "1"}
     r1 = engine.run_genome_pcr(dict(base))                                                     # no locus
-    r2 = engine.run_genome_pcr({**base, "design_locus": {"accession": "NC_1", "start": 950, "stop": 1300}})
+    r2 = engine.run_genome_pcr({**base, "design_locus": {"accession": "NC_1", "start": 950, "end": 1300, "strand": 1,
+                                    "intended_product_span": [50, 291]}})
     assert r2["n_on_target"] == 1 and r1["n_on_target"] == 0                                   # different labeling
     assert r1["provenance"]["manifestSha256"] == r2["provenance"]["manifestSha256"]            # identical seal
 
@@ -557,7 +559,7 @@ def test_run_analyze_shape():
     assert "records" in r and "provenance" in r and "references" in r
     assert r["records"][0]["valid"] is True
     assert len(r["provenance"]["manifestSha256"]) == 64
-    assert r["resultSchemaVersion"] == "1.0" and r["status"] == "complete"
+    assert r["resultSchemaVersion"] == "1.1" and r["status"] == "complete"
     assert r["records"][0]["processing"]["structural"]["status"] == "complete"
 
 
@@ -637,7 +639,7 @@ def test_analysis_status_distinguishes_zero_partial_and_not_run(monkeypatch):
 def test_analysis_result_document_is_complete_and_rejects_tampering():
     result = engine.run_analyze({"sequence": ">one\n" + "ACGT" * 8 + "\n>two\n" + "TGCA" * 8})
     doc = engine.analysis_result_document(result)
-    assert doc["format"] == "TEagle analysis result" and doc["resultSchemaVersion"] == "1.0"
+    assert doc["format"] == "TEagle analysis result" and doc["resultSchemaVersion"] == "1.1"
     assert len(doc["records"]) == 2 and doc["status"] == result["status"]
     assert doc["provenance"] == result["provenance"]
     assert engine.validate_analysis_result_document(doc)

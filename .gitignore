@@ -20,7 +20,7 @@ report/
 review-records/
 verification/
 scratch_e2e/
-workflows/
+/workflows/
 DESIGN-IS-*/
 
 # Build / packaging artifacts (regenerable; the shippable installer is attached to a Release)
@@ -29,6 +29,7 @@ dist_native/
 build/
 build_native/
 *.pyi_manifest
+/installer/_version_info.txt
 
 # Python
 __pycache__/

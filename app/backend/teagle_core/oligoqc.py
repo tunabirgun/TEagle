@@ -42,7 +42,8 @@ except Exception as _e:                              # pragma: no cover
 PRIMER3_VERSION = getattr(primer3, "__version__", "unavailable") if primer3 is not None else "unavailable"
 VIENNARNA_VERSION = _VRNA_VER or "unavailable"
 
-# IDT OligoAnalyzer-comparable reaction conditions (documented + sealed). Mg2+=0 and 0.25 uM oligo match
+# IDT OligoAnalyzer-comparable reaction conditions (reported with every QC result; advisory, not sealed —
+# the design Tm uses primers.TM_CONDITIONS instead). Mg2+=0 and 0.25 uM oligo match
 # IDT's OligoAnalyzer defaults; ViennaRNA has no divalent model, so both engines run at matched monovalent
 # salt + temperature so their numbers are compared like-for-like.
 CONDITIONS = {"mv_conc": 50.0, "dv_conc": 0.0, "dntp_conc": 0.0, "dna_conc": 250.0, "temp_c": 37.0}
@@ -75,8 +76,8 @@ def _round(x, n=2):
 # ---------------- primer3 (primary engine) ----------------
 def _p3_kcal(tr):
     """A primer3 ThermoResult -> (dg_kcal_per_mol or None if no structure, tm)."""
-    if tr is None or not getattr(tr, "structure_found", False):
-        return None, None
+    if tr is None or not getattr(tr, "structure_found", False) or tr.dg >= 0:
+        return None, None                            # a non-negative dG is no favourable structure (as for ViennaRNA)
     return tr.dg / 1000.0, tr.tm                     # dg is cal/mol -> kcal/mol
 
 
@@ -93,9 +94,9 @@ def _p3_heterodimer(a, b):
 
 
 def _p3_end_stability(a, b):
-    # gate on structure_found (like _p3_kcal): no favorable 3'-end cross-dimer -> None -> renders "—", not 0.0
+    # gated like _p3_kcal: no favorable 3'-end cross-dimer -> None -> renders "—", not 0.0
     tr = primer3.calc_end_stability(a, b, **_p3_args())
-    return (tr.dg / 1000.0 if (tr is not None and getattr(tr, "structure_found", False)) else None)
+    return _p3_kcal(tr)[0]
 
 
 def _p3_args():
@@ -250,7 +251,7 @@ def qc_oligo(seq: str) -> dict:
     hd_p3, _ = _p3_homodimer(seq)
     return {
         "ok": True, "seq": seq, "len": len(seq),
-        "tm": _oligo_tm(seq), "gc": _round(100.0 * sum(1 for b in seq if b in "GC") / len(seq), 1),
+        "tm": _oligo_tm(seq), "tm_basis": "qc_conditions", "gc": _round(100.0 * sum(1 for b in seq if b in "GC") / len(seq), 1),
         "gc_clamp": gc_clamp(seq), "poly_x": longest_poly_x(seq),
         "hairpin": _metric(hp_p3, _vrna_hairpin(seq), _HAIRPIN_WARN, _HAIRPIN_CAUTION),
         "self_dimer": _metric(hd_p3, _vrna_binding(seq, seq), _DIMER_WARN, _DIMER_CAUTION),
@@ -269,7 +270,8 @@ def qc_pair(left: str, right: str) -> dict:
     # 3'-end stability is a primer3-only metric (last-bases anneal ΔG); worst of F-on-R / R-on-F
     ends = [d for d in (_p3_end_stability(left, right), _p3_end_stability(right, left)) if d is not None]
     end_dg = min(ends) if ends else None
-    end = {"p3": _round(end_dg), "vrna": None, "flag": _tier(end_dg, _END_WARN, _END_CAUTION), "agree": "single"}
+    end = {"p3": _round(end_dg), "vrna": None, "flag": _tier(end_dg, _END_WARN, _END_CAUTION),
+           "agree": "single" if ends else "none"}
     left_qc, right_qc = qc_oligo(left), qc_oligo(right)
     worst = _worst_flag([left_qc["hairpin"]["flag"], left_qc["self_dimer"]["flag"],
                          right_qc["hairpin"]["flag"], right_qc["self_dimer"]["flag"], het["flag"], end["flag"]])

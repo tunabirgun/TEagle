@@ -30,10 +30,11 @@ def test_line_polyt_not_mislabeled_as_polya():
     struct = [{"type": "poly-T (5')", "length": 20, "pos": [0, 20]}]
     # ORF1p is what licenses the LINE call; the tract only names which tail was seen. Without a coding
     # module a lone RT no longer reaches this branch at all, because telomerase presents the same way.
-    cl = classify.classify(struct, [_dom("RT", (100, 1000), "+", 90),
-                                    _dom("ORF1", (10, 90), "+", 200)])
+    # a 5' poly-T belongs to a minus-strand ORF2, so the RT sits on "-" (a plus-strand RT would not credit it)
+    cl = classify.classify(struct, [_dom("RT", (100, 1000), "-", 90),
+                                    _dom("ORF1", (1500, 1590), "-", 200)])
     ev = " ".join(cl["evidence"])
-    assert "poly-T" in ev and "poly-A tail consistent" not in ev
+    assert "poly-T" in ev and "poly-A tail consistent" not in ev and "not credited" not in ev
 
 
 def test_domain_dedup_keeps_opposite_strand():

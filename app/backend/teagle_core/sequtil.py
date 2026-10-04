@@ -36,6 +36,19 @@ def parse_fasta(text, norm=None):
     return recs
 
 
+def fasta_preamble(text) -> str:
+    """Non-whitespace text that precedes the first FASTA header line. parse_fasta ignores it (it belongs to
+    no record); a caller that analyses the records should say so. '' for input without a header line, for
+    a blank preamble and for non-string input."""
+    if not isinstance(text, str):
+        return ""
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    for i, line in enumerate(lines):
+        if line.startswith(">"):
+            return re.sub(r"\s+", "", "".join(lines[:i]))
+    return ""
+
+
 def _norm(s: str) -> str:
     # strip whitespace, uppercase, and normalize RNA to its DNA equivalent (U -> T) so composition,
     # ORF finding, translation, and primer design all operate on DNA

@@ -7,9 +7,9 @@ and routes the outcome through the three-tier taxonomy (obs 4702):
 
 `key` lets a panel match a result to the request it issued (and ignore stale ones)."""
 from __future__ import annotations
-import os, sys, traceback
+import os, sys, threading, traceback
 
-from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
+from PySide6.QtCore import QObject, QThread, Signal
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend"))
 import engine
@@ -22,9 +22,8 @@ class _Signals(QObject):
     failed = Signal(str, str, str)
 
 
-class _Job(QRunnable):
+class _Job:
     def __init__(self, key, fn, signals):
-        super().__init__()
         self.key, self.fn, self.signals = key, fn, signals
 
     def _emit(self, signal, *args):
@@ -85,9 +84,12 @@ class Engine(QObject):
 
     def __init__(self, parent=None, max_threads: int | None = None):
         super().__init__(parent)
-        self.pool = QThreadPool(self)
-        if max_threads:
-            self.pool.setMaxThreadCount(max_threads)
+        # Daemon threads, not a QThreadPool owned by this object: a pool's destructor waits for every running
+        # job, and a whole-genome annotation or an integrity probe can run for minutes to hours inside WSL.
+        # Destroying an Engine (closing the backend dialog) or exiting the application must never wait on one.
+        self._slots = threading.Semaphore(max_threads or max(2, QThread.idealThreadCount()))
+        self._idle = threading.Condition()
+        self._active = 0
         self._sig = _Signals()
         self._sig.done.connect(self.done)
         self._sig.user_error.connect(self.user_error)
@@ -97,8 +99,21 @@ class Engine(QObject):
         """Run engine op `op` with request `body`. `key` (default = op) tags the result."""
         fn = self.OPS[op]
         b = body or {}
-        self.pool.start(_Job(key or op, lambda: fn(b), self._sig))
+        job = _Job(key or op, lambda: fn(b), self._sig)
+        with self._idle:
+            self._active += 1
+        threading.Thread(target=self._run, args=(job,), daemon=True, name=f"teagle-{op}").start()
+
+    def _run(self, job):
+        try:
+            with self._slots:
+                job.run()
+        finally:
+            with self._idle:
+                self._active -= 1
+                self._idle.notify_all()
 
     def wait(self, msecs: int = -1) -> bool:
-        """Block until all queued jobs finish (used by headless tests)."""
-        return self.pool.waitForDone(msecs)
+        """Block until all submitted jobs finish (used by headless tests)."""
+        with self._idle:
+            return self._idle.wait_for(lambda: self._active == 0, None if msecs < 0 else msecs / 1000)

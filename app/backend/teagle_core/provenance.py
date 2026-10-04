@@ -247,8 +247,19 @@ def _source_record_observations(records) -> list | None:
                     return None
         else:
             return None
-        observed.append({"id": str(record_id).split(None, 1)[0], "length": length, "sha256": digest})
+        observed.append({"id": _header_accession(str(record_id).split(None, 1)[0]),
+                         "length": length, "sha256": digest})
     return observed
+
+
+def _header_accession(token: str) -> str:
+    """The accession a FASTA header token names: ENA writes 'ENA|<accession>|<accession.version>'."""
+    parts = token.split("|")
+    return parts[2] if len(parts) == 3 and parts[0] == "ENA" and parts[1] == parts[2].rsplit(".", 1)[0] else token
+
+
+def _unversioned(accession: str) -> str:
+    return accession.rsplit(".", 1)[0]
 
 
 def _wire_record_binding_valid(binding) -> bool:
@@ -273,13 +284,20 @@ def normalize_source_context(source, records) -> dict:
     if label in _FETCH_ENDPOINTS:
         accession = str(source.get("accession") or "")
         provider, endpoint_enum, endpoint = _FETCH_ENDPOINTS[label]
-        expected_endpoint = endpoint or f"https://www.ebi.ac.uk/ena/browser/api/fasta/{accession}"
-        source_url = _public_source_url(source.get("sourceUrl"), accession, label)
-        if (not timestamp or not is_public_accession(accession) or source.get("endpoint") != expected_endpoint or
+        # fetch.retrieve records the resolved accession-version but builds its URLs from the text the user
+        # typed, so an unversioned accession ('M11240') names the same record as 'M11240.1'. The canonical
+        # versioned URL is emitted; a URL naming any other record, version or host is still refused.
+        forms = (accession, _unversioned(accession))
+        expected_endpoints = {endpoint or f"https://www.ebi.ac.uk/ena/browser/api/fasta/{form}" for form in forms}
+        source_url = None
+        if any(_public_source_url(source.get("sourceUrl"), form, label) for form in forms):
+            host, path = _SOURCE_URLS[_source_provider(label)]
+            source_url = _public_source_url(f"https://{host}{path.format(accession=accession)}", accession, label)
+        if (not timestamp or not is_public_accession(accession) or source.get("endpoint") not in expected_endpoints or
                 source_url is None or len(records) != 1):
             return local
         header, sequence = records[0]
-        if str(header).split(None, 1)[0] != accession:
+        if _header_accession(str(header).split(None, 1)[0]) != accession:
             return local
         length = source.get("length")
         if length is not None and (isinstance(length, bool) or not isinstance(length, int) or length != len(sequence)):
@@ -396,6 +414,12 @@ def _semantic_public_fields_valid(manifest: dict) -> bool:
         return False
     if not _nested_identity_bindings_valid(manifest.get("parameters")):
         return False
+    # input.id is outside the seal, so it is tied to the sealed per-record bindings instead: a generated
+    # label must not be rewritable
+    if len(records) == 1 and any(inp.get(k) != records[0].get(k) for k in ("id", "idSha256", "identitySource")):
+        return False
+    if len(records) > 1 and (inp["id"] != "multiple_records" or inp["identitySource"] != "generated"):
+        return False
     input_type = inp.get("inputType", "local_input")
     if (inp.get("sourceContextVersion") != SOURCE_CONTEXT_VERSION or
             input_type not in {"local_input", "fetched_accession", "fetched_coordinate"}):
@@ -416,7 +440,9 @@ def _semantic_public_fields_valid(manifest: dict) -> bool:
         return False
     if input_type == "local_input" and inp.get("identitySource") == "validated_fetch":
         return False
-    if input_type != "local_input" and inp.get("identitySource") != "validated_fetch":
+    multi_region = (input_type == "fetched_coordinate" and isinstance(inp.get("regions"), list) and
+                    len(inp["regions"]) > 1)
+    if input_type != "local_input" and inp.get("identitySource") != ("generated" if multi_region else "validated_fetch"):
         return False
     if input_type == "local_input" and any(key in inp for key in
             ("accession", "assemblyAccession", "taxid", "source", "endpoint", "sourceUrl", "regions")):
@@ -479,11 +505,60 @@ def _software(run_type: str) -> list:
     so an unused tool's version/availability can never change a byte-identical run's checksum."""
     sw = [{"name": "python", "version": platform.python_version()},
           {"name": "TEagle core", "version": TEAGLE_VERSION}]
+    # the versions are those of the Python bindings; the wrapped Primer3 core release is read from the library
     if run_type == "primer":
-        sw.insert(0, {"name": "primer3 (primer3-py)", "version": PRIMER3_VERSION})
+        sw.insert(0, {"name": "primer3-py (Primer3 bindings)", "version": PRIMER3_VERSION})
+        core = _libprimer3_release()
+        if core:
+            sw.insert(1, {"name": "libprimer3 (Primer3 core)", "version": core})
     elif run_type == "analysis":
-        sw.insert(0, {"name": "HMMER (pyhmmer)", "version": PYHMMER_VERSION})
+        sw.insert(0, {"name": "pyhmmer (HMMER 3 bindings)", "version": PYHMMER_VERSION})
     return sw
+
+
+def _libprimer3_release() -> str | None:
+    try:
+        from primer3.thermoanalysis import get_libprimer3_version
+        return str(get_libprimer3_version()).rsplit(None, 1)[-1]
+    except Exception:
+        return None
+
+
+_VOLATILE_SOURCE_FIELDS = ("retrievedUtc", "source", "endpoint", "sourceUrl")
+
+
+def _integral_floats_as_int(value):
+    """Write an integral float (60.0) as an int in sealed parameters. Python keeps the two apart when it
+    serializes, so the seal would otherwise depend on how a value was typed (opt_tm 60 or 60.0) and would
+    break on a re-serialization by a JSON tool that does not (JavaScript, jq)."""
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, dict):
+        return {k: _integral_floats_as_int(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_integral_floats_as_int(v) for v in value]
+    return value
+
+
+def _without_volatile_bindings(params):
+    """Drop the retrieval time and serving-database labels from the input bindings nested in sealed parameters.
+
+    In-silico PCR copies the assay and design input bindings into its parameters. The top-level input already
+    keeps these fields out of the seal; a copy left inside `parameters` would make the same primers and the
+    same sequence seal differently after a refetch or from a different serving database."""
+    def strip(binding):
+        return ({k: v for k, v in binding.items() if k not in _VOLATILE_SOURCE_FIELDS}
+                if isinstance(binding, dict) else binding)
+
+    if not isinstance(params, dict):
+        return params
+    out = _integral_floats_as_int(params)
+    for key in ("design_input", "assay_input"):
+        if key in out:
+            out[key] = strip(out[key])
+    if isinstance(out.get("search_inputs"), list):
+        out["search_inputs"] = [strip(binding) for binding in out["search_inputs"]]
+    return out
 
 
 def build_manifest(run_type: str, input_seq: str, input_id: str, params: dict,
@@ -549,7 +624,7 @@ def build_manifest(run_type: str, input_seq: str, input_id: str, params: dict,
         "input": inp,
         "software": _software(run_type),
         "databases": databases or [],
-        "parameters": params,
+        "parameters": _without_volatile_bindings(params),
         "references": references or [],
         "environment": {
             "os": platform.platform(),

@@ -11,6 +11,7 @@ from __future__ import annotations
 import sys, os, json, subprocess, hashlib, shutil, importlib
 import importlib.metadata as md
 from teagle_core import appdirs
+from teagle_core import wsl as _wsl
 
 FROZEN = bool(getattr(sys, "frozen", False))                 # packaged one-click build (deps bundled)
 # no console-window flash when the windowed GUI shells out (Windows only; 0 elsewhere)
@@ -84,10 +85,11 @@ def probe_backends() -> dict:
         try:
             out = subprocess.run([exe, "-l", "-v"], capture_output=True, timeout=8,
                                  text=True, errors="ignore", creationflags=_NO_WINDOW)
-            txt = (out.stdout or "").replace("\x00", "")
-            if "Running" in txt or "Stopped" in txt:
+            names, _ = _wsl.parse_distro_table(out.stdout or "")
+            # a container runtime's own distro (Docker Desktop's, say) is not a place the backend can live
+            if any(not _wsl.is_runtime_distro(n) for n in names):
                 wsl = "available"
-            else:                                            # wsl.exe present but no distro registered
+            else:                                            # wsl.exe present but no usable distro registered
                 wsl = "no distro"
         except Exception:
             wsl = "error"
@@ -148,9 +150,12 @@ def check() -> dict:
         "packages_ok": all_ok,
         "importFailures": import_fail,
         "signature": sig,
-        "signature_matches": (sig == last),
-        "first_run": last is None,
-        "needs_install": (not all_ok) or (sig != last),
+        # a packaged build carries its dependencies and never runs ensure(), so it has no recorded state to
+        # compare: only a genuinely missing package means anything needs installing
+        "signature_matches": FROZEN or (sig == last),
+        "first_run": last is None and not FROZEN,
+        "needs_install": (not all_ok) if FROZEN else ((not all_ok) or (sig != last)),
+        "bundled": FROZEN,
         "backends": probe_backends(),
     }
 

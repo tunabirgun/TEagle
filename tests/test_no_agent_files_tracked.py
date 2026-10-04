@@ -4,10 +4,9 @@ The project's position is that tooling instructions are not part of the software
 particular assistant should behave on this machine, they date faster than anything they describe, and
 they have no bearing on what TEagle computes — so they belong beside the checkout, not inside it.
 
-Stating that in `.gitignore` does not enforce it here. `.gitignore` ignores itself (line 23) and is
-untracked, so its rules never reach a clone: a contributor working from a fresh clone has no ignore file
-at all, and `git add -A` picks up whatever an assistant has written into the working directory. The rule
-has to live somewhere that travels with the code.
+Stating that in `.gitignore` does not enforce it here. `.gitignore` is tracked and travels with a clone,
+but an ignore rule does not stop a forced add or un-track a file that is already committed, and a
+contributor's global ignore may differ. The rule has to be checked against the index.
 
 This is the repository's own idiom applied to itself — prefer a claim the suite can check over one a
 reader must verify. It runs `git ls-files`, so it tests the index rather than the disk: the files may sit

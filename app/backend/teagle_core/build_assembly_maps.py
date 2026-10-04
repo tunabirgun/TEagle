@@ -15,9 +15,17 @@ from teagle_core.fetch import COORD_ASSEMBLIES               # single source of 
 
 
 def sequence_report(acc):
-    url = API + acc + "/sequence_reports?" + urllib.parse.urlencode({"page_size": "1000"})
-    req = urllib.request.Request(url, headers={"User-Agent": "TEagle"})
-    return json.loads(urllib.request.urlopen(req, timeout=60).read()).get("reports", [])
+    """All sequence reports of an assembly, following next_page_token (organelles come after the scaffolds)."""
+    reps, token = [], None
+    while True:
+        q = {"page_size": "1000", **({"page_token": token} if token else {})}
+        req = urllib.request.Request(API + acc + "/sequence_reports?" + urllib.parse.urlencode(q),
+                                     headers={"User-Agent": "TEagle"})
+        doc = json.loads(urllib.request.urlopen(req, timeout=60).read())
+        reps += doc.get("reports", [])
+        token = doc.get("next_page_token")
+        if not token:
+            return reps
 
 
 def build():

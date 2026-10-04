@@ -74,33 +74,46 @@ def summarize(amps: list, has_locus: bool = False) -> dict:
         size_mode, size_mode_n = Counter(lengths).most_common(1)[0]
         size_min, size_max = min(lengths), max(lengths)
     n_pair, n_on, n_off, n_sources = len(pair), len(on), len(off), len(src_counts)
+    n_single = len(single)
+    # a single-primer (F+F / R+R) product co-amplifies in the tube, so no verdict may say nothing else is
+    # predicted while one exists; the tier stays pair-based
+    sp = f"; {n_single} single-primer (F+F/R+R) product(s) also predicted" if n_single else ""
     if has_locus:
         # n_on is 0 or 1 (exactly one best-overlapping product is the on-target, chosen upstream)
         if n_on == 0 and n_off == 0:
-            tier, verdict = "none", "no genome-wide product — the primers do not amplify anywhere in this assembly"
+            tier = "none"
+            verdict = ("no forward+reverse product at the intended locus or elsewhere in this assembly "
+                       "under current settings" + sp)
         elif n_on == 0:
             tier, verdict = "intended-locus-negative", (f"{n_off} off-target candidate priming site(s); "
-                                                         "no product at the intended locus under current settings")
+                                                         "no product at the intended locus under current settings" + sp)
         elif n_off == 0:
-            tier, verdict = "intended-only", ("1 on-target product; no additional priming site detected in this "
-                                                "assembly under current settings")
+            tier = "intended-only"
+            if n_single:
+                verdict = ("1 on-target product; no additional forward+reverse product detected in this "
+                           "assembly under current settings" + sp)
+            else:
+                verdict = "1 on-target product; no additional priming site detected in this assembly under current settings"
         elif n_off <= 5:
             tier, verdict = "limited-off-target", (f"1 on-target + {n_off} off-target candidate priming site(s) — "
-                                                     "limited off-target count")
+                                                     "limited off-target count" + sp)
         else:
             tier, verdict = "many-off-target", (f"1 on-target + {n_off} off-target candidate priming site(s) "
-                                                 f"across {n_sources} assembly sequence(s) — many-site pattern")
+                                                 f"across {n_sources} assembly sequence(s) — many-site pattern" + sp)
     else:
         if n_pair == 0:
-            tier, verdict = "none", "no genome-wide priming site (in this assembly, at the current 3' match length)"
+            tier = "none"
+            verdict = ("no forward+reverse priming-site pair in this assembly, at the current 3' match length" + sp
+                       if n_single else
+                       "no genome-wide priming site (in this assembly, at the current 3' match length)")
         elif n_pair == 1:
-            tier, verdict = "single-site", "single-site pattern (1 genomic priming site)"
+            tier, verdict = "single-site", "single-site pattern (1 genomic priming site)" + sp
         elif n_pair <= 5:
-            tier, verdict = "limited-site", f"limited-site pattern ({n_pair} genomic priming sites)"
+            tier, verdict = "limited-site", f"limited-site pattern ({n_pair} genomic priming sites)" + sp
         else:
             tier, verdict = "many-site", (f"many-site pattern — {n_pair} genomic priming sites across {n_sources} "
-                                           "assembly sequence(s)")
-    return {"n_total": len(amps), "n_pair": n_pair, "n_on": n_on, "n_off": n_off, "n_single": len(single),
+                                           "assembly sequence(s)" + sp)
+    return {"n_total": len(amps), "n_pair": n_pair, "n_on": n_on, "n_off": n_off, "n_single": n_single,
             "n_sources": n_sources, "per_source": per_source, "has_locus": has_locus,
             "size_mode": size_mode, "size_mode_n": size_mode_n, "size_min": size_min, "size_max": size_max,
             "tier": tier, "verdict": verdict}

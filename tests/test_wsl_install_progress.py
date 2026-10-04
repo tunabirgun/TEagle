@@ -318,7 +318,7 @@ def test_integrity_probe_conditions_success_on_real_exit_codes_and_signatures():
 
 
 def test_integrity_check_reports_optional_partitions_without_failing_on_them(monkeypatch):
-    probe = ("=RM=\nRepeatMasker version 4.2.4\n=MM=\n2.31-r1302\n=FAMDB=\nVersion : 4.0\n"
+    probe = ("=RM=\nRepeatMasker version 4.2.4\n=MM=\n2.31-r1302\n=FAMDB=\nFAMDB_RC=0\nDatabase : Dfam\nVersion : 4.0\n"
              "=FILES=\npresent dfam40.0.h5 1\npresent dfam40.curated.consensus.0.h5 1\n"
              "=OPTFILES=\npresent dfam40.uncurated.consensus.0.h5\nabsent dfam40.uncurated.consensus.1.h5\n"
              "=SCAN=\nisPcr - Standalone v 33x2\nisPcr signature 33x2 OK\n"
@@ -341,7 +341,7 @@ def test_integrity_check_reports_optional_partitions_without_failing_on_them(mon
     ("VRNA", "present 2.7.1", False),
 ])
 def test_integrity_grades_installed_optional_tools_at_their_pinned_version(monkeypatch, section, body, expected):
-    probe = ("=RM=\nRepeatMasker version 4.2.4\n=MM=\n2.31-r1302\n=FAMDB=\nVersion : 4.0\n"
+    probe = ("=RM=\nRepeatMasker version 4.2.4\n=MM=\n2.31-r1302\n=FAMDB=\nFAMDB_RC=0\nDatabase : Dfam\nVersion : 4.0\n"
              "=FILES=\npresent dfam40.0.h5 1\npresent dfam40.curated.consensus.0.h5 1\n"
              "=OPTFILES=\nabsent dfam40.uncurated.consensus.0.h5\nabsent dfam40.uncurated.consensus.1.h5\n"
              "=SCAN=\nisPcr - Standalone v 33x2\nisPcr signature 33x2 OK\n"
@@ -376,7 +376,7 @@ def test_integrity_rejects_unusable_or_wrong_signature_executables(monkeypatch, 
     healthy_scan = ("isPcr - Standalone v 33x2\nisPcr signature 33x2 OK\n"
                     "datasets version: 18.34.0\ndatasets version 18.34.0 OK\n"
                     "ispcr package 33\ndatasets package 18.34.0")
-    probe = ("=RM=\nRepeatMasker version 4.2.4\n=MM=\n2.31-r1302\n=FAMDB=\nVersion : 4.0\n"
+    probe = ("=RM=\nRepeatMasker version 4.2.4\n=MM=\n2.31-r1302\n=FAMDB=\nFAMDB_RC=0\nDatabase : Dfam\nVersion : 4.0\n"
              "=FILES=\npresent dfam40.0.h5 1\npresent dfam40.curated.consensus.0.h5 1\n"
              "=OPTFILES=\nabsent dfam40.uncurated.consensus.0.h5\nabsent dfam40.uncurated.consensus.1.h5\n"
              f"=SCAN=\n{bad_body if section == 'SCAN' else healthy_scan}\n"
@@ -530,22 +530,22 @@ def test_annotation_budget_refuses_a_job_that_fits_wsl_but_not_its_windows_volum
     assert budget["disk_ok"] is False
 
 
-def _assert_held_miniprot_contract(steps, server_source: str) -> None:
+def _assert_held_miniprot_contract(steps, ops, run_miniprot) -> None:
     assert "miniprot" not in steps
-    assert '"/api/miniprot"' not in server_source and "'/api/miniprot'" not in server_source
+    assert not [k for k, fn in ops.items() if "miniprot" in k.lower() or fn is run_miniprot]
 
 
 def test_held_miniprot_is_neither_provisioned_nor_exposed_and_guard_is_mutation_sensitive():
-    import pathlib
-    server = pathlib.Path(wsl.__file__).parent.parent / "server.py"
-    source = server.read_text(encoding="utf-8")
-    _assert_held_miniprot_contract(wsl._ALL_STEPS, source)
-    for steps, mutant in [
-        (wsl._ALL_STEPS + ["miniprot"], source),
-        (wsl._ALL_STEPS, source + '\nroute = "/api/miniprot"\n'),
+    import engine
+    from engine_worker import Engine
+    _assert_held_miniprot_contract(wsl._ALL_STEPS, Engine.OPS, engine.run_miniprot)
+    for steps, ops in [
+        (wsl._ALL_STEPS + ["miniprot"], Engine.OPS),
+        (wsl._ALL_STEPS, {**Engine.OPS, "miniprot": lambda b: None}),
+        (wsl._ALL_STEPS, {**Engine.OPS, "homology": engine.run_miniprot}),
     ]:
         with pytest.raises(AssertionError):
-            _assert_held_miniprot_contract(steps, mutant)
+            _assert_held_miniprot_contract(steps, ops, engine.run_miniprot)
 
 
 def test_genome_retry_text_truthfully_says_partial_zip_restarts_and_is_mutation_sensitive():

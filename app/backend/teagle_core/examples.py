@@ -15,11 +15,14 @@ from . import appdirs
 # (accession, label, organism, expected class — as published, for the user to check the call against)
 CATALOG = [
     ("M11240", "copia", "Drosophila melanogaster",
-     "LTR retrotransposon · Copia (Ty1) — integrase N-terminal to RT"),
+     "LTR retrotransposon · Copia (Ty1) — integrase N-terminal to RT. NCBI lists M11240 as replaced by "
+     "X04456 (an identical 5,146-bp sequence)"),
     ("M12927", "gypsy (mdg4)", "Drosophila melanogaster",
-     "LTR retrotransposon · Gypsy (Ty3) — integrase C-terminal to RT; env-bearing errantivirus"),
+     "LTR retrotransposon · Gypsy (Ty3) — integrase C-terminal to RT. The published element also carries an "
+     "env-like ORF that TEagle does not treat as retroviral-envelope evidence, so the call stays Gypsy and is not an ERV call"),
     ("M80343", "LINE-1 (L1.2)", "Homo sapiens",
-     "Non-LTR retrotransposon · LINE — RT, no integrase, 3′ poly-A tail"),
+     "Non-LTR retrotransposon · LINE — ORF1p plus ORF2p with the endonuclease N-terminal to RT; no integrase; "
+     "3′ poly-A tail. NCBI lists M80343 as replaced by AH005269"),
     ("X01005", "Tc1", "Caenorhabditis elegans",
      "DNA transposon · Tc1/Mariner — transposase between terminal inverted repeats"),
     ("X05424", "Activator (Ac)", "Zea mays",

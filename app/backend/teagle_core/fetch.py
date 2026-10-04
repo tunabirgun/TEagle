@@ -2,7 +2,7 @@
 Verifies metadata (esummary) before pulling the sequence (efetch). Errors are typed
 and explicit; a failed or empty fetch is never returned as a sequence."""
 from __future__ import annotations
-import os, ssl, urllib.request, urllib.parse, urllib.error, json, re, datetime, hashlib, time, threading
+import os, ssl, urllib.request, urllib.parse, urllib.error, json, re, datetime, hashlib, time, threading, bisect
 
 # Verify TLS against certifi's CA bundle when available (some Windows Pythons lack the roots for UCSC/EBI/
 # NCBI chains); falls back to the system default. Hardens every HTTPS call the app makes.
@@ -27,7 +27,10 @@ def _ssl_ctx():
 EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
 ENA = "https://www.ebi.ac.uk/ena/browser/api/fasta/"
 TOOL = "TEagle"
-ACC_RE = re.compile(r"^[A-Za-z]{1,6}_?\d+(\.\d+)?$")   # GenBank/RefSeq nucleotide accession
+ACC_RE = re.compile(r"^(?:NZ_)?[A-Za-z]{1,6}_?\d+(\.\d+)?$")   # GenBank/RefSeq nucleotide accession
+_PROTEIN_ACC = re.compile(r"^(?:NP|XP|YP|WP|AP|ZP)_\d", re.I)       # RefSeq protein prefixes
+_ASSEMBLY_ACC = re.compile(r"^GC[AF]_\d", re.I)
+GENE_MODEL_VERSION = 2      # bump when build_gene_model output changes, so cached models are rebuilt
 
 # On-disk cache: an accession.version identifies a fixed sequence version, so a fetched sequence is reused instead of
 # re-downloaded on every run (the cached FASTA + original retrieval time travel with results).
@@ -63,25 +66,63 @@ class FetchError(Exception):
     pass
 
 
-def _get(url: str, timeout: int = 25) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": "TEagle/0.1 (+local)"})
+_NCBI_GAP = 0.34            # NCBI allows 3 requests/s without an API key
+_last_ncbi = [0.0]
+_ncbi_lock = threading.Lock()
+
+
+def _pace(url: str):
+    if "ncbi.nlm.nih.gov" not in url:
+        return
+    with _ncbi_lock:
+        wait = _last_ncbi[0] + _NCBI_GAP - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        _last_ncbi[0] = time.monotonic()
+
+
+def _retry_delay(e, attempt: int) -> float:
     try:
-        with urllib.request.urlopen(req, timeout=timeout, context=_ssl_ctx()) as r:
-            return r.read().decode("utf-8", "replace")
-    except urllib.error.HTTPError as e:
-        raise FetchError(f"HTTP {e.code} from source")
-    except urllib.error.URLError as e:
-        raise FetchError(f"network error: {getattr(e, 'reason', e)}")
-    except Exception as e:                                 # timeout etc.
-        raise FetchError(str(e))
+        return min(float(e.headers.get("Retry-After")), 10.0)
+    except (AttributeError, TypeError, ValueError):
+        return float(2 ** attempt)
+
+
+def _get(url: str, timeout: int = 25) -> str:
+    from . import __version__
+    req = urllib.request.Request(url, headers={"User-Agent": f"TEagle/{__version__} (+local)"})
+    for attempt in range(3):                               # 429/5xx are retried twice; nothing else is
+        _pace(url)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout, context=_ssl_ctx()) as r:
+                return r.read().decode("utf-8", "replace")
+        except urllib.error.HTTPError as e:
+            if (e.code == 429 or 500 <= e.code < 600) and attempt < 2:
+                time.sleep(_retry_delay(e, attempt))
+                continue
+            if e.code == 429:
+                raise FetchError("HTTP 429 from source — the server is rate-limiting requests; "
+                                 "wait a few seconds and try again")
+            if e.code >= 500:
+                raise FetchError(f"HTTP {e.code} from source — the service is temporarily unavailable; try again shortly")
+            raise FetchError(f"HTTP {e.code} from source")
+        except urllib.error.URLError as e:
+            raise FetchError(f"network error: {getattr(e, 'reason', e)} — check the internet connection and try "
+                             "again (previously fetched accessions still load from the local cache)")
+        except Exception as e:                             # timeout etc.
+            raise FetchError(str(e))
 
 
 def validate_accession(acc: str) -> str:
     acc = (acc or "").strip()
     if not acc:
         raise FetchError("no accession provided")
+    if _ASSEMBLY_ACC.match(acc):
+        raise FetchError(f"'{acc}' is an assembly accession, not a sequence record — use 'Fetch by coordinate'")
+    if _PROTEIN_ACC.match(acc):
+        raise FetchError(f"'{acc}' is a protein accession — TEagle fetches nucleotide records (e.g. X04456)")
     if not ACC_RE.match(acc):
-        raise FetchError(f"'{acc}' is not a valid nucleotide accession (e.g. M11240, NC_003075.7)")
+        raise FetchError(f"'{acc}' is not a valid nucleotide accession (e.g. X04456, AB087615)")
     return acc
 
 
@@ -108,6 +149,8 @@ def resolve(acc: str) -> dict:
         "length": r.get("slen"),
         "moltype": r.get("moltype", ""),
         "source": "NCBI nuccore",
+        "status": r.get("status") or "",                       # display-only: NCBI record status (live/replaced/...)
+        "replacedBy": r.get("replacedby") or "",
     }
 
 
@@ -181,56 +224,83 @@ def _dedup(ivs: list, identity_fields=()) -> list:
     return sorted(out, key=lambda x: x["start"])
 
 
+def _transcript_accession(raw: str):
+    """The nucleotide accession inside a /transcript_id value ('NM_1.2', 'gb|AB1.1|', 'ref|NM_1.2|'), else None.
+    Local identifiers (gnl|, lcl|) and anything that is not a whole accession field are never guessed at."""
+    raw = (raw or "").strip()
+    if raw.lower().startswith(("gnl|", "lcl|")):
+        return None
+    for field in raw.split("|"):
+        field = field.strip()
+        if ACC_RE.match(field) and not _PROTEIN_ACC.match(field) and not _ASSEMBLY_ACC.match(field):
+            return field
+    return None
+
+
 def build_gene_model(feats: list) -> dict:
     """Reduce a feature table to exon/intron/CDS segments. Introns and exons are taken from
-    explicit features when present, else derived from spliced (joined) CDS/mRNA coordinates."""
+    explicit features when present, else derived from spliced (joined) CDS/mRNA coordinates.
+    Introns are only ever derived WITHIN one join (one CDS/mRNA feature) or one gene's explicit exons, never
+    across separate features or genes, and every derived intron is flagged derived."""
     def collect(kind):
         out = []
         group_index = 0
-        for f in feats:
+        for fi, f in enumerate(feats):
             if f["type"] == kind:
                 group_index += 1
-                label = f["qualifiers"].get("number") or f["qualifiers"].get("gene") or f["qualifiers"].get("product") or ""
+                q = f["qualifiers"]
+                label = q.get("number") or q.get("gene") or q.get("product") or ""
                 intervals = [dict(iv) for iv in f["intervals"]]
+                # `_unit` names what one chain of exons belongs to; it never leaves this function
+                unit = f"{kind}_{fi}" if kind != "exon" else "exon:" + (q.get("gene") or q.get("locus_tag") or
+                                                                       q.get("transcript_id") or "")
                 if kind == "CDS":
                     strands = {iv.get("strand", "+") for iv in intervals}
                     strand = next(iter(strands)) if len(strands) == 1 else None
                     intervals.sort(key=lambda iv: iv["start"], reverse=(strand == "-"))
+                    # INSDC: codon_start defaults to 1, and NCBI's feature table omits it in that case; only a
+                    # qualifier that is present but not 1/2/3 leaves the phase unavailable
                     raw_start = f["qualifiers"].get("codon_start")
-                    phase = int(raw_start) - 1 if str(raw_start or "") in {"1", "2", "3"} else None
+                    phase = 0 if raw_start is None else (int(raw_start) - 1 if str(raw_start) in {"1", "2", "3"} else None)
                     for iv in intervals:
-                        row = {**iv, "note": label, "cds_group": f"cds_{group_index}", "phase": phase}
+                        row = {**iv, "note": label, "cds_group": f"cds_{group_index}", "phase": phase, "_unit": unit}
                         out.append(row)
                         length = iv["end"] - iv["start"]
                         phase = ((3 - ((length - phase) % 3)) % 3
                                  if phase is not None and length > phase else None)
                 else:
-                    out.extend({**iv, "note": label} for iv in intervals)
+                    out.extend({**iv, "note": label, "_unit": unit + (":" + iv["strand"] if kind == "exon" else "")}
+                               for iv in intervals)
         return out
     exons, introns, cds, mrna = collect("exon"), collect("intron"), collect("CDS"), collect("mRNA")
     derived_exons = derived_introns = False
     if not exons and (mrna or cds):                            # derive exons from a spliced transcript/CDS
-        exons = [{**dict(x), "derived": True} for x in (mrna or cds)]   # flag each so the viewer marks them exon* (honest)
+        # flag each so the viewer marks them exon* (honest); the CDS-only keys do not describe an exon
+        exons = [{**{k: v for k, v in x.items() if k not in ("cds_group", "phase")}, "derived": True}
+                 for x in (mrna or cds)]
         derived_exons = True
-    exons = _dedup(exons)
-    if not introns and len(exons) > 1:                         # introns = gaps between consecutive exons
-        for a, b in zip(exons, exons[1:]):
-            if b["start"] > a["end"]:
-                introns.append({"start": a["end"], "end": b["start"], "strand": a.get("strand", "+"), "note": ""})
+    chains = {}
+    for e in exons:
+        chains.setdefault(e["_unit"], []).append(e)
+    if not introns:                                            # introns = gaps between consecutive exons OF ONE UNIT
+        for chain in chains.values():
+            chain = _dedup(chain)
+            for a, b in zip(chain, chain[1:]):
+                if b["start"] > a["end"]:
+                    introns.append({"start": a["end"], "end": b["start"], "strand": a.get("strand", "+"),
+                                    "note": "", "derived": True})
         derived_introns = bool(introns)
-    exons, introns = _dedup(exons), _dedup(introns)
-    cds = _dedup(cds, ("strand", "phase", "cds_group"))
+    def clean(rows):
+        return [{k: v for k, v in r.items() if k != "_unit"} for r in rows]
+    exons, introns = _dedup(clean(exons)), _dedup(clean(introns))
+    cds = _dedup(clean(cds), ("strand", "phase", "cds_group"))
     # the record's OWN annotated transcripts (mRNA /transcript_id = NM_/XM_) — a splice picker offers these so a
     # user does not have to hunt for the matching transcript. Aligning one back to its own record is a CONSISTENCY
     # check (same annotation source), NOT independent confirmation — the UI relabels accordingly.
     transcripts, seen_tx = [], set()
     for f in feats:
-        raw = f.get("qualifiers", {}).get("transcript_id")
-        if not raw:
-            continue
-        m = re.search(r"[A-Z]{2}_\d+(?:\.\d+)?", raw) or re.search(r"[A-Z]{1,2}\d+(?:\.\d+)?", raw)
-        acc = m.group(0) if m else raw
-        if acc in seen_tx:
+        acc = _transcript_accession(f.get("qualifiers", {}).get("transcript_id"))
+        if not acc or acc in seen_tx:
             continue
         seen_tx.add(acc)
         q = f["qualifiers"]
@@ -244,6 +314,22 @@ def build_gene_model(feats: list) -> dict:
     })
 
 
+def _subtract(iv: dict, cuts: list) -> list:
+    pieces = [(iv["start"], iv["end"])]
+    for c in cuts:
+        nxt = []
+        for lo, hi in pieces:
+            if c["end"] <= lo or c["start"] >= hi:
+                nxt.append((lo, hi))
+                continue
+            if lo < c["start"]:
+                nxt.append((lo, c["start"]))
+            if c["end"] < hi:
+                nxt.append((c["end"], hi))
+        pieces = nxt
+    return [{**iv, "start": lo, "end": hi} for lo, hi in pieces]
+
+
 def complete_gene_model(gm: dict) -> dict:
     """Fill in exons implied by the CDS/mRNA when a record annotates some exons but omits others — e.g.
     J00265 annotates exon 1 and the last exon but NOT the middle exon that carries the first CDS segment.
@@ -252,27 +338,34 @@ def complete_gene_model(gm: dict) -> dict:
     it is safe to re-apply to an already-complete or cached model."""
     exons = [dict(e) for e in gm.get("exons", [])]
     introns, cds = gm.get("introns", []), gm.get("cds", [])
-    covered = lambda iv: any(e["start"] <= iv["start"] and iv["end"] <= e["end"] for e in exons)
-    added = False
+    derived_introns = bool(gm.get("derived_introns"))
+    bounds = [] if derived_introns else introns                # gaps derived from the exons say nothing about an absent exon
+    ordered = sorted(exons, key=lambda e: e["start"])
+    starts, reach, far = [e["start"] for e in ordered], [], -1
+    for e in ordered:
+        far = max(far, e["end"])
+        reach.append(far)
+    new = []
+    def covered(iv):
+        i = bisect.bisect_right(starts, iv["start"]) - 1       # farthest-reaching exon starting at or before iv
+        return (i >= 0 and reach[i] >= iv["end"]) or any(e["start"] <= iv["start"] and iv["end"] <= e["end"] for e in new)
     for c in cds:
         if covered(c):
             continue
-        left = max([i["end"] for i in introns if i["end"] <= c["start"]], default=c["start"])
-        right = min([i["start"] for i in introns if i["start"] >= c["end"]], default=c["end"])
-        exons.append({"start": min(left, c["start"]), "end": max(right, c["end"]),
-                      "strand": c.get("strand", "+"), "note": c.get("note", ""), "derived": True})
-        added = True
-    if not added:
+        left = max([i["end"] for i in bounds if i["end"] <= c["start"]], default=c["start"])
+        right = min([i["start"] for i in bounds if i["start"] >= c["end"]], default=c["end"])
+        new.append({"start": min(left, c["start"]), "end": max(right, c["end"]),
+                    "strand": c.get("strand", "+"), "note": c.get("note", ""), "derived": True})
+    if not new:
         return gm
-    exons = _dedup(exons)
+    exons = _dedup(exons + new)
     out = dict(gm)
     out["exons"] = exons
     out["derived_exons"] = True
-    # if the introns were DERIVED from the OLD exon gaps, a newly inserted exon leaves a stale intron
-    # overlapping it -> recompute derived introns from the completed exon set. Explicit introns are authoritative.
-    if gm.get("derived_introns"):
-        introns = [{"start": a["end"], "end": b["start"], "strand": a.get("strand", "+"), "note": ""}
-                   for a, b in zip(exons, exons[1:]) if b["start"] > a["end"]]
+    # derived introns are the gaps between the OLD exons of one unit: a newly inserted exon splits the intron it
+    # lands in. Explicit introns are authoritative and untouched.
+    if derived_introns:
+        introns = _dedup([piece for i in introns for piece in _subtract(i, new)])
         out["introns"] = introns
     out["counts"] = {"exons": len(exons), "introns": len(out.get("introns", introns)), "cds": len(cds)}
     return out
@@ -304,6 +397,46 @@ def fetch_features(acc: str) -> dict:
     return build_gene_model(parse_feature_table(_get(EUTILS + "efetch.fcgi?" + q)))
 
 
+_ENA_HEADER = re.compile(r"^>ENA\|[^|\s]+\|(\S+)(.*)$")
+
+
+def _ena_header(fasta: str, accession: str) -> str:
+    """ENA names its record '>ENA|acc|acc.ver ...'. When that third field is exactly the accession NCBI
+    resolved, rewrite the header to '>acc.ver ...' (as fetch_fasta_range does); anything else is left untouched,
+    so a record that does not match the verified metadata is never presented as the fetched accession."""
+    head, nl, rest = fasta.partition("\n")
+    m = _ENA_HEADER.match(head.strip())
+    return f">{accession}{m.group(2)}{nl}{rest}" if m and m.group(1) == accession else fasta
+
+
+def _canonical_urls(meta: dict):
+    """The endpoint and record URL of the resolved accession.version (a cache written from the typed text
+    names the unversioned form, which never matched the verified record)."""
+    acc = meta.get("accession")
+    if not acc:
+        return
+    if str(meta.get("source", "")).startswith("ENA"):
+        meta["endpoint"], meta["sourceUrl"] = ENA + acc, "https://www.ebi.ac.uk/ena/browser/view/" + acc
+    else:
+        meta["sourceUrl"] = "https://www.ncbi.nlm.nih.gov/nuccore/" + acc
+
+
+def _attach_features(acc: str, meta: dict):
+    """Best-effort gene annotation (exon/intron/CDS); never blocks the fetch. featuresStatus records whether the
+    table was read ('ok'), held nothing ('none') or could not be fetched ('failed' — retried on the next use)."""
+    meta.pop("features", None)
+    try:
+        gm = fetch_features(acc)
+    except Exception:
+        meta["featuresStatus"] = "failed"
+    else:
+        if gm["counts"]["exons"] or gm["counts"]["cds"]:
+            meta["features"], meta["featuresStatus"] = gm, "ok"
+        else:
+            meta["featuresStatus"] = "none"
+    meta["featuresModel"] = GENE_MODEL_VERSION
+
+
 def retrieve(acc: str, refresh: bool = False) -> dict:
     """Full retrieval: metadata + sequence, with provenance fields. Cached on disk per accession
     so the same organism is not re-downloaded on every run; `refresh=True` forces a fresh pull."""
@@ -311,12 +444,18 @@ def retrieve(acc: str, refresh: bool = False) -> dict:
     if not refresh:
         cached = _read_cache(acc)
         if cached and cached.get("fasta"):
+            _canonical_urls(cached)
+            if cached.get("featuresStatus") == "failed" or cached.get("featuresModel") != GENE_MODEL_VERSION:
+                _attach_features(acc, cached)                  # sequence and retrievedUtc stay as first retrieved
+                _write_cache(acc, cached)
             cached["fromCache"] = True
             cached["servedUtc"] = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
             return cached
     meta = resolve(acc)
     served = []
-    fasta = fetch_fasta(acc, served)
+    fasta = fetch_fasta(meta["accession"], served)             # the verified accession.version, from NCBI or ENA alike
+    if served and served[0][0].startswith("ENA"):
+        fasta = _ena_header(fasta, meta["accession"])
     seq = "".join(l for l in fasta.splitlines() if not l.startswith(">"))
     meta["fasta"] = fasta
     meta["seq_length"] = len(seq)
@@ -325,15 +464,9 @@ def retrieve(acc: str, refresh: bool = False) -> dict:
         meta["source"], meta["endpoint"] = served[0]
     else:
         meta["endpoint"] = EUTILS + "efetch.fcgi"
-    meta["sourceUrl"] = ("https://www.ebi.ac.uk/ena/browser/view/" + acc if meta.get("source", "").startswith("ENA")
-                         else "https://www.ncbi.nlm.nih.gov/nuccore/" + acc)
+    _canonical_urls(meta)
     meta["fromCache"] = False
-    try:                                                       # best-effort gene annotation (exon/intron/CDS); never blocks the fetch
-        gm = fetch_features(acc)
-        if gm["counts"]["exons"] or gm["counts"]["cds"]:
-            meta["features"] = gm
-    except Exception:
-        pass
+    _attach_features(acc, meta)
     _write_cache(acc, meta)
     return meta
 
@@ -436,9 +569,23 @@ def _assembly_map_dir() -> str:
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "assemblies")
 
 
+def _sequence_reports(assembly_accession: str) -> list:
+    """Every sequence report of an assembly. Datasets pages them (organelles come after the unplaced
+    scaffolds), so the next_page_token is followed until it runs out."""
+    reps, token, seen = [], None, set()
+    while True:
+        path = f"genome/accession/{assembly_accession}/sequence_reports?page_size=1000"
+        doc = _datasets_json(path + (f"&page_token={urllib.parse.quote(token)}" if token else ""))
+        reps += doc.get("reports", [])
+        token = doc.get("next_page_token")
+        if not token or token in seen:
+            return reps
+        seen.add(token)
+
+
 def _fetch_assembly_map_live(assembly_accession: str) -> dict:
     """Build a chromosome map for an assembly not bundled (custom organism) from NCBI Datasets."""
-    reps = _datasets_json(f"genome/accession/{assembly_accession}/sequence_reports?page_size=1000").get("reports", [])
+    reps = _sequence_reports(assembly_accession)
     mols = []
     for r in reps:
         if r.get("role") != "assembled-molecule":
@@ -449,7 +596,7 @@ def _fetch_assembly_map_live(assembly_accession: str) -> dict:
                          "refseqAccession": ref, "length": int(r.get("length", 0))})
     if not mols:
         raise CoordError(f"no assembled chromosomes found for assembly {assembly_accession}")
-    return {"assemblyAccession": assembly_accession, "molecules": mols}
+    return {"assemblyAccession": assembly_accession, "molecules": mols, "paginated": True}
 
 
 def _load_assembly_map(assembly_accession: str, refresh: bool = False) -> dict:
@@ -463,11 +610,15 @@ def _load_assembly_map(assembly_accession: str, refresh: bool = False) -> dict:
         except (json.JSONDecodeError, ValueError, OSError):
             pass
     cached = _read_cache("asm_" + assembly_accession)
-    if cached and not refresh:
+    if cached and cached.get("paginated") and not refresh:     # a map built before pagination lacks the organelles
         return cached
     doc = _fetch_assembly_map_live(assembly_accession)
     _write_cache("asm_" + assembly_accession, doc)
     return doc
+
+
+_MT_NAMES = {"M", "MT", "CHRM", "CHRMT"}
+_PLASTID_NAMES = {"C", "CHRC", "PT", "PLTD", "CHLOROPLAST"}
 
 
 def resolve_chrom(assembly_accession: str, chrom_key: str, refresh: bool = False) -> dict:
@@ -475,18 +626,26 @@ def resolve_chrom(assembly_accession: str, chrom_key: str, refresh: bool = False
     chr_name and ucsc_style_name (with/without 'chr'); M<->MT aliased."""
     amap = _load_assembly_map(assembly_accession, refresh)
     want = {chrom_key.upper(), re.sub(r"^chr", "", chrom_key, flags=re.I).upper()}
-    if want & {"M", "MT", "CHRM", "CHRMT"}:
-        want |= {"M", "MT", "CHRM"}
-    for mol in amap["molecules"]:
-        keys = set()
-        for v in (mol.get("chrName", ""), mol.get("ucscStyleName", "")):
-            if v:
-                keys.add(v.upper()); keys.add(re.sub(r"^chr", "", v, flags=re.I).upper())
-        if keys & want:
-            return {"refseqAccession": mol["refseqAccession"], "length": int(mol["length"]),
-                    "ucscStyleName": mol.get("ucscStyleName") or mol.get("chrName") or ("chr" + chrom_key),
-                    "chrName": mol.get("chrName")}
-    raise CoordError(f"chromosome '{chrom_key}' not found in assembly {assembly_accession}")
+
+    def find(names):
+        for mol in amap["molecules"]:
+            keys = set()
+            for v in (mol.get("chrName", ""), mol.get("ucscStyleName", "")):
+                if v:
+                    keys.add(v.upper()); keys.add(re.sub(r"^chr", "", v, flags=re.I).upper())
+            if keys & names:
+                return mol
+    mol = find(want)                                           # an exact name is never shadowed by an alias
+    for group in (_MT_NAMES, _PLASTID_NAMES):                  # organelle synonyms biologists paste (Ensembl, TAIR, UCSC)
+        if mol is None and want & group:
+            mol = find(group)
+    if mol is not None:
+        return {"refseqAccession": mol["refseqAccession"], "length": int(mol["length"]),
+                "ucscStyleName": mol.get("ucscStyleName") or mol.get("chrName") or ("chr" + chrom_key),
+                "chrName": mol.get("chrName")}
+    names = [m.get("chrName") or m.get("ucscStyleName") or "" for m in amap["molecules"]]
+    shown = ", ".join(n for n in names[:40] if n) + (f", … (+{len(names) - 40} more)" if len(names) > 40 else "")
+    raise CoordError(f"chromosome '{chrom_key}' not found in assembly {assembly_accession} (available: {shown})")
 
 
 def resolve_assembly(query: str) -> dict:
@@ -548,6 +707,13 @@ def add_custom_assembly(query: str) -> dict:
              "resolvedUtc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
     with _CUSTOM_ASM_LOCK:                                # atomic read-modify-write: a second add cannot read a stale store and clobber this entry
         store = load_custom_assemblies()
+        pinned = COORD_ASSEMBLIES.get(org) or store.get(org)
+        if pinned:                                            # one assembly per organism: refuse, never a false success
+            if pinned["assemblyAccession"] == entry["assemblyAccession"]:
+                return {"organism": org, **entry}
+            raise CoordError(f"{org} is already pinned to {pinned['assemblyName']} ({pinned['assemblyAccession']}); "
+                             f"one assembly per organism is supported, so {entry['assemblyName']} "
+                             f"({entry['assemblyAccession']}) was not added")
         store[org] = entry
         os.makedirs(os.path.dirname(_CUSTOM_ASM_PATH), exist_ok=True)
         tmp = _CUSTOM_ASM_PATH + ".tmp"
@@ -596,7 +762,7 @@ def retrieve_coords(regions_text: str, assembly_accession: str, assembly_name: s
         cached = _read_cache(key)
         if cached and cached.get("fasta"):
             cached["fromCache"] = True
-            cached["source"]["retrievedUtc"] = _now()       # display-only; excluded from the seal
+            cached["servedUtc"] = _now()                    # source.retrievedUtc stays the original retrieval time
             return cached
     fastas = []
     for i, (reg, r) in enumerate(zip(regions, resolved)):

@@ -1,5 +1,5 @@
 """WSL2 install-from-app logic (elevated Windows-side path). The feature can't be end-to-end tested
-where WSL is already present, so these lock down the decomposable parts: the elevated .bat contents,
+where WSL is already present, so these lock down the decomposable parts: the elevated command line,
 the NUL-stripping Windows-log reader, the absent-vs-broken classification, and the dialog routing.
 No real `wsl --install` / UAC is ever triggered."""
 import os
@@ -35,37 +35,47 @@ def _assert_cleanup_target_contract(iss: str) -> None:
     assert "distroArg" not in backend
 
 
-# ---------- elevated .bat ----------
-def _assert_wsl2_bat_contract(bat: str) -> None:
-    assert "%~dp0" in bat and "TEAGLE_WSL_LOG" in bat
-    assert "EnableDelayedExpansion" in bat
-    assert bat.count('set "TEAGLE_INSTALL_RC=!ERRORLEVEL!"') == 2
-    marker = next(line for line in bat.splitlines() if "DONE-WSL" in line)
-    assert "!TEAGLE_INSTALL_RC!" in marker and "%ERRORLEVEL%" not in marker
-    assert bat.index("wsl.exe --status") < bat.index("DONE-WSL")
+# ---------- elevated command line (no staged batch file) ----------
+def _assert_elevated_contract(params: str) -> None:
+    assert "/v:on" in params and "set TEAGLE_RC=!errorlevel!" in params
+    marker = params[params.index("DONE-WSL"):]
+    assert "!TEAGLE_RC!" in marker and "%errorlevel%" not in params.lower()
+    assert params.index("--status") < params.index("DONE-WSL")
 
 
-def test_wsl2_bat_script_has_install_fallback_and_terminal_marker():
-    bat = wsl._wsl2_bat_script()
-    assert "wsl.exe --install -d Ubuntu --no-launch" in bat      # primary: register distro, no OOBE
-    assert "retrying: wsl --install" in bat                      # fallback for older wsl.exe
-    assert "--set-default-version 2" in bat and "|| rem" in bat  # tolerant pre-reboot
-    _assert_wsl2_bat_contract(bat)
+def test_elevated_command_has_no_interactive_fallback_and_a_terminal_marker():
+    exe, params = wsl._wsl2_elevated_command(r"C:\Users\x\AppData\Local\TEagle\wsl_win_install.log")
+    assert exe.lower().endswith("cmd.exe")
+    assert params.count("--install") == 1 and "--install -d Ubuntu --no-launch" in params   # never a plain `wsl --install`
+    assert "--set-default-version 2" in params                    # tolerated to fail pre-reboot (no `&&` chain)
+    assert ".bat" not in params.lower()                           # nothing staged in a user-writable folder
+    _assert_elevated_contract(params)
 
 
-def test_wsl2_bat_preserves_install_rc_and_never_embeds_unicode_user_path():
-    bat = wsl._wsl2_bat_script()
-    bat.encode("ascii")                                         # staging is byte-preserving, never errors="ignore"
-    assert "İpek" not in bat and "C:\\Users" not in bat       # cmd resolves the Unicode directory via %~dp0
+def test_elevated_command_contract_gate_rejects_injected_defects():
+    _exe, params = wsl._wsl2_elevated_command(r"C:\x\log.txt")
     mutants = [
-        bat.replace("!TEAGLE_INSTALL_RC! (restart", "%ERRORLEVEL% (restart", 1),
-        bat.replace("%~dp0", "C:\\Users\\İpek\\AppData\\Local\\TEagle\\", 1),
-        bat.replace('set "TEAGLE_INSTALL_RC=!ERRORLEVEL!"', "rem lost install rc", 1),
+        params.replace("DONE-WSL !TEAGLE_RC!", "DONE-WSL %errorlevel%", 1),
+        params.replace("set TEAGLE_RC=!errorlevel!", "rem lost install rc", 1),
+        params.replace("/v:on ", "", 1),
     ]
     for mutant in mutants:
-        with pytest.raises((AssertionError, UnicodeEncodeError)):
-            mutant.encode("ascii")
-            _assert_wsl2_bat_contract(mutant)
+        with pytest.raises(AssertionError):
+            _assert_elevated_contract(mutant)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="runs the generated cmd.exe command line")
+def test_elevated_command_survives_a_unicode_user_directory(tmp_path):
+    import subprocess
+    stub = tmp_path / "wslstub.cmd"
+    stub.write_text("@echo off\r\necho stub %*\r\nexit /b 0\r\n")
+    folder = tmp_path / "İpek Çelik"
+    folder.mkdir()
+    log = folder / wsl._WIN_WSL_LOG
+    exe, params = wsl._wsl2_elevated_command(str(log), wsl_exe=str(stub))
+    subprocess.run(f"{exe} {params}", capture_output=True, timeout=60)
+    text = log.read_bytes().decode("utf-8", "ignore")
+    assert "DONE-WSL 0" in text and "stub --install -d Ubuntu --no-launch" in text
 
 
 def test_windows_clean_install_preserves_shared_micromamba_root():
@@ -73,7 +83,7 @@ def test_windows_clean_install_preserves_shared_micromamba_root():
     root = Path(__file__).resolve().parents[1]
     iss = (root / "installer" / "teagle.iss").read_text(encoding="utf-8")
     clean = next(line for line in iss.splitlines() if "Exec(wsl, '-d" in line)
-    assert "~/micromamba/envs/te " in clean
+    assert "then rm -rf ~/micromamba/envs/te; fi;" in clean and "-f ~/micromamba/envs/te/.teagle-owned" in clean
     assert "~/micromamba/envs/teagle-vrna" in clean
     assert "~/teagle_genomes" in clean and "~/teagle_libs" in clean
     assert "~/micromamba " not in clean
@@ -177,17 +187,20 @@ def test_wsl2_installing_terminal_markers(monkeypatch, tmp_path):
 
 
 # ---------- absent vs registered-but-broken ----------
-def test_components_status_absent_offers_install(monkeypatch):
+def test_components_status_absent_offers_install(monkeypatch, tmp_path):
+    monkeypatch.setattr(wsl.appdirs, "user_data_dir", lambda: str(tmp_path))
     monkeypatch.setattr(wsl, "available", lambda: {"wsl2": False, "distro": None, "error": "no distro"})
     w = _wsl2(wsl.components_status())
     assert "Install WSL" in w["guide"]
     assert w.get("installable") == (os.name == "nt")            # Windows-only capability
 
 
-def test_components_status_broken_distro_offers_unregister(monkeypatch):
-    monkeypatch.setattr(wsl, "available", lambda: {"wsl2": False, "distro": "Ubuntu-24.04", "error": "launch failed"})
+def test_components_status_broken_distro_offers_unregister(monkeypatch, tmp_path):
+    monkeypatch.setattr(wsl.appdirs, "user_data_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(wsl, "available", lambda: {"wsl2": False, "distro": "Ubuntu-24.04",
+                                                    "reason": "start_failed", "error": "Wsl/Service/0x80070002"})
     w = _wsl2(wsl.components_status())
-    assert "unregister Ubuntu-24.04" in w["guide"]              # broken ext4.vhdx needs unregister+reinstall
+    assert "unregister Ubuntu-24.04" in w["guide"]              # a confirmed start failure (broken ext4.vhdx)
 
 
 def test_install_wsl2_is_windows_only(monkeypatch):

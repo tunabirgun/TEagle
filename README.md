@@ -44,7 +44,7 @@ TEagle installs and verifies its optional WSL2 environment from the graphical in
 
 ## Results and exports
 
-The native application exports tables as **XLSX/CSV/TSV**, figures as **SVG/PNG/vector PDF**, and sequence or annotation data as **GFF3/BED/FASTA** where applicable. Validated runs can also export provenance JSON and complete-result JSON. The legacy browser has a deliberately narrower export surface and does not provide XLSX, PDF, provenance JSON, or complete-result JSON.
+The native application exports tables as **XLSX/CSV/TSV**, figures as **SVG/PNG/vector PDF**, and sequence or annotation data as **GFF3/BED/FASTA** where applicable. Validated runs can also export provenance JSON and complete-result JSON.
 
 Right-click tables, features, and gel bands for context-specific actions such as copying a row, extracting sequence or flanks, sending coordinates to primer design, or exporting the selected result.
 
@@ -68,7 +68,7 @@ The public results archive contains 152 files and has SHA-256 `63559355f723a4a45
 
 The deployment evaluation executed 12 deterministic graphical-workflow cases on each of four exact Windows 10/11 guests. Ten required formats per case produced 480 verified export observations, 48 result documents, 48 manifests, and 144 cross-guest identity sets. These results support consistency across those exact guest observations; biological accuracy and wet-lab performance remain separate questions.
 
-Every analysis records scientific software and database versions, parameters, and input checksums. Manifest schema 0.2 and analysis result schema 1.0 use deterministic SHA-256 content seals under an unkeyed integrity model; source-context schema 1.0 binds validated public-record identity to the sequence actually analysed. The seals detect accidental or uncoordinated changes but are not author authentication or a substitute for archiving the referenced software, databases, and inputs.
+Every analysis records scientific software and database versions, parameters, and input checksums. Manifest schema 0.2 and analysis result schema 1.1 (4.0.0 documents at schema 1.0 still validate) use deterministic SHA-256 content seals under an unkeyed integrity model; source-context schema 1.0 binds validated public-record identity to the sequence actually analysed. The seals detect accidental or uncoordinated changes but are not author authentication or a substitute for archiving the referenced software, databases, and inputs.
 
 ## Develop and build
 
@@ -79,7 +79,7 @@ python -m pytest tests/ -q
 powershell -File installer/build_installer.ps1
 ```
 
-The installer pipeline freezes the application, checks the bundle, runs the headless self-test, and then builds the Inno Setup installer. Optional `@wsl` and `@network` test groups are gated separately.
+Source launches need Python 3.12 exactly and install the pinned packages into the interpreter that runs them, so use a virtual environment; `python app/teagle.py --check` only reports and never installs. The installer pipeline freezes the application, checks the bundle, runs the headless self-test, and then builds the Inno Setup installer. Optional `@wsl` and `@network` test groups are gated separately.
 
 ## Documentation
 

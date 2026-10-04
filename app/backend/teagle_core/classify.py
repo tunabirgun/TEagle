@@ -20,6 +20,56 @@ def _rep(domains, code):
     return max(ds, key=lambda d: d.get("score", 0.0)) if ds else None
 
 
+def _same_strand(domains, a, b):
+    # is there an `a` hit and a `b` hit on one strand? (RT with a tyrosine recombinase is DIRS only when co-oriented)
+    return any(x.get("domain") == a and y.get("domain") == b and x.get("strand", "+") == y.get("strand", "+")
+               for x in domains for y in domains)
+
+
+def _wicker_order(te_class, outcome):
+    # the Wicker order the call sits in (or its withheld/unassigned state), as distinct from the domain architecture
+    if outcome == "withheld":
+        return "withheld"
+    tc = te_class or ""
+    if tc.startswith("LTR"):
+        return "LTR"
+    if tc.startswith("DNA/"):
+        return "TIR"
+    return tc if tc in ("LINE", "DIRS") else "unassigned"
+
+
+def _tpase_family(tp_hits):
+    """Family of the strongest transposase hit (not a fixed hAT-first precedence): (superfamily, te_class,
+    classes_conflict). Shared by the structure-aware and structure-free paths."""
+    best = max(tp_hits, key=lambda d: d.get("score", 0.0))
+    bcl = best.get("class", "")
+    if "hAT" in bcl:
+        superfamily = "hAT"
+    elif "Tc1-Mariner" in bcl:
+        superfamily = "Tc1/Mariner"
+    elif "CACTA" in bcl:
+        superfamily = "CACTA (En/Spm)"
+    elif "MULE" in bcl:
+        superfamily = "MULE (Mutator)"
+    elif "IS4" in bcl:
+        # PF13843 is Pfam's generic IS4-like DDE family; piggyBac sits inside it but so do others,
+        # so the call names the family that was actually matched, not the best-known member.
+        superfamily = "IS4-like DDE (piggyBac group)"
+    elif "DDE" in bcl:
+        superfamily = "DDE transposon"
+    else:
+        superfamily = "DNA transposon"
+    # take the leading token before any parenthetical ("CACTA (En/Spm)" -> "CACTA"), but KEEP a
+    # compound superfamily name whose "/" joins two members ("Tc1/Mariner"): rewrite that "/" to "-"
+    # so the full superfamily survives without a second slash (the "/" in te_class separates class
+    # from subclass). Truncating at "/" dropped "Mariner" and asserted a narrower call than the
+    # domain evidence supports (Tc1/Mariner is one Wicker superfamily).
+    token = superfamily.split(" ")[0].replace("/", "-")
+    # the generic "DNA transposon" fallback would collapse to a redundant "DNA/DNA"; name it honestly
+    return (superfamily, "DNA/" + (token if token != "DNA" else "unclassified"),
+            len({d.get("class") for d in tp_hits}) > 1)
+
+
 def _brackets(term, d):
     # do a terminal-repeat pair's two arms enclose this domain hit? an autonomous TIR transposon's
     # transposase lies BETWEEN the ends its own product binds. None when either side is unavailable.
@@ -36,6 +86,20 @@ def _brackets(term, d):
 _GAG_CORE = {"Gag_p24", "Gag_p24_C", "Gag_p10", "PEG10_N-capsid"}
 
 _CODE_ORDER = ["ORF1", "GAG", "PR", "EN", "RT", "RNaseH", "INT", "YR", "CHR", "ENV", "TPase", "HEL"]
+
+# Profiles of retrovirus-specific capsid/matrix and envelope proteins. Retroviruses and ERVs share the
+# Gypsy pol order (PR-RT-RH-INT), so on a hit from one of these the integrase-after-RT test cannot separate
+# Gypsy from Retrovirus/ERV (Wicker 2007 sibling superfamilies) and the superfamily is withheld. TLV_coat is
+# excluded on purpose: it also annotates the envelope of insect Ty3/gypsy elements (errantiviruses).
+_RETROVIRAL_PROFILES = frozenset({"Gag_p24", "Gag_p24_C", "Gag_p10", "HERV-K_env_2", "GP41"})
+RETROVIRAL_UNDETERMINED = ("LTR retrotransposon (superfamily undetermined; retroviral-type gag/env — Gypsy, "
+                           "Bel-Pao and Retrovirus/ERV are not separated by the bundled panel)")
+
+# Longest chance inverted repeat over five seeds and the number of random sequences behind it
+# (benchmarks/chance_tir.py). Constants because the benchmark output is not shipped; a claim about the live
+# detector is checked by a seeded test against the detector itself, not against the recorded file.
+CHANCE_TIR_MAX_BP = 17
+CHANCE_TIR_SEQUENCES = 22500
 
 # What has to accompany a reverse transcriptase before a Class I call is licensed.
 #
@@ -88,6 +152,68 @@ def _refine_tsd(tsd, superfamily, seq):
         tsd.update(refined)                              # correct length/motif/coords/matched_expected in place
 
 
+def _recover_target_site(structural, tir_ev, superfamily, seq):
+    """A Tc1/Mariner TIR on a flanked record runs through the palindromic TA target site, so detect_all reports
+    the arms 2 bp too long and no TSD. Only a caller that knows the superfamily may trim them (structural.
+    palindromic_target_site); the rows are updated in place so the caller's list and the verdict stay in step.
+    Returns True when the TIR row was trimmed or a TSD row was set."""
+    motif = structural_mod.TSD_EXPECT["Tc1/Mariner"][3]
+    found = structural_mod.palindromic_target_site(seq, tir_ev, motif=motif) if seq and tir_ev else None
+    if not found or not found[1]:
+        return False
+    tir, tsd = found
+    tir_ev.clear()
+    tir_ev.update(tir)
+    old = next((e for e in structural if e["type"].startswith("TSD") and not e.get("advisory")), None)
+    if old is None:
+        structural.insert(next(i for i, e in enumerate(structural) if e is tir_ev) + 1, tsd)
+    else:
+        old.clear()
+        old.update(tsd)
+    return True
+
+
+def _tsd_expectation(c):
+    lo, hi = c["expected_range"]
+    return (f"{lo} bp" if lo == hi else f"{lo}-{hi} bp") + (f" ({c['expected_motif']})" if c.get("expected_motif") else "")
+
+
+def _tsd_observed(c):
+    lo, hi = c["expected_range"]
+    return f"{c['observed']} bp" + (f" ({c['observed_motif']})" if c.get("observed_motif") and lo <= c["observed"] <= hi else "")
+
+
+def _tsd_chance_clause(tsd):
+    """Why a congruent or undiagnostic TSD does not establish the insertion site, or None when it does."""
+    flag = (tsd or {}).get("chance_level")
+    if flag is False:
+        return None
+    if flag is None:
+        return "its chance probability was not assessed"
+    p = tsd.get("chance_probability")
+    return (f"a flanking direct repeat of {tsd.get('length')} bp is short enough to arise by chance" +
+            (f" (p = {p:.2g})" if p is not None else ""))
+
+
+def _scan_gap(seq, kind):
+    """Parenthetical saying which part of a long record the terminal-repeat scan could not see, or ''.
+    Appended where a terminal repeat is reported absent: absence is only meaningful within the scanned windows."""
+    if not seq:
+        return ""
+    sc = structural_mod.scan_scope(seq)
+    n = sc["record_bp"]
+    if kind == "LTR":
+        wide = narrow = sc["ltr_seed_window_bp"]
+    else:
+        wide, narrow = sc["tir_seed_window_bp"], sc["tir_joint_window_bp"]
+    if 2 * wide >= n and 2 * narrow >= n:
+        return ""
+    if 2 * wide >= n:
+        return (f" (the record is {n:,} bp and short or imperfect terminal repeats were searched only within "
+                f"{narrow:,} bp of each end)")
+    return f" (the record is {n:,} bp and terminal repeats were searched only within {wide:,} bp of each end)"
+
+
 def _classify_without_structure(domains, domains_ok=True, orfs_unscanned=0):
     """Classify only positive coding evidence when structural detection did not run."""
     codes = [d.get("domain") for d in domains if d.get("domain")]
@@ -107,7 +233,7 @@ def _classify_without_structure(domains, domains_ok=True, orfs_unscanned=0):
         superfamily = "classification withheld (structural scan unavailable)"
         ledger.append({"dependency": "domains", "status": "complete",
                        "statement": "no tested protein domain was detected; structural evidence is unavailable"})
-    elif "RT" in cset and "YR" in cset and "INT" not in cset:
+    elif "INT" not in cset and _same_strand(domains, "RT", "YR"):
         klass, superfamily, te_class = ("Class I · retrotransposon",
                                         "DIRS-group (coding architecture; structure unassessed)", "DIRS")
         order = "–".join(_ordered(cset))
@@ -120,8 +246,9 @@ def _classify_without_structure(domains, domains_ok=True, orfs_unscanned=0):
         ledger.append({"dependency": "domains", "status": "complete",
                        "statement": "reverse transcriptase plus DDE integrase supports the LTR order from coding architecture"})
     elif "TPase" in cset:
-        klass, superfamily, te_class = ("Class II · DNA transposon",
-                                        "DNA transposon (transposase detected; termini unassessed)", "DNA/unclassified")
+        _fam, te_class, _conflict = _tpase_family([d for d in domains if d.get("domain") == "TPase"])
+        klass = "Class II · DNA transposon"
+        superfamily = f"{_fam} (advisory: strongest transposase profile; termini unassessed)"
         order = "–".join(_ordered(cset))
         completeness = {"tier": "coding evidence present (transposase); terminal structure unassessed",
                         "kind": "DNA transposon (terminal structure unassessed)", "present": ["TPase"],
@@ -129,6 +256,9 @@ def _classify_without_structure(domains, domains_ok=True, orfs_unscanned=0):
                         "unassessed": ["TIR (5′)", "TIR (3′)"], "scope": DOMAINS_TESTED}
         ledger.append({"dependency": "domains", "status": "complete",
                        "statement": "a transposase domain supports a Class II coding assignment; termini are unassessed"})
+        if _conflict:
+            ledger.append({"dependency": "domains", "status": "complete",
+                           "statement": "multiple transposase classes detected — family assigned from the strongest-scoring hit (ambiguous)"})
     elif "HEL" in cset:
         superfamily = "Helitron-family helicase present — superfamily not called"
         ledger.append({"dependency": "domains", "status": "complete",
@@ -153,6 +283,8 @@ def _classify_without_structure(domains, domains_ok=True, orfs_unscanned=0):
     explanation = (prefix + "Structural: unavailable. "
                    f"Domains: {' · '.join(codes) or 'none'}. " + "; ".join(evidence) + ".")
     return {"class": klass, "superfamily": superfamily, "te_class": te_class, "order": order,
+            "domain_architecture": ("unavailable" if not domains_ok else "–".join(_ordered(cset)) or "none detected"),
+            "wicker_order": _wicker_order(te_class, outcome),
             "confidence": "Candidate", "evidence": evidence, "evidenceLedger": ledger,
             "outcome": outcome, "explanation": explanation, "n_domains": len(cset), "is_erv": False,
             "completeness": completeness, "domains_unavailable": not domains_ok,
@@ -178,7 +310,6 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
     tir_ev = next((e for e in credited if e["type"].startswith("TIR")), None)
     has_tir = tir_ev is not None
     has_tsd = any(e["type"].startswith("TSD") for e in credited)
-    has_polya = any(e["type"].startswith("poly") for e in credited)
     codes = [d["domain"] for d in domains]
     cset = set(codes)
     gag_core = any(d.get("hmm") in _GAG_CORE for d in domains)   # capsid/matrix, not nucleocapsid zf-CCHC alone
@@ -200,6 +331,12 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
     line_corroborated = en_ok or bool(cset & _LINE_CORROBORATION)
     retro_corroborated = line_corroborated or gag_core or bool(cset & _RETRO_CORROBORATION)
     rt, intg = rt_d is not None, int_d is not None
+    # a 3' poly-A tail belongs to a plus-strand ORF2 and a 5' poly-T to a minus-strand one; the opposite
+    # tract is an unrelated T/A run (or the other strand's copy) and is reported but not credited. The
+    # advisory polyA-signal motif row is neither: tail types are matched exactly.
+    _tails = {e["type"].split(" ")[0] for e in credited if e["type"].startswith(("poly-A", "poly-T"))}
+    has_polya = bool(_tails)
+    tail_ok = ("poly-A" if (rt_d or {}).get("strand", "+") == "+" else "poly-T") in _tails
     tpase = "TPase" in cset
     # the element's own ends: a TIR pair that actually encloses the transposase. The scan resolves the two
     # arms together, so they stand or fall as a pair; an inverted repeat elsewhere in the record is not
@@ -211,14 +348,15 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
     tpase_conflict = False
     classification_withheld = False
     rt_class_withheld = False
+    order_conflict = scan_unassessed = False
 
     # DIRS-group elements carry a tyrosine recombinase in place of the DDE integrase, so they must be
     # tested BEFORE the generic RT branch — otherwise every one of them falls through to "LINE (non-LTR)"
     # on the strength of an absent integrase. Wicker 2007 order DIRS; PASTEC's YR-vs-DDE logic
     # (Hoede 2014 PLoS ONE 9:e91929) makes the same distinction.
-    yr = "YR" in cset
+    yr = rt and _same_strand(domains, "RT", "YR")          # a recombinase on the other strand is not the DIRS architecture
     hel = "HEL" in cset          # Helitron Rep/Helicase (PF14214) — bundled and advertised, so it must be consumed
-    if rt and yr and not intg:
+    if yr and not intg:
         klass = "Class I · retrotransposon"
         superfamily, te_class = "DIRS-group (tyrosine-recombinase retroelement)", "DIRS"
         ev.append("reverse transcriptase with a tyrosine recombinase and no DDE integrase → DIRS-group "
@@ -234,10 +372,22 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
         if intg and has_ltr:
             # decide Copia vs Gypsy by strand-aware TRANSLATION order of INT vs RT, not ORF length-rank;
             # the call is only unambiguous when both are on the same strand with non-overlapping spans
-            i_nt, r_nt = (int_d.get("nt") or [0, 0]), (rt_d.get("nt") or [0, 0])
-            order_resolvable = (int_d.get("strand", "+") == rt_d.get("strand", "+") and
-                                (i_nt[1] <= r_nt[0] or r_nt[1] <= i_nt[0]))
-            if not order_resolvable:
+            r_nt = rt_d.get("nt") or [0, 0]
+            # every integrase hit that can be read against the RT (same strand, non-overlapping). Several can
+            # exist in a nested or adjacent locus, so the call must not follow the highest bit score alone:
+            # an integrase in the RT's own ORF is preferred, and integrases on both sides of the RT with no
+            # such tie-break are a conflict.
+            ints = [d for d in domains if d["domain"] == "INT" and d.get("strand", "+") == rt_d.get("strand", "+")
+                    and ((d.get("nt") or [0, 0])[1] <= r_nt[0] or r_nt[1] <= (d.get("nt") or [0, 0])[0])]
+            own_orf = [d for d in ints if rt_d.get("orf") is not None and d.get("orf") == rt_d.get("orf")]
+            ints = own_orf or ints
+            sides = {_pos(d) < _pos(rt_d) for d in ints}
+            order_resolvable = len(sides) == 1
+            if len(sides) == 2:
+                superfamily, te_class = "LTR retrotransposon (superfamily undetermined)", "LTR/unclassified"
+                ev.append("integrase hits lie on both sides of the RT on its strand (possible nested or adjacent "
+                          "elements), so the integrase-vs-RT order is conflicting — Copia/Gypsy is not called")
+            elif not order_resolvable:
                 # Do NOT name a superfamily from a comparison that cannot carry the answer. _pos negates the
                 # minus-strand coordinate to get translation order, which is coherent WITHIN one strand and
                 # meaningless ACROSS two: a minus-strand hit always yields a negative value, so the test
@@ -251,15 +401,23 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
                 ev.append("integrase and RT are not in a readable arrangement (different strands, or "
                           "overlapping spans), so the diagnostic integrase-vs-RT order cannot be determined — "
                           "Copia/Gypsy is not called")
-            elif _pos(int_d) < _pos(rt_d):
+            elif sides == {True}:
                 superfamily, te_class = "Copia (Ty1)", "LTR/Copia"
-                ev.append("integrase N-terminal to RT + paired LTRs → Copia/Ty1 order")
+                ev.append("integrase N-terminal to RT (INT before RT, the Copia/Ty1-type domain order) + paired LTRs → "
+                          "Copia superfamily")
+            elif _RETROVIRAL_PROFILES & {d.get("hmm") for d in domains}:
+                # integrase C-terminal to RT is the pol order of Gypsy, Bel-Pao, Retrovirus and ERV alike
+                superfamily, te_class = RETROVIRAL_UNDETERMINED, "LTR/unclassified"
+                ev.append("integrase C-terminal to RT + paired LTRs fits the Gypsy-type pol order, but a "
+                          "retrovirus-specific capsid/matrix or envelope profile is present: that order is "
+                          "shared by Gypsy, Bel-Pao and Retrovirus/ERV, so the superfamily is not called")
             else:
                 superfamily = "Gypsy (Ty3)"
                 if "CHR" in cset:
                     superfamily += " · chromovirus"
                 te_class = "LTR/Gypsy"
-                ev.append("integrase C-terminal to RT + paired LTRs → Gypsy/Ty3 order")
+                ev.append("integrase C-terminal to RT (RT before INT, the Gypsy/Ty3-type domain order) + paired LTRs → "
+                          "Gypsy superfamily")
             if "PR" in cset:                                  # cset holds emitted domain codes; domains.py maps RVP -> code "PR"
                 ev.append("aspartic-protease domain present")
             if "RNaseH" in cset:
@@ -270,13 +428,14 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
             if has_tsd:
                 _ltsd = next((e for e in structural if e["type"].startswith("TSD")), None)
                 _refine_tsd(_ltsd, superfamily, seq)      # prefer the superfamily's target-site length over a coincidental longer flank
-                _lcong = structural_mod.tsd_congruence((_ltsd or {}).get("length"), superfamily)
+                _lcong = structural_mod.tsd_congruence((_ltsd or {}).get("length"), superfamily, motif=(_ltsd or {}).get("motif"))
                 if _ltsd is not None:
                     _ltsd["tsd_congruence"] = _lcong["verdict"]
                 if _lcong["verdict"] == "incongruent":
-                    ev.append(f"a flanking target-site duplication is present but {_lcong['observed']} bp where "
-                              f"{superfamily.split(' ')[0]} elements duplicate {_lcong['expected']} bp "
-                              f"({_lcong['basis']}) — likely coincidental, so the ends are not credited from it")
+                    ev.append(f"a flanking target-site duplication is present but {_tsd_observed(_lcong)} where "
+                              f"{superfamily.split(' ')[0]} elements duplicate {_tsd_expectation(_lcong)} "
+                              f"({_lcong['basis']}) — the repeat may be coincidental, or the boundary or superfamily "
+                              f"call may be wrong, so the ends are not credited from it")
                 elif _lcong["verdict"] == "congruent":
                     ev.append(f"a {_lcong['observed']} bp target-site duplication flanks the element — congruent "
                               f"with the {superfamily.split(' ')[0]} target-site length ({_lcong['basis']})")
@@ -292,7 +451,7 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
             ev.append("chromodomain present with reverse transcriptase — the chromoviruses are a Ty3/Gypsy "
                       "lineage and non-LTR elements do not carry a chromodomain, so this is an LTR "
                       "retrotransposon even though no integrase was detected and no terminal repeat was "
-                      "accepted")
+                      "accepted" + _scan_gap(seq, "LTR"))
             ev.append("the superfamily is not called: Copia versus Gypsy needs the integrase-versus-RT "
                       "translation order, and no integrase was detected")
         elif not has_ltr and not intg and not retro_corroborated:
@@ -338,10 +497,13 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
         elif not has_ltr and not intg:
             superfamily, te_class = "LINE (non-LTR)", "LINE"
             ev.append("RT without a DDE integrase and without LTRs → non-LTR retrotransposon (LINE)")
-            if has_polya:                                     # name the tail that was actually detected, not always poly-A
-                _pa = any(e["type"].startswith("poly-A") for e in structural)
-                ev.append(("3′ poly-A tail" if _pa else "5′ poly-T tract") +
+            if tail_ok:                                       # name the tail that was actually detected, not always poly-A
+                ev.append(("3′ poly-A tail" if "poly-A" in _tails else "5′ poly-T tract") +
                           " consistent with target-primed reverse transcription")
+            elif has_polya:
+                ev.append(("a 5′ poly-T tract" if "poly-T" in _tails else "a 3′ poly-A tail") +
+                          f" is present but the RT is on the {rt_d.get('strand', '+')} strand, where a tail of that "
+                          "kind does not belong, so it is not credited as this element's tail")
             if "ORF1" in cset:
                 ev.append("ORF1p domain present — the LINE-specific coding module, not shared with LTR elements")
             if en_ok:
@@ -355,6 +517,15 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
             # Penelope-like elements remain outside the panel: their GIY-YIG endonuclease is not modelled.
             ev.append("a Penelope-like element would also show RT without a DDE integrase; its GIY-YIG "
                       "endonuclease is not in the tested panel, so it is not excluded here")
+        elif has_ltr and (en_ok or "ORF1" in cset):
+            # LINE-specific coding modules and terminal direct repeats disagree (e.g. a LINE inside a
+            # segmental or tandem duplication). Neither outranks the other, so the order is withheld.
+            superfamily, te_class = "retrotransposon order unassigned", "retro/unassigned"
+            order_conflict = True
+            ev.append("LINE-specific coding evidence (" +
+                      " and ".join(x for x, ok in (("ORF1p", "ORF1" in cset), ("an ORF2p endonuclease–RT arrangement", en_ok)) if ok) +
+                      ") conflicts with paired terminal direct repeats, which suggest an LTR element, and no "
+                      "integrase was detected, so the order is withheld")
         elif has_ltr:
             superfamily, te_class = "LTR retrotransposon (superfamily undetermined)", "LTR/unclassified"
             ev.append("LTRs + RT present but integrase/order not resolved")
@@ -372,43 +543,21 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
             # that needs the INT-vs-RT translation order, which is a separate question from the order.
             superfamily, te_class = "LTR retrotransposon (superfamily undetermined)", "LTR/unclassified"
             ev.append("RT + DDE integrase present → LTR order, from domain architecture; no terminal "
-                      "repeat was accepted, so the assignment does not rest on structural evidence")
+                      "repeat was accepted" + _scan_gap(seq, "LTR") + ", so the assignment does not rest on structural evidence")
             if "ENV" in cset:                     # has_env is not bound until later in this function
                 ev.append("envelope glycoprotein present — carried by LTR elements and never by non-LTR "
                           "retrotransposons, corroborating the order")
     elif tpase:
         klass = "Class II · DNA transposon"
         tp_hits = [d for d in domains if d["domain"] == "TPase"]
-        best = max(tp_hits, key=lambda d: d.get("score", 0.0))       # decide by the strongest hit, not a fixed hAT-first precedence
-        bcl = best.get("class", "")
-        if "hAT" in bcl:
-            superfamily = "hAT"
-        elif "Tc1-Mariner" in bcl:
-            superfamily = "Tc1/Mariner"
-        elif "CACTA" in bcl:
-            superfamily = "CACTA (En/Spm)"
-        elif "MULE" in bcl:
-            superfamily = "MULE (Mutator)"
-        elif "IS4" in bcl:
-            # PF13843 is Pfam's generic IS4-like DDE family; piggyBac sits inside it but so do others,
-            # so the call names the family that was actually matched, not the best-known member.
-            superfamily = "IS4-like DDE (piggyBac group)"
-        elif "DDE" in bcl:
-            superfamily = "DDE transposon"
-        else:
-            superfamily = "DNA transposon"
-        # take the leading token before any parenthetical ("CACTA (En/Spm)" -> "CACTA"), but KEEP a
-        # compound superfamily name whose "/" joins two members ("Tc1/Mariner"): rewrite that "/" to "-"
-        # so the full superfamily survives without a second slash (the "/" in te_class separates class
-        # from subclass). Truncating at "/" dropped "Mariner" and asserted a narrower call than the
-        # domain evidence supports (Tc1/Mariner is one Wicker superfamily).
-        _sf_token = superfamily.split(" ")[0].replace("/", "-")
-        # the generic "DNA transposon" fallback would collapse to a redundant "DNA/DNA"; name it honestly
-        te_class = "DNA/" + (_sf_token if _sf_token != "DNA" else "unclassified")
+        superfamily, te_class, tpase_conflict = _tpase_family(tp_hits)
         ev.append("transposase domain present → Class II DNA transposon")
-        tpase_conflict = len({d["class"] for d in tp_hits}) > 1
         if tpase_conflict:
             ev.append("multiple transposase classes detected — superfamily assigned from the strongest-scoring hit (ambiguous)")
+        elif superfamily.startswith("Tc1/Mariner") and _recover_target_site(structural, tir_ev, superfamily, seq):
+            has_tsd = True                                   # the trimmed arms may enclose the transposase differently
+            tir_encloses_tpase = _brackets(tir_ev, tp_d)
+            tir_ok = tir_encloses_tpase is not False
         if has_tir:
             ev.append("terminal inverted repeats consistent with a cut-and-paste transposon")
         # The ends are half of what makes a DNA transposon autonomous, so state what was actually recovered.
@@ -418,29 +567,31 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
         if tir_ok and has_tsd:
             _tsd = next((e for e in structural if e["type"].startswith("TSD")), None)
             _refine_tsd(_tsd, superfamily, seq)               # prefer the superfamily's target-site length over a coincidental longer flank
-            _cong = structural_mod.tsd_congruence((_tsd or {}).get("length"), superfamily)
+            _cong = structural_mod.tsd_congruence((_tsd or {}).get("length"), superfamily, motif=(_tsd or {}).get("motif"))
             if _tsd is not None:
                 _tsd["tsd_congruence"] = _cong["verdict"]     # carry the verdict to the record (GFF3 export reads it)
+            _chance = _tsd_chance_clause(_tsd)
+            _fit = (f"length congruent with {superfamily}, {_cong['basis']}" if _cong["verdict"] == "congruent" else
+                    f"no literature-attributed expected target-site length exists for {superfamily} to corroborate its length")
             if _cong["verdict"] == "incongruent":
                 ev.append(f"a target-site duplication flanks the inverted repeats, but it is "
-                          f"{_cong['observed']} bp where {superfamily} elements duplicate "
-                          f"{_cong['expected']} bp ({_cong['basis']}) — the repeat may be coincidental, or the "
+                          f"{_tsd_observed(_cong)} where {superfamily} elements duplicate "
+                          f"{_tsd_expectation(_cong)} ({_cong['basis']}) — the repeat may be coincidental, or the "
                           f"boundary or superfamily call may be wrong, so the ends are not credited from it")
-            elif _cong["verdict"] == "congruent":
-                ev.append("a target-site duplication flanks the inverted repeats — the insertion site itself is "
-                          f"captured, so both element termini are present in the record (length congruent with "
-                          f"{superfamily}, {_cong['basis']})")
+            elif _chance:
+                # a short exact direct repeat arises by chance at ~4^-L, so neither a congruent length nor its
+                # absence turns it into a captured insertion site
+                ev.append(f"a target-site duplication flanks the inverted repeats ({_fit}), but {_chance}, so it "
+                          "is not credited as the insertion site and does not confirm the element ends")
             else:
-                # a TSD flanks the repeats but this superfamily has no literature-attributed expected length,
-                # so the length cannot corroborate the termini — say that rather than imply congruence.
                 ev.append("a target-site duplication flanks the inverted repeats — the insertion site itself is "
-                          "captured, so both element termini are present in the record; no literature-attributed "
-                          f"expected target-site length exists for {superfamily} to corroborate its length")
+                          f"captured, so both element termini are present in the record ({_fit})")
         elif has_tir and tir_encloses_tpase is False:
             ev.append("the detected inverted-repeat pair does not enclose the transposase — the termini and the "
                       "coding module may not belong to the same element, so the ends are not credited")
         elif not has_tir:
-            ev.append("no terminal inverted-repeat pair recovered — neither element end is confirmed, which is "
+            ev.append("no terminal inverted-repeat pair recovered" + _scan_gap(seq, "TIR") +
+                      " — neither element end is confirmed, which is "
                       "consistent with a 5′- or 3′-truncated (or internally deleted) copy, with a superfamily "
                       "that does not carry TIRs, or with termini too diverged for the scan")
         order = "–".join(_ordered(cset))     # coding architecture only — the TIR ends are structural, not domains
@@ -464,8 +615,11 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
         superfamily = "Helitron-family helicase present — superfamily not called"
         te_class = "unclassified"
         ev.append("Helitron-family Rep/Helicase domain (PF14214) present. Helitrons move by rolling-circle "
-                  "replication, so they carry no terminal inverted repeat and duplicate no target site — "
-                  "the absence of TIR/TSD here is expected and is not evidence against a Helitron")
+                  "replication, so they carry no terminal inverted repeat and duplicate no target site" +
+                  (" — the absence of TIR/TSD here is expected and is not evidence against a Helitron"
+                   if not has_tir else
+                   "; a terminal inverted repeat was detected in this record, which is not a Helitron feature "
+                   "(it may belong to another element or be coincidental)"))
         # The structural signature that would confirm it — a 5' TC / 3' CTRR terminus and the ~11-20 nt
         # hairpin upstream of the 3' end — is NOT among TEagle's detectors, so say so rather than let the
         # domain hit alone read as a complete Helitron call.
@@ -505,6 +659,16 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
                 superfamily, te_class = f"coding fragment ({_cs}; RT/transposase not detected)", "retro/partial"
                 ev.append(f"coding domain(s) recovered ({_cs}) but neither reverse transcriptase nor "
                           f"transposase detected")
+            elif has_tir and (tir_ev.get("tir_len") or 0) >= structural_mod.MIN_TIR_STANDALONE:
+                klass = "Class II · DNA transposon"
+                superfamily = "non-autonomous TIR element (superfamily undetermined)"
+                te_class = "DNA/non-autonomous"
+                ev.append(f"a {tir_ev.get('tir_len')} bp terminal inverted repeat was detected, beyond what chance "
+                          f"inverted repeats reach ({CHANCE_TIR_MAX_BP} bp across {CHANCE_TIR_SEQUENCES:,} random "
+                          f"sequences), so it is structural evidence of a Class II element; the only coding "
+                          f"evidence is {_cs}, which host genes also carry and which may be a captured gene "
+                          f"fragment (as in Pack-MULEs), so no transposase is credited and the superfamily is "
+                          f"not called")
             else:
                 klass = "unclassified"
                 superfamily = f"{_cs} domain(s) detected; no transposable-element assignment"
@@ -514,6 +678,9 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
                           f"recombinase matches phage, plasmid and host site-specific recombinases. Without "
                           f"a reverse transcriptase, a transposase, a capsid, an envelope or an integrase "
                           f"there is no element-specific evidence, so no class is assigned")
+                if has_tir:
+                    ev.append(f"an inverted terminal repeat ({tir_ev.get('tir_len') or 0} bp) was also detected but "
+                              f"is too short to attribute to a Class II element")
         elif has_ltr:
             superfamily, te_class = "terminal direct-repeat candidate (LTR origin unconfirmed)", "repeat/structural-only"
             classification_withheld = True
@@ -525,6 +692,20 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
                 ev.append("paired terminal direct repeats were detected, but the protein-domain scan was "
                           "unavailable; direct repeats alone do not distinguish an LTR retroelement from a "
                           "tandem or satellite repeat, so the order is withheld")
+        elif not domains_ok:
+            # Every domain-absence the TIR and no-signal arms below would assert (no transposase, no coding
+            # capacity) comes from a scan that never ran, so nothing is concluded from structure alone.
+            klass = "unclassified"
+            classification_withheld = scan_unassessed = True
+            if has_tir:
+                superfamily, te_class = "terminal inverted repeat, class unassigned", "repeat/structural-only"
+                ev.append(f"an inverted terminal repeat was detected ({(tir_ev or {}).get('tir_len') or 0} bp), but "
+                          "the protein-domain scan was unavailable, so whether a transposase is present is "
+                          "unassessed and no class is assigned")
+            else:
+                superfamily, te_class = "classification withheld (protein-domain scan unavailable)", "unclassified"
+                ev.append("the protein-domain scan was unavailable, so the absence of a transposable-element "
+                          "signature cannot be concluded from the structural evidence alone")
         elif has_tir:
             # A SHORT inverted terminal repeat without a transposase is not Class II evidence. Verified on
             # the real copia 5' LTR (276 bp): fed alone it trips the terminal-inverted-repeat scan and used
@@ -532,8 +713,8 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
             # outnumber full-length elements in most genomes, so this is the common case, not an edge case.
             #
             # A LONG one is different, and the distinction is measured rather than assumed. Chance inverted
-            # repeats reached at most 15 bp at the recorded seed and 17 bp across five seeds over 4,500
-            # random sequences (benchmarks/chance_tir.py; see structural.MIN_TIR_STANDALONE),
+            # repeats reached at most 15 bp at the recorded seed (4,500 sequences) and 17 bp across five
+            # seeds (22,500 sequences; benchmarks/chance_tir.py, see structural.MIN_TIR_STANDALONE),
             # and the solo copia LTR that motivated this branch yields 12 bp. Above that ceiling the repeat
             # is not attributable to chance, and a terminal inverted repeat is the defining structural
             # feature of a Class II element. Refusing to call it left every NON-AUTONOMOUS DNA transposon
@@ -545,8 +726,8 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
                 superfamily = "non-autonomous TIR element (superfamily undetermined)"
                 te_class = "DNA/non-autonomous"
                 ev.append(f"a {_tl} bp terminal inverted repeat was detected with no transposase. Chance "
-                          f"inverted repeats reached at most {structural_mod.MIN_TIR_STANDALONE - 3} bp "
-                          f"over 4,500 random sequences, so a repeat this "
+                          f"inverted repeats reached at most {CHANCE_TIR_MAX_BP} bp across "
+                          f"{CHANCE_TIR_SEQUENCES:,} random sequences (five seeds), so a repeat this "
                           f"long is structural evidence of a Class II element; the absence of a transposase "
                           f"is consistent with a non-autonomous derivative such as a MITE or an internally "
                           f"deleted copy, which carry terminal repeats and no coding capacity")
@@ -569,15 +750,16 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
         ev.append("transposase domain also present alongside reverse transcriptase — possible nested / composite "
                   "element (e.g. a DNA transposon within a retroelement, or two overlapping TE fragments)")
 
-    # envelope (env) domain + paired LTRs mark an ENDOGENOUS RETROVIRUS (ERV) / errantivirus — an env-bearing
-    # LTR retroelement (potentially infection-capable), distinct from a plain LTR retrotransposon.
+    # envelope (env) domain + paired LTRs mark an env-bearing LTR retroelement (potentially infection-capable),
+    # distinct from a plain LTR retrotransposon. "Errantivirus" is the insect Ty3/gypsy lineage, so it is named
+    # only when the element is Gypsy-called; a vertebrate ERV is not one.
     has_env = "ENV" in cset
     # a DIRS-group call (RT + tyrosine recombinase, no DDE integrase) is never an ERV, even with a spurious
     # env hit — routing it through the retroviral transcript-architecture model would contradict its own class.
     is_erv = bool(rt and has_ltr and has_env and not (yr and not intg))
     if is_erv:
-        ev.append("envelope (env) domain present with paired LTRs → endogenous retrovirus (ERV) / errantivirus "
-                  "lineage (an env-bearing LTR retroelement)")
+        ev.append("envelope (env) domain present with paired LTRs → env-bearing LTR retroelement (ERV architecture" +
+                  ("; errantivirus lineage for a Gypsy element)" if (superfamily or "").startswith("Gypsy") else ")"))
 
     # domain-architecture order shows ONLY the domains actually detected, in the superfamily's
     # canonical order — never a full template presented as if it were observed. ENV closes the retroviral order.
@@ -587,6 +769,8 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
     _CANON = {"Copia": ["GAG", "PR", "INT", "RT", "RNaseH", "ENV"],
               "Gypsy": ["GAG", "PR", "RT", "RNaseH", "INT", "CHR", "ENV"]}
     _sf = superfamily.split(" ")[0] if superfamily else ""
+    if superfamily == RETROVIRAL_UNDETERMINED:                  # the pol order is Gypsy-type, only the superfamily is withheld
+        _sf = "Gypsy"
     if _sf in _CANON:
         order = "–".join(c for c in _CANON[_sf] if c in cset) or None
 
@@ -600,27 +784,32 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
         # the 3' tail is the only POSITIVE structural evidence for a LINE here; without it the call rests on
         # an absence (no integrase, no LTRs), which DIRS and Penelope-like elements share. `ndom >= 1` was
         # always true on this branch (RT is a domain), so it never discriminated anything.
-        confidence = "Moderate" if has_polya else "Candidate"
+        confidence = "Moderate" if tail_ok else "Candidate"
     # The transposase arm gates on tir_ok, not raw has_tir. This function already refuses to credit a
     # terminal repeat that does not enclose the transposase — the ledger drops the arms and the evidence
     # says "the ends are not credited" — because the termini and the coding module may belong to different
     # elements. Reading that same repeat as enough to lift the badge out of Candidate contradicted the
     # refusal one screen above it: two records with an identical completeness ledger got different badges.
     # A solo LTR fed alone trips the inverted-repeat scan (see the note below), so this is the common case.
-    elif (rt and (has_ltr or has_tir)) or (tpase and (has_ltr or tir_ok)):
+    elif (rt and (has_ltr or has_tir)) or (tpase and tir_ok):
         confidence = "Moderate"
     elif rt or tpase:
         confidence = "Moderate" if ndom >= 2 else "Candidate"
     else:
         confidence = "Candidate"
-    if tpase_conflict:                             # conflicting transposase classes -> don't overstate
-        confidence = "Candidate"
+    if tpase_conflict or order_conflict or rt_class_withheld or classification_withheld:
+        confidence = "Candidate"                   # conflicting or withheld evidence never earns a higher badge than the call it refuses
     if composite and confidence == "High":         # a co-occurring transposase makes a confident single-element call unsafe
         confidence = "Moderate"
 
-    completeness = _completeness(cset, rt, intg, tpase, has_ltr, has_tir, has_polya, is_erv, order_resolvable,
+    completeness = _completeness(cset, rt, intg, tpase, has_ltr, has_tir, tail_ok, is_erv, order_resolvable,
                                  gag_core, tir_ok, en_ok=en_ok, yr=yr, te_class=te_class)
-    if classification_withheld:
+    if scan_unassessed:
+        completeness = ({"tier": "structural-only (protein-domain scan unavailable; coding content unassessed)",
+                         "kind": "terminal inverted repeat (class unassigned)", "present": [], "missing": [],
+                         "expected": [], "unassessed": ["protein domains"], "scope": DOMAINS_TESTED}
+                        if has_tir else None)
+    elif classification_withheld:
         completeness = {
             "tier": "structural candidate (no trusted LTR coding architecture)",
             "kind": "terminal direct-repeat candidate (LTR origin unconfirmed)",
@@ -633,7 +822,7 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
     # domain-only ledger was the ONLY thing on screen, so "partial" was read as "decayed". Adding the axis
     # answers the question the reader was actually asking without perturbing a benchmarked number.
     coding = _coding_axis(domains, orfs)
-    if coding:
+    if coding and completeness:
         completeness["coding"] = coding
 
     dom_str = (" · ".join(codes) or "none detected in tested panel") if domains_ok else "unavailable (scan failed)"
@@ -656,7 +845,7 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
               else f"Classified as {te_class} ({confidence.lower()} confidence). ")
     explanation = (prefix + f"Structural: {struct_str}. Domains: {dom_str}." +
                    (" " + "; ".join(ev) + "." if ev else ""))
-    if classification_withheld:
+    if classification_withheld and not scan_unassessed:
         evidence_ledger = [{"dependency": "structural", "status": "complete",
                             "statement": "paired terminal direct repeats were detected"}]
         if domains_ok:
@@ -675,10 +864,19 @@ def classify(structural, domains, seq=None, domains_ok=True, orfs_unscanned=0, o
         ]
     else:
         evidence_ledger = [{"dependency": "combined", "status": "complete", "statement": item} for item in ev]
+    outcome = ("withheld" if classification_withheld or rt_class_withheld or (not domains_ok and not credited)
+               else "complete")
+    if not domains_ok:
+        domain_architecture = "unavailable"
+    elif not cset:
+        domain_architecture = "none detected"
+    else:
+        domain_architecture = order if (_sf in _CANON and order) else "–".join(_ordered(cset))
     return {"class": klass, "superfamily": superfamily, "te_class": te_class, "order": order,
+            "domain_architecture": domain_architecture, "wicker_order": _wicker_order(te_class, outcome),
             "confidence": confidence, "evidence": ev,
             "evidenceLedger": evidence_ledger,
-            "outcome": "withheld" if classification_withheld or rt_class_withheld or (not domains_ok and not credited) else "complete",
+            "outcome": outcome,
             "explanation": explanation, "n_domains": ndom,
             "is_erv": is_erv, "completeness": completeness, "domains_unavailable": not domains_ok,
             "structural_unavailable": not structural_ok, "orfs_unscanned": int(orfs_unscanned or 0)}
@@ -769,10 +967,20 @@ def _coding_axis(domains, orfs):
                 "the coding structure of what was found is intact, whatever the domain ledger above lists as "
                 "not detected")
     else:
-        note = (f"the detected domains fall in {n} separate reading frame(s)"
-                + (f", and {unplaced} could not be placed in any single ORF" if unplaced else "")
-                + " — consistent with an interrupted, rearranged or degenerate copy, though a genuine "
-                  "multi-ORF architecture (LINE ORF1/ORF2, some ERVs) also looks like this")
+        # n counts host ORFs; a sequence has only six reading frames, so the frames are listed, not counted
+        frames = sorted({f"{k[2]}{k[3]}" for k in placed if k[3] is not None})
+        note = (f"the detected domains fall in {n} separate ORFs" + (f" (frames {', '.join(frames)})" if frames else "")
+                + (f", and {unplaced} could not be placed in any single ORF" if unplaced else ""))
+        line_layout = False
+        if n == 2 and not unplaced:
+            (ka, ca), (kb, cb) = sorted(placed.items(), key=lambda kv: kv[0][0])
+            if ka[2] == kb[2]:                            # ORF1 upstream of the endonuclease-RT ORF in translation order
+                up, down = (ca, cb) if ka[2] == "+" else (cb, ca)
+                line_layout = set(up) == {"ORF1"} and "RT" in down and "ORF1" not in down
+        note += (" — consistent with the canonical LINE ORF1/ORF2 organisation (ORF1p, then the endonuclease–RT ORF)"
+                 if line_layout else
+                 " — consistent with an interrupted, rearranged or degenerate copy, though a genuine "
+                 "multi-ORF architecture (LINE ORF1/ORF2, some ERVs) also looks like this")
     if truncated:
         note += "; at least one hosting ORF runs to the end of the supplied sequence, so it may be truncated"
     return {"frames": n, "unplaced": unplaced, "truncated_frame": truncated, "state": state, "note": note}
@@ -790,7 +998,7 @@ def _completeness(cset, rt, intg, tpase, has_ltr, has_tir, has_polya, is_erv, or
     not a claim that the ORFs are functional, that the element is transcribed, that it retains transposition or
     infection competence, or that any individual carries the insertion — the three conflations Lanciano & Cristofari
     2020 (Nat Rev Genet 21:721-736) identify as the field's central interpretive trap."""
-    if rt and yr and not intg:                            # DIRS-group: tyrosine recombinase in place of DDE integrase
+    if rt and yr and not intg:                            # DIRS-group: tyrosine recombinase in place of DDE integrase (yr is the co-oriented RT+YR test)
         # A DIRS-group element encodes Gag, an RT-RNaseH pol module and a tyrosine recombinase (YR); it lacks
         # both the DDE integrase and the aspartic protease of an LTR retrotransposon (Wicker 2007; Poulter &
         # Goodwin 2005 Cytogenet Genome Res 110:575-588). Scoring it against the LTR ledger would flag INT — a
@@ -804,8 +1012,10 @@ def _completeness(cset, rt, intg, tpase, has_ltr, has_tir, has_polya, is_erv, or
         tier = ("intact / autonomous-consistent" if (gag_core and not missing)
                 else "partial (DIRS core present: RT + tyrosine recombinase)")
         kind = "DIRS-group retroelement (tyrosine recombinase)"
-    elif rt and (has_ltr or intg):                        # LTR retroelement / ERV
-        expected = ["GAG", "PR", "RT", "RNaseH", "INT"] + (["ENV"] if "ENV" in cset else [])
+    elif rt and (has_ltr or intg or str(te_class or "").startswith("LTR")) and te_class != "retro/unassigned":
+        # LTR retroelement / ERV; an LTR-order call that rests on RT + chromodomain has no LTRs or integrase
+        # yet still gets this ledger, not the LINE one
+        expected = ["GAG", "PR", "RT", "RNaseH", "INT"] + [c for c in ("ENV", "CHR") if c in cset]
         present = [m for m in expected if m in cset]
         missing = [m for m in expected if m not in cset]
         # autonomous signature = a CORE gag (capsid/matrix) + RT + integrase; a nucleocapsid-only (zf-CCHC) gag hit
@@ -823,6 +1033,8 @@ def _completeness(cset, rt, intg, tpase, has_ltr, has_tir, has_polya, is_erv, or
             # record collapsed to the bare "fragment" tier, ranking BELOW a 2-domain RT+INT "partial" despite
             # carrying more recovered core architecture. Integrase is a core module, so this is a 'partial' tier.
             tier = "partial (gag + RT core present; integrase not confirmed)"
+        elif rt and not has_ltr and not intg:
+            tier = "partial (RT + chromodomain; integrase not confirmed)"
         elif rt and intg:
             # keep the tier a short label — the results banner renders the 'not detected' list itself, so
             # embedding it here too would double-render it. Only flag the nucleocapsid-only case, which the
@@ -883,7 +1095,11 @@ def _completeness(cset, rt, intg, tpase, has_ltr, has_tir, has_polya, is_erv, or
         tier = "intact / autonomous-consistent" if not missing else "partial (transposase present)"
         kind = "DNA transposon" if tir_ok else "DNA transposon (terminal repeats not confirmed)"
     elif has_ltr or has_tir:
-        kind = "LTR retroelement" if has_ltr else "DNA transposon"
+        # the kind follows the call: a short TIR, or a TIR beside only non-transposase domains, is not Class II
+        kind = ("LTR retroelement" if has_ltr
+                else "DNA transposon" if str(te_class or "").startswith("DNA/")
+                else "retroelement fragment (order unassigned)" if str(te_class or "").startswith("retro")
+                else "terminal inverted repeat (class unassigned)")
         if cset:                                          # coding domain(s) recovered but no RT/transposase — name them
             present = _ordered(cset)
             expected, missing = list(present), []

@@ -81,7 +81,8 @@ def test_ltr_fragment_without_rt_degrades_to_repeat_region():
                                                 "five_prime": [0, 200], "three_prime": [1000, 1200]}],
                                 "domains": [], "composition": {"length": 1200}}))[0][8]
     assert "classification_outcome=withheld" in attrs
-    assert "classification_order=withheld" in attrs
+    assert "wicker_order=withheld" in attrs
+    assert "domain_architecture=ENV" in attrs
 
 
 def test_trusted_ltr_fragment_gff3_preserves_hedge_while_using_neutral_so_term():
@@ -99,7 +100,8 @@ def test_trusted_ltr_fragment_gff3_preserves_hedge_while_using_neutral_so_term()
     assert parent[2] == "repeat_region"
     assert "wicker_code=LTR/partial" in parent[8]
     assert "classification_outcome=complete" in parent[8]
-    assert "classification_order=unassigned" in parent[8]
+    assert "wicker_order=LTR" in parent[8]
+    assert "domain_architecture=" in parent[8] and "classification_order=" in parent[8]
     assert "domain_evidence_status=tested_with_hits" in parent[8]
     assert "classification_explanation=" in parent[8]
     assert "RT/pol not detected" in parent[8]
@@ -115,7 +117,8 @@ def test_failed_domain_gff3_and_bed_preserve_withheld_unavailable_state():
     parent = _rows(gff3.to_gff3(rec))[0]
     assert parent[2] == "repeat_region"
     assert "classification_outcome=withheld" in parent[8]
-    assert "classification_order=withheld" in parent[8]
+    assert "wicker_order=withheld" in parent[8]
+    assert "domain_architecture=unavailable" in parent[8]
     assert "domain_evidence_status=unavailable_failed" in parent[8]
     bed_parent = gff3.to_bed(rec).splitlines()[0].split("\t")
     assert "|outcome=withheld|order=withheld|domains=unavailable_failed" in bed_parent[3]
@@ -263,7 +266,8 @@ def test_pbs_confidence_hedge_survives_into_the_export():
                            "confident": False, "note": "priming tRNA undetermined — often diverged"}],
            "domains": []}
     g = gff3.to_gff3(rec, seqid="x")
-    row = next((l for l in g.splitlines() if "primer_binding_site" in l), "")
+    row = next((l for l in g.splitlines() if "Name=PBS_candidate" in l), "")
+    assert "\tsequence_feature\t" in row and "primer_binding_site" not in g
     assert "priming_trna=undetermined" in row
     assert "confident=false" in row
     assert "identity_pct=61.1" in row

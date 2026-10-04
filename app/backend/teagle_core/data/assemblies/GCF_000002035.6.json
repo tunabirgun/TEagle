@@ -153,6 +153,12 @@
    "ucscStyleName": "chr25",
    "refseqAccession": "NC_007136.7",
    "length": 37502051
+  },
+  {
+   "chrName": "MT",
+   "ucscStyleName": "chrM",
+   "refseqAccession": "NC_002333.2",
+   "length": 16596
   }
  ]
 }

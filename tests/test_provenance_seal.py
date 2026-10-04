@@ -134,13 +134,13 @@ def test_canonical_utf8_golden_vector():
                   "identitySource": "local_input", "sourceContextVersion": "1.0",
                   "inputType": "local_input", "length": 4,
                   "sha256": "1" * 64,
-                  "records": [{"id": "record_bbbbbbbbbbbb", "idSha256": "b" * 64,
+                  "records": [{"id": "record_aaaaaaaaaaaa", "idSha256": "a" * 64,
                                "identitySource": "local_input", "length": 4, "sha256": "0" * 64}]},
         "parameters": {"note": "not run — unavailable"}, "manifestSha256": "0" * 64,
     }
     expected = (b'{"canonicalization":"teagle-json-utf8-v1","input":{"idSha256":"' + b"a" * 64 +
                 b'","identitySource":"local_input","inputType":"local_input","length":4,"records":'
-                b'[{"id":"record_bbbbbbbbbbbb","idSha256":"' + b"b" * 64 +
+                b'[{"id":"record_aaaaaaaaaaaa","idSha256":"' + b"a" * 64 +
                 b'","identitySource":"local_input","length":4,"sha256":"' + b"0" * 64 +
                 b'"}],"sha256":"' + b"1" * 64 + b'","sourceContextVersion":"1.0"},"parameters":{"note":"not run '
                 b'\xe2\x80\x94 unavailable"},"schemaVersion":"0.2"}')
@@ -436,7 +436,7 @@ def test_compact_display_collision_keeps_full_digest_and_order_bindings(monkeypa
     monkeypatch.setattr(gff3, "_identity_sha256",
                         lambda value: "deadbeefdead" + real_sha(value)[12:])
     raw = ["patient_042", "donor-A1"]
-    top = {**gff3.public_record_identity("multiple_records"), "identitySource": "local_input"}
+    top = {**gff3.public_record_identity("multiple_records", trust="generated"), "identitySource": "generated"}
     manifest = provenance.build_manifest("analysis", "ACGTACGT", "multiple_records", {}, input_identity=top,
                                          input_records=[{"id": raw[0], "sequence": "ACGT"},
                                                         {"id": raw[1], "sequence": "ACGT"}])

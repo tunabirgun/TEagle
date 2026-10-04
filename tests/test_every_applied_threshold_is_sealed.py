@@ -109,3 +109,86 @@ def test_known_unused_constants_really_are_unused():
             if len(re.findall(rf"\b{re.escape(name)}\b", body)) > 1:
                 still_unused.append(f"{name} is exempt as unused ({reason}) but is read in {fn}")
     assert not still_unused, "\n  ".join(still_unused)
+
+
+def _numeric_defaults(module):
+    import inspect
+    for name, fn in inspect.getmembers(module, inspect.isfunction):
+        if fn.__module__ != module.__name__:
+            continue
+        for pname, param in inspect.signature(fn).parameters.items():
+            if isinstance(param.default, (int, float)) and not isinstance(param.default, bool):
+                yield name, pname, param.default
+
+
+def _unsealed_numeric_defaults(modules):
+    """Numeric signature defaults that appear in the seal neither under an explicit key nor under the key
+    derived for structural.py."""
+    import engine
+    sealed = {(fname, p) for _module, fname, p in engine._SEALED_DEFAULTS.values()}
+    sealed_keys = set(engine._detector_parameters())
+    out = []
+    for module in modules:
+        for fname, p, default in _numeric_defaults(module):
+            derived = f"structural_{fname.lstrip('_')}_{p}"
+            if (fname, p) in sealed or (module.__name__.endswith("structural") and derived in sealed_keys):
+                continue
+            if (fname, p) in engine._NOT_THRESHOLDS:
+                continue
+            out.append(f"{module.__name__}.{fname}({p}={default})")
+    return out
+
+
+def test_every_numeric_signature_default_in_the_detectors_is_sealed():
+    from teagle_core import domains, sequtil, structural
+    assert _unsealed_numeric_defaults([structural, domains, sequtil]) == []
+
+
+def test_default_gate_reports_an_unsealed_default():
+    import types
+    fake = types.ModuleType("fake_detector")
+    exec("def find_x(seq, cutoff=0.5):" + chr(10) + "    return seq", fake.__dict__)
+    fake.find_x.__module__ = "fake_detector"
+    assert _unsealed_numeric_defaults([fake]) == ["fake_detector.find_x(cutoff=0.5)"]
+
+
+def test_every_numeric_constant_in_structural_is_sealed_or_declared_not_a_threshold():
+    """Read from the source, not from the engine's own introspection, so the engine cannot vouch for itself."""
+    import ast
+    import engine
+    with open(os.path.join(CORE, "structural.py"), encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    sealed_attrs = set(engine._SEALED_STRUCTURAL_CONSTANTS.values())
+    keys = set(engine._detector_parameters())
+    missing = []
+    for node in tree.body:
+        targets = [t for t in getattr(node, "targets", []) if isinstance(t, ast.Name)]
+        if not isinstance(node, ast.Assign) or not targets or not isinstance(node.value, (ast.Constant, ast.Call, ast.UnaryOp)):
+            continue
+        for target in targets:
+            name = target.id
+            if not re.fullmatch(r"_?[A-Z][A-Z0-9_]*", name) or name in sealed_attrs or name in engine._NOT_THRESHOLDS:
+                continue
+            try:
+                value = ast.literal_eval(node.value)
+            except ValueError:
+                if not (isinstance(node.value, ast.Call) and getattr(node.value.func, "id", "") == "range"):
+                    continue
+            else:
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    continue
+            if "structural_" + name.lstrip("_").lower() not in keys:
+                missing.append(name)
+    assert missing == []
+
+
+def test_derived_structural_keys_follow_the_module(monkeypatch):
+    import engine
+    from teagle_core import structural
+    name = next(n for n in vars(structural) if n.startswith("_") and n.isupper() and n[1:].replace("_", "").isalnum()
+                and isinstance(getattr(structural, n), int) and not isinstance(getattr(structural, n), bool)
+                and n not in engine._NOT_THRESHOLDS and n not in engine._SEALED_STRUCTURAL_CONSTANTS.values())
+    key = "structural_" + name.lstrip("_").lower()
+    before = engine._detector_parameters()[key]
+    monkeypatch.setattr(structural, name, before + 1)
+    assert engine._detector_parameters()[key] == before + 1
