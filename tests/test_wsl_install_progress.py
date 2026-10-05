@@ -318,7 +318,7 @@ def test_integrity_probe_conditions_success_on_real_exit_codes_and_signatures():
 
 
 def test_integrity_check_reports_optional_partitions_without_failing_on_them(monkeypatch):
-    probe = ("=RM=\nRepeatMasker version 4.2.4\n=MM=\n2.31-r1302\n=FAMDB=\nFAMDB_RC=0\nDatabase : Dfam\nVersion : 4.0\n"
+    probe = (f"=RM=\nRepeatMasker version {wsl._REPEATMASKER_VERSION}\n=MM=\n2.31-r1302\n=FAMDB=\nFAMDB_RC=0\nDatabase : Dfam\nVersion : 4.0\n"
              "=FILES=\npresent dfam40.0.h5 1\npresent dfam40.curated.consensus.0.h5 1\n"
              "=OPTFILES=\npresent dfam40.uncurated.consensus.0.h5\nabsent dfam40.uncurated.consensus.1.h5\n"
              "=SCAN=\nisPcr - Standalone v 33x2\nisPcr signature 33x2 OK\n"
@@ -341,7 +341,7 @@ def test_integrity_check_reports_optional_partitions_without_failing_on_them(mon
     ("VRNA", "present 2.7.1", False),
 ])
 def test_integrity_grades_installed_optional_tools_at_their_pinned_version(monkeypatch, section, body, expected):
-    probe = ("=RM=\nRepeatMasker version 4.2.4\n=MM=\n2.31-r1302\n=FAMDB=\nFAMDB_RC=0\nDatabase : Dfam\nVersion : 4.0\n"
+    probe = (f"=RM=\nRepeatMasker version {wsl._REPEATMASKER_VERSION}\n=MM=\n2.31-r1302\n=FAMDB=\nFAMDB_RC=0\nDatabase : Dfam\nVersion : 4.0\n"
              "=FILES=\npresent dfam40.0.h5 1\npresent dfam40.curated.consensus.0.h5 1\n"
              "=OPTFILES=\nabsent dfam40.uncurated.consensus.0.h5\nabsent dfam40.uncurated.consensus.1.h5\n"
              "=SCAN=\nisPcr - Standalone v 33x2\nisPcr signature 33x2 OK\n"
@@ -376,7 +376,7 @@ def test_integrity_rejects_unusable_or_wrong_signature_executables(monkeypatch, 
     healthy_scan = ("isPcr - Standalone v 33x2\nisPcr signature 33x2 OK\n"
                     "datasets version: 18.34.0\ndatasets version 18.34.0 OK\n"
                     "ispcr package 33\ndatasets package 18.34.0")
-    probe = ("=RM=\nRepeatMasker version 4.2.4\n=MM=\n2.31-r1302\n=FAMDB=\nFAMDB_RC=0\nDatabase : Dfam\nVersion : 4.0\n"
+    probe = (f"=RM=\nRepeatMasker version {wsl._REPEATMASKER_VERSION}\n=MM=\n2.31-r1302\n=FAMDB=\nFAMDB_RC=0\nDatabase : Dfam\nVersion : 4.0\n"
              "=FILES=\npresent dfam40.0.h5 1\npresent dfam40.curated.consensus.0.h5 1\n"
              "=OPTFILES=\nabsent dfam40.uncurated.consensus.0.h5\nabsent dfam40.uncurated.consensus.1.h5\n"
              f"=SCAN=\n{bad_body if section == 'SCAN' else healthy_scan}\n"
@@ -453,7 +453,7 @@ def test_readiness_requires_config_and_successful_famdb_load_with_mutation_guard
         with pytest.raises(AssertionError):
             _assert_famdb_readiness_contract(mutant_source, mutant_probe)
 
-    base = ("micromamba=2.8.1\nrepeatmasker=4.2.4\nminimap2=2.31-r1302\ngenomescan=1\n"
+    base = (f"micromamba=2.8.1\nrepeatmasker={wsl._REPEATMASKER_VERSION}\nminimap2=2.31-r1302\ngenomescan=1\n"
             "ispcr_pin=1\ndatasets_pin=1\nfatotwobit=absent\nviennarna=2.7.2\n"
             "dfam_root=1\ndfam_curated=1\ndfam_unc_root=0\ndfam_unc_euk=0\n"
             "famdb_conf=1\ninstalling=0\ndisk_free_gb=100\n")
@@ -626,6 +626,24 @@ def test_micromamba_bootstrap_is_versioned_and_checksum_gated():
     assert "hashlib.sha256(data).hexdigest()" in s
     assert "sha256sum -c -" in s
     assert "/latest" not in s
+
+@pytest.mark.parametrize('defect', ['foreign_source_directory', 'invalid_cached_archive'])
+def test_repeatmasker_source_guards_fail_closed(tmp_path, defect):
+    step = wsl._STEP['repeatmasker']
+    payload = step.split("<<'PY'", 1)[1].split('\n', 1)[1].split('\nPY\n', 1)[0]
+    environment = tmp_path / 'environment'
+    (environment / 'share').mkdir(parents=True)
+    if defect == 'foreign_source_directory':
+        (environment / 'share' / ('teagle-repeatmasker-' + wsl._REPEATMASKER_VERSION)).mkdir()
+        expected_message = 'not TEagle-owned'
+    else:
+        cache = environment / '.teagle-source-downloads'
+        cache.mkdir()
+        (cache / ('RepeatMasker-' + wsl._REPEATMASKER_VERSION + '.tar.gz')).write_bytes(b'corrupt archive fixture')
+        expected_message = 'checksum mismatch'
+    result = subprocess.run([sys.executable, '-', str(environment), wsl._REPEATMASKER_VERSION, 'https://invalid.example/source.tar.gz', wsl._REPEATMASKER_SOURCE_SHA256], input=payload, capture_output=True, text=True)
+    assert result.returncode != 0 and expected_message in result.stderr
+    assert 'Traceback' not in result.stderr
 
 
 def test_prelude_kills_background_helpers_on_exit():

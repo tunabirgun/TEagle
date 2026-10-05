@@ -9,7 +9,7 @@ The application version is defined once in `app/backend/teagle_core/__init__.py`
 every run provenance manifest, and the packaged executable's Windows file-version
 metadata. Release QA separately reconciles the documentation with that source.
 
-## [4.1.0] — 2026-10-04
+## [4.1.0] — 2026-10-05
 
 This release corrects scientific and interface defects found by a full audit of 4.0.0 and adds guidance, assay-planning and reporting features for non-coding users. Classification, structural detection, in-silico PCR and provenance results can differ from 4.0.0 for the same input, and every manifest hash changes, so re-run any record whose 4.0.0 result is on file. The 30-model Pfam panel, the E-value cut-off, the 12-ORF search budget, the 80% LTR/TIR identity floors, the 20-bp standalone-TIR rule, the 2–12-bp TSD search range, the 200-kb warning and the Primer3 Standard preset are unchanged. The DOI-bound 4.0.0 evaluation (results DOI 10.5281/zenodo.22159977) describes 4.0.0 only and is not inherited by 4.1.0, and `benchmarks/score.py` remains the frozen 4.0.0 scorer, which does not score labels introduced in 4.1.0. Analysis-result schema is 1.1 (4.0.0 documents at 1.0 still validate); manifest schema 0.2 and source-context schema 1.0 are unchanged.
 
@@ -42,7 +42,7 @@ This release corrects scientific and interface defects found by a full audit of 
 - LTR elements whose integrase follows the reverse transcriptase and that carry a retrovirus-specific capsid/matrix or envelope profile hit no longer receive a Gypsy (Ty3) call; the superfamily is reported as not resolved because Gypsy, Bel-Pao and Retrovirus/ERV share that pol order (Wicker et al. 2007), and confidence is capped at Moderate. "Errantivirus" is named only for Gypsy-called elements. Drosophila gypsy keeps its Gypsy call.
 - Pfam RVT_3 (PF13456), an RNase H-clan profile, is reported as an RNase H-like domain instead of reverse transcriptase, so an RNase H region alone no longer licenses a Class I call. The panel still has 30 models.
 - A classification that is withheld outright always reports Candidate confidence; terminal repeats no longer raise a transposase-only call to Moderate.
-- LTR identity and length are measured from a gapped alignment, so an indel between the LTR copies no longer reads as heavy divergence or halves the LTR; boundaries are refined jointly with the target-site duplication.
+- LTR identity and length are measured from a gapped alignment that accommodates indels up to 32 bp; longer indels can still shorten the detected repeat. Boundaries are refined jointly with the target-site duplication.
 - Terminal inverted repeats are located in records that carry genomic flanks, and a Tc1/Mariner element reports its true TIR and the TA target site; poly-A tails followed by flank or interrupted by one base are found, with chance tails controlled for multiple testing.
 - TSD congruence uses superfamily length ranges (LTR 4–6 bp, preferred 5 bp) and motifs (Tc1/Mariner TA), and a short chance-level repeat is no longer described as proof that the insertion site is captured.
 - LTR cis-elements (PBS, PPT, poly(A) signal) are reported on the element's own strand, using the domain strand when the structure alone cannot orient the element.
@@ -67,6 +67,9 @@ This release corrects scientific and interface defects found by a full audit of 
 
 ### Fixed
 
+- Bundled dependency pins include Primer3-py 2.3.1 memory-safety and correctness fixes, pyhmmer 0.12.3 fixes for model comparison and type stubs, and pypdf 6.19.0 security fixes for page-label parsing. The profile panel and scientific thresholds are unchanged.
+- The optional backend provisions verified upstream RepeatMasker 4.2.5 source, with fixes to reverse-strand LINE pairing and forward-strand DNA-transposon fragment joining. The available Bioconda 4.2.4 package supplies its prerequisites; downloaded Dfam data remain in their existing directory.
+- Windows builds exclude unrelated ICU libraries from the build machine's search path, preventing a frozen application from replacing the Windows ICU interface that Qt requires.
 - Results of a family annotation, splice alignment, primer design, in-silico PCR or genome scan for a previous specimen are discarded instead of being shown as current, and a slow fetch can no longer overwrite a sequence entered afterwards.
 - Invalid input names the offending characters, their positions and the likely cause (protein, alignment gaps, GenBank numbering, an accession typed into the sequence box) instead of a provenance-binding error, and the specimen readouts reset.
 - Primer-design and in-silico-PCR tables, exports and manifests carry the analysed record's identity instead of a hash shared by every pasted sequence.
@@ -128,7 +131,7 @@ This release narrows the taxonomic boundary for paired terminal direct repeats a
 
 ## Post-release benchmark evidence — 2026-08-25
 
-- Completed the TEagle 3.9.0 publication benchmark under frozen protocol 2.3.6 and freeze `258013a15ad7caf648ad4ef967b14830e1c27fce156e34c3284053dcb5bd007f`, after publication of the result-informed corrective registration at [10.5281/zenodo.22091013](https://doi.org/10.5281/zenodo.22091013). Complete 2.3.5 outputs had been observed before the correction; all were excluded and every 2.3.6 stage was rerun, but the registration is not outcome-blind. The DOI identifies the corrective-registration package, not the executed result archive; a public result DOI is pending.
+- Completed the TEagle 3.9.0 publication benchmark under frozen protocol 2.3.6, after publication of the result-informed corrective registration at [10.5281/zenodo.22091013](https://doi.org/10.5281/zenodo.22091013). Complete 2.3.5 outputs had been observed before the correction; all were excluded and every 2.3.6 stage was rerun, but the registration is not outcome-blind. The DOI identifies the corrective-registration package, not the executed result archive; a public result DOI is pending. The freeze binding is retained in local validation records.
 - The executed result archive is not part of this software release and has no public DOI. Numerical outcomes and detailed execution records therefore remain outside the public changelog; the corrective-registration DOI is not a results citation.
 
 ## [3.9.0] — 2026-08-23

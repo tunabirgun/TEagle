@@ -8,15 +8,15 @@ in `app/backend/requirements.txt`; the provenance manifest of every run records 
 
 | Component | Version | Licence | Role |
 |---|---|---|---|
-| [primer3-py](https://github.com/libnano/primer3-py) | 2.3.0 | GPL-2.0-**or-later** | Primer design and nearest-neighbour thermodynamics |
+| [primer3-py](https://github.com/libnano/primer3-py) | 2.3.1 | GPL-2.0-**or-later** | Primer design and nearest-neighbour thermodynamics |
 | [PySide6](https://doc.qt.io/qtforpython/) | 6.11.1 | LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only | Qt user interface |
 | [shiboken6](https://doc.qt.io/qtforpython/shiboken6/) | 6.11.1 | LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only | PySide6 binding runtime |
-| [pyhmmer](https://github.com/althonos/pyhmmer) | 0.12.1 | MIT AND BSD-3-Clause AND BSD-2-Clause | HMMER3 profile search, in-process; the wheel statically links HMMER and Easel (BSD-3-Clause, see below) |
+| [pyhmmer](https://github.com/althonos/pyhmmer) | 0.12.3 | MIT AND BSD-3-Clause AND BSD-2-Clause | HMMER3 profile search, in-process; the wheel statically links HMMER and Easel (see below) |
 | [openpyxl](https://openpyxl.readthedocs.io/) | 3.1.5 | MIT | XLSX table export |
 | [psutil](https://github.com/giampaolo/psutil) | 7.2.2 | BSD-3-Clause | Process and memory inspection for the resource gates |
 | et_xmlfile | 2.0.0 (openpyxl dependency) | MIT | XLSX writing |
 | [certifi](https://github.com/certifi/python-certifi) | 2026.7.22 | MPL-2.0 | CA bundle for NCBI/Ensembl requests |
-| [pypdf](https://github.com/py-pdf/pypdf) | 6.15.0 | BSD-3-Clause | PDF metadata minimisation while preserving document navigation |
+| [pypdf](https://github.com/py-pdf/pypdf) | 6.19.0 | BSD-3-Clause | PDF metadata minimisation while preserving document navigation |
 | Pfam-A TE domain profiles (`data/te_domains.hmm`) | 30 profiles, listed below | CC0-1.0 | Protein-domain panel |
 | CPython runtime | 3.12 | PSF-2.0 | Python interpreter and standard library frozen into the executable |
 | OpenSSL libraries linked by CPython | as shipped with CPython 3.12 | Apache-2.0 | TLS for NCBI/Ensembl requests |
@@ -33,7 +33,7 @@ The installer places `LICENSE` (AGPL-3.0-or-later), this file, `LGPL-3.0.txt`, `
 
 ### HMMER and Easel
 
-pyhmmer statically links HMMER 3 and its Easel library. HMMER is distributed under the BSD three-clause licence and Easel under the BSD two-clause licence, which accounts for the licence expression declared by the pyhmmer wheel. The licence files are installed verbatim as `HMMER-BSD-3-Clause.txt` and `Easel-BSD-2-Clause.txt` in the `licenses` folder. They were taken from the bioconda hmmer 3.3.2 package, not from the HMMER release that pyhmmer 0.12.1 compiles in, so their copyright years and contributor lists may be older than that release's own files. Replace them with the files of the bundled release once those are verified.
+pyhmmer statically links HMMER 3.4 and its Easel library. HMMER is distributed under the BSD three-clause licence and Easel under the BSD two-clause licence, which accounts for the licence expression declared by the pyhmmer wheel. The licence files are installed verbatim as `HMMER-BSD-3-Clause.txt` and `Easel-BSD-2-Clause.txt` in the `licenses` folder. They are the vendored licence texts from the verified pyhmmer 0.12.3 source distribution, including the corresponding copyright notices and contributor lists.
 
 ### Pfam profiles in the bundled panel
 
@@ -62,7 +62,7 @@ listed because their terms affect what you may do with the results.
 
 | Tool | Licence | Note |
 |---|---|---|
-| [RepeatMasker](https://www.repeatmasker.org/) | Open Software License 2.1 | Family naming |
+| [RepeatMasker](https://www.repeatmasker.org/) | Open Software License 2.1 | Family naming with verified upstream 4.2.5 source; Bioconda 4.2.4 supplies the prerequisite stack |
 | [Dfam](https://dfam.org/) | CC0-1.0 (curated partitions) | Family library |
 | [minimap2](https://github.com/lh3/minimap2) | MIT | Splice alignment |
 | [isPcr](https://genome.ucsc.edu/) | UCSC — free for academic, non-profit and personal use | **Commercial use requires a licence from UCSC.** Relevant if TEagle is ever hosted as a paid service. |

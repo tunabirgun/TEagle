@@ -256,7 +256,8 @@ def test_readme_panel_size_matches_the_bundled_profiles():
 def test_readme_identifies_the_public_result_package():
     readme = _readme()
     assert "10.5281/zenodo.22159977" in readme
-    assert "63559355f723a4a45c3b439e00dce283cc8b191855a5118d27a0dc94619961a6" in readme
+    assert "public 4.0.0 results archive" in readme
+    assert not re.search(r"(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])", readme)
     assert "result archive has not received a public DOI" not in readme
 
 
@@ -369,8 +370,9 @@ def test_manual_herv_caption_matches_visible_headline_classification():
     if text is None:
         pytest.skip("manual not present")
     flat = " ".join(text.split())
-    assert "The headline call is \\texttt{LTR/Gypsy}" in flat
-    assert "the explanation identifies an env-bearing ERV lineage" in flat
+    # 4.1.0: retrovirus-specific gag/env profiles leave an LTR element's superfamily unresolved (classify.RETROVIRAL_UNDETERMINED)
+    assert "The banner reads \\texttt{LTR/unclassified}" in flat
+    assert "superfamily is not resolved" in flat
     assert "classification banner reports an ERV" not in flat
 
 
@@ -565,12 +567,14 @@ def test_current_docs_state_native_export_boundaries_and_no_retired_web_ui():
 
 
 def test_screenshot_index_records_completed_40_capture_contract():
+    from teagle_core import __version__
     text = _read("docs/img/README.md")
     for required in (
-        "native TEagle 4.0.0 app", "light theme at 1920x1080",
+        f"native TEagle {__version__} app", "light theme at 1920x1080",
         "1500x1150 window and UI scale 1.0", "Every accepted figure is a real run",
         "No figure contains synthesised results", "recapture sidecar",
-        "dimensions and SHA-256 hashes",
+        "dimensions, capture conditions", "rendered-content equality verified",
+        "maintainer-local validation records",
     ):
         assert required in text
     assert "must be recaptured" not in text

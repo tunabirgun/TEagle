@@ -376,6 +376,9 @@ def test_frozen_spec_filters_unused_qt_native_chains_before_collect():
     helpers = _load_bundle_gate_helpers()
     entries = [
         ("PySide6/Qt6Core.dll", "core", "BINARY"),
+        ("icuuc.dll", "foreign-icu", "BINARY"),
+        ("icuin.dll", "foreign-icu-i18n", "BINARY"),
+        ("icudt78.dll", "foreign-icu-data", "BINARY"),
         ("PySide6/Qt6Pdf.dll", "pdf", "BINARY"),
         ("PySide6/Qt6QuickWidgets.dll", "quick", "BINARY"),
         ("PySide6/Qt6QmlModels.dll", "qml", "BINARY"),
@@ -391,6 +394,10 @@ def test_frozen_spec_filters_unused_qt_native_chains_before_collect():
     "mutation",
     [
         "_internal\\PySide6\\plugins\\imageformats\\qpdf.dll",
+        "_internal/icu.dll",
+        "_internal/icuuc.dll",
+        "_internal/icuin.dll",
+        "_internal/icudt78.dll",
         "_internal/PySide6/Qt6Pdf.dll",
         "_internal/PySide6/Qt6Quick.dll",
         "_internal/PySide6/Qt6QmlWorkerScript.dll",

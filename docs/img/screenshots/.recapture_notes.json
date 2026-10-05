@@ -1,234 +1,204 @@
 {
  "_capture": {
-  "appVersion": "4.0.0",
-  "completedNs": 1787693747730278400,
+  "appVersion": "4.1.0",
+  "candidateScope": "Pre-release interface captures with Primer3-py 2.3.0 and pyhmmer 0.12.1; not scientific benchmark outputs of the final release.",
+  "completedNs": 1791138311865757500,
   "failures": [],
   "outputs": {
    "docs/img/coord_fetch.png": {
     "height": 1070,
-    "sha256": "6cfd80a6f43b14b842124f31a6aec7f7dc293a46b701d25c0bd8116b0b4da5f2",
     "width": 340
    },
    "docs/img/genome_scan.png": {
-    "height": 1227,
-    "sha256": "c06d1d1deb5c4a20cb1524c9d227c0be5cea6e66e396ef125411c7ccd4999ba9",
+    "height": 1302,
     "width": 1109
    },
    "docs/img/installer.png": {
-    "height": 1043,
-    "sha256": "ce57e652069b8df868255709d475cc132a6daf6e2ffc7eb6e74b6587a4cabe4d",
+    "height": 1048,
     "width": 900
    },
    "docs/img/overview.png": {
     "height": 1150,
-    "sha256": "1970b7831c3ece3fe78ef5605d9cc971bd7aa051ae99f00bd60ec9ae78e5c225",
     "width": 1500
    },
    "docs/img/pcr_gel.png": {
-    "height": 977,
-    "sha256": "45bf09217fa6070d6ebe6d9516907aa71c248f5220e188ee9a901398156ffaca",
+    "height": 1226,
     "width": 1109
    },
    "docs/img/primers.png": {
-    "height": 752,
-    "sha256": "14143177234aec6c36f9039d52eb8bc959696cec3ec90236c45a615533767ef7",
+    "height": 941,
     "width": 1109
    },
    "docs/img/screenshots/genome_scan_no_locus.png": {
-    "height": 1213,
-    "sha256": "c06c29e8a85c12025b78e964257dee657c9d7d432793f3ecb59ebbb09406c725",
+    "height": 1286,
     "width": 1109
    },
    "docs/img/screenshots/herv_h_partial.png": {
-    "height": 1950,
-    "sha256": "0c48c464855687407ff7324b09b1bafe3627a1336a96a174b362330492139d3a",
+    "height": 2838,
     "width": 1109
    },
    "docs/img/screenshots/herv_k_domains.png": {
-    "height": 1997,
-    "sha256": "e0d1655280cc8171c3ca59c16ddf92464f1a0920f0f452bdb0c9a4dff5209a4b",
+    "height": 2788,
     "width": 1109
    },
    "docs/img/screenshots/manage_genomes_panel.png": {
-    "height": 995,
-    "sha256": "da8f85c098ee985c8bc90905716680d5c0e62d148b4cf406ad839b617fc89c3e",
+    "height": 1004,
     "width": 1180
    },
    "docs/img/screenshots/methods_databases.png": {
-    "height": 1936,
-    "sha256": "65a2bc259ae4005e29746a76c633f2bec35973734edf8274dbfedb4fd3f95fe3",
+    "height": 2911,
     "width": 1109
    },
    "docs/img/screenshots/primer_structure_detail.png": {
     "height": 460,
-    "sha256": "db3a9c104f59d914cc786dfcd3868cb60c08e5d090bc94d3e1a4c8bbb368457c",
     "width": 640
    },
    "docs/img/screenshots/splice_multi_exon.png": {
-    "height": 728,
-    "sha256": "9a61064054dd4273617d8ce26ceb82bbcc7f7bc475ad61a3214058a75907164a",
+    "height": 787,
     "width": 1109
    },
    "docs/img/screenshots/subregion_picker.png": {
     "height": 200,
-    "sha256": "5936cd33834b4943713351bf4437a5a6b4463fa30b0d4e312ce96a8d21079c67",
     "width": 478
    },
+   "report/manual_figures/assay_report_page1.png": {
+    "height": 1684,
+    "width": 1190
+   },
    "report/manual_figures/card02_methods_foot.png": {
-    "height": 351,
-    "sha256": "f8d90c37f2583017d8599f6a0181ae72a224de9eb903a3e654c1a7f4e866d691",
+    "height": 863,
     "width": 1109
    },
    "report/manual_figures/card_coord.png": {
     "height": 1070,
-    "sha256": "6cfd80a6f43b14b842124f31a6aec7f7dc293a46b701d25c0bd8116b0b4da5f2",
     "width": 340
    },
    "report/manual_figures/card_coord_fetch.png": {
-    "height": 404,
-    "sha256": "2f001827ea954f12b4080cefd6d4b9748918b8bd3a9a607a3659c0e0e70149bb",
+    "height": 441,
     "width": 340
    },
-   "report/manual_figures/card_genome_results.png": {
-    "height": 535,
-    "sha256": "05ff268b4b05623e38c9d66a25a536135786e9d1fe6cccaab46b871714ca8436",
-    "width": 1109
-   },
-   "report/manual_figures/card_genome_scope.png": {
-    "height": 93,
-    "sha256": "69732b7750e0d65a6e997261ee179b07239b84a044dd31b282c5e3adb9262d9a",
-    "width": 1109
-   },
-   "report/manual_figures/card_genome_table.png": {
-    "height": 458,
-    "sha256": "3d0f4e00c7111192b9f230303c44126a192cda6cadf0436f45bfd1229ef04e84",
+   "report/manual_figures/card_genome.png": {
+    "height": 1302,
     "width": 1109
    },
    "report/manual_figures/card_herv.png": {
-    "height": 1997,
-    "sha256": "e0d1655280cc8171c3ca59c16ddf92464f1a0920f0f452bdb0c9a4dff5209a4b",
-    "width": 1109
-   },
-   "report/manual_figures/card_herv_domains_notes.png": {
-    "height": 513,
-    "sha256": "42b1bb7978911071e63f37291bb9d1b0dc2ec2f9c3b981b2dd8f9941e380a11f",
-    "width": 1109
-   },
-   "report/manual_figures/card_herv_structural_orfs.png": {
-    "height": 434,
-    "sha256": "c95706872247475427db4f13af36de6693cd2bb958874f01a2e431afc6b5e80e",
+    "height": 2788,
     "width": 1109
    },
    "report/manual_figures/card_installer.png": {
-    "height": 1043,
-    "sha256": "ce57e652069b8df868255709d475cc132a6daf6e2ffc7eb6e74b6587a4cabe4d",
+    "height": 1048,
     "width": 900
    },
    "report/manual_figures/card_pcr.png": {
-    "height": 977,
-    "sha256": "45bf09217fa6070d6ebe6d9516907aa71c248f5220e188ee9a901398156ffaca",
-    "width": 1109
-   },
-   "report/manual_figures/card_pcr_controls.png": {
-    "height": 360,
-    "sha256": "14d24310c1f37257bf31f6b1ff31eaee0af99792bffbf1d92b686dbc652224cf",
-    "width": 1109
-   },
-   "report/manual_figures/card_pcr_results.png": {
-    "height": 625,
-    "sha256": "702f44a53137a02c1336f1f4e93f1e3a5425767e6dc94927df61bf768b9c97a8",
+    "height": 1226,
     "width": 1109
    },
    "report/manual_figures/card_primer.png": {
-    "height": 752,
-    "sha256": "14143177234aec6c36f9039d52eb8bc959696cec3ec90236c45a615533767ef7",
+    "height": 941,
     "width": 1109
    },
-   "report/manual_figures/card_primer_pairs.png": {
-    "height": 338,
-    "sha256": "22699c74fc77caaf9a03ade65001947b6fec56798e33416adba0d4458a1c0886",
+   "report/manual_figures/card_primer_genotype.png": {
+    "height": 957,
     "width": 1109
    },
    "report/manual_figures/card_prov.png": {
-    "height": 644,
-    "sha256": "878d454456122d6606349cc1a35beeaa715f01c346c94ce5e3a5d94e580fcf84",
-    "width": 760
+    "height": 1057,
+    "width": 1109
+   },
+   "report/manual_figures/card_prov_runs.png": {
+    "height": 1057,
+    "width": 1109
    },
    "report/manual_figures/card_splice.png": {
-    "height": 728,
-    "sha256": "9a61064054dd4273617d8ce26ceb82bbcc7f7bc475ad61a3214058a75907164a",
+    "height": 787,
     "width": 1109
    },
    "report/manual_figures/card_struct.png": {
-    "height": 1643,
-    "sha256": "92398b5e55c1ad38aabed8e356f7cd16d172677d57a721346f11239b33533161",
+    "height": 2479,
     "width": 1109
    },
    "report/manual_figures/card_wsl.png": {
-    "height": 421,
-    "sha256": "9e58d4f952c7316f29e46c70106f1c0defc87d07a0aa71bcc54641be6d79f711",
+    "height": 420,
     "width": 1109
    },
-   "report/manual_figures/methods_databases.png": {
-    "height": 1936,
-    "sha256": "65a2bc259ae4005e29746a76c633f2bec35973734edf8274dbfedb4fd3f95fe3",
+   "report/manual_figures/coord_toggle_card.png": {
+    "height": 182,
     "width": 1109
+   },
+   "report/manual_figures/coord_toggle_menu.png": {
+    "height": 234,
+    "width": 700
+   },
+   "report/manual_figures/help_menu.png": {
+    "height": 212,
+    "width": 1500
+   },
+   "report/manual_figures/methods_databases.png": {
+    "height": 2911,
+    "width": 1109
+   },
+   "report/manual_figures/multi_record.png": {
+    "height": 1150,
+    "width": 1500
    },
    "report/manual_figures/overview.png": {
     "height": 1150,
-    "sha256": "1970b7831c3ece3fe78ef5605d9cc971bd7aa051ae99f00bd60ec9ae78e5c225",
     "width": 1500
    },
    "report/manual_figures/primer_structure_detail.png": {
     "height": 460,
-    "sha256": "db3a9c104f59d914cc786dfcd3868cb60c08e5d090bc94d3e1a4c8bbb368457c",
     "width": 640
+   },
+   "report/manual_figures/scope_caution.png": {
+    "height": 544,
+    "width": 1087
    },
    "report/manual_figures/subregion_picker.png": {
     "height": 200,
-    "sha256": "5936cd33834b4943713351bf4437a5a6b4463fa30b0d4e312ce96a8d21079c67",
     "width": 478
    }
   },
-  "schemaVersion": "1.0",
-  "startedNs": 1787693712634054400,
-  "status": "ok"
+  "schemaVersion": "public-descriptive-1.0",
+  "startedNs": 1791138223184531600,
+  "status": "ok",
+  "bindingScope": "Dimensions and capture descriptions only; original byte bindings and derivative verification are maintained locally."
  },
  "img": {
   "coord_fetch.png": "panel 01 rail after a real NCBI coordinate fetch — chr13:33,016,423-33,066,143 · GRCh38.p14 · 49,721 bp · 340x1070",
-  "genome_scan.png": "REAL on+off-target (1 on / 48 off) · 1109x1227",
-  "installer.png": "backend installer — per-component status, per-component Install (absent) or Repair (present), Install all, Check integrity, live log · 900x1043",
-  "overview.png": "header v4.0.0 · 1500x1150",
-  "pcr_gel.png": "panel 05 — staged pair, to-scale gel, 1 amplicon(s) on M11240 · 1109x977",
-  "primers.png": "panel 04 — 5 ranked pairs on M11240, per-pair structure QC · 1109x752"
+  "genome_scan.png": "REAL on+off-target (1 on / 12 off) · Saccharomyces cerevisiae GCF_000146045.2 (R64) · Ty1 at chrII:220,000-232,000 · 1109x1302",
+  "installer.png": "backend installer — per-component status, per-component Install (absent) or Repair (present), Install all, Check integrity, live log · 900x1048",
+  "overview.png": "header v4.1.0 · 1500x1150",
+  "pcr_gel.png": "panel 05 — staged pair, to-scale gel, 1 amplicon(s) on M11240 · 1109x1226",
+  "primers.png": "panel 04 — assay-goal chooser, 5 ranked pairs on M11240 with Location and Notes, per-pair structure QC, order-sheet buttons · 1109x941"
  },
  "man": {
-  "card02_methods_foot.png": "card 02 foot — enlarged methods & databases panel · 1109x351",
+  "assay_report_page1.png": "page 1 of 2 of the assay report (PDF) the app wrote for M11240 after analysis, primer design and in-silico PCR · 1190x1684",
+  "card02_methods_foot.png": "card 02 foot — protein-domain table + methods & databases panel · 1109x863",
   "card_coord.png": "panel 01 rail after a real NCBI coordinate fetch — chr13:33,016,423-33,066,143 · GRCh38.p14 · 49,721 bp · 340x1070",
-  "card_coord_fetch.png": "panel 01 coordinate fetch — chr13:33,016,423-33,066,143 · GRCh38.p14 · 340x404",
-  "card_genome_results.png": "whole-genome verdict, summaries, full result table, and caveat · 1109x535",
-  "card_genome_scope.png": "whole-genome computational scope note · 1109x93",
-  "card_genome_table.png": "whole-genome verdict, summaries, and full result table · 1109x458",
-  "card_herv.png": "HERV-K113 GAG-POL-ENV + per-domain confidence + completeness tier · 1109x1997",
-  "card_herv_domains_notes.png": "HERV-K113 protein-domain table and scope notes · 1109x513",
-  "card_herv_structural_orfs.png": "HERV-K113 structural-evidence and ORF tables · 1109x434",
-  "card_installer.png": "backend installer — per-component status, per-component Install (absent) or Repair (present), Install all, Check integrity, live log · 900x1043",
-  "card_pcr.png": "panel 05 — staged pair, to-scale gel, 1 amplicon(s) on M11240 · 1109x977",
-  "card_pcr_controls.png": "Card 05 — enlarged loaded-pair queue, search settings, and run control · 1109x360",
-  "card_pcr_results.png": "Card 05 — enlarged gel, product table, exports, and scope note · 1109x625",
-  "card_primer.png": "panel 04 — 5 ranked pairs on M11240, per-pair structure QC · 1109x752",
-  "card_primer_pairs.png": "Card 04 — enlarged ranked primer-pair table and visible structure key · 1109x338",
-  "card_prov.png": "core v4.0.0 · 760x644",
-  "card_splice.png": "J00265 x NM_000207 -> 3 exons / 2 introns · 1109x728",
-  "card_struct.png": "captured by recapture_shots.py · 1109x1643",
-  "card_wsl.png": "M80343 — all 1 returned row(s): 1 TE-classified, 0 non-TE repeat, 0 unclassified · 1109x421",
-  "methods_databases.png": "methods & databases disclosure expanded · 1109x1936",
-  "overview.png": "header v4.0.0 · 1500x1150",
+  "card_coord_fetch.png": "panel 01 coordinate fetch — chr13:33,016,423-33,066,143 · GRCh38.p14 · 340x441",
+  "card_genome.png": "REAL on+off-target (1 on / 12 off) · Saccharomyces cerevisiae GCF_000146045.2 (R64) · Ty1 at chrII:220,000-232,000 · 1109x1302",
+  "card_herv.png": "HERV-K113 GAG-POL-ENV + per-domain confidence + completeness tier · 1109x2788",
+  "card_installer.png": "backend installer — per-component status, per-component Install (absent) or Repair (present), Install all, Check integrity, live log · 900x1048",
+  "card_pcr.png": "panel 05 — staged pair, to-scale gel, 1 amplicon(s) on M11240 · 1109x1226",
+  "card_primer.png": "panel 04 — assay-goal chooser, 5 ranked pairs on M11240 with Location and Notes, per-pair structure QC, order-sheet buttons · 1109x941",
+  "card_primer_genotype.png": "panel 04 — Genotype goal across the 5′ insertion junction of the Ty1 at chrII:220,000-232,000; Location and Notes columns · 1109x957",
+  "card_prov.png": "core v4.1.0 · 1109x1057",
+  "card_prov_runs.png": "sectioned provenance view with the run-history list open (4 runs: analysis, primer design, in-silico PCR, family naming) · 1109x1057",
+  "card_splice.png": "J00265 x NM_000207 -> 3 exons / 2 introns · 1109x787",
+  "card_struct.png": "captured by recapture_shots.py · 1109x2479",
+  "card_wsl.png": "M80343 — all 1 returned row(s): 1 TE-classified, 0 non-TE repeat, 0 unclassified · 1109x420",
+  "coord_toggle_card.png": "structural-evidence table in 1-based inclusive numbering, with its display-only caption · 1109x182",
+  "coord_toggle_menu.png": "header Coords menu: 0-based half-open (default) or 1-based inclusive, display only · 700x234",
+  "help_menu.png": "Start here strip (published examples as one-click runs) with the Help menu open · 1500x212",
+  "methods_databases.png": "methods & databases disclosure expanded · 1109x2911",
+  "multi_record.png": "3 bundled examples (M11240, M12927, X01005) pasted as one FASTA; record 2 selected by clicking its row, named in the detail title and the rail · 1500x1150",
+  "overview.png": "header v4.1.0 · 1500x1150",
   "primer_structure_detail.png": "primer3 vs ViennaRNA ΔG, side by side · 640x460",
+  "scope_caution.png": "classification banner for a constructed input: two head-to-tail copies of M11240 (10,292 bp); the strip warns that one call covers more than one copy · 1087x544",
   "subregion_picker.png": "pick an interval inside a feature · 478x200"
  },
  "shots": {
-  "genome_scan_no_locus": "live scan with no design locus — neutral 'genomic priming site' wording",
+  "genome_scan_no_locus": "live scan with no design locus (Ty1-H3 GenBank record M18706 vs Saccharomyces cerevisiae) — neutral 'genomic priming site' wording",
   "herv_h_partial": "HERV-H partial tier, single 'not detected' line",
   "herv_k_domains": "HERV-K113 GAG-POL-ENV + per-domain confidence + completeness tier",
   "manage_genomes_panel": "full organism catalogue, per-row download/delete",
@@ -236,5 +206,10 @@
   "primer_structure_detail": "primer3 vs ViennaRNA ΔG, side by side",
   "splice_multi_exon": "J00265 x NM_000207 -> 3 exons / 2 introns",
   "subregion_picker": "pick an interval inside a feature"
+ },
+ "deliveryTransformation": {
+  "kind": "optional_metadata_removal",
+  "scientificContent": "unchanged",
+  "renderedEquality": "verified for delivered PNG and SVG derivatives"
  }
 }

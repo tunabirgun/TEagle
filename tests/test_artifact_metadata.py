@@ -750,7 +750,7 @@ def test_current_manuscript_office_artifacts_have_minimal_metadata():
     assert failures == {}
 
 
-def test_current_project_media_have_author_only_metadata():
+def test_current_project_media_follow_scoped_metadata_policy():
     media_roots = [
         ROOT / "docs" / "img",
         ROOT / "app" / "native" / "assets",
@@ -771,11 +771,14 @@ def test_current_project_media_have_author_only_metadata():
     ]
     existing = [path for path in paths if path.exists()]
     assert existing, "no current project media found"
-    failures = {
-        str(path): media_metadata_violations(path)
-        for path in existing
-        if media_metadata_violations(path)
-    }
+    failures = {}
+    for path in existing:
+        current_asset = any(path.is_relative_to(root) for root in media_roots[:2]) or path in {
+            ROOT / "report" / "teagle_manual.pdf", ROOT / "dist" / "TEagle-User-Manual.pdf",
+        }
+        violations = media_metadata_violations(path, author=None) if current_asset else media_metadata_violations(path)
+        if violations:
+            failures[str(path)] = violations
     assert failures == {}
 
 

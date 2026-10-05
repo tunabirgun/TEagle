@@ -75,7 +75,7 @@ def main():
     figdir = os.path.join(ROOT, "report", "figures"); os.makedirs(figdir, exist_ok=True)
     mark_png = os.path.join(figdir, "teagle-mark-dark.png")
     Image.open(io.BytesIO(_png(DARK_INK, 900))).save(mark_png)
-    clean_png_metadata(mark_png)
+    clean_png_metadata(mark_png, author=None)
     print("wrote", mark_png)
 
     r = _renderer(DARK_INK); s = r.defaultSize(); ar = s.width() / s.height()
@@ -86,7 +86,7 @@ def main():
     pw.setPageMargins(QMarginsF(0, 0, 0, 0))
     p = QPainter(pw)
     r.render(p, QRectF(0, 0, p.viewport().width(), p.viewport().height())); p.end()
-    clean_pdf_metadata(pdf)
+    clean_pdf_metadata(pdf, author=None)
     print("wrote", pdf)
 
 if __name__ == "__main__":

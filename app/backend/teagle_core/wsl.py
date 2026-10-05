@@ -442,6 +442,9 @@ _CONDA_PINS = {
     "viennarna": "2.7.2",
 }
 _MICROMAMBA_VERSION = "2.8.1"
+_REPEATMASKER_VERSION = "4.2.5"
+_REPEATMASKER_SOURCE_URL = "https://github.com/Dfam-consortium/RepeatMasker/archive/refs/tags/v4.2.5.tar.gz"
+_REPEATMASKER_SOURCE_SHA256 = "2a863a62c01d631f733ee0e9d01278241a96dfc168dc8eb974c43a44bcf1d570"
 _MICROMAMBA_URL = ("https://github.com/mamba-org/micromamba-releases/releases/download/"
                    "2.8.1-0/micromamba-linux-64.tar.bz2")
 _MICROMAMBA_SHA256 = "a934c3709c997feae403a27fd1e321c106d26ffa4f294800ffb11cbc9a3e8515"
@@ -963,11 +966,84 @@ if "$MM" run -n te RepeatMasker -v 2>&1 | grep -q "RepeatMasker version __RM_VER
   # never `env remove` here: the Dfam .h5 libraries (multi-GB) live INSIDE this env prefix.
   # mm_create / mm_install self-recover from a corrupted repodata shard (clean-index + retry once).
   mm_create || fail "create te env"
-  mm_install repeatmasker=__RM_VERSION__ || fail "install repeatmasker __RM_VERSION__"
+  # Bioconda supplies the dependency stack; the verified source supplies the corrected runtime.
+  mm_install repeatmasker=__RM_BOOTSTRAP__ || fail "install RepeatMasker dependency stack"
+  "$MM" run -n te python - "$ENV" '__RM_VERSION__' '__RM_URL__' '__RM_SHA__' <<'PY' || fail "RepeatMasker source setup failed; preserved files can be repaired by retrying this component"
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import urllib.request
+
+env = Path(sys.argv[1])
+version, url, expected = sys.argv[2:]
+destination = env / "share" / ("teagle-repeatmasker-" + version)
+marker = destination / ".teagle-source-owned.json"
+if destination.exists() and not marker.is_file():
+    raise SystemExit("RepeatMasker source directory is not TEagle-owned; it was left untouched")
+ownership = {"version": version, "source_url": url, "source_sha256": expected}
+if marker.is_file() and json.loads(marker.read_text(encoding="utf-8")) != ownership:
+    raise SystemExit("RepeatMasker ownership marker is unrecognized; the directory was left untouched")
+cache = env / ".teagle-source-downloads"
+cache.mkdir(exist_ok=True)
+archive = cache / ("RepeatMasker-" + version + ".tar.gz")
+if not archive.exists():
+    with tempfile.NamedTemporaryFile(dir=cache, delete=False) as stream:
+        partial = Path(stream.name)
+        try:
+            with urllib.request.urlopen(url, timeout=120) as response:
+                shutil.copyfileobj(response, stream)
+        except Exception as exc:
+            raise SystemExit("RepeatMasker source download failed; retry this component: " + type(exc).__name__)
+    if hashlib.sha256(partial.read_bytes()).hexdigest() != expected:
+        raise SystemExit("RepeatMasker source checksum mismatch; the untrusted download was retained for inspection")
+    partial.replace(archive)
+if hashlib.sha256(archive.read_bytes()).hexdigest() != expected:
+    raise SystemExit("Cached RepeatMasker source checksum mismatch; inspect the cache before retrying")
+stage = Path(tempfile.mkdtemp(prefix=".teagle-repeatmasker-", dir=env / "share"))
+with tarfile.open(archive) as source:
+    source.extractall(stage, filter="data")
+candidate = stage / ("RepeatMasker-" + version)
+if not (candidate / "RepeatMasker").is_file() or not (candidate / "configure").is_file():
+    raise SystemExit("RepeatMasker source archive layout is invalid; staging was preserved")
+famdb = sorted(env.glob("share/famdb-*/famdb.py"))
+if not famdb:
+    raise SystemExit("FamDB tool is missing; repair the dependency stack")
+previous = None
+if destination.exists():
+    backup = Path(tempfile.mkdtemp(prefix=".teagle-repeatmasker-backup-", dir=env / "share"))
+    previous = backup / destination.name
+    destination.rename(previous)
+candidate.rename(destination)
+stage.rmdir()
+(destination / ".teagle-source-owned.json").write_text(json.dumps(ownership) + "\n", encoding="utf-8")
+command = [str(env / "bin/perl"), "configure", "-perlbin", str(env / "bin/perl"), "-trf_prgm", str(env / "bin/trf"), "-rmblast_dir", str(env / "bin"), "-hmmer_dir", str(env / "bin"), "-famdb_dir", str(famdb[0].parent), "-default_search_engine", "rmblast"]
+configured = subprocess.run(command, cwd=destination, stdin=subprocess.DEVNULL)
+if configured.returncode:
+    if previous is not None:
+        failed = Path(tempfile.mkdtemp(prefix=".teagle-repeatmasker-failed-", dir=env / "share"))
+        destination.rename(failed / destination.name)
+        previous.rename(destination)
+    raise SystemExit("RepeatMasker configuration failed; source evidence was preserved")
+binary = env / "bin/RepeatMasker"
+if binary.exists() or binary.is_symlink():
+    backup = Path(tempfile.mkdtemp(prefix="RepeatMasker-launcher-", dir=cache)) / "RepeatMasker"
+    shutil.copy2(binary, backup, follow_symlinks=False)
+temporary = binary.with_name(".RepeatMasker-source-link")
+if temporary.exists() or temporary.is_symlink():
+    raise SystemExit("RepeatMasker staging link already exists; inspect it before retrying")
+temporary.symlink_to(destination / "RepeatMasker")
+os.replace(temporary, binary)
+PY
   "$MM" run -n te RepeatMasker -v 2>&1 | grep -q "RepeatMasker version __RM_VERSION__$" || fail "RepeatMasker __RM_VERSION__ not runnable after install"
 fi
 echo "[teagle] STEP repeatmasker OK"
-'''.replace("__RM_VERSION__", _CONDA_PINS["repeatmasker"]),
+'''.replace("__RM_VERSION__", _REPEATMASKER_VERSION).replace("__RM_BOOTSTRAP__", _CONDA_PINS["repeatmasker"]).replace("__RM_URL__", _REPEATMASKER_SOURCE_URL).replace("__RM_SHA__", _REPEATMASKER_SOURCE_SHA256),
     "minimap2": r'''
 echo "[teagle] STEP minimap2 START"
 [ -x "$MM" ] || fail "micromamba required first (repair micromamba)"
@@ -1311,7 +1387,7 @@ def components_status() -> dict:
     present("micromamba", mmgr == _MICROMAMBA_VERSION,
             (f"v{mmgr}" if mmgr not in ("0", "") else "missing"))
     rm = kv.get("repeatmasker", "0")
-    present("repeatmasker", rm == _CONDA_PINS["repeatmasker"], (f"v{rm}" if rm not in ("0", "") else "missing"))
+    present("repeatmasker", rm == _REPEATMASKER_VERSION, (f"v{rm}" if rm not in ("0", "") else "missing"))
     mm = kv.get("minimap2", "0")
     mm_base = mm.split("-", 1)[0]
     present("minimap2", mm_base == _CONDA_PINS["minimap2"], (mm if mm not in ("0", "") else "missing"))
@@ -1442,7 +1518,7 @@ def integrity_check() -> dict:
     vrna_absent = vrna_txt == "absent"
     vrna_exact = vrna_txt == f"present {_CONDA_PINS['viennarna']}"
     checks = [
-        {"name": "RepeatMasker runs", "ok": f"RepeatMasker version {_CONDA_PINS['repeatmasker']}" in rm_txt, "detail": rm_txt.strip()[:80] or "no version reported"},
+        {"name": "RepeatMasker runs", "ok": f"RepeatMasker version {_REPEATMASKER_VERSION}" in rm_txt, "detail": rm_txt.strip()[:80] or "no version reported"},
         {"name": "minimap2 runs", "ok": mm_txt.split("-", 1)[0] == _CONDA_PINS["minimap2"], "detail": mm_txt[:60] or "no version reported"},
         {"name": "FamDB loads", "ok": fam_ok,
          "detail": (f"exit {fam_rc}: " if fam_rc not in (None, "0") else "") + (fam_txt[:90] or "famdb.py info returned nothing")},
@@ -1655,7 +1731,7 @@ def resolve_species(species: str, timeout: int = 90) -> dict:
     return {"ok": True}
 
 
-_RM_DEFAULT_LINEAGE = "Homo sapiens"        # RepeatMasker 4.2.4: `$species = "homo sapiens" if ( $species eq "" )`
+_RM_DEFAULT_LINEAGE = "Homo sapiens"        # RepeatMasker 4.2.5 retains this default when no lineage is supplied.
 
 
 def _backend_not_ready(st: dict, need_dfam: bool = True) -> str:

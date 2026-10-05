@@ -517,7 +517,7 @@ def test_annotation_checks_free_space_before_re_downloading_the_fasta(tmp_path):
 
 # ---------- wsl_backend-10: FamDB check is graded on its exit status ----------
 def _probe_text(famdb):
-    return ("=RM=\nRepeatMasker version 4.2.4\n=MM=\n2.31-r1\n=FAMDB=\n" + famdb +
+    return (f"=RM=\nRepeatMasker version {wsl._REPEATMASKER_VERSION}\n=MM=\n2.31-r1\n=FAMDB=\n" + famdb +
             "=FILES=\n=OPTFILES=\n=SCAN=\n=FATOTWOBIT=\nabsent\n=VRNA=\nabsent\n")
 
 

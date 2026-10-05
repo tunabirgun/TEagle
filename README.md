@@ -32,7 +32,7 @@ TEagle reports `complete`, `partial`, `withheld`, `failed`, and `not_run` separa
 ## Install and start
 
 1. Download the installer and illustrated manual from the [latest release](https://github.com/tunabirgun/TEagle/releases/latest).
-2. Verify the published SHA-256 value, then run the installer. Windows SmartScreen may show **Windows protected your PC** because the installer is not code-signed; select **More info → Run anyway** if local policy permits it.
+2. Run the installer obtained from the release page. Windows SmartScreen may show **Windows protected your PC** because the installer is not code-signed; follow your institution's software-installation policy.
 3. Launch TEagle, select **Load example element**, and press **Run analysis**. You can instead paste a sequence, open a FASTA file, or enter an NCBI accession.
 4. Install optional Linux-backed components from **BACKEND** inside the application when Dfam, splice detection, or assembly functions are needed.
 
@@ -64,7 +64,7 @@ The TEagle 4.0.0 evaluation is linked to a public protocol lineage and independe
 - [Final controlling protocol](https://doi.org/10.5281/zenodo.22154316)
 - [Validated benchmark results](https://doi.org/10.5281/zenodo.22159977)
 
-The public results archive contains 152 files and has SHA-256 `63559355f723a4a45c3b439e00dce283cc8b191855a5118d27a0dc94619961a6`. It preserves evaluated, partial, withheld, failed, and unexecuted branches instead of presenting only completed analyses.
+The public 4.0.0 results archive contains 152 files. It preserves evaluated, partial, withheld, failed, and unexecuted branches instead of presenting only completed analyses. Local validation records retain the independent archive-integrity checks.
 
 The deployment evaluation executed 12 deterministic graphical-workflow cases on each of four exact Windows 10/11 guests. Ten required formats per case produced 480 verified export observations, 48 result documents, 48 manifests, and 144 cross-guest identity sets. These results support consistency across those exact guest observations; biological accuracy and wet-lab performance remain separate questions. The evaluation describes TEagle 4.0.0 only: TEagle 4.1.0 changes classification, structural detection and in-silico PCR results for some inputs (see [CHANGELOG.md](CHANGELOG.md)) and has not been separately evaluated.
 

@@ -19,6 +19,7 @@ if str(VERIFY) not in sys.path:
     sys.path.insert(0, str(VERIFY))
 
 import screenshot_gate as gate
+from teagle_core import __version__
 from teagle_core.artifact_metadata import clean_png_metadata
 
 
@@ -44,7 +45,8 @@ def _recapture_tree(tmp_path):
 
 
 def test_release_version_font_and_exit_gates_fail_closed():
-    assert gate.version_issues("3.9.0") and not gate.version_issues("4.0.0")
+    assert gate.version_issues("3.9.0") and not gate.version_issues(__version__)
+    assert gate.RELEASE_VERSION == __version__
     assert gate.font_issues(["CascadiaMono.ttf"]) and not gate.font_issues([])
     assert gate.exit_status(["capture failed"]) == 1 and gate.exit_status([]) == 0
 
@@ -120,7 +122,7 @@ def test_inventory_and_uncited_gates_detect_mutations(tmp_path):
     shots.mkdir(parents=True); manual.mkdir(parents=True); img.mkdir(exist_ok=True)
     for name in gate.RUN_SCREENSHOTS | gate.RECAP_SCREENSHOTS:
         _png(shots / name)
-    for name in gate.MANUAL_FIGURES:
+    for name in gate.MANUAL_FIGURES | gate.MANUAL_FIGURES_41:
         _png(manual / name)
     for name in gate.README_FIGURES:
         _png(img / name)
@@ -146,7 +148,7 @@ def test_current_tex_cites_every_expected_manual_figure():
 @pytest.mark.parametrize("marker", ["FAIL", "MISS", "UNDOC", "STALE", "UNCITED"])
 def test_manifest_gate_rejects_every_failure_marker(marker):
     required = ("CSV", "PDF")
-    good = "TEagle documentation screenshots — TEagle v4.0.0\nOK    export_CSV\nOK    export_PDF\n"
+    good = f"TEagle documentation screenshots — TEagle v{__version__}\nOK    export_CSV\nOK    export_PDF\n"
     assert gate.validate_manifest_text(good, required_exports=required) == []
     assert gate.validate_manifest_text(good + marker + " mutation\n", required_exports=required)
 
@@ -159,7 +161,7 @@ def test_manifest_gate_rejects_old_version_and_missing_export():
 
 
 def test_manifest_gate_rejects_false_off_target_wording_for_unsealed_ltr_products():
-    prefix = "TEagle documentation screenshots — TEagle v4.0.0\n"
+    prefix = f"TEagle documentation screenshots — TEagle v{__version__}\n"
     good = (prefix + "OK    pcr_off_target [runs] In-silico PCR card: repeated-LTR priming sites; "
             "three target-unassessed products because no intended locus was sealed\n")
     bad = prefix + "OK    pcr_off_target [runs] In-silico PCR card: off-target bands\n"

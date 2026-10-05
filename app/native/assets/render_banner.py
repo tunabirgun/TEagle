@@ -97,13 +97,13 @@ def render(variant, scale=4):
     # PNG (high-res, transparent)
     img = QImage(int(W * scale), int(Hh * scale), QImage.Format_ARGB32); img.fill(0)
     p = QPainter(img); p.scale(scale, scale); _paint(p, colors); p.end()
-    png = os.path.join(OUT, f"teagle-banner-{variant}.png"); img.save(png); clean_png_metadata(png)
+    png = os.path.join(OUT, f"teagle-banner-{variant}.png"); img.save(png); clean_png_metadata(png, author=None)
     # SVG (vector, self-contained)
     svg = os.path.join(OUT, f"teagle-banner-{variant}.svg")
     gen = QSvgGenerator(); gen.setFileName(svg)
     gen.setSize(img.size()); gen.setViewBox(QRectF(0, 0, W, Hh))
     gen.setTitle("TEagle"); gen.setDescription("TEagle brand banner")
-    p = QPainter(gen); _paint(p, colors); p.end(); clean_svg_metadata(svg)
+    p = QPainter(gen); _paint(p, colors); p.end(); clean_svg_metadata(svg, author=None)
     print("wrote", png, "and", svg, f"({int(W)}x{int(Hh)})")
 
 def write_wordmark_asset():
@@ -119,7 +119,7 @@ def write_wordmark_asset():
            f'<path d="{te_d}" fill="{{TE}}"/><path d="{ag_d}" fill="{{AGLE}}"/></svg>\n')
     dest = os.path.join(HERE, "teagle-wordmark.svg")
     open(dest, "w", encoding="utf-8").write(svg)
-    clean_svg_metadata(dest)
+    clean_svg_metadata(dest, author=None)
     print("wrote", dest, f"({br.width():.0f}x{br.height():.0f})")
 
 def render_social(w=1280, h=640, bg="#0B0F14"):
@@ -132,7 +132,7 @@ def render_social(w=1280, h=640, bg="#0B0F14"):
     p.translate((w - W * scale) / 2, (h - Hh * scale) / 2); p.scale(scale, scale)
     _paint(p, VARIANTS["dark"]); p.end()
     os.makedirs(OUT, exist_ok=True)
-    dest = os.path.join(OUT, "teagle-social-preview.png"); img.save(dest); clean_png_metadata(dest)
+    dest = os.path.join(OUT, "teagle-social-preview.png"); img.save(dest); clean_png_metadata(dest, author=None)
     print("wrote", dest, f"({w}x{h})")
 
 if __name__ == "__main__":

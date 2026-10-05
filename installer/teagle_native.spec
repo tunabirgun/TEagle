@@ -106,6 +106,9 @@ def _is_forbidden_bundle_path(path):
     name = parts[-1]
     return (
         "qml" in parts
+        # Qt uses Windows ICU C APIs; an unrelated ICU found on PATH can shadow them.
+        or name in {"icu.dll", "icuuc.dll", "icuin.dll"}
+        or (name.startswith("icudt") and name.endswith(".dll"))
         or any("virtualkeyboard" in part for part in parts)
         or name == "qpdf.dll"
         or name.startswith("qt6pdf")
