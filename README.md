@@ -4,7 +4,7 @@
   <img alt="TEagle" src="docs/img/teagle-banner-light.png" width="460">
 </picture>
 
-![Version](https://img.shields.io/badge/version-4.1.0-0A7259) ![Platform](https://img.shields.io/badge/platform-Windows%20x64-1FB89C) ![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-0A7259)
+![Version](https://img.shields.io/badge/version-4.1.1-0A7259) ![Platform](https://img.shields.io/badge/platform-Windows%20x64-1FB89C) ![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-0A7259)
 
 **Single-sequence transposable-element evaluation and PCR target planning for Windows.**
 </div>
@@ -48,6 +48,8 @@ The native application exports tables as **XLSX/CSV/TSV**, figures as **SVG/PNG/
 
 Right-click tables, features, and gel bands for context-specific actions such as copying a row, extracting sequence or flanks, sending coordinates to primer design, or exporting the selected result.
 
+Version 4.1.1 corrects the provenance view's included-region label: a stored start and length are displayed as the corresponding half-open start and end. Stored parameters, primer geometry and product predictions are unchanged; manifests identify the new software version. Existing screenshots retain their documented 4.1.0 capture provenance.
+
 ## Scientific scope
 
 TEagle evaluates a selected sequence or locus; it is not a genome assembler, variant caller, or de-novo TE-family discovery system. Dfam labels depend on the installed library, and a family absent from that library cannot be reported. Primer products and assembly candidate sites are computational predictions that require experimental confirmation for wet-lab use.
@@ -66,7 +68,7 @@ The TEagle 4.0.0 evaluation is linked to a public protocol lineage and independe
 
 The public 4.0.0 results archive contains 152 files. It preserves evaluated, partial, withheld, failed, and unexecuted branches instead of presenting only completed analyses. Local validation records retain the independent archive-integrity checks.
 
-The deployment evaluation executed 12 deterministic graphical-workflow cases on each of four exact Windows 10/11 guests. Ten required formats per case produced 480 verified export observations, 48 result documents, 48 manifests, and 144 cross-guest identity sets. These results support consistency across those exact guest observations; biological accuracy and wet-lab performance remain separate questions. The evaluation describes TEagle 4.0.0 only: TEagle 4.1.0 changes classification, structural detection and in-silico PCR results for some inputs (see [CHANGELOG.md](CHANGELOG.md)) and has not been separately evaluated.
+The deployment evaluation executed 12 deterministic graphical-workflow cases on each of four exact Windows 10/11 guests. Ten required formats per case produced 480 verified export observations, 48 result documents, 48 manifests, and 144 cross-guest identity sets. These results support consistency across those exact guest observations; biological accuracy and wet-lab performance remain separate questions. The cited public evaluation describes TEagle 4.0.0 only and does not evaluate 4.1.0 or 4.1.1. Version 4.1.0 changes classification, structural detection and in-silico PCR results for some inputs; 4.1.1 changes the included-region display only (see [CHANGELOG.md](CHANGELOG.md)). This patch does not claim a new scientific benchmark.
 
 Every analysis records scientific software and database versions, parameters, and input checksums. Manifest schema 0.2 and analysis result schema 1.1 (4.0.0 documents at schema 1.0 still validate) use deterministic SHA-256 content seals under an unkeyed integrity model; source-context schema 1.0 binds validated public-record identity to the sequence actually analysed. The seals detect accidental or uncoordinated changes but are not author authentication or a substitute for archiving the referenced software, databases, and inputs.
 

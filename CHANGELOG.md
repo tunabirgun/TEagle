@@ -9,6 +9,14 @@ The application version is defined once in `app/backend/teagle_core/__init__.py`
 every run provenance manifest, and the packaged executable's Windows file-version
 metadata. Release QA separately reconciles the documentation with that source.
 
+## [4.1.1] — 2026-10-28
+
+### Fixed
+
+- The provenance view now converts the included-region start and length into half-open start and end coordinates. A nonzero start previously displayed the length as if it were the end. Primer3 target values and intended-product endpoint spans retain their separate conventions.
+
+This patch changes display formatting only. Scientific algorithms, parameters, dependencies, stored coordinates, primer designs and predicted products are unchanged from 4.1.0. New manifests record version 4.1.1; earlier results retain their original version and evidence limits. Verification targets the display correction and release packaging rather than repeating unchanged scientific benchmarks or the optional-backend installation matrix.
+
 ## [4.1.0] — 2026-10-05
 
 This release corrects scientific and interface defects found by a full audit of 4.0.0 and adds guidance, assay-planning and reporting features for non-coding users. Classification, structural detection, in-silico PCR and provenance results can differ from 4.0.0 for the same input, and every manifest hash changes, so re-run any record whose 4.0.0 result is on file. The 30-model Pfam panel, the E-value cut-off, the 12-ORF search budget, the 80% LTR/TIR identity floors, the 20-bp standalone-TIR rule, the 2–12-bp TSD search range, the 200-kb warning and the Primer3 Standard preset are unchanged. The DOI-bound 4.0.0 evaluation (results DOI 10.5281/zenodo.22159977) describes 4.0.0 only and is not inherited by 4.1.0, and `benchmarks/score.py` remains the frozen 4.0.0 scorer, which does not score labels introduced in 4.1.0. Analysis-result schema is 1.1 (4.0.0 documents at 1.0 still validate); manifest schema 0.2 and source-context schema 1.0 are unchanged.

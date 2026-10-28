@@ -156,7 +156,7 @@ def param_row(key, value, run_type=None):
     elif kind == "target" and isinstance(value, (list, tuple)) and len(value) == 2:
         text = f"start {fmt_num(value[0])}, length {fmt_num(value[1])} nt (0-based)"
     elif kind in ("span", "region") and _span_text(value):
-        text = _span_text(value) + (" (0-based, half-open)" if kind in ("span", "region") else "")
+        text = _span_text((value[0], value[0] + value[1]) if kind == "region" else value) + " (0-based, half-open)"
     elif isinstance(value, list):
         text = ", ".join(fmt_num(x) for x in value)
     else:

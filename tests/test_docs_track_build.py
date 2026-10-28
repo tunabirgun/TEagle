@@ -569,8 +569,11 @@ def test_current_docs_state_native_export_boundaries_and_no_retired_web_ui():
 def test_screenshot_index_records_completed_40_capture_contract():
     from teagle_core import __version__
     text = _read("docs/img/README.md")
+    capture_version = "4.1.0" if __version__ == "4.1.1" else __version__
+    if __version__ == "4.1.1":
+        assert "Version 4.1.1 reuses the unchanged 4.1.0 captures for this display-only patch." in text
     for required in (
-        f"native TEagle {__version__} app", "light theme at 1920x1080",
+        f"native TEagle {capture_version} app", "light theme at 1920x1080",
         "1500x1150 window and UI scale 1.0", "Every accepted figure is a real run",
         "No figure contains synthesised results", "recapture sidecar",
         "dimensions, capture conditions", "rendered-content equality verified",
