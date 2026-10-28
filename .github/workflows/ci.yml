@@ -3,15 +3,43 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Published version tag to verify (empty uses the workflow revision)
+        required: false
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
   test:
     name: scientific-core + native tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
+      - name: Validate requested source tag
+        if: github.event_name == 'workflow_dispatch' && inputs.source_ref != ''
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+        run: |
+          if [[ ! "$SOURCE_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "source_ref must be a published version tag" >&2
+            exit 1
+          fi
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref && format('refs/tags/{0}', inputs.source_ref) || github.sha }}
+          persist-credentials: false
+      - name: Verify requested source tag
+        if: github.event_name == 'workflow_dispatch' && inputs.source_ref != ''
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+        run: |
+          requested_commit=$(git rev-parse --verify "refs/tags/${SOURCE_REF}^{commit}")
+          test "$(git rev-parse HEAD)" = "$requested_commit"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
