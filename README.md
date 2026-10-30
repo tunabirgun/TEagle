@@ -85,6 +85,7 @@ Source launches need Python 3.12 exactly and install the pinned packages into th
 
 ## Documentation
 
+- [Documentation website](https://tunabirgun.github.io/TEagle/): getting started, interpretation, primer design, exports, and benchmark evidence
 - Illustrated user manual: attached to each [release](https://github.com/tunabirgun/TEagle/releases)
 - Reproducible example workflow: [docs/TRY-IT-YOURSELF.md](docs/TRY-IT-YOURSELF.md)
 - Current changes: [CHANGELOG.md](CHANGELOG.md)
