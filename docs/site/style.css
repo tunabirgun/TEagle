@@ -14,3 +14,5 @@
 .brand-block{flex-shrink:0;padding:15px 0}.brand-tagline{font-size:12px;line-height:1.4;margin:7px 0 0;color:var(--muted)}
 @media(min-width:721px) and (max-width:1100px){.header-inner{flex-wrap:wrap}.brand-block{flex:1}.appearance{order:2}header nav{order:3;flex-basis:100%;justify-content:flex-start;margin:0;padding:0 0 14px}}
 @media(max-width:720px){.brand-block{flex-basis:100%;padding:0}.brand-tagline{font-size:11px}.appearance{margin-left:0}.menu{margin-left:auto}.header-inner{gap:12px}}
+@media(max-width:950px){.intro{grid-template-columns:1fr;gap:40px}.intro .lead{max-width:65ch}.diagram text{font-size:24px}.route-rail{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.readout{grid-template-columns:1fr;gap:10px;min-height:0}.readout strong{margin-top:4px}}
