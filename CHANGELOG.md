@@ -9,6 +9,14 @@ The application version is defined once in `app/backend/teagle_core/__init__.py`
 every run provenance manifest, and the packaged executable's Windows file-version
 metadata. Release QA separately reconciles the documentation with that source.
 
+## [4.1.2] — 2026-11-01
+
+### Fixed
+
+- Primer pairs entered in panel 05 can now be selected in panel 06 for the existing whole-genome scan. Previously, this picker offered only pairs designed in panel 04. Adding, removing or clearing a custom pair updates the picker.
+- This is an interface-access correction, not a change to the scientific method. Primer design, sequence analysis, isPcr matching rules, product-size limits, product interpretation and scientific dependencies are unchanged. The same primer sequences, reference assembly and search parameters reach the same computational path; manifests record the new application version.
+- Manually entered pairs retain neutral genomic-priming-site labels because they do not carry a sealed intended design locus. This route requires A/C/G/T annealing sequences without synthetic 5′ tails; displayed lengths are reference-assembly spans. Panel 05 retains its existing IUPAC and tailed-primer support.
+
 ## [4.1.1] — 2026-10-28
 
 ### Fixed

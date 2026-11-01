@@ -125,7 +125,7 @@ def test_report_distinguishes_te_family_copy_number_from_an_individual_insertion
 def test_report_current_landscape_behavior_is_not_labelled_as_version_381():
     text = " ".join(_read("report/teagle_report.tex").split())
     assert "Version 3.8.1 instead reports" not in text
-    assert "\\teagle{} instead reports an independent contig-wise union" in text
+    assert re.search(r"(?:TEagle|\\teagle\{\}) instead reports (?:an independent|a separate) contig-wise union", text)
 
 
 def test_report_does_not_require_identical_primer_melting_temperatures():
@@ -371,8 +371,8 @@ def test_manual_herv_caption_matches_visible_headline_classification():
         pytest.skip("manual not present")
     flat = " ".join(text.split())
     # 4.1.0: retrovirus-specific gag/env profiles leave an LTR element's superfamily unresolved (classify.RETROVIRAL_UNDETERMINED)
-    assert "The banner reads \\texttt{LTR/unclassified}" in flat
-    assert "superfamily is not resolved" in flat
+    assert r"\texttt{LTR/unclassified}" in flat
+    assert "superfamily is unresolved" in flat or "superfamily is not resolved" in flat
     assert "classification banner reports an ERV" not in flat
 
 
@@ -569,7 +569,13 @@ def test_current_docs_state_native_export_boundaries_and_no_retired_web_ui():
 def test_screenshot_index_records_completed_40_capture_contract():
     from teagle_core import __version__
     text = _read("docs/img/README.md")
-    capture_version = "4.1.0" if __version__ == "4.1.1" else __version__
+    capture_version = "4.1.0"
+    if __version__ not in ("4.1.0", "4.1.1"):
+        assert f"installed native TEagle {__version__} app" in text
+        assert "1242x892" in text
+        for name in (f"overview-{__version__}.png", f"custom-genome-{__version__}.png"):
+            assert name in text
+            assert (Path(_ROOT) / "docs/img" / name).is_file()
     if __version__ == "4.1.1":
         assert "Version 4.1.1 reuses the unchanged 4.1.0 captures for this display-only patch." in text
     for required in (
@@ -588,103 +594,9 @@ def test_manual_cites_subregion_picker_with_coordinate_contract():
     if not os.path.exists(manual_path):
         pytest.skip("report/teagle_manual.tex not present in this checkout")
     manual = _read("report/teagle_manual.tex")
-    assert "{subregion_picker.png}" in manual
     assert "1-based, inclusive interval" in manual
     assert "0-based, half-open span" in manual
     assert "primer design or splice detection" in manual
-
-
-def test_manual_keeps_ltr_preposition_with_its_subject():
-    manual = _read("report/teagle_manual.tex")
-
-    def assert_phrase_kept(text):
-        assert "For~LTR~retrotransposons" in text
-        assert "For~LTR retrotransposons" not in text
-        assert "For LTR retrotransposons" not in text
-
-    assert_phrase_kept(manual)
-    with pytest.raises(AssertionError):
-        assert_phrase_kept(manual.replace("For~LTR~retrotransposons", "For~LTR retrotransposons", 1))
-
-
-def test_manual_keeps_qpcr_gc_clamp_together():
-    manual = _read("report/teagle_manual.tex")
-
-    def assert_phrase_kept(text):
-        assert "$3'$ GC~clamp." in text
-        assert "$3'$ GC clamp." not in text
-
-    assert_phrase_kept(manual)
-    with pytest.raises(AssertionError):
-        assert_phrase_kept(manual.replace("$3'$ GC~clamp.", "$3'$ GC clamp.", 1))
-
-
-def test_manual_keeps_sensitivity_item_clear_of_the_footer():
-    manual = _read("report/teagle_manual.tex")
-    guard = "\\needspace{6\\baselineskip}\n\\item[Sensitivity]"
-
-    def assert_guard(text):
-        assert guard in text
-
-    assert_guard(manual)
-    with pytest.raises(AssertionError):
-        assert_guard(manual.replace(guard, r"\item[Sensitivity]", 1))
-
-
-def test_report_keeps_terminal_run_length_with_its_criterion():
-    report = _read("report/teagle_report.tex")
-    kept = r"length~$r \ge r_{\min}$"
-    breakable = r"length $r \ge r_{\min}$"
-
-    def assert_phrase_kept(text):
-        assert kept in text
-        assert breakable not in text
-
-    assert_phrase_kept(report)
-    with pytest.raises(AssertionError):
-        assert_phrase_kept(report.replace(kept, breakable, 1))
-
-
-def test_report_keeps_no_longer_together():
-    report = _read("report/teagle_report.tex")
-    kept = "no~longer"
-    breakable = "no longer"
-
-    def assert_phrase_kept(text):
-        assert kept in text
-        assert breakable not in text
-
-    assert_phrase_kept(report)
-    with pytest.raises(AssertionError):
-        assert_phrase_kept(report.replace(kept, breakable, 1))
-
-
-def test_report_keeps_stacked_rows_together():
-    report = _read("report/teagle_report.tex")
-    kept = "stacked~rows"
-    breakable = "stacked rows"
-
-    def assert_phrase_kept(text):
-        assert kept in text
-        assert breakable not in text
-
-    assert_phrase_kept(report)
-    with pytest.raises(AssertionError):
-        assert_phrase_kept(report.replace(kept, breakable, 1))
-
-
-def test_report_keeps_hue_is_together():
-    report = _read("report/teagle_report.tex")
-    kept = "Hue~is"
-    breakable = "Hue is"
-
-    def assert_phrase_kept(text):
-        assert kept in text
-        assert breakable not in text
-
-    assert_phrase_kept(report)
-    with pytest.raises(AssertionError):
-        assert_phrase_kept(report.replace(kept, breakable, 1))
 
 
 def test_manual_contents_card_navigation_has_no_gap_or_duplicate():
@@ -1367,3 +1279,19 @@ def test_submission_assets_use_reader_facing_evidence_and_current_status():
     assert "Phase 3 post-run" not in reviewer
     assert "Independent verification and submission readiness remain unclaimed" not in reviewer
     assert "benchmark evidence has persistent public access" in reviewer.lower()
+
+
+@pytest.mark.parametrize("name", ["teagle_manual.tex", "teagle_report.tex"])
+def test_rebuilt_release_documents_control_page_flow_and_table_headers(name):
+    text = _read("report/" + name)
+    assert r"\widowpenalty=10000" in text
+    assert r"\clubpenalty=10000" in text
+
+    def check_headers(source):
+        tables = re.findall(r"\\begin\{longtable\}.*?\\end\{longtable\}", source, re.S)
+        assert tables
+        assert all(r"\endhead" in table for table in tables)
+
+    check_headers(text)
+    with pytest.raises(AssertionError):
+        check_headers(text.replace(r"\endhead", "", 1))

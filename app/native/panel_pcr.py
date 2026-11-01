@@ -52,7 +52,9 @@ class PcrMixin:
         card.bodylay.addLayout(cgrid)
         card.bodylay.addWidget(_note("Primers from a paper or your own lab, in any IUPAC letters. A 5′ tail (a restriction "
                                      "site, for example) is fine: it is reported separately from the part that anneals. "
-                                     "These pairs were not designed here, so the intended-product check does not apply.",
+                                     "These pairs were not designed here, so the intended-product check does not apply. "
+                                     "For a whole-genome scan in panel 06, add the A/C/G/T annealing sequences without "
+                                     "synthetic 5′ tails; that scan reports reference-assembly spans.",
                                      "info"))
         grid = QGridLayout(); grid.setHorizontalSpacing(8)
         self._grid_fields(grid, [("pcrMM", "Max mismatches", "2"), ("pcrTP", "3′ exact bases", "5"),
@@ -143,6 +145,7 @@ class PcrMixin:
         self._render_pcr_queue()
 
     def _render_pcr_queue(self):
+        self._refresh_scan_picker()
         while self.pcrQueueBox.count():
             w = self.pcrQueueBox.takeAt(0).widget()
             if w:

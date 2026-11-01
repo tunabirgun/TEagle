@@ -125,7 +125,7 @@ class FamilyMixin:
         tag = "optional · Linux backend: "
         self.card_wsl.set_meta(f"{tag}{st['rm']} · names the TE family (Dfam)")
         self.card_splice.set_meta(f"{tag}{st['mm']} · exon–intron structure from an aligned transcript")
-        self.card_genome.set_meta(f"{tag}{st['wsl']} · a designed pair vs a downloaded RefSeq genome (isPcr)")
+        self.card_genome.set_meta(f"{tag}{st['wsl']} · a primer pair vs a downloaded RefSeq genome (isPcr)")
 
     def _on_wsl_status(self, w):
         self._wsl = w

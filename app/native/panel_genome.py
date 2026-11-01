@@ -17,7 +17,7 @@ class GenomeScanMixin:
         # dropdown lists ONLY downloaded+verified genomes (from genome_list). On-target = the product at the
         # specimen's own genome locus when it sits in the scanned assembly; the rest are off-target candidate sites.
         card = CollapsibleCard(PANEL["genome"], "Whole-genome off-target scan",
-                               "optional · Linux backend: checking… · a designed pair vs a downloaded RefSeq genome (isPcr)")
+                               "optional · Linux backend: checking… · a primer pair vs a downloaded RefSeq genome (isPcr)")
         self.card_genome = card
         card.bodylay.addWidget(_sl("Organism — local isPcr against a downloaded genome"))
         gorow = QHBoxLayout()
@@ -38,12 +38,14 @@ class GenomeScanMixin:
         self.scanBtn.clicked.connect(self._scan_from_picker); srow.addWidget(self.scanBtn)
         card.bodylay.addLayout(srow)
         self._refresh_genome_dropdown()                       # render from cached prepared set (empty at first build)
-        gnote = QLabel("Off-target check: runs a local isPcr scan of a designed pair against a downloaded RefSeq "
+        gnote = QLabel("Off-target check: runs a local isPcr scan of the selected pair against a downloaded RefSeq "
                        "genome. Results are sealed with the assembly version + checksum. With a design locus, "
-                       "intended-locus sites are listed before additional sites.")
+                       "intended-locus sites are listed before additional sites. Manually entered pairs report genomic "
+                       "priming sites without an intended-locus assignment. Enter A/C/G/T annealing sequences; "
+                       "omit synthetic 5′ tails. The scan reports reference-assembly spans, not added tail lengths.")
         gnote.setObjectName("orient"); gnote.setWordWrap(True); card.bodylay.addWidget(gnote)
         self.genomeBody = QVBoxLayout(); gb = QWidget(); gb.setLayout(self.genomeBody)
-        self.genomeBody.addWidget(_empty("Design a primer pair (panel 04) and download a genome, then scan here."))
+        self.genomeBody.addWidget(_empty("Design a pair in panel 04 or add your own pair in panel 05, then select a downloaded genome here."))
         card.bodylay.addWidget(gb)
         return card
 
@@ -58,6 +60,9 @@ class GenomeScanMixin:
         labels are applied only when the specimen supplies a matching intended locus.
         `org` is captured at scan start so a later dropdown change can't retarget an in-flight scan/download."""
         self._clear_banner()
+        if cand.get("custom") and any(set(cand[k]) - set("ACGT") for k in ("left_seq", "right_seq")):
+            return self._banner("Whole-genome scanning of a manually entered pair requires A/C/G/T annealing sequences. "
+                                "Ambiguous primers can still be checked in panel 05.", "warn")
         if self._genome_inflight or self._genome_prep_inflight:
             return self._banner("A whole-genome scan / download is already running — wait for it to finish.", "info")
         run = getattr(self, "_pcr_run", None)
@@ -138,7 +143,7 @@ class GenomeScanMixin:
         SAME _scan_genome handler as the right-click, so the sealed isPcr job is byte-identical across entry points."""
         cand = self.scanPicker.currentData() if hasattr(self, "scanPicker") else None
         if not cand:
-            return self._banner("Design a primer pair in panel 04 first, then pick it here to scan.", "warn")
+            return self._banner("Design a pair in panel 04 or add your own pair in panel 05, then pick it here to scan.", "warn")
         org = self.genomeOrg.currentData()
         if not org:
             return self._banner("Select a downloaded genome above (download one via Manage genomes).", "warn")
@@ -151,19 +156,20 @@ class GenomeScanMixin:
         if picker is None:
             return
         picker.blockSignals(True); picker.clear()
-        cands = self.state.get("candidates") or []
+        designed = self.state.get("candidates") or []
+        cands = list(designed) + [c for c in self.state.get("pcrPairs", []) if c.get("custom")]
         if not cands:
-            picker.addItem("Design a primer pair in panel 04 first", None)   # self-describing empty state, not a blank combo
+            picker.addItem("Design a pair (04) or add your own pair (05)", None)
         for c in cands:
             picker.addItem(f"{self._pair_label(c)}  ·  {c['left_seq'][:12]}… / {c['right_seq'][:12]}…", c)
         picker.blockSignals(False)
         has_pairs = bool(cands)
         if hasattr(self, "pcrStageAll"):
-            self.pcrStageAll.setEnabled(has_pairs)            # 'stage all' only ever stages the current designs
+            self.pcrStageAll.setEnabled(bool(designed))
         has_genome = getattr(self, "genomeOrg", None) is not None and self.genomeOrg.count() > 1   # past the placeholder
         picker.setEnabled(has_pairs)
         self.scanBtn.setEnabled(has_pairs and has_genome)
-        self.scanBtn.setToolTip("Design a primer pair in panel 04 first" if not has_pairs
+        self.scanBtn.setToolTip("Design a pair in panel 04 or add your own pair in panel 05" if not has_pairs
                                 else "Download a genome via Manage genomes first" if not has_genome else "")
 
     def _refresh_genome_manager(self):
@@ -387,7 +393,7 @@ class GenomeScanMixin:
         export_listing = "listed on-target first" if has_locus else "listed"
         note = QLabel(f"{head}{sp}, {listing}.{comig} Every product is a candidate under isPcr's default ≥15 bp "
                       "minimum perfect 3′-end match requirement — a specificity screen, not wet-lab-validated bands. "
-                      f"Only products up to {cap:,} bp are considered, so a longer product would not appear. The verdict is a "
+                      f"Only reference-assembly spans up to {cap:,} bp are considered; synthetic 5′ tail lengths are not added. The verdict is a "
                       "heuristic read of the count/spread; the numbers carry the claim.")
         note.setObjectName("orient"); note.setWordWrap(True); self.genomeBody.addWidget(note)
         if scan_table is not None:
@@ -407,6 +413,7 @@ class GenomeScanMixin:
             notes.append("Search: " + ", ".join(bits) + f", product sizes up to {cap:,} bp (longer products are not "
                          "reported). Coordinates are 1-based and inclusive, as isPcr reports them. The sealed run manifest "
                          "(assembly accession, file checksum, parameters) is exported from the Provenance card.")
+            notes.append("Len is the reference-assembly span (End - Start + 1); synthetic 5-prime tail lengths are not added.")
             if shown < len(samps):
                 notes.append(f"The on-screen table shows the first {shown:,} of {len(samps):,} products; this file lists all {len(samps):,}.")
             scan_table.export_notes = notes

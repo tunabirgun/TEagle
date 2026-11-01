@@ -113,3 +113,7 @@ The separately deposited [v3.8.0 benchmark evidence](https://doi.org/10.5281/zen
 - `native/` — the native PySide6 app (the “assay terminal”): the window and its panels, `engine_worker.py` (runs the engine off the UI thread), `figures.py` (genome viewer + gel SVG), `widgets.py` (interactive figure/table widgets), `coords.py` (coordinate display, primer locations and notes, order sheet) and `report.py` (assay report, notebook entry, classification table and provenance view).
 
 Dependencies are pinned in `backend/requirements.txt` for reproducibility.
+
+## Whole-genome scan of an existing pair
+
+In panel 05, enter the forward and reverse A/C/G/T annealing sequences, optionally name the pair, and select **Add pair**. In panel 06, select this pair and a downloaded genome, then select **Scan whole genome**. The same isPcr engine and fixed search settings used for designed pairs apply. Manually entered pairs have no sealed design locus, so their matches are labelled genomic priming sites. Enter annealing sequences without synthetic 5′ tails: the displayed lengths are reference-assembly spans. Ambiguous IUPAC primers remain supported by the local in-silico PCR workflow in panel 05.

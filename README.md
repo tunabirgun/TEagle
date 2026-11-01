@@ -4,7 +4,7 @@
   <img alt="TEagle" src="docs/img/teagle-banner-light.png" width="460">
 </picture>
 
-![Version](https://img.shields.io/badge/version-4.1.1-0A7259) ![Platform](https://img.shields.io/badge/platform-Windows%20x64-1FB89C) ![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-0A7259)
+![Version](https://img.shields.io/badge/version-4.1.2-0A7259) ![Platform](https://img.shields.io/badge/platform-Windows%20x64-1FB89C) ![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-0A7259)
 
 **Single-sequence transposable-element evaluation and PCR target planning for Windows.**
 </div>
@@ -47,6 +47,8 @@ TEagle installs and verifies its optional WSL2 environment from the graphical in
 The native application exports tables as **XLSX/CSV/TSV**, figures as **SVG/PNG/vector PDF**, and sequence or annotation data as **GFF3/BED/FASTA** where applicable. Validated runs can also export provenance JSON and complete-result JSON. A one-row-per-oligo order sheet exports as XLSX/CSV/TSV, the assay report as PDF or HTML, and a per-record classification table as TSV in TEsorter's `.cls.tsv` column order for joining with TEsorter, EDTA or RepeatMasker output. A header toggle switches on-screen coordinates between 0-based half-open and 1-based inclusive; exports keep their documented conventions. The **Help** menu opens a quick start and a glossary (F1).
 
 Right-click tables, features, and gel bands for context-specific actions such as copying a row, extracting sequence or flanks, sending coordinates to primer design, or exporting the selected result.
+
+Version 4.1.2 makes manually entered primer pairs available to the existing whole-genome scan. Add A/C/G/T annealing sequences in panel 05, select the pair and a downloaded genome in panel 06, then scan. These pairs report neutral genomic priming sites without an intended-locus assignment. The scan uses the existing isPcr settings and reports reference-assembly spans; omit synthetic 5′ tails. This interface-access correction does not change the scientific algorithms, thresholds or dependencies.
 
 Version 4.1.1 corrects the provenance view's included-region label: a stored start and length are displayed as the corresponding half-open start and end. Stored parameters, primer geometry and product predictions are unchanged; manifests identify the new software version. Existing screenshots retain their documented 4.1.0 capture provenance.
 
