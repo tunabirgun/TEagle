@@ -1,80 +1,38 @@
-<div align="center">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/img/teagle-banner-dark.png">
-  <img alt="TEagle" src="docs/img/teagle-banner-light.png" width="460">
-</picture>
+# TEagle
 
-![Version](https://img.shields.io/badge/version-4.1.2-0A7259) ![Platform](https://img.shields.io/badge/platform-Windows%20x64-1FB89C) ![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-0A7259)
+Windows desktop software for evaluating individual transposable-element sequences and planning PCR assays. It combines structural and protein-domain evidence, classification, optional Dfam annotation, Primer3 design and assembly-based candidate-site checks.
 
-**Single-sequence transposable-element evaluation and PCR target planning for Windows.**
-</div>
+[Download](https://github.com/tunabirgun/TEagle/releases/latest) · [Documentation](https://tunabirgun.github.io/TEagle/) · [Changes](CHANGELOG.md)
 
-TEagle connects structural evidence, protein domains, Wicker classification, family annotation, primer design, predicted products, and provenance in one native desktop workflow. It is designed for researchers working on individual elements or loci and requires no command line for routine use.
+![TEagle analysis interface](docs/img/overview.png)
 
-> **Article status:** The TEagle software article remains a work in progress; no journal publication is currently available. The application, documentation, and DOI-bound benchmark materials are available now.
+## Get started
 
-![TEagle analysis view showing classification, sequence structure, and an interactive feature map](docs/img/overview.png)
+1. Download the Windows x64 installer and illustrated manual from the release page. The installer is unsigned; follow your institution's installation policy.
+2. Launch TEagle, choose **Load example element**, and select **Run analysis**, or supply a sequence, FASTA file or NCBI accession.
+3. Use **BACKEND** to install optional WSL2 components for Dfam, splice detection or assembly functions.
 
-## At a glance
+The Windows bundle includes Qt, Primer3, HMMER and the TE-domain profiles. Routine use requires no Python installation. See the [example workflow](docs/TRY-IT-YOURSELF.md) for a reproducible walkthrough.
 
-| Step | TEagle provides |
-|---|---|
-| **Load** | Pasted sequence, FASTA, NCBI accession, genomic coordinates, or a bundled published example (one click from the **Start here** strip) |
-| **Interpret** | Terminal features, ORFs, cis-elements, and a 30-model Pfam panel |
-| **Classify** | Evidence-linked Wicker class, order, and superfamily calls, with unsupported levels withheld, shown with a Wicker rank path and RepeatMasker-style class string |
-| **Annotate** | Optional Dfam family matching and transcript-guided splice detection |
-| **Design** | Primer3 pairs for an assay goal (inside a protein domain, across an insertion junction, or a custom range), with locations, secondary-structure checks, predicted products, and a to-scale gel |
-| **Check** | Candidate priming sites against a selected downloaded assembly and fixed criteria |
-| **Record** | Versions, database checksums, parameters, input hashes, and explicit run states, with an assay report and an oligo order sheet |
+## Interpret results
 
-TEagle reports `complete`, `partial`, `withheld`, `failed`, and `not_run` separately. These states prevent an unavailable or unexecuted analysis from appearing as a negative biological finding.
+TEagle evaluates a selected sequence or locus. It reports complete, partial, withheld, failed and unexecuted stages separately. Missing database entries or failed analysis stages are not negative biological findings. Predicted primer products require experimental confirmation; assembly checks apply only to the selected assembly and criteria. Manual primer pairs have no intended-locus assignment; omit synthetic 5′ tails.
 
-## Install and start
+Tables, figures, sequences, annotations and assay reports have documented export formats and coordinate conventions. Whole-genome RepeatMasker annotation is a separate optional function.
 
-1. Download the installer and illustrated manual from the [latest release](https://github.com/tunabirgun/TEagle/releases/latest).
-2. Run the installer obtained from the release page. Windows SmartScreen may show **Windows protected your PC** because the installer is not code-signed; follow your institution's software-installation policy.
-3. Launch TEagle, select **Load example element**, and press **Run analysis**. You can instead paste a sequence, open a FASTA file, or enter an NCBI accession.
-4. Install optional Linux-backed components from **BACKEND** inside the application when Dfam, splice detection, or assembly functions are needed.
+## Evidence and citation
 
-The Windows bundle includes the native runtime, Qt, Primer3, HMMER, and the bundled TE-domain profiles. Nothing needs to be installed with `pip`.
+The software article is unpublished. Public benchmark materials cover **TEagle 4.0.0**, not subsequent releases or wet-lab performance:
 
-### Optional backend
+- [Protocol lineage](https://doi.org/10.5281/zenodo.22129307)
+- [Controlling protocol](https://doi.org/10.5281/zenodo.22154316)
+- [Benchmark results](https://doi.org/10.5281/zenodo.22159977)
 
-TEagle installs and verifies its optional WSL2 environment from the graphical interface. Components are independently installable and repairable, with pinned package versions, integrity checks, and live progress. The panel shows the current default Dfam cost of 85 MiB downloaded and 0.6 GiB after extraction. Storage gates compare the WSL filesystem with the Windows backing volume and use the smaller available limit. NCBI Datasets does not resume a partial genome ZIP, so an interrupted genome download restarts that ZIP. WSL2 resource limits can be adjusted through `.wslconfig`; apply them with `wsl --shutdown` only after TEagle and other WSL work have stopped.
+Read the [changelog](CHANGELOG.md) before interpreting results from different versions; 4.1.0 changed scientific outputs for some inputs. Use [CITATION.cff](CITATION.cff) and record the software and database versions actually used.
 
-## Results and exports
+## Development
 
-The native application exports tables as **XLSX/CSV/TSV**, figures as **SVG/PNG/vector PDF**, and sequence or annotation data as **GFF3/BED/FASTA** where applicable. Validated runs can also export provenance JSON and complete-result JSON. A one-row-per-oligo order sheet exports as XLSX/CSV/TSV, the assay report as PDF or HTML, and a per-record classification table as TSV in TEsorter's `.cls.tsv` column order for joining with TEsorter, EDTA or RepeatMasker output. A header toggle switches on-screen coordinates between 0-based half-open and 1-based inclusive; exports keep their documented conventions. The **Help** menu opens a quick start and a glossary (F1).
-
-Right-click tables, features, and gel bands for context-specific actions such as copying a row, extracting sequence or flanks, sending coordinates to primer design, or exporting the selected result.
-
-Version 4.1.2 makes manually entered primer pairs available to the existing whole-genome scan. Add A/C/G/T annealing sequences in panel 05, select the pair and a downloaded genome in panel 06, then scan. These pairs report neutral genomic priming sites without an intended-locus assignment. The scan uses the existing isPcr settings and reports reference-assembly spans; omit synthetic 5′ tails. This interface-access correction does not change the scientific algorithms, thresholds or dependencies.
-
-Version 4.1.1 corrects the provenance view's included-region label: a stored start and length are displayed as the corresponding half-open start and end. Stored parameters, primer geometry and product predictions are unchanged; manifests identify the new software version. Existing screenshots retain their documented 4.1.0 capture provenance.
-
-## Scientific scope
-
-TEagle evaluates a selected sequence or locus; it is not a genome assembler, variant caller, or de-novo TE-family discovery system. Dfam labels depend on the installed library, and a family absent from that library cannot be reported. Primer products and assembly candidate sites are computational predictions that require experimental confirmation for wet-lab use.
-
-Classification is evidence-bounded. Paired terminal direct repeats alone do not establish an LTR order, isolated domains do not force a finer lineage call, and a failed domain stage is recorded as unavailable rather than as zero detected domains. Assembly candidate-site labels are restricted to the selected assembly and criteria; they do not establish specimen-wide specificity.
-
-Whole-genome RepeatMasker landscape annotation is available as a separate optional function. Its counts describe alignment rows or distinct matched models as labelled in the interface, while coverage uses contig-wise interval unions. This assembly-scale function is not part of the admitted 4.0.0 performance panel.
-
-## Current benchmark and reproducibility
-
-The TEagle 4.0.0 evaluation is linked to a public protocol lineage and independently downloadable result package:
-
-- [Protocol concept](https://doi.org/10.5281/zenodo.22129307)
-- [Final controlling protocol](https://doi.org/10.5281/zenodo.22154316)
-- [Validated benchmark results](https://doi.org/10.5281/zenodo.22159977)
-
-The public 4.0.0 results archive contains 152 files. It preserves evaluated, partial, withheld, failed, and unexecuted branches instead of presenting only completed analyses. Local validation records retain the independent archive-integrity checks.
-
-The deployment evaluation executed 12 deterministic graphical-workflow cases on each of four exact Windows 10/11 guests. Ten required formats per case produced 480 verified export observations, 48 result documents, 48 manifests, and 144 cross-guest identity sets. These results support consistency across those exact guest observations; biological accuracy and wet-lab performance remain separate questions. The cited public evaluation describes TEagle 4.0.0 only and does not evaluate 4.1.0 or 4.1.1. Version 4.1.0 changes classification, structural detection and in-silico PCR results for some inputs; 4.1.1 changes the included-region display only (see [CHANGELOG.md](CHANGELOG.md)). This patch does not claim a new scientific benchmark.
-
-Every analysis records scientific software and database versions, parameters, and input checksums. Manifest schema 0.2 and analysis result schema 1.1 (4.0.0 documents at schema 1.0 still validate) use deterministic SHA-256 content seals under an unkeyed integrity model; source-context schema 1.0 binds validated public-record identity to the sequence actually analysed. The seals detect accidental or uncoordinated changes but are not author authentication or a substitute for archiving the referenced software, databases, and inputs.
-
-## Develop and build
+Source launches require Python 3.12 and install pinned dependencies into the active interpreter; use a virtual environment. `python app/teagle.py --check` reports dependencies without installing them.
 
 ```powershell
 python app/teagle.py
@@ -83,17 +41,6 @@ python -m pytest tests/ -q
 powershell -File installer/build_installer.ps1
 ```
 
-Source launches need Python 3.12 exactly and install the pinned packages into the interpreter that runs them, so use a virtual environment; `python app/teagle.py --check` only reports and never installs. The installer pipeline freezes the application, checks the bundle, runs the headless self-test, and then builds the Inno Setup installer. Optional `@wsl` and `@network` test groups are gated separately.
+WSL and network tests are gated separately. See [app documentation](app/README.md) and [third-party notices](THIRD-PARTY-NOTICES.md).
 
-## Documentation
-
-- [Documentation website](https://tunabirgun.github.io/TEagle/): getting started, interpretation, primer design, exports, and benchmark evidence
-- Illustrated user manual: attached to each [release](https://github.com/tunabirgun/TEagle/releases)
-- Reproducible example workflow: [docs/TRY-IT-YOURSELF.md](docs/TRY-IT-YOURSELF.md)
-- Current changes: [CHANGELOG.md](CHANGELOG.md)
-- Software citation metadata: [CITATION.cff](CITATION.cff)
-- Third-party components and licences: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)
-
-## License
-
-TEagle is free software under the [GNU Affero General Public License, version 3 or later](LICENSE). Modified network deployments must make their corresponding source available to their users under the licence terms.
+Licensed under [AGPL-3.0-or-later](LICENSE).
